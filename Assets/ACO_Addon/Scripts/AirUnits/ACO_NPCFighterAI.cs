@@ -40,6 +40,12 @@ namespace ACO
         [Tooltip("격추 시 끌 콜라이더. 루트가 BoxCollider면 애니메이션 대상(MeshCollider)이 아니라 꺼지지 않으므로 여기 넣는다")]
         public Collider[] DisableCollidersOnDeath;
 
+        [Header("공중 충돌 방지 (Bake가 채운다)")]
+        [Tooltip("이 기체의 충돌 콜라이더(트리거·바퀴 제외). 내가 조종 중인 기체와는 Physics.IgnoreCollision으로 서로 통과한다 — 기총(파티클)·미사일·범위 피해·지형 충돌은 그대로")]
+        public Collider[] BodyColliders;
+        [Tooltip("플레이어 기체(강화 확장). 켜지거나 부활할 때 이 중 내가 조종 중인 기체와만 다시 건다")]
+        public ACO_VehicleUpgrades[] PlayerVehicles;
+
         [Header("플레어 (대응책) — 규칙·연출은 플레어 장치(ACO_FlareDispenser)가 맡는다")]
         [Tooltip("플레어 장치(같은 오브젝트). 출격할 때 횟수를 채우고 등급에 맞춰 확률·반응 거리(신병 ×0.7, 에이스 ×1.3)를 넣는다. 비우면 플레어 없음")]
         public ACO_FlareDispenser Flares;
@@ -123,7 +129,8 @@ namespace ACO
         public ACO_CombatDirector Director;
 
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(가까운 적기 플레어 대사)")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
 
         [Header("디버그")]
         [Tooltip("켜면 1초마다 고도/타겟/원하는 상승각/지면 회피 바닥각을 [ACO_FLT]로 로그에 남긴다(오너만). 비행 진단용")]
@@ -210,6 +217,39 @@ namespace ACO
         void Start()
         {
             Init();
+        }
+
+        // 풀에서 켜질 때마다 다시 건다(콜라이더가 꺼졌다 켜지면 무시 상태가 풀릴 수 있다).
+        void OnEnable()
+        {
+            IgnorePlayerCollisions();
+        }
+
+        /// 충돌 데미지는 기체 오너(조종사) 화면에서만 계산하므로 내 화면의 내 기체만 걸면 된다.
+        /// 조종 중이 아니면 할 일이 없다 — 탑승할 때 기체 쪽(ACO_VehicleUpgrades)이 NPC 전부와 건다.
+        public void IgnorePlayerCollisions()
+        {
+            if (PlayerVehicles == null) { return; }
+            for (int i = 0; i < PlayerVehicles.Length; i++)
+            {
+                ACO_VehicleUpgrades v = PlayerVehicles[i];
+                if (v && v.IsLocalPilot()) { IgnoreWith(v.BodyColliders); return; }
+            }
+        }
+
+        /// 이 기체의 충돌 콜라이더와 others 사이의 충돌을 끈다(이 클라이언트에서만).
+        public void IgnoreWith(Collider[] others)
+        {
+            if (BodyColliders == null || others == null) { return; }
+            for (int i = 0; i < BodyColliders.Length; i++)
+            {
+                Collider a = BodyColliders[i];
+                if (!a) { continue; }
+                for (int j = 0; j < others.Length; j++)
+                {
+                    if (others[j]) { Physics.IgnoreCollision(a, others[j], true); }
+                }
+            }
         }
 
         /// 늦게 들어온 클라이언트는 Start보다 NetState가 먼저 올 수 있어 양쪽에서 부른다.
@@ -403,7 +443,7 @@ namespace ACO
             _isOwner = Net != null ? Net.RefreshOwnerSilent() : Networking.IsOwner(gameObject);
 
             // 체력 복구는 한 클라이언트만 해야 한다(RespawnTarget이 내부에서 소유권을 가져가고 동기화한다).
-            if (_isOwner && TargetHealth) { TargetHealth.RespawnTarget(); }
+            if (_isOwner && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
 
             transform.position = position;
             transform.rotation = rotation;
@@ -415,6 +455,9 @@ namespace ACO
             _yieldTimer = 0f;
             if (Flares) { Flares.ResetSalvos(); }
             SetDeathVisuals(false);
+            // 격추 때 꺼졌던 콜라이더가 다시 켜졌다(SaccTarget 애니메이터는 조금 늦게 켤 수 있어 한 번 더)
+            IgnorePlayerCollisions();
+            SendCustomEventDelayedSeconds(nameof(IgnorePlayerCollisions), 0.5f);
             _alive = true;
             if (_isOwner)
             {
@@ -1115,6 +1158,13 @@ namespace ACO
                 + " spd=" + Flight.Speed.ToString("F0")
                 + " sep=" + _separation.magnitude.ToString("F2")
                 + " target=" + targetInfo);
+        }
+
+        /// SaccTarget 체력 복구(RespawnTarget). 풀에서 막 켠 유닛은 SaccTarget의 Start가 아직 안 돌아 localPlayer·FullHealth가 비어 있다 —
+        /// 바로 부르면 예외로 SaccTarget이 멈춘다(그 뒤로 피해·격추가 안 된다). 그래서 2프레임 뒤에 부른다.
+        public void _RespawnTargetHealth()
+        {
+            if (TargetHealth) { TargetHealth.RespawnTarget(); }
         }
     }
 }

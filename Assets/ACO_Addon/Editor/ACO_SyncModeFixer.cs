@@ -87,6 +87,24 @@ public class ACO_SyncModeFixer : IVRCSDKBuildRequestedCallback
         return count;
     }
 
+    /// 애드온 스크립트가 NoVariableSync(네트워크 이벤트를 쓴다)로 바뀌었는데 컴포넌트가 예전 값 None으로 남아 있으면
+    /// 이벤트가 나가지 않는다(예: ACO_VehicleUpgrades — 소모품 외형). Manual로 맞춘다.
+    private static int FixNoneButNetworked(UdonBehaviour[] behaviours, bool recordPrefabOverrides)
+    {
+        int count = 0;
+        foreach (UdonBehaviour ub in behaviours)
+        {
+            if (!(ub.programSource is UdonSharpProgramAsset program)) { continue; }
+            if (!AssetDatabase.GetAssetPath(program).StartsWith(AddonPath)) { continue; }
+            if (program.behaviourSyncMode != BehaviourSyncMode.NoVariableSync || ub.SyncMethod != Networking.SyncType.None) { continue; }
+            ub.SyncMethod = Networking.SyncType.Manual;
+            if (recordPrefabOverrides && PrefabUtility.IsPartOfPrefabInstance(ub)) { PrefabUtility.RecordPrefabInstancePropertyModifications(ub); }
+            EditorUtility.SetDirty(ub);
+            count++;
+        }
+        return count;
+    }
+
     /// 프리팹 빌더가 저장 직전에 호출한다.
     public static int FixHierarchy(GameObject root, bool recordPrefabOverrides)
     {
@@ -102,7 +120,8 @@ public class ACO_SyncModeFixer : IVRCSDKBuildRequestedCallback
     private static int FixObject(GameObject go, bool recordPrefabOverrides)
     {
         UdonBehaviour[] behaviours = go.GetComponents<UdonBehaviour>();
-        if (behaviours.Length < 2) { return 0; }
+        int count = FixNoneButNetworked(behaviours, recordPrefabOverrides);
+        if (behaviours.Length < 2) { return count; }
 
         bool hasAddon = false;
         bool hasManual = false;
@@ -117,9 +136,8 @@ public class ACO_SyncModeFixer : IVRCSDKBuildRequestedCallback
             else if (ub.SyncMethod == Networking.SyncType.Manual) { hasManual = true; }
         }
         // 애드온 컴포넌트가 없는 오브젝트(SAV 기체 등)는 그대로 둔다.
-        if (!hasAddon || !hasManual) { return 0; }
+        if (!hasAddon || !hasManual) { return count; }
 
-        int count = 0;
         foreach (UdonBehaviour ub in behaviours)
         {
             if (!(ub.programSource is UdonSharpProgramAsset program)) { continue; }

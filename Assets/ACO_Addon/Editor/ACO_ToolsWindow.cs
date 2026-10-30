@@ -54,16 +54,14 @@ public class ACO_ToolsWindow : EditorWindow
             Description = "씨앗으로 섬/고원/산맥/협곡 지형을 육각 기둥으로 만든다. 리롤·작전 테이블 지형에 쓰인다. 항모는 ExcludeZones에." },
         new SceneTool { Label = "지형 장식 (선택)", Component = typeof(ACO_TerrainFeatures), Create = ACO_SceneBaker.CreateTerrainFeatures,
             Description = "육각 지형 위에 도시·마을·비행장·항구·등대 등을 놓는다(육각 지형 필요)." },
-        new SceneTool { Label = "페이즈 음성 (선택)", Component = typeof(ACO_MissionVoice), Create = ACO_SceneBaker.CreateMissionVoice,
-            Description = "페이즈 시작/성공/실패 때 무전 음성을 튼다(클립은 직접 넣는다)." },
         new SceneTool { Label = "진행도 (재화·강화·해금)", Component = typeof(ACO_PlayerProgress), Create = ACO_SceneBaker.CreatePlayerProgress,
             Description = "크레딧·단계식 강화·특수무장 해금을 플레이어별로 영구 저장, 미션 보상 계산. SafeZones에 항모 갑판 콜라이더를 넣는다. 씬에 하나." },
         new SceneTool { Label = "게임 진행 (명단·준비·출격)", Component = typeof(ACO_GameFlow), Create = ACO_SceneBaker.CreateGameFlow,
             Description = "참가 명단·READY·카운트다운·일제 출격·재출격·관전·귀환·지형 리롤. 만들면 DeckPoint 4개와 Briefing(대기실)/Spectate 지점이 생긴다(격납고를 따로 두려면 HangarPoint를 넣는다) — 위치로 옮긴다. 씬에 하나." },
         new SceneTool { Label = "화면 암전", Component = typeof(ACO_ScreenFader), Create = ACO_SceneBaker.CreateScreenFader,
             Description = "순간이동·출격 때 화면이 어두워졌다 밝아진다. 씬에 하나." },
-        new SceneTool { Label = "무전 자막", Component = typeof(ACO_Radio), Create = ACO_SceneBaker.CreateRadio,
-            Description = "상황(격추·빗나감·적 플레어·미사일 경보·아군 격추·호위 피격·페이즈 등)에 맞는 대사를 확률·쿨타임으로 골라 머리를 따라오는 자막(+선택 음성)으로 띄운다. 대사는 인스펙터에서. 씬에 하나." },
+        new SceneTool { Label = "무전 채터", Component = typeof(ACO_Chatter), Create = ACO_SceneBaker.CreateChatter,
+            Description = "페이즈 시작·성공·실패, 미션 결과(실패 사유별), 격추·빗나감·적 플레어·미사일 경보·아군 격추·호위 피격 등에 맞는 대사를 머리를 따라오는 자막 + 선택 음성(PTT)으로 차례로 낸다. 대사·음성은 인스펙터에서. 씬에 하나." },
         new SceneTool { Label = "작전 테이블 (3D 미니맵, 선택)", Component = typeof(ACO_TacticalMap), Create = ACO_SceneBaker.CreateTacticalMap,
             Description = "브리핑실의 Tacview식 미니맵: 축소 지형 + 모든 유닛 실시간. 브리핑실 가운데로 옮기고 HomeBase에 항모." },
     };
@@ -131,6 +129,11 @@ public class ACO_ToolsWindow : EditorWindow
                 if (found != null) { Row(t.Label, t.Description, "선택", () => Select(found), $"있음: {found.name}", true); }
                 else { Row(t.Label, t.Description, "만들기", t.Create, "없음", false); }
             }
+            bool sky = ACO_SkyBuilder.Exists();
+            Row("구름 + 비",
+                "뭉게구름(퍼프 빌보드, ACO/CloudPuffs — 지형 시드로 배치, 구름 속은 하얀 안개)과 비(카메라 둘레 빗줄기, ACO/Rain — 기체 속도만큼 기운다, 격납고 안은 안 옴). "
+                + "ACO_Sky의 Coverage(구름 양)·Rain의 Intensity(비 세기)로 조절. 다시 만들면 메시·풀만 새로(값 유지).",
+                sky ? "다시 만들기" : "만들기", ACO_SkyBuilder.Create, sky ? "있음" : "없음", sky);
             bool natural = ACO_TerrainLook.IsApplied();
             Row("육각 지형 자연 머티리얼 + 나무",
                 "셰이더 ACO/HexTerrain: 월드 높이·경사로 모래·풀·숲·흙·바위·눈·절벽(지층)을 칠해 육각 경계를 숨긴다. 나무(ACO/HexTrees)는 숲 자리에만 서고 멀면 사라진다(충돌 없음). "

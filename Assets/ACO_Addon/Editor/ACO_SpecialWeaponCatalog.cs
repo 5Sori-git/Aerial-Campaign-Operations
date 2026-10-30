@@ -299,13 +299,14 @@ public static class ACO_SpecialWeaponCatalog
         var descs = Pad(loadout.SpecialDescriptions, n, i => "");
         var prices = Pad(loadout.SpecialPrices, n, i => 0);
         var icons = Pad(loadout.SpecialIcons, n, i => ACO_HUDBuilder.SpecialIcon(ids[i]));
+        var cats = Pad(loadout.SpecialCategories, n, i => ACO_Loadout.CAT_OTHER);
         int added = 0;
         foreach (ACO_SpecialWeaponDef d in defs)
         {
             int k = ids.IndexOf(d.Id);
             if (k < 0)
             {
-                ids.Add(d.Id); names.Add(""); descs.Add(""); prices.Add(0); icons.Add(null);
+                ids.Add(d.Id); names.Add(""); descs.Add(""); prices.Add(0); icons.Add(null); cats.Add(ACO_Loadout.CAT_OTHER);
                 k = ids.Count - 1;
                 added++;
             }
@@ -313,18 +314,40 @@ public static class ACO_SpecialWeaponCatalog
             descs[k] = d.Description;
             prices[k] = Mathf.Max(d.Price, 0);
             icons[k] = d.Icon != null ? d.Icon : ACO_HUDBuilder.SpecialIcon(d.Id);
+            cats[k] = CategoryOf(d);
         }
         if (Same(loadout.SpecialIds, ids) && Same(loadout.SpecialNames, names) && Same(loadout.SpecialDescriptions, descs)
-            && Same(loadout.SpecialPrices, prices) && Same(loadout.SpecialIcons, icons)) { return 0; }
+            && Same(loadout.SpecialPrices, prices) && Same(loadout.SpecialIcons, icons) && Same(loadout.SpecialCategories, cats)) { return 0; }
         Undo.RecordObject(loadout, "ACO special catalog");
         loadout.SpecialIds = ids.ToArray();
         loadout.SpecialNames = names.ToArray();
         loadout.SpecialDescriptions = descs.ToArray();
         loadout.SpecialPrices = prices.ToArray();
         loadout.SpecialIcons = icons.ToArray();
+        loadout.SpecialCategories = cats.ToArray();
         PrefabUtility.RecordPrefabInstancePropertyModifications(loadout);
         EditorUtility.SetDirty(loadout);
         return added;
+    }
+
+    /// 정의의 격납고 분류(ACO_Loadout.CAT_*). Auto면 모듈의 강화 계열로.
+    public static int CategoryOf(ACO_SpecialWeaponDef d)
+    {
+        switch (d.Category)
+        {
+            case ACO_WeaponCategory.AirToAir: return ACO_Loadout.CAT_AAM;
+            case ACO_WeaponCategory.AirToGround: return ACO_Loadout.CAT_AGM;
+            case ACO_WeaponCategory.Bomb: return ACO_Loadout.CAT_BOMB;
+            case ACO_WeaponCategory.Other: return ACO_Loadout.CAT_OTHER;
+        }
+        if (d.Module == null) { return ACO_Loadout.CAT_OTHER; }
+        switch (d.Module.UpgradeFamily)
+        {
+            case ACO_UpgradeFamily.SpecialAAM: return ACO_Loadout.CAT_AAM;
+            case ACO_UpgradeFamily.SpecialAGM: return ACO_Loadout.CAT_AGM;
+            case ACO_UpgradeFamily.SpecialBomb: return ACO_Loadout.CAT_BOMB;
+        }
+        return ACO_Loadout.CAT_OTHER;
     }
 
     private static bool Same<T>(T[] a, List<T> b)

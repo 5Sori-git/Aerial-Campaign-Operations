@@ -1501,6 +1501,8 @@ public static class ACO_PrefabBuilder
             AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(TargetControllerPath);
         if (controller) { animator.runtimeAnimatorController = controller; }
         else { Debug.LogWarning($"[ACO] Target.controller를 찾지 못했습니다: {TargetControllerPath} — SaccTarget이 Animator 파라미터를 못 찾아 경고를 낼 수 있습니다."); }
+        // 풀에서 껐다 켤 때 다시 바인딩하지 않게(아래 ACO_SceneBaker.BakeTargetAnimators 설명)
+        animator.keepAnimatorStateOnDisable = true;
     }
 
     private static Transform NewChild(GameObject parent, string name, Vector3 localPos)

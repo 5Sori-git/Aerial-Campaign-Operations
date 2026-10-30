@@ -22,7 +22,8 @@ namespace ACO
         public GameObject PitBullIndicator;
 
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(나를 노린 미사일 경보)")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(락온 방향·날아오는 미사일 방향/거리 표시)")]
         public ACO_RWR Rwr;
 
@@ -239,7 +240,7 @@ namespace ACO
             // 자체 미사일(ACO_Missile)은 발사 정보를 직접 주입한다.
             // SAV 미사일은 GetProgramVariable로 이 스크립트를 읽으므로 주입이 필요 없다.
             ACO_Missile acoMissile = missile.GetComponent<ACO_Missile>();
-            if (acoMissile) { acoMissile.Radio = Radio; acoMissile.Rwr = Rwr; }
+            if (acoMissile) { acoMissile.Chatter = Chatter; acoMissile.Rwr = Rwr; }
             if (acoMissile != null)
             {
                 acoMissile.EntityControl = EntityControl;

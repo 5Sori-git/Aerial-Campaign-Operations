@@ -255,7 +255,17 @@ public static class ACO_HUDBuilder
         Selection.activeObject = prefab;
     }
 
-    /// 작전 콘솔(미션 시작, 페이즈 수 선택) 프리팹. 1~5 페이즈 UI 버튼 5개(월드 공간 Canvas). 앞면은 루트 +Z 쪽.
+    /// 작전 콘솔 글자 이름 — Bake가 이 이름으로 찾아 ACO_GameFlow의 BannerTexts/PhaseTexts/PhaseInfoTexts/TerrainTexts에 넣는다.
+    public const string FlowBannerName = "ACO_FlowBanner";
+    public const string FlowPhasesName = "ACO_FlowPhases";
+    public const string FlowPhaseInfoName = "ACO_FlowPhaseInfo";
+    public const string FlowTerrainName = "ACO_FlowTerrain";
+    private const int ConsoleSlotCards = 8;
+
+    /// 작전 콘솔 프리팹(월드 공간 Canvas 2.4 x 1.5m, 앞면은 루트 +Z 쪽).
+    ///  위 = 상태 배너(큰 상태 + 내 다음 할 일 + 거절 안내), 왼쪽 = 작전 카드(공용 설정: 페이즈 −/+ · 예상 시간 · 지형 · NEW TERRAIN · 바꾼 사람),
+    ///  오른쪽 = 명단 칸 카드 8장(2열 — 기체 수보다 많은 카드는 게임 진행이 숨긴다, 빈 칸을 누르면 그 칸으로 참가),
+    ///  아래 = 내 행동 버튼(JOIN → READY → LAUNCH) + LEAVE. 글자·버튼 상태는 모두 게임 진행이 쓴다.
     public static void CreateMissionConsolePrefab()
     {
         EnsureFolder("Assets/ACO_Addon", "Prefabs");
@@ -266,25 +276,49 @@ public static class ACO_HUDBuilder
             return;
         }
 
-        // 위: 페이즈 수 선택, 아래: 참가 명단(게임 진행이 글자를 쓴다) + JOIN/LEAVE. 게임 진행이 없으면 페이즈 버튼이 바로 미션을 시작한다.
         GameObject root = new GameObject("ACO_MissionConsole");
-        RectTransform canvas = MakeUiPanel(root.transform, 2200f, 1500f);
-        MakeUiText(canvas, "Title", new Vector2(0f, 650f), new Vector2(2000f, 140f), 90f, font, "MISSION SELECT");
-        MakeUiText(canvas, "Hint", new Vector2(0f, 545f), new Vector2(2000f, 80f), 40f, font, "SELECT NUMBER OF PHASES  -  LATER PHASES SCORE HIGHER");
+        RectTransform canvas = MakeUiPanel(root.transform, 2400f, 1500f);
 
-        for (int k = 1; k <= 5; k++)
+        // 상태 배너
+        MakeUiBox(canvas, "BannerBox", new Vector2(0f, 590f), new Vector2(2300f, 240f), new Color(0.03f, 0.17f, 0.1f, 1f));
+        TextMeshProUGUI banner = MakeUiText(canvas, FlowBannerName, new Vector2(0f, 590f), new Vector2(2300f, 240f), 70f, font, "BRIEFING");
+        banner.alignment = TextAlignmentOptions.Left;
+        banner.margin = new Vector4(50f, 10f, 50f, 10f);
+
+        // 작전 카드(공용 설정)
+        const float lx = -640f;
+        MakeUiBox(canvas, "OperationBox", new Vector2(lx, -20f), new Vector2(1020f, 900f), new Color(0.04f, 0.08f, 0.06f, 1f));
+        MakeUiLabel(canvas, "OperationTitle", new Vector2(lx, 390f), new Vector2(960f, 60f), 36f, font, "OPERATION - SHARED BY THE SQUAD");
+        MakeUiLabel(canvas, "PhasesTitle", new Vector2(lx, 310f), new Vector2(960f, 50f), 34f, font, "PHASES");
+        MakeFlowButton(canvas, "PhasesDown", new Vector2(lx - 290f, 190f), new Vector2(170f, 170f), font, "-", ACO_GameFlow.ACTION_PHASES_DOWN, 110f);
+        MakeUiText(canvas, FlowPhasesName, new Vector2(lx, 190f), new Vector2(320f, 190f), 150f, font, "3");
+        MakeFlowButton(canvas, "PhasesUp", new Vector2(lx + 290f, 190f), new Vector2(170f, 170f), font, "+", ACO_GameFlow.ACTION_PHASES_UP, 110f);
+        MakeUiText(canvas, FlowPhaseInfoName, new Vector2(lx, 30f), new Vector2(960f, 120f), 34f, font, "ABOUT 15 MIN");
+        MakeUiLabel(canvas, "TerrainTitle", new Vector2(lx, -80f), new Vector2(960f, 50f), 34f, font, "TERRAIN");
+        MakeUiText(canvas, FlowTerrainName, new Vector2(lx, -180f), new Vector2(960f, 150f), 64f, font, "-");
+        MakeFlowButton(canvas, "Reroll", new Vector2(lx, -360f), new Vector2(720f, 130f), font, "NEW TERRAIN", ACO_GameFlow.ACTION_REROLL, 48f);
+
+        // 명단 칸 카드
+        const float rx = 560f;
+        MakeUiBox(canvas, "RosterBox", new Vector2(rx, -20f), new Vector2(1240f, 900f), new Color(0.04f, 0.08f, 0.06f, 1f));
+        MakeUiLabel(canvas, "RosterTitle", new Vector2(rx, 390f), new Vector2(1180f, 60f), 36f, font, "ROSTER - TAP AN OPEN SLOT TO JOIN");
+        for (int k = 0; k < ConsoleSlotCards; k++)
         {
-            Image img = MakeUiButton(canvas, $"Button_{k}", new Vector2((k - 3) * 400f, 330f), new Vector2(340f, 260f), font,
-                $"{k}\n<size=40%>PHASE{(k > 1 ? "S" : "")}</size>", 100f);
-            ACO_MissionStartButton start = img.gameObject.AddUdonSharpComponent<ACO_MissionStartButton>();
-            start.PhaseCount = k;
-            start.Background = img;
-            WireClick(img.GetComponent<Button>(), start);
+            int col = k % 2, row = k / 2;
+            var pos = new Vector2(rx + (col == 0 ? -305f : 305f), 265f - row * 185f);
+            Image img = MakeUiButton(canvas, $"Slot_{k}", pos, new Vector2(590f, 170f), font, $"{k + 1}. OPEN", 44f);
+            ACO_FlowButton fb = img.gameObject.AddUdonSharpComponent<ACO_FlowButton>();
+            fb.Action = ACO_GameFlow.ACTION_JOIN_SLOT;
+            fb.Slot = k;
+            fb.Label = img.GetComponentInChildren<TextMeshProUGUI>();
+            fb.Label.lineSpacing = -20f;
+            fb.Background = img;
+            WireClick(img.GetComponent<Button>(), fb);
         }
 
-        MakeFlowStatus(canvas, new Vector2(0f, -110f), new Vector2(2000f, 520f), 50f, font);
-        MakeFlowButton(canvas, "Join", new Vector2(-400f, -570f), new Vector2(700f, 150f), font, "JOIN", ACO_GameFlow.ACTION_TOGGLE_JOIN);
-        MakeFlowButton(canvas, "Reroll", new Vector2(400f, -570f), new Vector2(700f, 150f), font, "REROLL TERRAIN", ACO_GameFlow.ACTION_REROLL);
+        // 내 행동 + LEAVE
+        MakeFlowButton(canvas, "Primary", new Vector2(-300f, -620f), new Vector2(1700f, 180f), font, "JOIN", ACO_GameFlow.ACTION_PRIMARY, 76f);
+        MakeFlowButton(canvas, "Leave", new Vector2(900f, -620f), new Vector2(500f, 180f), font, "LEAVE", ACO_GameFlow.ACTION_LEAVE, 50f);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_MissionConsole.prefab");
         Object.DestroyImmediate(root);
@@ -313,9 +347,7 @@ public static class ACO_HUDBuilder
         ACO_Loadout loadout = root.AddUdonSharpComponent<ACO_Loadout>();
         string[] names = loadout.SpecialNames != null && loadout.SpecialNames.Length > 0 ? loadout.SpecialNames : loadout.SpecialIds;
         int count = names != null ? names.Length : 0;
-        const int pageCols = 4;
-        const int pageRows = 2;
-        const int pageSize = pageCols * pageRows;
+        const int pageSize = 5;   // 목록 줄 수(한 분류 화면)
 
         ACO_Shop shop = root.AddUdonSharpComponent<ACO_Shop>();
 
@@ -328,8 +360,13 @@ public static class ACO_HUDBuilder
 
         // 왼쪽: 특수무장
         MakeUiText(canvas, "SpecialHeader", new Vector2(left, 410f), new Vector2(1300f, 80f), 50f, font, "SPECIAL WEAPON");
-        TextMeshProUGUI selection = MakeUiText(canvas, "Selection", new Vector2(left, 240f), new Vector2(1300f, 250f), 44f, font, "SPECIAL WEAPON: -");
-        // 한 페이지 = 2줄 x 4칸. 칸의 이름·아이콘·자물쇠는 게임 중 ACO_Loadout이 페이지에 맞게 바꾼다(프리팹에는 첫 페이지를 미리 그려 둔다).
+        TextMeshProUGUI selection = MakeUiText(canvas, "Selection", new Vector2(left, 250f), new Vector2(1300f, 230f), 44f, font, "SPECIAL WEAPON: -");
+        // 분류 넘김: < 분류 이름 > (공대공 → 공대지 → 폭탄 → 기타)
+        Image prev = MakeUiButton(canvas, "PrevPage", new Vector2(left - 540f, 80f), new Vector2(160f, 90f), font, "<", 60f);
+        Image next = MakeUiButton(canvas, "NextPage", new Vector2(left + 540f, 80f), new Vector2(160f, 90f), font, ">", 60f);
+        TextMeshProUGUI pageText = MakeUiText(canvas, "PageText", new Vector2(left, 80f), new Vector2(900f, 90f), 46f, font, "AIR-TO-AIR");
+        pageText.color = new Color(1f, 0.85f, 0.35f, 1f);
+        // 목록: 줄마다 왼쪽 아이콘 + 오른쪽 이름·상태(EQUIPPED / OWNED / 가격) + 잠긴 무장 자물쇠. 글자·아이콘은 게임 중 ACO_Loadout이 분류에 맞게 쓴다.
         var images = new Image[pageSize];
         var labels = new TextMeshProUGUI[pageSize];
         var icons = new Image[pageSize];
@@ -337,16 +374,15 @@ public static class ACO_HUDBuilder
         Sprite lockSprite = LoadIcon("lock");
         for (int k = 0; k < pageSize; k++)
         {
-            float x = left + (k % pageCols - (pageCols - 1) * 0.5f) * 315f;
-            float y = 10f - (k / pageCols) * 185f;
+            float y = -10f - k * 100f;
             string name = k < count ? names[k] : "-";
-            Image img = MakeUiButton(canvas, $"Button_{k}", new Vector2(x, y), new Vector2(295f, 170f), font, name, 44f);
+            Image img = MakeUiButton(canvas, $"Button_{k}", new Vector2(left, y), new Vector2(1240f, 92f), font, name, 42f);
             TextMeshProUGUI label = img.GetComponentInChildren<TextMeshProUGUI>();
-            label.alignment = TextAlignmentOptions.Bottom;
-            label.margin = new Vector4(0f, 0f, 0f, 10f);
+            label.alignment = TextAlignmentOptions.Left;
+            label.margin = new Vector4(130f, 0f, 70f, 0f);
             string id = loadout.SpecialIds != null && k < loadout.SpecialIds.Length ? loadout.SpecialIds[k] : "";
-            Image icon = MakeIcon(img.rectTransform, "Icon", k < count ? SpecialIcon(id) : null, new Vector2(0f, 22f), 92f);
-            Image lockIcon = MakeIcon(img.rectTransform, "Lock", lockSprite, new Vector2(115f, 55f), 46f);
+            Image icon = MakeIcon(img.rectTransform, "Icon", k < count ? SpecialIcon(id) : null, new Vector2(-560f, 0f), 80f);
+            Image lockIcon = MakeIcon(img.rectTransform, "Lock", lockSprite, new Vector2(585f, 0f), 46f);
             lockIcon.color = new Color(1f, 0.85f, 0.3f, 0.95f);
             labels[k] = label;
             icons[k] = icon;
@@ -359,9 +395,10 @@ public static class ACO_HUDBuilder
             WireClick(img.GetComponent<Button>(), hb);
             images[k] = img;
         }
-        // 페이지 넘김(무장이 한 페이지를 넘을 때만 보인다)
-        Image prev = MakeUiButton(canvas, "PrevPage", new Vector2(left - 470f, -345f), new Vector2(300f, 100f), font, "< PREV", 42f);
-        Image next = MakeUiButton(canvas, "NextPage", new Vector2(left + 470f, -345f), new Vector2(300f, 100f), font, "NEXT >", 42f);
+        TextMeshProUGUI empty = MakeUiText(canvas, "EmptyText", new Vector2(left, -160f), new Vector2(1200f, 100f), 40f, font, "NO WEAPONS IN THIS CATEGORY YET");
+        empty.color = new Color(0.56f, 0.66f, 0.6f, 1f);
+        empty.gameObject.SetActive(false);
+        loadout.EmptyText = empty.gameObject;
         foreach (Image pager in new[] { prev, next })
         {
             ACO_HangarButton pb = pager.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
@@ -370,14 +407,13 @@ public static class ACO_HUDBuilder
             pb.Index = pager == prev ? -1 : 1;
             WireClick(pager.GetComponent<Button>(), pb);
         }
-        TextMeshProUGUI pageText = MakeUiText(canvas, "PageText", new Vector2(left, -345f), new Vector2(500f, 100f), 40f, font, count > pageSize ? "PAGE 1 / " + ((count + pageSize - 1) / pageSize) : "");
-        Image buy = MakeUiButton(canvas, "BuySpecial", new Vector2(left, -480f), new Vector2(800f, 120f), font, "BUY", 50f);
+        Image buy = MakeUiButton(canvas, "BuySpecial", new Vector2(left, -540f), new Vector2(800f, 100f), font, "BUY", 48f);
         buy.color = new Color(0.45f, 0.4f, 0.12f, 1f);
         ACO_HangarButton buyButton = buy.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
         buyButton.Loadout = loadout;
         buyButton.Action = ACO_HangarButton.ACTION_BUY_SPECIAL;
         WireClick(buy.GetComponent<Button>(), buyButton);
-        MakeUiText(canvas, "SpecialHint", new Vector2(left, -620f), new Vector2(1300f, 80f), 36f, font, "APPLIED WHEN YOU ENTER THE COCKPIT");
+        MakeUiText(canvas, "SpecialHint", new Vector2(left, -615f), new Vector2(1300f, 40f), 28f, font, "APPLIED WHEN YOU ENTER THE COCKPIT");
 
         loadout.SelectionText = selection;
         loadout.ButtonImages = images;
@@ -389,7 +425,6 @@ public static class ACO_HUDBuilder
         var specialIcons = new Sprite[loadout.SpecialIds != null ? loadout.SpecialIds.Length : 0];
         for (int i = 0; i < specialIcons.Length; i++) { specialIcons[i] = SpecialIcon(loadout.SpecialIds[i]); }
         loadout.SpecialIcons = specialIcons;
-        if (count <= pageSize) { prev.gameObject.SetActive(false); next.gameObject.SetActive(false); }
         loadout.BuyButton = buy.gameObject;
         loadout.BuyText = buy.GetComponentInChildren<TextMeshProUGUI>();
 
@@ -402,20 +437,25 @@ public static class ACO_HUDBuilder
         string[] categoryNames = defaults.CategoryNames;
         int rowCount = 0;
         for (int c = 0; c < ACO_PlayerProgress.CATEGORY_COUNT; c++) { rowCount = Mathf.Max(rowCount, defaults.GetCategoryLength(c)); }
+        rowCount = Mathf.Max(rowCount, ACO_PlayerProgress.CONSUMABLE_COUNT);   // SUPPLY 탭
         shop.UpgradeIcons = BuildUpgradeIcons(defaults);
+        shop.ConsumableIcons = new[] { LoadIcon("hull"), LoadIcon("cm_pod"), LoadIcon("ammo"), LoadIcon("fuel") };
         Object.DestroyImmediate(defaultsGo);
 
-        var tabImages = new Image[ACO_PlayerProgress.CATEGORY_COUNT];
-        for (int c = 0; c < ACO_PlayerProgress.CATEGORY_COUNT; c++)
+        // 탭: 강화 분류 + 마지막 SUPPLY(소모품). 패널 폭(1300)에 맞춰 나눈다.
+        int tabCount = ACO_PlayerProgress.CATEGORY_COUNT + 1;
+        float tabStep = 1300f / tabCount;
+        var tabImages = new Image[tabCount];
+        for (int c = 0; c < tabCount; c++)
         {
-            string label = categoryNames != null && c < categoryNames.Length ? categoryNames[c] : $"TAB {c}";
-            float x = right + (c - (ACO_PlayerProgress.CATEGORY_COUNT - 1) * 0.5f) * 262f;
-            Image img = MakeUiButton(canvas, $"Tab_{c}", new Vector2(x, 320f), new Vector2(250f, 100f), font, label, 30f);
+            string label = c == ACO_Shop.TAB_SUPPLY ? "SUPPLY" : (categoryNames != null && c < categoryNames.Length ? categoryNames[c] : $"TAB {c}");
+            float x = right + (c - (tabCount - 1) * 0.5f) * tabStep;
+            Image img = MakeUiButton(canvas, $"Tab_{c}", new Vector2(x, 320f), new Vector2(tabStep - 10f, 100f), font, label, 26f);
             Sprite tabIcon = c < TabIconNames.Length ? LoadIcon(TabIconNames[c]) : null;
             if (tabIcon != null)
             {
-                img.GetComponentInChildren<TextMeshProUGUI>().margin = new Vector4(62f, 0f, 6f, 0f);
-                MakeIcon(img.rectTransform, "Icon", tabIcon, new Vector2(-90f, 0f), 62f);
+                img.GetComponentInChildren<TextMeshProUGUI>().margin = new Vector4(56f, 0f, 4f, 0f);
+                MakeIcon(img.rectTransform, "Icon", tabIcon, new Vector2(-(tabStep - 10f) * 0.5f + 34f, 0f), 54f);
             }
             ACO_HangarButton hb = img.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
             hb.Shop = shop;
@@ -481,10 +521,51 @@ public static class ACO_HUDBuilder
         t.margin = new Vector4(30f, 10f, 30f, 10f);
     }
 
-    /// 게임 진행 버튼(JOIN/READY/LAUNCH). 게임 진행은 씬 오브젝트라 Bake가 연결한다.
-    private static void MakeFlowButton(RectTransform canvas, string name, Vector2 pos, Vector2 size, TMP_FontAsset font, string label, int action)
+    /// 출격 카운트다운 판. Bake가 상태 글자가 있는 패널마다 만들고 ACO_GameFlow.CountdownOverlays/CountdownTexts에 넣는다.
+    public const string FlowCountdownName = "ACO_FlowCountdown";
+
+    /// 패널 전체를 덮는 반투명 판 + 가운데 큰 글자(처음엔 꺼 둔다, 클릭은 막지 않는다 — 아래 버튼이 거절 안내를 띄운다).
+    /// 이미 있으면 그것을 돌려준다. 항상 맨 위(마지막 자식)에 둔다.
+    public static GameObject EnsureFlowCountdown(RectTransform canvas)
     {
-        Image img = MakeUiButton(canvas, name, pos, size, font, label, 56f);
+        Transform old = canvas.Find(FlowCountdownName);
+        if (old != null) { old.SetAsLastSibling(); return old.gameObject; }
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        if (font == null) { return null; }
+
+        var go = new GameObject(FlowCountdownName, typeof(RectTransform));
+        Undo.RegisterCreatedObjectUndo(go, "ACO countdown overlay");
+        go.layer = canvas.gameObject.layer;
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(canvas, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        Image img = go.AddComponent<Image>();
+        img.color = new Color(0f, 0.04f, 0.02f, 0.72f);
+        img.raycastTarget = false;
+
+        TextMeshProUGUI t = MakeUiText(rt, "Text", Vector2.zero, Vector2.zero, 400f, font, "10");
+        var trt = (RectTransform)t.transform;
+        trt.anchorMin = Vector2.zero;
+        trt.anchorMax = Vector2.one;
+        trt.offsetMin = new Vector2(40f, 40f);
+        trt.offsetMax = new Vector2(-40f, -40f);
+        t.alignment = TextAlignmentOptions.Center;
+        t.enableAutoSizing = true;
+        t.fontSizeMin = 40f;
+        t.fontSizeMax = 600f;
+        t.color = new Color(0.45f, 1f, 0.55f, 1f);
+        rt.SetAsLastSibling();
+        go.SetActive(false);
+        return go;
+    }
+
+    /// 게임 진행 버튼(JOIN/READY/LAUNCH 등). 게임 진행은 씬 오브젝트라 Bake가 연결한다.
+    private static void MakeFlowButton(RectTransform canvas, string name, Vector2 pos, Vector2 size, TMP_FontAsset font, string label, int action, float fontSize = 56f)
+    {
+        Image img = MakeUiButton(canvas, name, pos, size, font, label, fontSize);
         ACO_FlowButton fb = img.gameObject.AddUdonSharpComponent<ACO_FlowButton>();
         fb.Action = action;
         fb.Label = img.GetComponentInChildren<TextMeshProUGUI>();
@@ -524,6 +605,29 @@ public static class ACO_HUDBuilder
         img.color = PanelBackground;
         img.raycastTarget = false;
         return rt;
+    }
+
+    /// 카드 배경(누를 수 없는 단색 판).
+    private static Image MakeUiBox(RectTransform parent, string name, Vector2 pos, Vector2 size, Color color)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform));
+        go.layer = 0;
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta = size;
+        Image img = go.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+        return img;
+    }
+
+    /// 카드 안 작은 제목(흐린 색).
+    private static TextMeshProUGUI MakeUiLabel(RectTransform parent, string name, Vector2 pos, Vector2 size, float fontSize, TMP_FontAsset font, string text)
+    {
+        TextMeshProUGUI t = MakeUiText(parent, name, pos, size, fontSize, font, text);
+        t.color = new Color(0.56f, 0.66f, 0.6f, 1f);
+        return t;
     }
 
     private static TextMeshProUGUI MakeUiText(RectTransform parent, string name, Vector2 pos, Vector2 size, float fontSize, TMP_FontAsset font, string text)
@@ -749,8 +853,8 @@ public static class ACO_HUDBuilder
         return true;
     }
 
-    private static readonly Color RwrFar = new Color(1f, 0.85f, 0.2f, 0.9f);
-    private static readonly Color RwrLock = new Color(1f, 0.85f, 0.2f, 0.7f);
+    private static readonly Color RwrFar = new Color(0.35f, 1f, 0.45f, 0.9f);
+    private static readonly Color RwrLock = new Color(0.35f, 1f, 0.45f, 0.75f);
 
     /// RWR(크로스헤어 둘레 위협 링)이 없으면 만든다: 표적 마커 아래 'RWR'(ACO_RWR) → Ring(쉐브론 8개, 락온 호 6개, 항상 맨 위) + 경보음 2개(3D).
     /// 경보음은 사인파 WAV를 Generated에 만들어 쓴다(바꾸려면 AudioSource의 클립만 바꾼다). 만들었으면 true.
@@ -1052,7 +1156,7 @@ public static class ACO_HUDBuilder
         return icons;
     }
 
-    private static readonly string[] TabIconNames = { "tab_airframe", "tab_missile", "tab_sp_aam", "tab_sp_agm", "tab_sp_bomb" };
+    private static readonly string[] TabIconNames = { "tab_airframe", "tab_missile", "tab_sp_aam", "tab_sp_agm", "tab_sp_bomb", "tab_supply" };
 
     /// 특수무장 ID → 아이콘: Textures/Icons/aco_icon_weapon_<id 소문자>.png, 없으면 일반 미사일 그림.
     public static Sprite SpecialIcon(string id)
@@ -1062,16 +1166,40 @@ public static class ACO_HUDBuilder
         return LoadIcon("tab_missile");
     }
 
-    // HUD 설정 패널 줄 순서(항목 번호는 저장 ID 순서라 그대로 두고 보이는 순서만 묶는다): 점수 패널 → 결과·안내 → 마커 → 크로스헤어·RWR.
-    private static readonly int[] HudSettingsRowOrder = {
-        ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE,
-        ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y, ACO_HudSettings.ITEM_RESULT_SCALE,
-        ACO_HudSettings.ITEM_MARKER_SIZE, ACO_HudSettings.ITEM_INFO_ANGLE,
-        ACO_HudSettings.ITEM_CROSSHAIR, ACO_HudSettings.ITEM_CROSSHAIR_SIZE, ACO_HudSettings.ITEM_RWR, ACO_HudSettings.ITEM_RWR_SIZE,
-        ACO_HudSettings.ITEM_CROSSHAIR_DISTANCE };
+    // HUD 설정 패널: 분류 카드(제목 + 줄 — 항목 번호는 저장 ID 순서라 그대로 두고 보이는 묶음만 정한다). 열마다 카드를 위에서 아래로 쌓는다.
+    private struct HudCategory
+    {
+        public int Column;
+        public string Title;
+        public int[] Items;
+        public string[] Labels;
+        public HudCategory(int column, string title, int[] items, string[] labels) { Column = column; Title = title; Items = items; Labels = labels; }
+    }
 
-    /// HUD 설정 패널 프리팹: 항목마다 이름 / − / 값 / +, 아래에 RESET. 판 1.8m x 1.75m(월드 공간 Canvas), 앞면은 루트 +Z 쪽.
-    /// HUD(점수 패널·표적 마커)는 씬 오브젝트라 Bake가 연결한다.
+    private static readonly HudCategory[] HudCategories =
+    {
+        new HudCategory(0, "SCORE PANEL",
+            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE },
+            new[] { "LEFT / RIGHT", "UP / DOWN", "DISTANCE", "SIZE" }),
+        new HudCategory(0, "RESULT / NOTICE TEXT",
+            new[] { ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y, ACO_HudSettings.ITEM_RESULT_SCALE },
+            new[] { "LEFT / RIGHT", "UP / DOWN", "SIZE" }),
+        new HudCategory(1, "RADIO SUBTITLES",
+            new[] { ACO_HudSettings.ITEM_CHATTER_X, ACO_HudSettings.ITEM_CHATTER_Y, ACO_HudSettings.ITEM_CHATTER_SCALE },
+            new[] { "LEFT / RIGHT", "UP / DOWN", "SIZE" }),
+        new HudCategory(1, "TARGET MARKERS",
+            new[] { ACO_HudSettings.ITEM_MARKER_SIZE, ACO_HudSettings.ITEM_INFO_ANGLE },
+            new[] { "FRAME SIZE", "INFO VIEW ANGLE" }),
+        new HudCategory(2, "CROSSHAIR",
+            new[] { ACO_HudSettings.ITEM_CROSSHAIR, ACO_HudSettings.ITEM_CROSSHAIR_SIZE, ACO_HudSettings.ITEM_CROSSHAIR_DISTANCE },
+            new[] { "SHOW", "SIZE", "DISTANCE (+RWR)" }),
+        new HudCategory(2, "RWR",
+            new[] { ACO_HudSettings.ITEM_RWR, ACO_HudSettings.ITEM_RWR_SIZE, ACO_HudSettings.ITEM_RWR_MISSILE_SIZE, ACO_HudSettings.ITEM_RWR_LOCK_SIZE },
+            new[] { "SHOW", "RING SIZE", "MISSILE MARK SIZE", "LOCK ARC SIZE" }),
+    };
+
+    /// HUD 설정 패널 프리팹(판 2.8m x 1.25m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커 /
+    /// 크로스헤어, RWR) — 카드마다 제목 + 줄(이름 / − / 값 / +), 가운데 열 아래에 RESET. HUD(점수 패널·표적 마커·RWR·자막)는 씬 오브젝트라 Bake가 연결한다.
     public const string CreditsPath = "Assets/ACO_Addon/Credits/ACO_Credits.txt";
 
     /// 크레딧 보드 프리팹: 판 2.4m x 1.9m(월드 공간 Canvas), 제목 + 본문(텍스트 파일 Credits/ACO_Credits.txt — 실행할 때 ACO_CreditBoard가 읽는다).
@@ -1119,28 +1247,43 @@ public static class ACO_HUDBuilder
 
         GameObject root = new GameObject("ACO_HudSettings");
         ACO_HudSettings settings = root.AddUdonSharpComponent<ACO_HudSettings>();
-        string[] names = settings.ItemNames;
 
-        RectTransform canvas = MakeUiPanel(root.transform, 1800f, 1750f);
-        MakeUiText(canvas, "Title", new Vector2(0f, 790f), new Vector2(1700f, 110f), 76f, font, "HUD SETTINGS");
+        const float colWidth = 860f, rowH = 90f, headerH = 76f, cardGap = 30f, top = 470f;
+        float[] colX = { -900f, 0f, 900f };
+        float[] colY = { top, top, top };
+        RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1250f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 555f), new Vector2(2700f, 100f), 70f, font, "HUD SETTINGS");
         var values = new TextMeshProUGUI[ACO_HudSettings.ITEM_COUNT];
-        for (int row = 0; row < HudSettingsRowOrder.Length; row++)
+        var accent = new Color(1f, 0.85f, 0.35f, 1f);
+        foreach (HudCategory cat in HudCategories)
         {
-            int i = HudSettingsRowOrder[row];
-            float y = 680f - row * 94f;
-            string label = names != null && i < names.Length ? names[i] : $"ITEM {i}";
-            TextMeshProUGUI l = MakeUiText(canvas, $"Label_{i}", new Vector2(-430f, y), new Vector2(820f, 90f), 44f, font, label);
-            l.alignment = TextAlignmentOptions.Left;
-            MakeHudSettingButton(canvas, $"Minus_{i}", new Vector2(150f, y), font, "-", i, -1);
-            values[i] = MakeUiText(canvas, $"Value_{i}", new Vector2(390f, y), new Vector2(320f, 90f), 44f, font, "-");
-            MakeHudSettingButton(canvas, $"Plus_{i}", new Vector2(630f, y), font, "+", i, 1);
+            float cx = colX[cat.Column];
+            float y0 = colY[cat.Column];
+            float h = headerH + cat.Items.Length * rowH + 16f;
+            MakeUiBox(canvas, $"Card_{cat.Title}", new Vector2(cx, y0 - h * 0.5f), new Vector2(colWidth, h), new Color(0.04f, 0.09f, 0.06f, 1f));
+            TextMeshProUGUI header = MakeUiText(canvas, $"Header_{cat.Title}", new Vector2(cx, y0 - headerH * 0.5f), new Vector2(colWidth - 40f, headerH), 40f, font, cat.Title);
+            header.alignment = TextAlignmentOptions.Left;
+            header.color = accent;
+            for (int r = 0; r < cat.Items.Length; r++)
+            {
+                int i = cat.Items[r];
+                float y = y0 - headerH - rowH * (r + 0.5f);
+                TextMeshProUGUI l = MakeUiText(canvas, $"Label_{i}", new Vector2(cx - 215f, y), new Vector2(400f, rowH), 36f, font, cat.Labels[r]);
+                l.alignment = TextAlignmentOptions.Left;
+                MakeHudSettingButton(canvas, $"Minus_{i}", new Vector2(cx + 60f, y), font, "-", i, -1);
+                values[i] = MakeUiText(canvas, $"Value_{i}", new Vector2(cx + 200f, y), new Vector2(160f, rowH), 36f, font, "-");
+                MakeHudSettingButton(canvas, $"Plus_{i}", new Vector2(cx + 340f, y), font, "+", i, 1);
+            }
+            colY[cat.Column] = y0 - h - cardGap;
         }
-        Image reset = MakeUiButton(canvas, "Reset", new Vector2(-300f, -730f), new Vector2(500f, 110f), font, "RESET", 54f);
+        // 가운데 열 아래: RESET + 안내
+        float ry = colY[1] - 70f;
+        Image reset = MakeUiButton(canvas, "Reset", new Vector2(colX[1], ry), new Vector2(500f, 110f), font, "RESET ALL", 50f);
         ACO_HudSettingButton rb = reset.gameObject.AddUdonSharpComponent<ACO_HudSettingButton>();
         rb.Settings = settings;
         rb.Direction = 0;
         WireClick(reset.GetComponent<Button>(), rb);
-        MakeUiText(canvas, "Hint", new Vector2(300f, -730f), new Vector2(800f, 110f), 34f, font, "SAVED AUTOMATICALLY\nYOUR HUD PREVIEWS WHILE ADJUSTING");
+        MakeUiText(canvas, "Hint", new Vector2(colX[1], ry - 120f), new Vector2(colWidth, 100f), 30f, font, "SAVED AUTOMATICALLY\nYOUR HUD PREVIEWS WHILE ADJUSTING");
         settings.ValueTexts = values;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_HudSettings.prefab");
@@ -1152,7 +1295,7 @@ public static class ACO_HUDBuilder
 
     private static void MakeHudSettingButton(RectTransform canvas, string name, Vector2 pos, TMP_FontAsset font, string label, int item, int direction)
     {
-        Image img = MakeUiButton(canvas, name, pos, new Vector2(130f, 82f), font, label, 60f);
+        Image img = MakeUiButton(canvas, name, pos, new Vector2(120f, 76f), font, label, 56f);
         ACO_HudSettingButton b = img.gameObject.AddUdonSharpComponent<ACO_HudSettingButton>();
         b.Item = item;
         b.Direction = direction;
@@ -1353,9 +1496,9 @@ public static class ACO_HUDBuilder
         return go;
     }
 
-    /// 무전 자막(ACO_Radio)을 씬에 만든다: 머리를 따라오는 자막 한 줄(가운데 정렬, 줄바꿈 허용) + 2D 음성 AudioSource.
+    /// 무전 채터(ACO_Chatter)를 씬에 만든다: 머리를 따라오는 자막 한 줄(가운데 정렬, 줄바꿈 허용) + 2D 음성 AudioSource.
     /// 글자는 HUD와 같은 '항상 맨 위' 머티리얼(Generated/ACO_HUDTextOverlay — HUD 프리팹을 만들 때 생긴다)을 쓴다.
-    public static GameObject CreateRadio()
+    public static GameObject CreateChatter()
     {
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
         if (font == null)
@@ -1366,15 +1509,15 @@ public static class ACO_HUDBuilder
         Material textMat = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_HUDTextOverlay.mat");
         if (textMat == null) { textMat = font.material; }
 
-        var root = new GameObject("ACO_Radio");
-        ACO_Radio radio = root.AddUdonSharpComponent<ACO_Radio>();
+        var root = new GameObject("ACO_Chatter");
+        ACO_Chatter radio = root.AddUdonSharpComponent<ACO_Chatter>();
 
         // 한 단위 = 0.03m(점수 패널과 같다). 폭 50단위 ≈ 1.5m, 넘치면 줄바꿈.
         var panel = new GameObject("SubtitlePanel");
         panel.transform.SetParent(root.transform, false);
         panel.transform.localScale = Vector3.one * 0.03f;
         TextMeshPro text = MakeText(panel.transform, "Subtitle", Vector3.zero, 6f, Color.white,
-            TextAlignmentOptions.Bottom, new Vector2(50f, 8f), new Vector2(0.5f, 0f), font, textMat, "[SKY EYE] Radio check.");
+            TextAlignmentOptions.Bottom, new Vector2(50f, 8f), new Vector2(0.5f, 0f), font, textMat, "[SKY EYE] Chatter check.");
         text.enableWordWrapping = true;
 
         var voiceGo = new GameObject("Voice");

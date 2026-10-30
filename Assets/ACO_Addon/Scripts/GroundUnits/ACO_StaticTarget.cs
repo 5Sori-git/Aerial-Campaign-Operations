@@ -111,8 +111,15 @@ namespace ACO
         public void NetRespawn()
         {
             // 체력 복구는 한 클라이언트만 해야 한다(RespawnTarget이 내부에서 소유권을 가져가고 동기화한다).
-            if (Networking.IsOwner(gameObject) && TargetHealth) { TargetHealth.RespawnTarget(); }
+            if (Networking.IsOwner(gameObject) && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
             SetDeathVisuals(false);
+        }
+
+        /// SaccTarget 체력 복구(RespawnTarget). 풀에서 막 켠 유닛은 SaccTarget의 Start가 아직 안 돌아 localPlayer·FullHealth가 비어 있다 —
+        /// 바로 부르면 예외로 SaccTarget이 멈춘다(그 뒤로 피해·격추가 안 된다). 그래서 2프레임 뒤에 부른다.
+        public void _RespawnTargetHealth()
+        {
+            if (TargetHealth) { TargetHealth.RespawnTarget(); }
         }
     }
 }

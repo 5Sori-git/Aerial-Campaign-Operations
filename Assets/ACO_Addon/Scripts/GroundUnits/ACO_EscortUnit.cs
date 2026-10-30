@@ -206,7 +206,7 @@ namespace ACO
             SpawnGuns(revive);
             if (revive)
             {
-                if (Networking.IsOwner(gameObject) && TargetHealth) { TargetHealth.RespawnTarget(); }
+                if (Networking.IsOwner(gameObject) && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
                 SetDeathVisuals(false);
                 SetCrashHidden(false);
                 return;
@@ -488,6 +488,13 @@ namespace ACO
                     if (DisableCollidersOnDeath[i]) { DisableCollidersOnDeath[i].enabled = !dead; }
                 }
             }
+        }
+
+        /// SaccTarget 체력 복구(RespawnTarget). 풀에서 막 켠 유닛은 SaccTarget의 Start가 아직 안 돌아 localPlayer·FullHealth가 비어 있다 —
+        /// 바로 부르면 예외로 SaccTarget이 멈춘다(그 뒤로 피해·격추가 안 된다). 그래서 2프레임 뒤에 부른다.
+        public void _RespawnTargetHealth()
+        {
+            if (TargetHealth) { TargetHealth.RespawnTarget(); }
         }
     }
 }

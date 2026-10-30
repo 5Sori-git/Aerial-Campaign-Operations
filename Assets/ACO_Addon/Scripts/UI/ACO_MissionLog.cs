@@ -25,7 +25,8 @@ namespace ACO
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 진행도를 넣는다. 내 격추 점수를 개인 보상으로 넘기고, 디브리핑에 보상을 띄운다")]
         public ACO_PlayerProgress Progress;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(격추 대사)")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
         [Tooltip("제목/결과 줄")]
         public TextMeshPro HeaderText;
         [Tooltip("격추 기록")]
@@ -305,7 +306,7 @@ namespace ACO
             PushRow(row);
             AddPilotScore(pilot, points);
             if (mine && Progress) { Progress.AddPersonalScore(points); }
-            if (Radio && valid) { Radio.Report(mine ? ACO_Radio.EV_KILL : ACO_Radio.EV_ALLY_KILL, killer.displayName); }
+            if (Chatter && valid) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
         }
 
         private void PushRow(string row)
