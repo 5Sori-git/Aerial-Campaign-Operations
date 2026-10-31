@@ -351,6 +351,23 @@ def i_lock(c):
     seg(c, (50, 66), (50, 80), 5)
 
 
+def i_cm_pod(c):
+    # 대응탄 포드: 원통 포드 + 아래로 떨어지는 플레어 셋(꼬리 곡선)
+    rrect(c, 20, 18, 80, 40, 10)
+    seg(c, (30, 29), (70, 29), 4)
+    for x, dx in ((32, -10), (50, 0), (68, 10)):
+        seg(c, (x, 46), (x + dx * 0.6, 64), 4)
+        fill_circle(c, x + dx, 76, 7)
+
+
+def i_tab_supply(c):
+    # 보급 상자: 상자 + 낙하산 줄
+    rrect(c, 24, 50, 76, 88, 5)
+    seg(c, (24, 66), (76, 66), 4); seg(c, (50, 50), (50, 88), 4)
+    arc(c, 50, 30, 26, 180, 360)
+    seg(c, (24, 30), (36, 50), 4); seg(c, (76, 30), (64, 50), 4)
+
+
 def i_credits(c):
     # 동전 두 개: 뒤 동전은 앞 동전에 가려지지 않는 테두리만, 앞 동전은 안쪽 고리 + 마름모.
     arc(c, 60, 40, 30, 200, 425)
@@ -368,7 +385,7 @@ ICONS = [
     ("weapon_4aam", i_w_4aam), ("weapon_ugb", i_w_ugb), ("weapon_rkt", i_w_rkt), ("weapon_none", i_w_none),
     ("weapon_4agm", i_w_4agm), ("weapon_lagm", i_w_lagm), ("weapon_laam", i_w_laam), ("weapon_sasm", i_w_sasm),
     ("weapon_qaam", i_w_qaam), ("weapon_hpaa", i_w_hpaa), ("weapon_hvaa", i_w_hvaa),
-    ("lock", i_lock), ("credits", i_credits),
+    ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
 ]
 
 

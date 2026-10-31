@@ -21,6 +21,18 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
     }
 
     [MenuItem("ACO/Bake NPC References")]
+    /// 물리 충돌을 만드는 콜라이더(트리거·바퀴 제외).
+    private static Collider[] SolidColliders(Component root)
+    {
+        var list = new List<Collider>();
+        foreach (Collider c in root.GetComponentsInChildren<Collider>(true))
+        {
+            if (c.isTrigger || c is WheelCollider) { continue; }
+            list.Add(c);
+        }
+        return list.ToArray();
+    }
+
     public static void BakeNeighbors()
     {
         var fighters = new List<ACO_NPCFighterAI>();
@@ -38,8 +50,31 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             Debug.LogWarning($"[ACO] CombatDirector가 {directors.Count}개 있습니다. '{director.name}' 하나만 사용합니다.", director);
         }
 
+        // 공중 충돌 방지: 플레이어 기체(강화 확장이 있는 기체)와 NPC 전투기의 충돌 콜라이더
+        var playerUpgrades = new List<ACO_VehicleUpgrades>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            playerUpgrades.AddRange(root.GetComponentsInChildren<ACO_VehicleUpgrades>(true));
+        }
+        foreach (ACO_VehicleUpgrades up in playerUpgrades)
+        {
+            Component body = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+            up.BodyColliders = SolidColliders(body != null ? body : up);
+            up.NPCFighters = fighters.ToArray();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(up);
+            EditorUtility.SetDirty(up);
+        }
+
+        int npcColliders = 0;
+        int maxNpcColliders = 0;
         foreach (ACO_NPCFighterAI fighter in fighters)
         {
+            Component npcBody = fighter.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+            fighter.BodyColliders = SolidColliders(npcBody != null ? npcBody : fighter);
+            fighter.PlayerVehicles = playerUpgrades.ToArray();
+            npcColliders += fighter.BodyColliders.Length;
+            maxNpcColliders = Mathf.Max(maxNpcColliders, fighter.BodyColliders.Length);
+
             var others = new List<ACO_NPCFighterAI>(fighters.Count);
             foreach (ACO_NPCFighterAI other in fighters)
             {
@@ -50,6 +85,14 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             fighter.Director = director;
             PrefabUtility.RecordPrefabInstancePropertyModifications(fighter);
             EditorUtility.SetDirty(fighter);
+        }
+
+        if (fighters.Count > 0 && playerUpgrades.Count > 0)
+        {
+            int maxPlayer = 0;
+            foreach (ACO_VehicleUpgrades up in playerUpgrades) { maxPlayer = Mathf.Max(maxPlayer, up.BodyColliders.Length); }
+            Debug.Log($"[ACO] 공중 충돌 방지: 플레이어 기체 {playerUpgrades.Count}대(한 대 최대 콜라이더 {maxPlayer}개) × NPC 전투기 {fighters.Count}대(콜라이더 {npcColliders}개). "
+                + $"내 기체만 건다 — NPC가 켜질 때·탑승 때 프레임당 IgnoreCollision 최대 {maxPlayer * maxNpcColliders}회, 그 뒤 비용 없음.");
         }
 
         if (director != null)
@@ -74,6 +117,63 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeSeatRecenter();
         BakeUiSound();
         BakeSuperAces();
+        BakeSky();
+        BakeTargetAnimators();
+    }
+
+    /// SaccTarget 애니메이터(Target.controller)는 'normal' 상태가 클립 없이 Write Defaults로 모델·락온 표적·콜라이더를 되살린다.
+    /// 그런데 격추된 채(TargetExplode — 모델 끔, 파괴 모델 켬, 락온 표적 끔) 풀에서 꺼졌다가 다음 미션에 다시 켜지면 애니메이터가
+    /// 다시 바인딩하면서 그 '파괴된 모습'을 기본값으로 잡는다 → 부활해도 파괴 모델이 보이고 락온이 안 되는 유닛이 된다.
+    /// Keep Animator State On Disable을 켜면 다시 켤 때 바인딩·상태를 그대로 두므로 처음(살아 있을 때) 잡은 기본값이 유지된다.
+    private static void BakeTargetAnimators()
+    {
+        int fixedCount = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (SaccFlightAndVehicles.SaccTarget t in root.GetComponentsInChildren<SaccFlightAndVehicles.SaccTarget>(true))
+            {
+                Animator a = t.GetComponent<Animator>();
+                if (a == null || a.keepAnimatorStateOnDisable) { continue; }
+                a.keepAnimatorStateOnDisable = true;
+                MarkChanged(a);
+                fixedCount++;
+            }
+        }
+        if (fixedCount > 0) { Debug.Log($"[ACO] SaccTarget 애니메이터 {fixedCount}개에 Keep Animator State On Disable을 켰습니다(풀 재사용 때 파괴된 모습이 기본값으로 잡히지 않게)."); }
+    }
+
+    /// 구름·날씨: 육각 지형 연결(지형 시드로 배치·날씨), 게임 진행에 날씨(작전 카드 표시).
+    private static void BakeSky()
+    {
+        ACO_HexTerrain terrain = null;
+        var fields = new List<ACO_CloudField>();
+        var weathers = new List<ACO_Weather>();
+        ACO_GameFlow flow = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            fields.AddRange(root.GetComponentsInChildren<ACO_CloudField>(true));
+            weathers.AddRange(root.GetComponentsInChildren<ACO_Weather>(true));
+            if (terrain == null) { terrain = root.GetComponentInChildren<ACO_HexTerrain>(true); }
+            if (flow == null) { flow = root.GetComponentInChildren<ACO_GameFlow>(true); }
+        }
+        foreach (ACO_Weather w in weathers)
+        {
+            if (terrain != null && w.Terrain != terrain) { w.Terrain = terrain; MarkChanged(w); }
+            if (w.Sun == null) { w.Sun = ACO_SkyBuilder.FindSun(); if (w.Sun != null) { MarkChanged(w); } }
+        }
+        if (flow != null)
+        {
+            ACO_Weather w0 = weathers.Count > 0 ? weathers[0] : null;
+            if (flow.Weather != w0) { flow.Weather = w0; MarkChanged(flow); }
+        }
+        foreach (ACO_CloudField f in fields)
+        {
+            if (terrain != null && f.Terrain != terrain) { f.Terrain = terrain; MarkChanged(f); }
+            if (f.Clouds == null || f.Clouds.Length == 0)
+            {
+                Debug.LogWarning($"[ACO] 구름 '{f.name}'에 구름 풀이 없습니다 — ACO → Environment → Create Clouds and Rain으로 다시 만드세요.", f);
+            }
+        }
     }
 
     /// 슈퍼에이스 ↔ 같은 기체의 AI(AI.SuperAce가 있어야 생성기가 일반 배치에서 뺀다). 생성기 풀에 없으면 알린다.
@@ -139,6 +239,15 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             if (rwr == null) { rwr = root.GetComponentInChildren<ACO_RWR>(true); }
         }
         if (rwr == null) { return; }
+        // 예전 기본색(노랑)이면 HUD 초록으로(직접 바꾼 색은 그대로)
+        var oldYellow = new Color(1f, 0.85f, 0.2f, 0.9f);
+        if (ColorClose(rwr.FarColor, oldYellow))
+        {
+            rwr.FarColor = new Color(0.35f, 1f, 0.45f, 0.9f);
+            rwr.LockColor = new Color(0.35f, 1f, 0.45f, 0.75f);
+            MarkChanged(rwr);
+            Debug.Log("[ACO] RWR 기본색을 노랑에서 HUD 초록으로 바꿨습니다(가까운 미사일은 그대로 빨강).", rwr);
+        }
         int linked = 0;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
@@ -149,15 +258,20 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (linked > 0) { Debug.Log($"[ACO] RWR '{rwr.name}'을 {linked}곳에 연결했습니다.", rwr); }
     }
 
-    /// 무전 자막 ↔ 관리자·생성기, 그리고 상황을 알리는 쪽(작전판, 플레이어·NPC 미사일 런처, NPC 전투기, 기체 강화 확장)에 무전을 넣는다.
+    private static bool ColorClose(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f && Mathf.Abs(a.a - b.a) < 0.01f;
+    }
+
+    /// 무전 채터 ↔ 관리자·생성기, 그리고 상황을 알리는 쪽(작전판, 플레이어·NPC 미사일 런처, NPC 전투기, 기체 강화 확장)에 채터를 넣는다.
     private static void BakeRadio()
     {
-        ACO_Radio radio = null;
+        ACO_Chatter radio = null;
         ACO_MissionManager manager = null;
         ACO_MissionGenerator generator = null;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            if (radio == null) { radio = root.GetComponentInChildren<ACO_Radio>(true); }
+            if (radio == null) { radio = root.GetComponentInChildren<ACO_Chatter>(true); }
             if (manager == null) { manager = root.GetComponentInChildren<ACO_MissionManager>(true); }
             if (generator == null) { generator = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
         }
@@ -170,15 +284,38 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         int linked = 0;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            foreach (ACO_MissionLog c in root.GetComponentsInChildren<ACO_MissionLog>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_DFUNC_Missile c in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_MissileLauncher c in root.GetComponentsInChildren<ACO_MissileLauncher>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_NPCFighterAI c in root.GetComponentsInChildren<ACO_NPCFighterAI>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_SuperAce c in root.GetComponentsInChildren<ACO_SuperAce>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_FlareDispenser c in root.GetComponentsInChildren<ACO_FlareDispenser>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
-            foreach (ACO_VehicleUpgrades c in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true)) { if (c.Radio != radio) { c.Radio = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_MissionLog c in root.GetComponentsInChildren<ACO_MissionLog>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_DFUNC_Missile c in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_MissileLauncher c in root.GetComponentsInChildren<ACO_MissileLauncher>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_NPCFighterAI c in root.GetComponentsInChildren<ACO_NPCFighterAI>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_SuperAce c in root.GetComponentsInChildren<ACO_SuperAce>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_FlareDispenser c in root.GetComponentsInChildren<ACO_FlareDispenser>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_VehicleUpgrades c in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
+            foreach (ACO_HudSettings c in root.GetComponentsInChildren<ACO_HudSettings>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); linked++; } }
         }
-        if (linked > 0) { Debug.Log($"[ACO] 무전 자막 '{radio.name}'를 {linked}곳에 연결했습니다.", radio); }
+        if (radio.Voice == null) { Debug.LogWarning("[ACO] 무전 채터에 음성 AudioSource(Voice)가 없어 음성·PTT가 들리지 않습니다.", radio); }
+
+        // 씬에 저장된 대사 표가 예전 무전 기본값 그대로면 새 기본 대사로 바꾼다(손으로 고친 대사는 건드리지 않는다)
+        const string OldFirstLine = "All aircraft, the operation has begun. Good hunting.";
+        if (radio.LineText != null && radio.LineText.Length > 0 && radio.LineText[0] == OldFirstLine)
+        {
+            var temp = new GameObject("ACO_ChatterDefaults") { hideFlags = HideFlags.HideAndDontSave };
+            try
+            {
+                ACO_Chatter d = temp.AddComponent<ACO_Chatter>();   // 필드 기본값만 읽는다
+                Undo.RecordObject(radio, "ACO chatter defaults");
+                radio.LineEvent = d.LineEvent;
+                radio.LineSpeaker = d.LineSpeaker;
+                radio.LineText = d.LineText;
+                radio.LineClip = new AudioClip[0];
+                radio.SpeakerNames = d.SpeakerNames;
+                radio.SpeakerColors = d.SpeakerColors;
+                MarkChanged(radio);
+                Debug.Log("[ACO] 무전 채터의 대사 표를 새 기본 대사로 바꿨습니다(예전 기본값이었음).", radio);
+            }
+            finally { Object.DestroyImmediate(temp); }
+        }
+        if (linked > 0) { Debug.Log($"[ACO] 무전 채터 '{radio.name}'를 {linked}곳에 연결했습니다.", radio); }
     }
 
     /// HUD 설정 패널 ↔ 씬의 HUD(점수 패널·표적 마커). 비어 있을 때만 채운다.
@@ -241,6 +378,14 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (flows.Count > 1) { Debug.LogWarning($"[ACO] 게임 진행(ACO_GameFlow)이 {flows.Count}개 있습니다. '{flow.name}' 하나만 연결합니다.", flow); }
 
         if (flow.Manager == null) { flow.Manager = manager; }
+        // 지형 이름: 프리셋이 늘었으면 새 이름을 붙인다
+        string[] defNames = { "BIG ISLAND", "ARCHIPELAGO", "TWIN ISLANDS", "ATOLL", "ISLAND CHAIN", "PLATEAU", "MOUNTAIN RANGE", "CANYON", "COASTLINE", "VOLCANO", "REEF ISLANDS", "BASIN" };
+        if (flow.TerrainNames == null || flow.TerrainNames.Length < defNames.Length)
+        {
+            var names = new string[defNames.Length];
+            for (int k = 0; k < names.Length; k++) { names[k] = flow.TerrainNames != null && k < flow.TerrainNames.Length ? flow.TerrainNames[k] : defNames[k]; }
+            flow.TerrainNames = names;
+        }
         ACO_ScreenFader fader = null;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
@@ -275,13 +420,22 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (decks < slots) { Debug.LogWarning($"[ACO] 게임 진행: 기체 {slots}대인데 갑판 출격 위치(DeckPoints)가 {decks}개입니다 — 위치가 없는 칸은 출격할 수 없습니다.", flow); }
 
         var status = new List<TMPro.TextMeshProUGUI>();
+        var banners = new List<TMPro.TextMeshProUGUI>();
+        var phaseTexts = new List<TMPro.TextMeshProUGUI>();
+        var phaseInfos = new List<TMPro.TextMeshProUGUI>();
+        var terrainTexts = new List<TMPro.TextMeshProUGUI>();
         var buttons = new List<ACO_FlowButton>();
         var phaseButtons = new List<ACO_MissionStartButton>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (TMPro.TextMeshProUGUI t in root.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true))
             {
-                if (t.gameObject.name == ACO_HUDBuilder.FlowStatusName) { status.Add(t); }
+                string n = t.gameObject.name;
+                if (n == ACO_HUDBuilder.FlowStatusName) { status.Add(t); }
+                else if (n == ACO_HUDBuilder.FlowBannerName) { banners.Add(t); }
+                else if (n == ACO_HUDBuilder.FlowPhasesName) { phaseTexts.Add(t); }
+                else if (n == ACO_HUDBuilder.FlowPhaseInfoName) { phaseInfos.Add(t); }
+                else if (n == ACO_HUDBuilder.FlowTerrainName) { terrainTexts.Add(t); }
             }
             foreach (ACO_FlowButton b in root.GetComponentsInChildren<ACO_FlowButton>(true))
             {
@@ -301,10 +455,37 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
         }
         flow.StatusTexts = status.ToArray();
+        flow.BannerTexts = banners.ToArray();
+        flow.PhaseTexts = phaseTexts.ToArray();
+        flow.PhaseInfoTexts = phaseInfos.ToArray();
+        flow.TerrainTexts = terrainTexts.ToArray();
+        // 출격 카운트다운 판: 상태 글자·배너가 있는 패널(캔버스)마다 하나 — 없으면 만든다
+        var overlays = new List<GameObject>();
+        var overlayTexts = new List<TMPro.TextMeshProUGUI>();
+        var panelTexts = new List<TMPro.TextMeshProUGUI>(status);
+        panelTexts.AddRange(banners);
+        foreach (TMPro.TextMeshProUGUI t in panelTexts)
+        {
+            Canvas c = t.canvas != null ? t.canvas.rootCanvas : t.GetComponentInParent<Canvas>(true);
+            RectTransform canvasRt = c != null ? (RectTransform)c.transform : t.transform.parent as RectTransform;
+            if (canvasRt == null) { continue; }
+            GameObject ov = ACO_HUDBuilder.EnsureFlowCountdown(canvasRt);
+            if (ov == null || overlays.Contains(ov)) { continue; }
+            overlays.Add(ov);
+            overlayTexts.Add(ov.GetComponentInChildren<TMPro.TextMeshProUGUI>(true));
+        }
+        flow.CountdownOverlays = overlays.ToArray();
+        flow.CountdownTexts = overlayTexts.ToArray();
+        // 격납고·상점: 출격 카운트다운 중 무장 변경·구매를 막는다
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_Loadout l in root.GetComponentsInChildren<ACO_Loadout>(true)) { if (l.Flow != flow) { l.Flow = flow; MarkChanged(l); } }
+            foreach (ACO_Shop sh in root.GetComponentsInChildren<ACO_Shop>(true)) { if (sh.Flow != flow) { sh.Flow = flow; MarkChanged(sh); } }
+        }
         flow.Buttons = buttons.ToArray();
         flow.PhaseButtons = phaseButtons.ToArray();
         MarkChanged(flow);
-        Debug.Log($"[ACO] 게임 진행 '{flow.name}'를 연결했습니다(기체 {slots}, 상태 글자 {status.Count}, 진행 버튼 {buttons.Count}, 페이즈 버튼 {phaseButtons.Count}).", flow);
+        Debug.Log($"[ACO] 게임 진행 '{flow.name}'를 연결했습니다(기체 {slots}, 상태 글자 {status.Count}, 카운트다운 판 {overlays.Count}, 진행 버튼 {buttons.Count}, 페이즈 버튼 {phaseButtons.Count}).", flow);
     }
 
     /// 진행도(재화·강화·해금, 씬에 하나)를 격납고·상점·작전판·기체 강화 확장에 연결한다.
@@ -357,6 +538,17 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
 
     private static void BakePlayerProgress()
     {
+        // 예전 이름 "LOCK CONE" → "SEEKER CONE"(강화가 락온 각도가 아니라 미사일 시커 범위를 키운다)
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_PlayerProgress pp in root.GetComponentsInChildren<ACO_PlayerProgress>(true))
+            {
+                if (pp.UpgradeNames == null) { continue; }
+                bool renamed = false;
+                for (int k = 0; k < pp.UpgradeNames.Length; k++) { if (pp.UpgradeNames[k] == "LOCK CONE") { pp.UpgradeNames[k] = "SEEKER CONE"; renamed = true; } }
+                if (renamed) { MarkChanged(pp); }
+            }
+        }
         var progresses = new List<ACO_PlayerProgress>();
         var upgrades = new List<ACO_VehicleUpgrades>();
         ACO_MissionManager manager = null;
@@ -431,6 +623,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 }
             }
             up.Weapons = weapons.ToArray();
+            up.Flares = entity.GetComponentsInChildren<SaccFlightAndVehicles.DFUNC_Flares>(true);   // 대응탄 포드 소모품
             MarkChanged(up);
             ACO_PlayerMissileSetup.EnsureSeatRecenter(entity);
 
@@ -576,6 +769,17 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 foreach (ACO_HexTerrain hex in r.GetComponentsInChildren<ACO_HexTerrain>(true))
                 {
                     WarnHexMeshMismatch(hex);
+                    // 프리셋이 늘었다: 예전(짧은) 비율 배열이면 새 칸을 기본값으로 늘린다(안 늘리면 새 프리셋이 안 나온다)
+                    float[] defW = { 1f, 1f, 1f, 0.5f, 1f, 1f, 1f, 1f, 1f, 1f, 0.7f, 1f };
+                    if (hex.PresetWeights == null || hex.PresetWeights.Length < defW.Length)
+                    {
+                        var w = new float[defW.Length];
+                        for (int k = 0; k < w.Length; k++) { w[k] = hex.PresetWeights != null && k < hex.PresetWeights.Length ? hex.PresetWeights[k] : defW[k]; }
+                        hex.PresetWeights = w;
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(hex);
+                        EditorUtility.SetDirty(hex);
+                        Debug.Log("[ACO] 육각 지형 프리셋 비율에 새 지형(해안·화산섬·암초 군도·분지)을 넣었습니다.", hex);
+                    }
                     if (Mathf.Approximately(hex.HexRadius, ACO_PrefabBuilder.HexRadius)) { continue; }
                     hex.HexRadius = ACO_PrefabBuilder.HexRadius;
                     PrefabUtility.RecordPrefabInstancePropertyModifications(hex);
@@ -663,15 +867,6 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 button.Manager = firstManager;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(button);
                 EditorUtility.SetDirty(button);
-            }
-            foreach (ACO_MissionVoice voice in root.GetComponentsInChildren<ACO_MissionVoice>(true))
-            {
-                bool changed = false;
-                if (voice.Manager == null && firstManager != null) { voice.Manager = firstManager; changed = true; }
-                if (voice.Voice == null) { voice.Voice = voice.GetComponent<AudioSource>(); changed = voice.Voice != null || changed; }
-                if (!changed) { continue; }
-                PrefabUtility.RecordPrefabInstancePropertyModifications(voice);
-                EditorUtility.SetDirty(voice);
             }
             foreach (ACO_MissionLog log in root.GetComponentsInChildren<ACO_MissionLog>(true))
             {
@@ -808,34 +1003,6 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeNeighbors();
         EditorSceneManager.MarkSceneDirty(go.scene);
         Debug.Log("[ACO] 지형 장식을 만들었습니다. 육각 지형이 세워질 때마다 도시/마을/비행장/랜드마크를 놓고, 생성기가 그 둘레에 적을 배치합니다.", go);
-    }
-
-    [MenuItem("ACO/Create Mission Voice")]
-    public static void CreateMissionVoice()
-    {
-        foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects())
-        {
-            ACO_MissionVoice existing = r.GetComponentInChildren<ACO_MissionVoice>(true);
-            if (existing != null)
-            {
-                Selection.activeGameObject = existing.gameObject;
-                Debug.Log("[ACO] 씬에 이미 페이즈 음성이 있어 그것을 선택했습니다.", existing);
-                return;
-            }
-        }
-        var go = new GameObject("ACO_MissionVoice");
-        Undo.RegisterCreatedObjectUndo(go, "Create Mission Voice");
-        AudioSource source = go.AddComponent<AudioSource>();
-        source.playOnAwake = false;
-        source.loop = false;
-        source.spatialBlend = 0f; // 2D — 무전처럼 어디서나 같은 크기
-        source.priority = 0;
-        ACO_MissionVoice voice = go.AddUdonSharpComponent<ACO_MissionVoice>();
-        voice.Voice = source;
-        Selection.activeGameObject = go;
-        BakeNeighbors();
-        EditorSceneManager.MarkSceneDirty(go.scene);
-        Debug.Log("[ACO] 페이즈 음성을 만들었습니다. 유형별(1 타격 … 8 지상 호위) 시작/성공/실패 클립과 공통 클립을 넣으세요.", go);
     }
 
     [MenuItem("ACO/Create Hex Terrain")]
@@ -975,26 +1142,26 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         Debug.Log("[ACO] HUD 설정 패널을 씬에 놓았습니다. 로비나 격납고로 옮기세요(파란 화살표 +Z가 관객 쪽).", go);
     }
 
-    [MenuItem("ACO/Create Radio (Subtitles)")]
-    public static void CreateRadio()
+    [MenuItem("ACO/Create Chatter (Subtitles + Voice)")]
+    public static void CreateChatter()
     {
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            ACO_Radio existing = root.GetComponentInChildren<ACO_Radio>(true);
+            ACO_Chatter existing = root.GetComponentInChildren<ACO_Chatter>(true);
             if (existing != null)
             {
                 Selection.activeGameObject = existing.gameObject;
-                Debug.Log("[ACO] 씬에 이미 무전 자막이 있어 그것을 선택했습니다.", existing);
+                Debug.Log("[ACO] 씬에 이미 무전 채터가 있어 그것을 선택했습니다.", existing);
                 return;
             }
         }
-        GameObject go = ACO_HUDBuilder.CreateRadio();
+        GameObject go = ACO_HUDBuilder.CreateChatter();
         if (go == null) { return; }
-        Undo.RegisterCreatedObjectUndo(go, "Create Radio");
+        Undo.RegisterCreatedObjectUndo(go, "Create Chatter");
         Selection.activeGameObject = go;
         BakeNeighbors();
         EditorSceneManager.MarkSceneDirty(go.scene);
-        Debug.Log("[ACO] 무전 자막을 만들었습니다(위치 무관 — 머리를 따라온다). 대사·확률·쿨타임은 인스펙터에서 고칩니다.", go);
+        Debug.Log("[ACO] 무전 채터를 만들었습니다(위치 무관 — 머리를 따라온다). 대사·음성·확률·쿨타임은 인스펙터에서 고칩니다.", go);
     }
 
     [MenuItem("ACO/Create Combat Director")]

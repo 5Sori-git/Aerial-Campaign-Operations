@@ -34,6 +34,8 @@ namespace ACO
     /// 무장이 어느 계열인지는 무장 모듈 인스펙터의 ACO_DFUNC_Missile.UpgradeFamily(드롭다운). GetFamilyUpgradeId(계열, STAT_*)로 항목 번호를 얻는다.
     /// 특수무장 해금: 무장 ID별(aco_unlock_ + ID). 가격이 0인 무장은 처음부터 해금.
     /// 저장은 항목 번호가 아니라 고정 ID로 한다(강화: aco_up_ + _upgradeKeys) — 항목을 더하거나 순서를 바꿔도 기존 기록이 틀어지지 않는다.
+    /// 소모품(상점 SUPPLY 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
+    /// 산 소모품은 탑승할 때마다 적용되고(ACO_VehicleUpgrades), 출격한 미션이 끝나 보상을 받을 때 모두 쓴 것으로 사라진다(재출격해도 그 미션 동안은 유지).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PlayerProgress : UdonSharpBehaviour
     {
@@ -56,7 +58,7 @@ namespace ACO
         public const int STAT_TURN = 2;        // 선회 속도(대공 계열)
         public const int STAT_LOCK_SPEED = 3;  // 락온 속도(락온 시간 ÷ 배수, 대공 계열)
         public const int STAT_LOCK_RANGE = 4;  // 락온 거리(대공 계열)
-        public const int STAT_LOCK_ANGLE = 5;  // 락온 범위 각도(대공 계열)
+        public const int STAT_LOCK_ANGLE = 5;  // 시커 범위 — 미사일 추적 각도(대공 계열). 이름은 저장 ID(msl_lock_angle 등)와 맞춰 그대로 둔다
         public const int STAT_BLAST = 6;       // 폭발 반경(대지 계열)
         public const int STAT_RELOAD = 7;      // 재장전 속도(슬롯 장전 시간 ÷ 배수, 모든 계열)
 
@@ -77,6 +79,15 @@ namespace ACO
         private const string KEY_UPGRADE = "aco_up_";        // + 강화 ID → 산 단계(int)
         private const string KEY_UNLOCK = "aco_unlock_";     // + 무장 ID(격납고 SpecialIds) → 해금(bool)
         private const string KEY_SPECIAL = "aco_special_id"; // 마지막으로 고른 무장 ID(string)
+        private const string KEY_CONSUMABLE = "aco_cons_";   // + 소모품 ID → 보유(int 1/0)
+
+        // 소모품(CONS_* 순서). 저장 ID는 절대 바꾸거나 재사용하지 않는다(인스펙터에 두지 않는다).
+        public const int CONS_ARMOR = 0;      // 장갑판: 체력 배수
+        public const int CONS_CM = 1;         // 대응탄 포드: 플레어 수 배수
+        public const int CONS_AMMO = 2;       // 탄약 증량: 특수무장(대공·대지·폭탄 계열) 탄수 배수
+        public const int CONS_FUEL = 3;       // 연료탱크: 연료 용량 배수
+        public const int CONSUMABLE_COUNT = 4;
+        private string[] _consumableKeys = new string[] { "armor", "countermeasure", "ammo", "fuel_tank" };
 
         // 강화 저장 ID(항목 번호 순 — UpgradeNames/Steps/BaseCosts와 같은 자리). 인스펙터에 두지 않는다(실수로 바뀌지 않게).
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 다른 항목에 재사용하지 않는다. 새 항목은 아무 자리에나 넣고 새 ID를 준다.
@@ -122,8 +133,8 @@ namespace ACO
         public string[] CategoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB" };
         public string[] UpgradeNames = new string[] {
             "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "STABILITY",
-            "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "LOCK CONE", "RELOAD SPEED",
-            "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "LOCK CONE", "RELOAD SPEED",
+            "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
+            "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "BLAST RADIUS", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "BLAST RADIUS", "RELOAD SPEED" };
         [Tooltip("단계마다 늘어나는 배수(0.1 = 단계당 +10%). 락온 속도·재장전 속도는 시간이 그만큼 짧아진다(1 + 배수로 나눔)")]
@@ -143,7 +154,16 @@ namespace ACO
         [Tooltip("단계별 가격 배수. 길이 = 최대 단계")]
         public float[] LevelCostScale = new float[] { 1f, 2f, 3.5f, 5.5f, 8f };
 
+        [Header("소모품 (상점 SUPPLY 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
+        public string[] ConsumableNames = new string[] { "ARMOR PLATE", "CM POD", "EXTRA AMMO", "FUEL TANK" };
+        [Tooltip("상점에 보일 효과 한 줄")]
+        public string[] ConsumableEffects = new string[] { "HULL +25%", "FLARES +50%", "SP. AMMO +50%", "FUEL +50%" };
+        [Tooltip("효과 배수(체력·플레어 수·특수무장 탄수·연료 용량)")]
+        public float[] ConsumableFactors = new float[] { 1.25f, 1.5f, 1.5f, 1.5f };
+        public int[] ConsumablePrices = new int[] { 1500, 800, 1200, 600 };
+
         private bool _restored;
+        private bool[] _consumables = new bool[CONSUMABLE_COUNT];
         private int _credits;
         private int _pendingCredits;   // 불러오기 전에 받은 보상
         private int[] _levels = new int[UPGRADE_COUNT];
@@ -188,6 +208,10 @@ namespace ACO
             {
                 string key = UpgradeKey(i);
                 _levels[i] = key != "" && PlayerData.TryGetInt(player, key, out v) ? Mathf.Clamp(v, 0, GetMaxLevel()) : 0;
+            }
+            for (int c = 0; c < CONSUMABLE_COUNT; c++)
+            {
+                _consumables[c] = c < _consumableKeys.Length && PlayerData.TryGetInt(player, KEY_CONSUMABLE + _consumableKeys[c], out v) && v > 0;
             }
             string s;
             _savedSpecial = PlayerData.TryGetString(player, KEY_SPECIAL, out s) ? s : "";
@@ -313,6 +337,50 @@ namespace ACO
             SaveCredits();
             _version++;
             return true;
+        }
+
+        // ───────────── 소모품 ─────────────
+
+        public bool HasConsumable(int c) { return _restored && c >= 0 && c < CONSUMABLE_COUNT && _consumables[c]; }
+        public string GetConsumableName(int c) { return ConsumableNames != null && c >= 0 && c < ConsumableNames.Length ? ConsumableNames[c] : ""; }
+        public string GetConsumableEffect(int c) { return ConsumableEffects != null && c >= 0 && c < ConsumableEffects.Length ? ConsumableEffects[c] : ""; }
+        public int GetConsumablePrice(int c) { return ConsumablePrices != null && c >= 0 && c < ConsumablePrices.Length ? ConsumablePrices[c] : 0; }
+
+        /// 지금 적용할 배수: 사 둔 소모품이면 효과 배수, 아니면 1.
+        public float GetConsumableFactor(int c)
+        {
+            if (!HasConsumable(c)) { return 1f; }
+            return ConsumableFactors != null && c < ConsumableFactors.Length ? Mathf.Max(ConsumableFactors[c], 0f) : 1f;
+        }
+
+        /// 소모품을 산다. 1 = 샀다, 0 = 크레딧 부족, -1 = 이미 있다, -2 = 불러오는 중.
+        public int BuyConsumable(int c)
+        {
+            if (!_restored) { return -2; }
+            if (c < 0 || c >= CONSUMABLE_COUNT) { return 0; }
+            if (_consumables[c]) { return -1; }
+            int price = GetConsumablePrice(c);
+            if (_credits < price) { return 0; }
+            _credits -= price;
+            _consumables[c] = true;
+            PlayerData.SetInt(KEY_CONSUMABLE + _consumableKeys[c], 1);
+            SaveCredits();
+            _version++;
+            return 1;
+        }
+
+        /// 출격한 미션이 끝났다: 사 둔 소모품을 모두 쓴다.
+        private void UseConsumables()
+        {
+            bool any = false;
+            for (int c = 0; c < CONSUMABLE_COUNT; c++)
+            {
+                if (!_consumables[c]) { continue; }
+                _consumables[c] = false;
+                any = true;
+                if (_restored) { PlayerData.SetInt(KEY_CONSUMABLE + _consumableKeys[c], 0); }
+            }
+            if (any) { _version++; }
         }
 
         public bool BuySpecial(string id, int price)
@@ -457,6 +525,8 @@ namespace ACO
                 if (_restored) { _credits += reward; SaveCredits(); }
                 else { _pendingCredits += reward; }
             }
+            // 이 미션에 출격했으면 소모품은 다 썼다(재출격해도 미션 동안은 유지됐다)
+            if (_sortied) { UseConsumables(); }
             _version++;
             Debug.Log("[ACO] 미션 보상 " + reward + " CR (팀 " + team + " + 개인 " + personal + ") x" + fraction.ToString("0.00")
                 + ", 격추당함 " + _deaths + (success ? "" : ", 실패") + (_lastSortied ? "" : ", 출격 안 함"));

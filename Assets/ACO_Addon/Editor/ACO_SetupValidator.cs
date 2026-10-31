@@ -250,7 +250,7 @@ public class ACO_SetupValidator : EditorWindow
             else { Add(g, OK, $"안전지대 {progress.SafeZones.Length}개", progress); }
         }
         Single<ACO_ScreenFader>(g, "화면 암전", WARN, ACO_SceneBaker.CreateScreenFader);
-        Single<ACO_Radio>(g, "무전 자막", INFO, ACO_SceneBaker.CreateRadio);
+        Single<ACO_Chatter>(g, "무전 채터", INFO, ACO_SceneBaker.CreateChatter);
     }
 
     private void CheckFlow()
@@ -308,12 +308,14 @@ public class ACO_SetupValidator : EditorWindow
         }
 
         List<ACO_MissionStartButton> phaseButtons = FindAll<ACO_MissionStartButton>();
-        if (phaseButtons.Count == 0) { Add(g, ERROR, "작전 콘솔(ACO_MissionConsole — 페이즈 선택·명단·JOIN)이 씬에 없습니다.", null, () => PlacePrefab("ACO_MissionConsole", ACO_HUDBuilder.CreateMissionConsolePrefab)); }
-        else if (!HasFlowButton(ACO_GameFlow.ACTION_TOGGLE_JOIN) || !HasFlowButton(ACO_GameFlow.ACTION_REROLL))
+        ACO_FlowButton primary = null;
+        foreach (ACO_FlowButton b in FindAll<ACO_FlowButton>()) { if (b.Action == ACO_GameFlow.ACTION_PRIMARY) { primary = b; break; } }
+        if (phaseButtons.Count == 0 && primary == null) { Add(g, ERROR, "작전 콘솔(ACO_MissionConsole — 상태 배너·작전 카드·명단 칸·JOIN/READY)이 씬에 없습니다.", null, () => PlacePrefab("ACO_MissionConsole", ACO_HUDBuilder.CreateMissionConsolePrefab)); }
+        else if (primary == null)
         {
-            Add(g, WARN, "작전 콘솔이 옛 버전입니다(JOIN/REROLL 없음) — 프리팹을 다시 만들면 씬의 콘솔도 바뀝니다.", phaseButtons[0], () => ACO_HUDBuilder.CreateMissionConsolePrefab());
+            Add(g, WARN, "작전 콘솔이 옛 버전입니다(페이즈 1~5 버튼 + 글자 명단) — 프리팹을 다시 만들면 상태 배너·작전 카드(페이즈 −/+·지형)·명단 칸 카드·내 행동 버튼으로 바뀝니다(그 뒤 Bake).", phaseButtons[0], () => ACO_HUDBuilder.CreateMissionConsolePrefab());
         }
-        else { Add(g, OK, "작전 콘솔", phaseButtons[0]); }
+        else { Add(g, OK, "작전 콘솔", primary); }
 
         ACO_Loadout hangar = FindOne<ACO_Loadout>();
         if (hangar == null) { Add(g, ERROR, "격납고(ACO_Hangar — 특수무장·강화 상점·READY/LAUNCH)가 씬에 없습니다.", null, () => PlacePrefab("ACO_Hangar", ACO_HUDBuilder.CreateHangarPrefab)); }
@@ -322,10 +324,15 @@ public class ACO_SetupValidator : EditorWindow
             Add(g, WARN, "격납고가 옛 버전입니다(상점 또는 READY/LAUNCH 없음) — 프리팹을 다시 만들면 씬의 격납고도 바뀝니다.", hangar, () => ACO_HUDBuilder.CreateHangarPrefab());
         }
         else if (FindOne<ACO_Shop>().RowIcons == null || FindOne<ACO_Shop>().RowIcons.Length == 0 || hangar.LockIcons == null || hangar.LockIcons.Length == 0
-            || hangar.PagerObjects == null || hangar.PagerObjects.Length == 0
+            || hangar.PagerObjects == null || hangar.PagerObjects.Length == 0 || hangar.EmptyText == null
             || FindOne<ACO_Shop>().RowObjects == null || FindOne<ACO_Shop>().RowObjects.Length < ACO_PlayerProgress.MAX_CATEGORY_LENGTH)
         {
             Add(g, WARN, "격납고가 옛 버전입니다(아이콘·특수무장 페이지 버튼이 없거나 강화 줄이 모자람) — 프리팹을 다시 만들면 아이콘·자물쇠·PREV/NEXT·강화 7줄이 붙습니다.", hangar, () => ACO_HUDBuilder.CreateHangarPrefab());
+        }
+        else if (FindOne<ACO_Shop>().TabImages == null || FindOne<ACO_Shop>().TabImages.Length <= ACO_Shop.TAB_SUPPLY
+            || FindOne<ACO_Shop>().ConsumableIcons == null || FindOne<ACO_Shop>().ConsumableIcons.Length == 0)
+        {
+            Add(g, WARN, "격납고가 옛 버전입니다(상점에 소모품 SUPPLY 탭이 없음) — 프리팹을 다시 만들면 6번째 탭(장갑판·대응탄 포드·탄약 증량·연료탱크)이 붙습니다.", hangar, () => ACO_HUDBuilder.CreateHangarPrefab());
         }
         else { Add(g, OK, "격납고", hangar); }
 
@@ -354,7 +361,7 @@ public class ACO_SetupValidator : EditorWindow
         if (hudSettings == null) { Add(g, INFO, "HUD 설정 패널이 없습니다(선택).", null, ACO_SceneBaker.CreateHudSettingsPanel); }
         else if (hudSettings.ValueTexts == null || hudSettings.ValueTexts.Length < ACO_HudSettings.ITEM_COUNT)
         {
-            Add(g, WARN, $"HUD 설정 패널이 예전 버전입니다(항목 {(hudSettings.ValueTexts != null ? hudSettings.ValueTexts.Length : 0)}/{ACO_HudSettings.ITEM_COUNT} — 결과 글자 위치·크로스헤어/RWR 거리 등이 없음). "
+            Add(g, WARN, $"HUD 설정 패널이 예전 버전입니다(항목 {(hudSettings.ValueTexts != null ? hudSettings.ValueTexts.Length : 0)}/{ACO_HudSettings.ITEM_COUNT} — RWR 요소별 크기·분류 카드 배치 등이 없음). "
                 + "[고치기] = 프리팹 다시 만들기(씬의 패널이 프리팹 인스턴스가 아니면 새로 놓으세요).", hudSettings, ACO_HUDBuilder.CreateHudSettingsPrefab);
         }
     }
@@ -380,7 +387,15 @@ public class ACO_SetupValidator : EditorWindow
         {
             Add(g, WARN, $"프로그램이 빠진 UdonBehaviour가 {broken.Count}개 있습니다(예: '{broken[0].name}') — 아무 일도 안 하지만 다른 스크립트를 멈추게 할 수 있습니다. [고치기] = 그 컴포넌트만 제거.", broken[0], () =>
             {
-                foreach (VRC.Udon.UdonBehaviour ub in broken) { if (ub != null) { Undo.DestroyObjectImmediate(ub); } }
+                foreach (VRC.Udon.UdonBehaviour ub in broken)
+                {
+                    if (ub == null) { continue; }
+                    GameObject go = ub.gameObject;
+                    Undo.DestroyObjectImmediate(ub);
+                    // 지워진 U# 스크립트(예: 예전 페이즈 음성)는 스크립트가 빠진 컴포넌트도 함께 남는다 — 같이 지운다
+                    Undo.RegisterCompleteObjectUndo(go, "ACO remove missing scripts");
+                    GameObjectUtility.RemoveMonoBehavioursWithMissingScript(go);
+                }
             });
         }
 

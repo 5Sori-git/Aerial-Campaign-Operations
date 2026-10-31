@@ -9,11 +9,19 @@ namespace ACO
     /// 그 분류의 강화 항목이 줄마다 버튼 하나로 보인다 — 누르면 다음 단계를 산다. 줄은 분류 중 가장 긴 것(6)만큼 있고 남는 줄은 숨긴다.
     /// 버튼 글자: "이름  [##---]  +20%  4,000 CR". 보유 크레딧과 지난 미션 보상도 보여 준다. 진행도 값이 바뀔 때만 다시 그린다.
     /// 패널은 격납고 프리팹(ACO_Hangar)에 같이 있다 — 프리팹 빌더가 만든다. 강화는 다음 탑승부터 적용된다.
+    /// 마지막 탭(TAB_SUPPLY)은 소모품: 줄마다 "이름  효과  READY/가격" — 누르면 산다(종류마다 1개, 출격한 미션이 끝나면 사라진다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Shop : UdonSharpBehaviour
     {
+        /// 소모품 탭 번호(강화 분류 다음).
+        public const int TAB_SUPPLY = ACO_PlayerProgress.CATEGORY_COUNT;
+
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 진행도를 넣는다")]
         public ACO_PlayerProgress Progress;
+
+        [Header("게임 진행")]
+        [Tooltip("빌드 시 ACO_SceneBaker가 넣는다. 모두 READY해 출격 카운트다운이 시작되면 강화 구매를 막는다")]
+        public ACO_GameFlow Flow;
 
         [Header("패널 표시 (프리팹 빌더가 채운다)")]
         [Tooltip("보유 크레딧과 지난 미션 보상")]
@@ -30,6 +38,10 @@ namespace ACO
         public Image[] RowIcons;
         [Tooltip("강화 항목별 아이콘(강화 ID 순서, ACO_PlayerProgress.UPGRADE_COUNT개). 프리팹 빌더가 Textures/Icons에서 채운다")]
         public Sprite[] UpgradeIcons;
+        [Tooltip("소모품 아이콘(CONS_* 순서). 프리팹 빌더가 채운다")]
+        public Sprite[] ConsumableIcons;
+        [Tooltip("격납고 전시 기체의 소모품 외형(CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크). 사 둔 소모품 것만 켠다(로컬)")]
+        public GameObject[] ConsumablePreviewVisuals;
         [Tooltip("안내/오류 한 줄")]
         public TextMeshProUGUI MessageText;
         public Color NormalColor = new Color(0.08f, 0.3f, 0.14f, 1f);
@@ -57,7 +69,7 @@ namespace ACO
         /// 탭 버튼(ACO_HangarButton, Action = 탭 선택)이 부른다.
         public void SelectTab(int cat)
         {
-            _tab = Mathf.Clamp(cat, 0, ACO_PlayerProgress.CATEGORY_COUNT - 1);
+            _tab = Mathf.Clamp(cat, 0, TAB_SUPPLY);
             SetMessage("");
             _dirty = true;
         }
@@ -66,9 +78,11 @@ namespace ACO
         /// 효과음 종류(ACO_UiSound.KIND_*)를 돌려준다: 산 경우만 결정음, 아니면 거절음.
         public int BuyRow(int row)
         {
+            if (_tab == TAB_SUPPLY) { return BuyConsumable(row); }
             if (!Progress || row < 0 || row >= Progress.GetCategoryLength(_tab)) { return ACO_UiSound.KIND_DENY; }
             int id = Progress.GetCategoryStart(_tab) + row;
             if (!Progress.IsReady()) { SetMessage("<color=#FF5544>LOADING SAVE DATA...</color>"); return ACO_UiSound.KIND_DENY; }
+            if (Flow != null && Flow.IsLoadoutLocked()) { SetMessage("<color=#FF5544>ALL READY - UPGRADES LOCKED</color>"); return ACO_UiSound.KIND_DENY; }
             int cost = Progress.GetUpgradeCost(id);
             if (cost < 0) { SetMessage("ALREADY AT MAX LEVEL"); return ACO_UiSound.KIND_DENY; }
             if (Progress.BuyUpgrade(id))
@@ -80,6 +94,49 @@ namespace ACO
             return ACO_UiSound.KIND_DENY;
         }
 
+        private int BuyConsumable(int c)
+        {
+            if (!Progress || c < 0 || c >= ACO_PlayerProgress.CONSUMABLE_COUNT) { return ACO_UiSound.KIND_DENY; }
+            if (Flow != null && Flow.IsLoadoutLocked()) { SetMessage("<color=#FF5544>ALL READY - SUPPLIES LOCKED</color>"); return ACO_UiSound.KIND_DENY; }
+            int r = Progress.BuyConsumable(c);
+            string name = Progress.GetConsumableName(c);
+            if (r == 1) { SetMessage(name + " READY - USED UP WHEN YOUR NEXT MISSION ENDS"); return ACO_UiSound.KIND_CONFIRM; }
+            if (r == -1) { SetMessage(name + " ALREADY LOADED"); return ACO_UiSound.KIND_DENY; }
+            if (r == -2) { SetMessage("<color=#FF5544>LOADING SAVE DATA...</color>"); return ACO_UiSound.KIND_DENY; }
+            SetMessage("<color=#FF5544>NOT ENOUGH CREDITS (" + Progress.GetConsumablePrice(c).ToString("N0") + " CR)</color>");
+            return ACO_UiSound.KIND_DENY;
+        }
+
+        /// 소모품 탭: 줄마다 이름 / 효과 / READY(사 둔 것) 또는 가격.
+        private void RefreshSupply()
+        {
+            int credits = Progress.GetCredits();
+            int rows = RowObjects != null ? RowObjects.Length : 0;
+            for (int row = 0; row < rows; row++)
+            {
+                bool used = row < ACO_PlayerProgress.CONSUMABLE_COUNT;
+                if (RowObjects[row] && RowObjects[row].activeSelf != used) { RowObjects[row].SetActive(used); }
+                if (!used) { continue; }
+                bool owned = Progress.HasConsumable(row);
+                int price = Progress.GetConsumablePrice(row);
+                if (RowTexts != null && row < RowTexts.Length && RowTexts[row])
+                {
+                    RowTexts[row].text = Progress.GetConsumableName(row) + "<pos=40%>" + Progress.GetConsumableEffect(row)
+                        + "<pos=70%>" + (owned ? "READY" : price.ToString("N0") + " CR");
+                }
+                if (RowIcons != null && row < RowIcons.Length && RowIcons[row] != null)
+                {
+                    Sprite icon = ConsumableIcons != null && row < ConsumableIcons.Length ? ConsumableIcons[row] : null;
+                    if (RowIcons[row].sprite != icon) { RowIcons[row].sprite = icon; }
+                    if (RowIcons[row].enabled != (icon != null)) { RowIcons[row].enabled = icon != null; }
+                }
+                if (RowImages != null && row < RowImages.Length && RowImages[row])
+                {
+                    RowImages[row].color = owned ? MaxedColor : (credits >= price ? NormalColor : TooExpensiveColor);
+                }
+            }
+        }
+
         private void SetMessage(string s)
         {
             if (MessageText) { MessageText.text = s; }
@@ -87,6 +144,16 @@ namespace ACO
 
         private void Refresh()
         {
+            if (ConsumablePreviewVisuals != null)
+            {
+                for (int c = 0; c < ConsumablePreviewVisuals.Length; c++)
+                {
+                    GameObject g = ConsumablePreviewVisuals[c];
+                    if (!g) { continue; }
+                    bool on = Progress.HasConsumable(c);
+                    if (g.activeSelf != on) { g.SetActive(on); }
+                }
+            }
             if (CreditsText)
             {
                 string s = Progress.IsReady() ? "CREDITS " + Progress.GetCredits().ToString("N0") + " CR" : "CREDITS - (LOADING)";
@@ -103,6 +170,7 @@ namespace ACO
                 }
             }
 
+            if (_tab == TAB_SUPPLY) { RefreshSupply(); return; }
             int start = Progress.GetCategoryStart(_tab);
             int length = Progress.GetCategoryLength(_tab);
             int max = Progress.GetMaxLevel();

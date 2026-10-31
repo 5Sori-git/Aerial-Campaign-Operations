@@ -6,7 +6,8 @@ using TMPro;
 namespace ACO
 {
     /// 게임 진행 버튼(동기화 없음). Action: 0 = JOIN/LEAVE(로비), 1 = READY(격납고, 미션 전), 2 = LAUNCH(격납고, 미션 중 재출격),
-    /// 3 = 지형 리롤(로비, 미션 전, 명단에 있는 사람만).
+    /// 3 = 지형 리롤(로비, 미션 전, 명단에 있는 사람만), 4/5 = 페이즈 −/+, 6 = 명단 칸 카드(Slot 칸으로 참가·칸 바꾸기),
+    /// 7 = 내 행동(JOIN → READY → LAUNCH), 8 = LEAVE.
     /// UI 버튼(Button.onClick → SendCustomEvent "Click")이 부른다. 콜라이더가 있으면 Interact로도 눌린다.
     /// 게임 진행이 SetState로 글자와 색을 바꾼다(지금 누를 수 없으면 회색 — 그래도 누르면 이유를 안내하고 거절음). 누르면 효과음(ACO_UiSound).
     /// Bake가 게임 진행의 버튼 목록(Buttons)에 넣고 Background·Sound를 채운다.
@@ -15,8 +16,10 @@ namespace ACO
     {
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 게임 진행을 넣는다")]
         public ACO_GameFlow Flow;
-        [Tooltip("0 = JOIN/LEAVE, 1 = READY, 2 = LAUNCH, 3 = 지형 리롤")]
-        [Range(0, 3)] public int Action;
+        [Tooltip("0 = JOIN/LEAVE, 1 = READY, 2 = LAUNCH, 3 = 지형 리롤, 4 = 페이즈 −, 5 = 페이즈 +, 6 = 명단 칸, 7 = 내 행동, 8 = LEAVE")]
+        [Range(0, 8)] public int Action;
+        [Tooltip("명단 칸 카드(Action 6)의 칸 번호(0부터)")]
+        public int Slot;
         [Tooltip("버튼 글자(프리팹 빌더가 넣는다)")]
         public TextMeshProUGUI Label;
         [Tooltip("버튼 배경(비면 Bake가 이 오브젝트의 Image를 넣는다)")]
@@ -33,11 +36,11 @@ namespace ACO
         public void Click()
         {
             if (!Flow) { return; }
-            bool ok = Flow.ButtonAction(Action);
+            bool ok = Flow.ButtonActionSlot(Action, Slot);
             if (Sound)
             {
-                int kind = !ok ? ACO_UiSound.KIND_DENY
-                    : (Action == ACO_GameFlow.ACTION_REROLL ? ACO_UiSound.KIND_CLICK : ACO_UiSound.KIND_CONFIRM);
+                bool click = Action == ACO_GameFlow.ACTION_REROLL || Action == ACO_GameFlow.ACTION_PHASES_DOWN || Action == ACO_GameFlow.ACTION_PHASES_UP;
+                int kind = !ok ? ACO_UiSound.KIND_DENY : (click ? ACO_UiSound.KIND_CLICK : ACO_UiSound.KIND_CONFIRM);
                 Sound.PlayAt(kind, transform.position);
             }
         }
@@ -52,6 +55,18 @@ namespace ACO
                 Label.color = interactable ? _labelColor : DisabledLabelColor;
             }
             if (Background) { Background.color = interactable ? NormalColor : DisabledColor; }
+        }
+
+        /// 게임 진행이 부른다(명단 칸 카드): 글자와 배경색을 직접 정한다.
+        public void SetStyle(string label, Color background)
+        {
+            if (Label)
+            {
+                if (!_labelColorSet) { _labelColor = Label.color; _labelColorSet = true; }
+                if (Label.text != label) { Label.text = label; }
+                Label.color = _labelColor;
+            }
+            if (Background) { Background.color = background; }
         }
 
         public override void Interact() { Click(); }

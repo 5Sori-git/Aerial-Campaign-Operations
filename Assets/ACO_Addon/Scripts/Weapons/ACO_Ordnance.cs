@@ -49,6 +49,13 @@ namespace ACO
         public GameObject ExplosionObject;
         [Tooltip("폭발 후 풀에 돌려놓기까지의 시간(초). 후연을 쓰면 후연 파티클 Start Lifetime 최댓값 이상으로 둔다")]
         public float ExplosionDuration = 3f;
+        [Header("폭발 범위 표시 (선택)")]
+        [Tooltip("터질 때 이 오브젝트의 크기를 범위 피해 반경(SplashRadius, 강화 반영)에 맞춘다 — 반투명 구 메시 등. ExplosionObject 안에 두면 함께 켜지고 꺼진다. 비우면 없음. 범위 피해가 없으면(반경 0) 건드리지 않는다")]
+        public Transform SplashVisual;
+        [Tooltip("SplashVisual이 스케일 1일 때의 반지름(m). Unity 기본 구(Sphere)는 0.5")]
+        public float SplashVisualRadius = 0.5f;
+        [Tooltip("0이면 터지는 순간 반경 크기, 0보다 크면 이 시간(초) 동안 작게 시작해 반경까지 커진다")]
+        public float SplashVisualGrowTime = 0.25f;
         [Tooltip("폭발음. 하나를 무작위로 골라 음높이를 조금씩 바꿔 재생한다")]
         public AudioSource[] ExplosionSounds;
         [Tooltip("비행 중에만 켜둘 오브젝트(모델 등)")]
@@ -60,6 +67,7 @@ namespace ACO
         [System.NonSerialized] public SaccEntity EntityControl;
         [System.NonSerialized] public Vector3 LaunchVelocity;   // 모기체 속도 벡터(월드)
         [System.NonSerialized] public Transform PoolParent;
+        [System.NonSerialized] public ACO_DFUNC_Missile PoolOwner;   // 회수 시 돌아갈 플레이어 무장 풀(부모는 그대로)
         [System.NonSerialized] public bool IsShooter;
 
         private const int MAX_SPLASH_HITS = 32;
@@ -77,6 +85,8 @@ namespace ACO
         private float _age;
         private bool _flying;
         private bool _exploded;
+        private Vector3 _splashVisualScale;
+        private float _splashGrowStart;
 
         /// 발사하는 쪽이 SetActive(true) 직후 부른다.
         public void EnableWeapon()
@@ -170,10 +180,38 @@ namespace ACO
 
             SetFlightVisuals(false);
             if (ExplosionObject) { ExplosionObject.SetActive(true); }
+            ShowSplashVisual();
             PlayExplosionSound();
             SetTrailEmission(false, false);
             SendCustomEventDelayedSeconds(nameof(MoveBackToPool), ExplosionDuration);
         }
+
+        /// 폭발 범위 표시: SplashVisual을 반경에 맞춘다(부모 크기를 나눠 월드 반지름 = SplashRadius). GrowTime이 있으면 프레임마다 키운다.
+        private void ShowSplashVisual()
+        {
+            if (!SplashVisual || SplashRadius <= 0f) { return; }
+            Transform parent = SplashVisual.parent;
+            float parentScale = parent != null ? Mathf.Max(Mathf.Abs(parent.lossyScale.x), 0.0001f) : 1f;
+            _splashVisualScale = Vector3.one * (SplashRadius / Mathf.Max(SplashVisualRadius, 0.0001f) / parentScale);
+            if (SplashVisualGrowTime <= 0f)
+            {
+                SplashVisual.localScale = _splashVisualScale;
+                return;
+            }
+            _splashGrowStart = Time.time;
+            SplashVisual.localScale = _splashVisualScale * 0.05f;
+            SendCustomEventDelayedFrames(nameof(_GrowSplashVisual), 1);
+        }
+
+        public void _GrowSplashVisual()
+        {
+            if (!SplashVisual) { return; }
+            float t = Mathf.Clamp01((Time.time - _splashGrowStart) / Mathf.Max(SplashVisualGrowTime, 0.0001f));
+            float k = 1f - (1f - t) * (1f - t);   // 처음엔 빠르게, 끝에서 천천히
+            SplashVisual.localScale = _splashVisualScale * Mathf.Lerp(0.05f, 1f, k);
+            if (t < 1f) { SendCustomEventDelayedFrames(nameof(_GrowSplashVisual), 1); }
+        }
+
 
         /// 반경 안의 SaccTarget마다 한 번씩: 피해 = Damage × (1 → MinSplashFraction, 콜라이더 표면까지의 거리에 따라 선형).
         /// 한 유닛에 콜라이더가 여럿이면 가장 가까운 것 하나로 센다(같은 SaccTarget은 한 번만).
@@ -252,6 +290,11 @@ namespace ACO
             SetTrailEmission(false, false);
             _flying = false;
             _exploded = false;
+            if (PoolOwner)
+            {
+                PoolOwner.ReturnToPool(gameObject);
+                return;
+            }
             if (PoolParent) { transform.SetParent(PoolParent); }
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;

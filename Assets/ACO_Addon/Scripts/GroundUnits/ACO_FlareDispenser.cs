@@ -49,7 +49,8 @@ namespace ACO
         public float FlareEmitDuration = 1f;
         public AudioSource FlareSound;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(적 플레어 대사)")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
 
         private const int MAX_INCOMING = 8;
         private ACO_Missile[] _incoming = new ACO_Missile[MAX_INCOMING];
@@ -183,7 +184,7 @@ namespace ACO
             _flareVel = transform.forward * Mathf.Max(speed * 0.8f - 25f, 0f);
             StartVisual();
             if (FlareSound && FlareSound.clip) { FlareSound.PlayOneShot(FlareSound.clip); }
-            if (Radio) { Radio.ReportNear(ACO_Radio.EV_ENEMY_FLARE, transform.position, ""); }
+            if (Chatter) { Chatter.ReportNear(ACO_Chatter.EV_ENEMY_FLARE, transform.position, ""); }
         }
 
         private void StartVisual()

@@ -9,6 +9,9 @@ namespace ACO
     ///  2) 기체 셋업(ACO → Tools)·셋업 검사 [고치기]가 특수무장 슬롯(ACO_DFUNC_Special)에 모듈로 복제해 넣는다(이미 같은 ID가 있으면 건너뛴다 — 기체별로 고친 값을 지키게).
     /// 새 무장 = 예제 프리팹(ACO_Special_*, 프리팹 생성 창 → 플레이어 특수무장)을 복제해 ID와 모듈 값을 바꾼다. 기체·HUD에 묶인 칸(발사 지점·소리·잔탄 글자·HUD)은 설치가 기체에서 채운다.
     /// 일반 MonoBehaviour라 VRChat 월드에 올릴 수 없다 — 프리팹 파일로만 쓴다(셋업 검사가 씬에 있으면 알린다).
+    /// 격납고 목록 분류(좌우 버튼으로 넘긴다). Auto = 모듈의 강화 계열(UpgradeFamily)로 정한다.
+    public enum ACO_WeaponCategory { Auto, AirToAir, AirToGround, Bomb, Other }
+
     [DisallowMultipleComponent]
     public class ACO_SpecialWeaponDef : MonoBehaviour
     {
@@ -24,6 +27,8 @@ namespace ACO
         public Sprite Icon;
         [Tooltip("격납고 목록 순서(작을수록 앞). 이미 목록에 있는 무장은 자리를 옮기지 않는다")]
         public int SortOrder = 100;
+        [Tooltip("격납고 분류(공대공 / 공대지 / 폭탄 / 기타). Auto = 모듈의 강화 계열: SpecialAAM → 공대공, SpecialAGM → 공대지, SpecialBomb → 폭탄, 그 밖 → 기타")]
+        public ACO_WeaponCategory Category = ACO_WeaponCategory.Auto;
         [Tooltip("무장 모듈(이 프리팹 자식의 ACO_DFUNC_Missile). 미사일 프리팹(Missile)을 비우면 그 기체의 일반 미사일 모델을 쓴다")]
         public ACO_DFUNC_Missile Module;
     }

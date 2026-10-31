@@ -46,6 +46,19 @@ namespace ACO
         [Tooltip("콜드 런치 중 중력 배수(1 = Physics.gravity 그대로, 0 = 중력 없음). 사출된 미사일이 솟구쳤다 느려지며 처지는 궤적을 만든다")]
         public float ColdLaunchGravity = 1f;
 
+        [Header("탑 어택 (상공 진입 후 내리꽂기 — AGM용)")]
+        [Tooltip("켜면 먼저 표적 바로 위 TopAttackAltitude 높이 지점을 향해 올라가며 날아가다가, 표적을 내려다보는 각도가 TopAttackDiveAngle 이상이 되면(또는 수평 거리가 TopAttackMinDistance 안) 표적으로 내리꽂는다. "
+            + "올라가는 동안은 시커 각도 제한을 보지 않는다(표적이 옆·아래에 있어도 놓치지 않는다). 내리꽂기부터는 위 유도 방식 그대로")]
+        public bool TopAttack = false;
+        [Tooltip("표적 위 진입 높이(m)")]
+        public float TopAttackAltitude = 500f;
+        [Tooltip("표적을 내려다보는 각도(도)가 이 값 이상이면 내리꽂는다 — 클수록 더 가파르게(표적 가까이까지 높이 유지)")]
+        [Range(10f, 85f)] public float TopAttackDiveAngle = 40f;
+        [Tooltip("표적과 수평 거리가 이 안(m)이면 각도와 상관없이 내리꽂는다(높이를 못 올린 채 다가왔을 때)")]
+        public float TopAttackMinDistance = 150f;
+        [Tooltip("올라가는 동안의 선회 속도(도/초). TurnRate보다 크면 TurnRate")]
+        public float TopAttackClimbTurnRate = 45f;
+
         [Header("시커 (SAV_AAMController와 같은 의미/기본값)")]
         [Tooltip("기수와 타겟 방향이 이 각도(도)보다 벌어지면 그 프레임은 추적하지 못한다. 타겟을 지나치면 자연히 여기에 걸린다")]
         public float MaxTrackingAngle = 90f;
@@ -90,6 +103,13 @@ namespace ACO
         public AudioSource[] ExplosionSounds;
         [Tooltip("폭발 후 미사일을 풀에 돌려놓기까지의 시간(초). 후연을 쓰면 후연 파티클 Start Lifetime 최댓값 이상으로 둔다 — 돌려놓는 순간 남은 연기가 사라진다")]
         public float ExplosionDuration = 2f;
+        [Header("폭발 범위 표시 (선택)")]
+        [Tooltip("터질 때 이 오브젝트의 크기를 범위 피해 반경(SplashRadius, 강화 반영)에 맞춘다 — 반투명 구 메시 등. ExplosionObject 안에 두면 함께 켜지고 꺼진다. 비우면 없음. 범위 피해가 없으면(반경 0) 건드리지 않는다")]
+        public Transform SplashVisual;
+        [Tooltip("SplashVisual이 스케일 1일 때의 반지름(m). Unity 기본 구(Sphere)는 0.5")]
+        public float SplashVisualRadius = 0.5f;
+        [Tooltip("0이면 터지는 순간 반경 크기, 0보다 크면 이 시간(초) 동안 작게 시작해 반경까지 커진다")]
+        public float SplashVisualGrowTime = 0.25f;
         [Tooltip("비행 중에만 켜둘 오브젝트(모델/트레일 등)")]
         public GameObject[] DisableOnExplode;
         [Tooltip("후연 파티클. 발사 시 방출을 켜고 폭발 시 방출만 끈다 — 이미 뿌린 연기는 수명이 다할 때까지 남는다. "
@@ -103,14 +123,17 @@ namespace ACO
         [System.NonSerialized] public GameObject LaunchTarget;      // 락온 마커. null이면 무유도(직진)
         [System.NonSerialized] public int LaunchMissileType = 1;    // 0 레이더, 1 열추적, 2 기타 (대응책/경고 변수 선택)
         [System.NonSerialized] public float LaunchInheritSpeed;     // 모기체 속력. 발사 속력이 이보다 느리면 이 속력에서 출발한다
-        [System.NonSerialized] public Transform PoolParent;         // 회수 시 돌아갈 부모(런처)
+        [System.NonSerialized] public Transform PoolParent;         // 회수 시 돌아갈 부모(NPC 런처)
+        [System.NonSerialized] public ACO_DFUNC_Missile PoolOwner;  // 회수 시 돌아갈 플레이어 무장 풀(부모는 그대로 — 기체 계층을 바꾸지 않는다)
         [System.NonSerialized] public bool ShooterJudgesHit;        // true면 쏜 사람이, false면 피격 대상의 오너가 명중을 판정한다
         [System.NonSerialized] public bool IsShooter;               // 이 클라이언트가 쏜 사람인가
         // 범위 피해(대지 미사일). 0이면 없음. 쏜 사람만 넣는다 — 쏜 사람 화면에서 판정한다(폭탄/로켓과 같다).
         [System.NonSerialized] public float SplashRadius;
+        // 폭발 범위 표시용 반경(모든 화면). 범위 피해(SplashRadius)는 쏜 사람 화면에만 넣으므로 표시는 따로 받는다.
+        [System.NonSerialized] public float VisualSplashRadius;
         [System.NonSerialized] public float MinSplashFraction = 0.25f;
         // 무전 자막(런처가 넣는다): 내 미사일이 빗나감/플레어에 속음, 나를 노린 미사일 경보.
-        [System.NonSerialized] public ACO_Radio Radio;
+        [System.NonSerialized] public ACO_Chatter Chatter;
         // RWR(런처가 넣는다): 나를 노린 미사일이면 경고를 켤 때 등록해 방향·거리를 그린다.
         [System.NonSerialized] public ACO_RWR Rwr;
 
@@ -139,6 +162,9 @@ namespace ACO
         private float _unlockTimer;
         private bool _flying;
         private bool _exploded;
+        private bool _diving;          // 탑 어택: 내리꽂기 시작했다
+        private Vector3 _splashVisualScale;
+        private float _splashGrowStart;
         private bool _hadTarget;        // 락온한 채 발사됐다(무유도 발사는 빗나감을 알리지 않는다)
         private bool _outcomeReported;  // 빗나감/속음을 이미 알렸다(한 발에 한 번)
         private const int MAX_SPLASH_HITS = 32;
@@ -206,6 +232,7 @@ namespace ACO
             _unlockTimer = 0f;
             _flying = true;
             _exploded = false;
+            _diving = false;
             _targetLost = false;
             _decoyed = false;
             _decoyFlares = null;
@@ -231,7 +258,7 @@ namespace ACO
             _hadTarget = _target != null;
             _outcomeReported = false;
             // 나를 노린 미사일(NPC·SAM 미사일 — 표적 기체를 이 클라이언트가 조종 중)
-            if (Radio && !ShooterJudgesHit && _targetEntity && _targetEntity.Piloting) { Radio.Report(ACO_Radio.EV_MISSILE_INCOMING, ""); }
+            if (Chatter && !ShooterJudgesHit && _targetEntity && _targetEntity.Piloting) { Chatter.Report(ACO_Chatter.EV_MISSILE_INCOMING, ""); }
         }
 
         /// 내 미사일의 결과를 무전으로 한 번 알린다(쏜 사람 화면에서만, 락온해 쏜 플레이어 미사일만).
@@ -239,7 +266,7 @@ namespace ACO
         {
             if (_outcomeReported) { return; }
             _outcomeReported = true;
-            if (Radio && ShooterJudgesHit && IsShooter && _hadTarget) { Radio.Report(ev, ""); }
+            if (Chatter && ShooterJudgesHit && IsShooter && _hadTarget) { Chatter.Report(ev, ""); }
         }
 
         private void ResolveTarget()
@@ -341,14 +368,14 @@ namespace ACO
             {
                 if (_targetFlares != null && _targetFlares.IsFlareActive())
                 {
-                    ReportOutcome(ACO_Radio.EV_MISSILE_DECOYED);
+                    ReportOutcome(ACO_Chatter.EV_MISSILE_DECOYED);
                     _decoyed = true;
                     _decoyFlares = _targetFlares;
                     LoseTarget();
                 }
                 else if (_targetSAV && SavCountermeasuresActive(_targetSAV))
                 {
-                    ReportOutcome(ACO_Radio.EV_MISSILE_DECOYED);
+                    ReportOutcome(ACO_Chatter.EV_MISSILE_DECOYED);
                     _decoyed = true;
                     _decoySAV = _targetSAV;
                     _decoyPos = _target.position;
@@ -376,6 +403,30 @@ namespace ACO
             Vector3 toTarget = targetPos - transform.position;
             if (toTarget.sqrMagnitude < 0.000001f) { return; }
             Vector3 dirToTarget = toTarget.normalized;
+
+            // 탑 어택: 표적 위 진입 높이로 올라가며 날아가다가, 충분히 내려다보이면 내리꽂는다(그때부터 아래 유도 그대로)
+            if (TopAttack && !_diving)
+            {
+                float horiz = new Vector2(toTarget.x, toTarget.z).magnitude;
+                float above = transform.position.y - targetPos.y;
+                float lookDown = Mathf.Atan2(above, Mathf.Max(horiz, 0.01f)) * Mathf.Rad2Deg;
+                if (lookDown >= TopAttackDiveAngle || horiz <= TopAttackMinDistance)
+                {
+                    _diving = true;
+                    _hasPrevLos = false;   // 비례항법 시선 기준을 새로 잡는다
+                }
+                else
+                {
+                    Vector3 aim = new Vector3(targetPos.x, targetPos.y + TopAttackAltitude, targetPos.z) - transform.position;
+                    if (aim.sqrMagnitude > 0.000001f)
+                    {
+                        Quaternion climb = Quaternion.LookRotation(aim.normalized, Vector3.up);
+                        transform.rotation = Quaternion.RotateTowards(transform.rotation, climb, Mathf.Min(turnRate, TopAttackClimbTurnRate) * dt);
+                    }
+                    _unlockTimer = 0f;
+                    return;
+                }
+            }
 
             if (IsSeekerDefeated(dirToTarget))
             {
@@ -614,7 +665,7 @@ namespace ACO
             if (_targetFlares) { _targetFlares.UnregisterIncoming(this); }
             // 맞혔으면 결과는 격추 대사(작전판)가 맡는다. 범위 피해 미사일은 빗나가도 피해를 줄 수 있어 알리지 않는다.
             if (hitTarget || SplashRadius > 0f) { _outcomeReported = true; }
-            else { ReportOutcome(ACO_Radio.EV_MISSILE_MISS); }
+            else { ReportOutcome(ACO_Chatter.EV_MISSILE_MISS); }
 
             // 데미지는 피격 대상의 오너에서만 적용한다.
             // SaccTarget/SaccEntity가 내부적으로 로컬 적용 + 다른 클라이언트 전파를 처리한다.
@@ -643,11 +694,40 @@ namespace ACO
             }
 
             if (ExplosionObject) { ExplosionObject.SetActive(true); }
+            ShowSplashVisual();
             PlayExplosionSound();
             SetTrailEmission(false, false);
 
             SendCustomEventDelayedSeconds(nameof(MoveBackToPool), ExplosionDuration);
         }
+
+        /// 폭발 범위 표시: SplashVisual을 반경에 맞춘다(부모 크기를 나눠 월드 반지름 = SplashRadius). GrowTime이 있으면 프레임마다 키운다.
+        private void ShowSplashVisual()
+        {
+            float radius = SplashRadius > 0f ? SplashRadius : VisualSplashRadius;
+            if (!SplashVisual || radius <= 0f) { return; }
+            Transform parent = SplashVisual.parent;
+            float parentScale = parent != null ? Mathf.Max(Mathf.Abs(parent.lossyScale.x), 0.0001f) : 1f;
+            _splashVisualScale = Vector3.one * (radius / Mathf.Max(SplashVisualRadius, 0.0001f) / parentScale);
+            if (SplashVisualGrowTime <= 0f)
+            {
+                SplashVisual.localScale = _splashVisualScale;
+                return;
+            }
+            _splashGrowStart = Time.time;
+            SplashVisual.localScale = _splashVisualScale * 0.05f;
+            SendCustomEventDelayedFrames(nameof(_GrowSplashVisual), 1);
+        }
+
+        public void _GrowSplashVisual()
+        {
+            if (!SplashVisual) { return; }
+            float t = Mathf.Clamp01((Time.time - _splashGrowStart) / Mathf.Max(SplashVisualGrowTime, 0.0001f));
+            float k = 1f - (1f - t) * (1f - t);   // 처음엔 빠르게, 끝에서 천천히
+            SplashVisual.localScale = _splashVisualScale * Mathf.Lerp(0.05f, 1f, k);
+            if (t < 1f) { SendCustomEventDelayedFrames(nameof(_GrowSplashVisual), 1); }
+        }
+
 
         /// ACO_Ordnance와 같은 규칙: 반경 안의 SaccTarget마다 가장 가까운 콜라이더 거리로 한 번, 중심 Damage → 가장자리 MinSplashFraction.
         /// 쏜 기체와 아군(호위 대상)은 빼고, skip(정통으로 맞은 표적)도 뺀다.
@@ -797,6 +877,11 @@ namespace ACO
             _decoyFlares = null;
             _decoySAV = null;
 
+            if (PoolOwner)
+            {
+                PoolOwner.ReturnToPool(gameObject);
+                return;
+            }
             if (PoolParent) { transform.SetParent(PoolParent); }
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;

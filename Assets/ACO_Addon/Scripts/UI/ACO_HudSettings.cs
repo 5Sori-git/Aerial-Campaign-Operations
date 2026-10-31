@@ -7,7 +7,7 @@ using VRC.SDK3.Persistence;
 namespace ACO
 {
     /// HUD 설정 패널(로컬 전용, 동기화 없음). 내 HUD만 바꾼다 — 점수 패널 위치(좌우/상하/거리)·크기, 결과·안내 글자 묶음 위치(좌우/상하)·크기(거리는 점수 패널과 같다),
-    /// 표적 마커 테두리 크기, 시선 정보 각도, 크로스헤어 켜기/크기, RWR 켜기/크기, 크로스헤어·RWR 거리. 값은 플레이어 영구 저장(PlayerData)에 남아 다음 접속 때도 이어진다(불러오기 전에는 저장하지 않는다).
+    /// 무전 자막 위치(좌우/상하)·크기(거리는 점수 패널과 같다), 표적 마커 테두리 크기, 시선 정보 각도, 크로스헤어 켜기/크기, RWR 켜기/링 반경/미사일 표시 크기/락온 호 크기, 크로스헤어·RWR 거리. 값은 플레이어 영구 저장(PlayerData)에 남아 다음 접속 때도 이어진다(불러오기 전에는 저장하지 않는다).
     /// 버튼(ACO_HudSettingButton)으로 항목마다 −/+, 전체 RESET. 바꿀 때마다 HUD를 PreviewTime 동안 미션 전에도 보여 준다.
     /// 기본값 = 시작할 때 HUD 컴포넌트에 들어 있던 값(인스펙터 값). 패널은 프리팹 빌더가 만들고, Bake가 씬의 HUD를 연결한다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -27,7 +27,12 @@ namespace ACO
         public const int ITEM_RESULT_Y = 11;
         public const int ITEM_RESULT_SCALE = 12;
         public const int ITEM_CROSSHAIR_DISTANCE = 13;
-        public const int ITEM_COUNT = 14;
+        public const int ITEM_CHATTER_X = 14;
+        public const int ITEM_CHATTER_Y = 15;
+        public const int ITEM_CHATTER_SCALE = 16;
+        public const int ITEM_RWR_MISSILE_SIZE = 17;
+        public const int ITEM_RWR_LOCK_SIZE = 18;
+        public const int ITEM_COUNT = 19;
 
         private const string KEY_PREFIX = "aco_hud_";
 
@@ -35,26 +40,28 @@ namespace ACO
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 재사용하지 않는다. 인스펙터에 두지 않는다(실수로 바뀌지 않게).
         private string[] _keys = new string[] {
             "panel_x", "panel_y", "panel_distance", "panel_scale", "marker_size", "info_angle", "crosshair", "crosshair_size", "rwr", "rwr_size",
-            "result_x", "result_y", "result_scale", "crosshair_distance" };
+            "result_x", "result_y", "result_scale", "crosshair_distance", "chatter_x", "chatter_y", "chatter_scale", "rwr_missile_size", "rwr_lock_size" };
 
         [Header("참조 (빌드 시 ACO_SceneBaker가 넣는다)")]
         public ACO_ScoreHUD ScoreHUD;
         public ACO_TargetMarkers Markers;
         public ACO_RWR Rwr;
+        public ACO_Chatter Chatter;
 
-        [Header("항목 (ITEM_* 순서: 패널 좌우, 상하, 거리, 크기, 마커 크기, 정보 각도, 크로스헤어, 크로스헤어 크기, RWR, RWR 크기, 결과 좌우, 결과 상하, 결과 크기, 크로스헤어·RWR 거리)")]
+        [Header("항목 (ITEM_* 순서: 패널 좌우, 상하, 거리, 크기, 마커 크기, 정보 각도, 크로스헤어, 크로스헤어 크기, RWR, RWR 링 반경, 결과 좌우, 결과 상하, 결과 크기, 크로스헤어·RWR 거리, 자막 좌우, 자막 상하, 자막 크기, RWR 미사일 표시 크기, RWR 락온 호 크기)")]
         public string[] ItemNames = new string[] {
             "PANEL LEFT / RIGHT", "PANEL UP / DOWN", "PANEL DISTANCE", "PANEL SIZE",
-            "MARKER FRAME SIZE", "INFO VIEW ANGLE", "CROSSHAIR", "CROSSHAIR SIZE", "RWR", "RWR SIZE",
-            "RESULT LEFT / RIGHT", "RESULT UP / DOWN", "RESULT SIZE", "CROSSHAIR / RWR DISTANCE" };
+            "MARKER FRAME SIZE", "INFO VIEW ANGLE", "CROSSHAIR", "CROSSHAIR SIZE", "RWR", "RWR RING SIZE",
+            "RESULT LEFT / RIGHT", "RESULT UP / DOWN", "RESULT SIZE", "CROSSHAIR / RWR DISTANCE",
+            "SUBTITLE LEFT / RIGHT", "SUBTITLE UP / DOWN", "SUBTITLE SIZE", "RWR MISSILE MARK SIZE", "RWR LOCK ARC SIZE" };
         [Tooltip("−/+ 한 번에 바뀌는 양(위치 m, 크기 배율, 각도 도). 크로스헤어·RWR은 켜기/끄기. 패널 거리·크로스헤어 거리는 현재 거리의 DistanceStepRatio와 이 값 중 큰 쪽")]
-        public float[] Steps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f };
-        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f };
-        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f };
+        public float[] Steps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f, 0.02f, 0.02f, 0.1f, 0.1f, 0.1f };
+        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f };
+        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f };
         // 예전 프리팹(항목이 적은 배열)을 위한 코드 기본값 — 인스펙터 배열이 짧으면 이 값을 쓴다.
-        private float[] _fbSteps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f };
-        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f };
-        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f };
+        private float[] _fbSteps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f, 0.02f, 0.02f, 0.1f, 0.1f, 0.1f };
+        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f };
+        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f };
         [Tooltip("패널 거리·크로스헤어 거리 한 단계 = 현재 거리 × 이 비율(멀수록 크게 움직인다)")]
         public float DistanceStepRatio = 0.15f;
         [Tooltip("값을 바꾼 뒤 HUD를 미션 전에도 보여 주는 시간(초)")]
@@ -68,6 +75,7 @@ namespace ACO
         private float[] _defaults;
         private Vector3 _basePanelScale = Vector3.one;
         private Vector3 _baseResultScale = Vector3.one;
+        private Vector3 _baseChatterScale = Vector3.one;
         private bool _started;
         private bool _restored;
 
@@ -88,6 +96,10 @@ namespace ACO
             }
             _defaults[ITEM_PANEL_SCALE] = 1f;
             _defaults[ITEM_RESULT_SCALE] = 1f;
+            _defaults[ITEM_CHATTER_X] = Chatter != null ? Chatter.HeadOffset.x : 0f;
+            _defaults[ITEM_CHATTER_Y] = Chatter != null ? Chatter.HeadOffset.y : -0.2f;
+            _defaults[ITEM_CHATTER_SCALE] = 1f;
+            if (Chatter != null && Chatter.Panel != null) { _baseChatterScale = Chatter.Panel.localScale; }
             _defaults[ITEM_CROSSHAIR_DISTANCE] = Markers != null ? Markers.CrosshairDistance : 30f;
             if (Markers)
             {
@@ -98,6 +110,8 @@ namespace ACO
             }
             _defaults[ITEM_RWR] = Rwr == null || Rwr.ShowRwr ? 1f : 0f;
             _defaults[ITEM_RWR_SIZE] = Rwr != null ? Rwr.SizeScale : 1f;
+            _defaults[ITEM_RWR_MISSILE_SIZE] = Rwr != null ? Rwr.ChevronScale : 1f;
+            _defaults[ITEM_RWR_LOCK_SIZE] = Rwr != null ? Rwr.LockArcScale : 1f;
             _values = new float[ITEM_COUNT];
             for (int i = 0; i < ITEM_COUNT; i++) { _values[i] = _defaults[i]; }
             RefreshTexts();
@@ -167,6 +181,12 @@ namespace ACO
                 // 결과·안내 묶음: 거리는 점수 패널과 같고 좌우/상하/크기만 따로(같은 거리 비율로 키운다).
                 ScoreHUD.ResultOffset = new Vector2(_values[ITEM_RESULT_X] * k, _values[ITEM_RESULT_Y] * k);
                 if (ScoreHUD.ResultGroup) { ScoreHUD.ResultGroup.localScale = _baseResultScale * (_values[ITEM_RESULT_SCALE] * k); }
+                // 무전 자막: 거리는 점수 패널과 같고 좌우/상하/크기만 따로
+                if (Chatter)
+                {
+                    Chatter.HeadOffset = new Vector3(_values[ITEM_CHATTER_X] * k, _values[ITEM_CHATTER_Y] * k, d);
+                    if (Chatter.Panel) { Chatter.Panel.localScale = _baseChatterScale * (_values[ITEM_CHATTER_SCALE] * k); }
+                }
             }
             if (Markers)
             {
@@ -180,6 +200,8 @@ namespace ACO
             {
                 Rwr.ShowRwr = _values[ITEM_RWR] > 0.5f;
                 Rwr.SizeScale = _values[ITEM_RWR_SIZE];
+                Rwr.ChevronScale = _values[ITEM_RWR_MISSILE_SIZE];
+                Rwr.LockArcScale = _values[ITEM_RWR_LOCK_SIZE];
             }
             RefreshTexts();
         }
@@ -189,6 +211,7 @@ namespace ACO
             if (ScoreHUD) { ScoreHUD.Preview(PreviewTime); }
             if (Markers) { Markers.Preview(PreviewTime); }
             if (Rwr) { Rwr.Preview(PreviewTime); }
+            if (Chatter) { Chatter.Preview(PreviewTime); }
         }
 
         private void Save(int item)
@@ -222,14 +245,15 @@ namespace ACO
         private string Format(int i)
         {
             float v = _values[i];
-            if (i == ITEM_PANEL_X || i == ITEM_PANEL_Y || i == ITEM_RESULT_X || i == ITEM_RESULT_Y)
+            if (i == ITEM_PANEL_X || i == ITEM_PANEL_Y || i == ITEM_RESULT_X || i == ITEM_RESULT_Y || i == ITEM_CHATTER_X || i == ITEM_CHATTER_Y)
             {
                 int cm = Mathf.RoundToInt(v * 100f);
                 return (cm > 0 ? "+" : "") + cm + " cm";
             }
             if (i == ITEM_PANEL_DISTANCE) { return v.ToString("0.00") + " m"; }
             if (i == ITEM_CROSSHAIR_DISTANCE) { return v.ToString(v < 10f ? "0.00" : "0.0") + " m"; }
-            if (i == ITEM_PANEL_SCALE || i == ITEM_RWR_SIZE || i == ITEM_RESULT_SCALE) { return "x" + v.ToString("0.0"); }
+            if (i == ITEM_PANEL_SCALE || i == ITEM_RWR_SIZE || i == ITEM_RESULT_SCALE || i == ITEM_CHATTER_SCALE
+                || i == ITEM_RWR_MISSILE_SIZE || i == ITEM_RWR_LOCK_SIZE) { return "x" + v.ToString("0.0"); }
             if (i == ITEM_CROSSHAIR || i == ITEM_RWR) { return v > 0.5f ? "ON" : "OFF"; }
             return v.ToString("0.0#") + " DEG";
         }

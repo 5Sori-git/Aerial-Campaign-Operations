@@ -15,7 +15,7 @@ namespace ACO
     ///   기만체는 플레이어 락온 레이어(29)의 빈 오브젝트로, 시작할 때 기체에서 떼어 낸 뒤 편대처럼 기체 옆(DecoyOffsets, 기체 기준)에 붙어
     ///   기체의 기동을 그대로 따라 난다(DecoySpreadTime 동안 기체 자리에서 벌어지고, DecoySway만큼 살짝 흔들린다). 각 클라이언트가 자기 화면의 기체 위치로
     ///   계산하므로 위치 동기화가 없다. HUD 마커는 진짜와 똑같이(이름·목표 색·체력 바) 그려지고, 락온해 쏜 미사일은 기만체 근처에서 터진다(피해 없음).
-    /// - 무전: 등장·다연장·기만체·체력 절반·격추 때 Radio.Say로 자막(모든 클라이언트가 각자 본다).
+    /// - 무전: 등장·다연장·기만체·체력 절반·격추 때 Chatter.Say로 자막(모든 클라이언트가 각자 본다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_SuperAce : UdonSharpBehaviour
     {
@@ -25,7 +25,8 @@ namespace ACO
         [Tooltip("자막의 이름 색")]
         public Color SpeakerColor = new Color(1f, 0.35f, 0.3f, 1f);
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
         public string LineSpawn = "So you're the ones they keep talking about. Let's see what you've got.";
         public string LineSalvo = "Fox three, all of you. Dance.";
         public string LineDecoy = "Which one of me are you aiming at?";
@@ -281,7 +282,7 @@ namespace ACO
 
         private void Say(string text)
         {
-            if (Radio != null && !string.IsNullOrEmpty(text)) { Radio.Say(AceName, SpeakerColor, text); }
+            if (Chatter != null && !string.IsNullOrEmpty(text)) { Chatter.Say(AceName, SpeakerColor, text, ACO_Chatter.CH_ENEMY); }
         }
     }
 }

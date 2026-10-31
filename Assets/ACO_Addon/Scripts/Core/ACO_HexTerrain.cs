@@ -6,7 +6,7 @@ using VRC.SDK3.UdonNetworkCalling;
 namespace ACO
 {
     /// 육각 기둥 지형(씨앗으로 생성). 반경 FieldRadius 안을 육각 격자로 덮고, 칸마다 씨앗으로 높이를 정해 기둥(ColumnPrefab)을 세운다.
-    /// 지형 = 바다 위의 땅: 씨앗마다 프리셋(큰 섬/군도/쌍둥이 섬/환초/열도/고원/산맥/협곡)을 PresetWeights 비율로 골라
+    /// 지형 = 바다 위의 땅: 씨앗마다 프리셋(큰 섬/군도/쌍둥이 섬/환초/열도/고원/산맥/협곡/해안/화산섬/암초 군도/분지)을 PresetWeights 비율로 골라
     /// 땅 모양(원 + 능선 선분)을 정하고, 해안선은 노이즈로 흔들고, 프리셋마다 다른 높이 모양(산/단 지형/능선/깎인 협곡)을 얹는다.
     /// 범위 가장자리와 제외 구역(항공모함 등) 둘레는 항상 바다로 잦아들어 작전 지역 바깥 바다와 자연스럽게 이어진다.
     /// 해수면 아래 칸은 기둥을 만들지 않는다(바다는 씬의 바다가 보인다).
@@ -49,9 +49,10 @@ namespace ACO
         public float SeaLaneLandCost = 30f;
 
         [Header("지형 프리셋")]
-        [Tooltip("씨앗마다 이 비율로 지형 모양을 고른다. 순서: 0 큰 섬, 1 군도, 2 쌍둥이 섬, 3 환초, 4 열도, 5 고원, 6 산맥, 7 협곡 (0이면 안 나옴, 배열이 짧으면 빠진 칸은 0)")]
-        public float[] PresetWeights = new float[] { 1f, 1f, 1f, 0.5f, 1f, 1f, 1f, 1f };
-        [Tooltip("0~7이면 늘 그 프리셋(테스트/고정 맵용), -1이면 씨앗으로 고른다")]
+        [Tooltip("씨앗마다 이 비율로 지형 모양을 고른다. 순서: 0 큰 섬, 1 군도, 2 쌍둥이 섬, 3 환초, 4 열도, 5 고원, 6 산맥, 7 협곡, 8 해안, 9 화산섬, 10 암초 군도, 11 분지 "
+            + "(0이면 안 나옴, 배열이 짧으면 빠진 칸은 0 — Bake가 예전 8칸 배열에 새 칸을 기본값으로 늘린다)")]
+        public float[] PresetWeights = new float[] { 1f, 1f, 1f, 0.5f, 1f, 1f, 1f, 1f, 1f, 1f, 0.7f, 1f };
+        [Tooltip("0~11이면 늘 그 프리셋(테스트/고정 맵용), -1이면 씨앗으로 고른다")]
         public int ForcedPreset = -1;
 
         [Header("섬 (큰 섬/군도/쌍둥이 섬/환초/열도)")]
@@ -110,6 +111,55 @@ namespace ACO
         [Tooltip("곁가지 협곡이 생길 확률")]
         [Range(0f, 1f)] public float CanyonBranchChance = 0.5f;
 
+        [Header("해안 (대륙 해안 — 작전 지역 한쪽이 큰 땅)")]
+        [Tooltip("해안선이 범위 가운데에서 떨어진 거리(FieldRadius 비율). 가운데(항모)는 바다로 남고 그 너머 한쪽이 땅이다")]
+        [Range(0.1f, 0.7f)] public float CoastLandStart = 0.28f;
+        [Tooltip("해안선에서 내륙 최고 높이까지 거리(FieldRadius 비율). 짧을수록 해안 평야가 좁고 산이 가깝다")]
+        public float CoastRamp = 0.45f;
+        [Tooltip("내륙 구릉·산 최고 높이(해수면 위, m). 해안 쪽은 평야(도시·비행장·콘보이 항로가 놓이기 좋다)")]
+        public float CoastHillHeight = 750f;
+        [Tooltip("앞바다 작은 섬 수")]
+        public int CoastIslets = 3;
+
+        [Header("화산섬 (원뿔 산 + 꼭대기 분화구, 가장자리 쪽)")]
+        [Tooltip("화산섬 중심이 범위 가운데에서 떨어진 거리(FieldRadius 비율) — 가운데(항모)를 피해 가장자리 쪽")]
+        [Range(0.3f, 0.8f)] public float VolcanoOffset = 0.58f;
+        [Tooltip("화산섬 반지름(FieldRadius 비율)")]
+        public float VolcanoRadius = 0.36f;
+        [Tooltip("분화구 테두리 높이(해수면 위, m)")]
+        public float VolcanoHeight = 1700f;
+        [Tooltip("분화구 반지름(화산 반지름 비율)")]
+        [Range(0.05f, 0.4f)] public float CraterRadius = 0.14f;
+        [Tooltip("분화구 깊이(테두리에서 바닥까지, m)")]
+        public float CraterDepth = 350f;
+
+        [Header("암초 군도 (작은 섬 수십 개, 바다가 넓다)")]
+        public int ReefCountMin = 28;
+        public int ReefCountMax = 40;
+        [Tooltip("작은 섬 반지름(m). 칸 지름이 약 700m라 500~1300m면 1~3칸")]
+        public float ReefIsletRadiusMin = 500f;
+        public float ReefIsletRadiusMax = 1300f;
+        [Tooltip("이 반경(FieldRadius 비율) 안(가운데 — 항모 둘레)에는 섬을 두지 않는다")]
+        [Range(0f, 0.7f)] public float ReefInner = 0.25f;
+        [Tooltip("작은 섬 최고 높이(해수면 위, m) — 낮은 바위섬")]
+        public float ReefHeight = 90f;
+
+        [Header("분지 (산맥 고리에 둘러싸인 저지대, 가장자리 쪽)")]
+        [Tooltip("분지 중심이 범위 가운데에서 떨어진 거리(FieldRadius 비율) — 가운데(항모)를 피해 가장자리 쪽")]
+        [Range(0.3f, 0.8f)] public float BasinOffset = 0.55f;
+        [Tooltip("둘러싼 산맥 고리 반지름(FieldRadius 비율)")]
+        public float BasinRadius = 0.27f;
+        [Tooltip("고리 산맥 최고 높이(해수면 위, m)")]
+        public float BasinRingHeight = 1100f;
+        [Tooltip("고리 산맥 폭(고리 반지름 비율)")]
+        [Range(0.1f, 0.8f)] public float BasinRingWidth = 0.32f;
+        [Tooltip("분지로 드나드는 고개 수(고리가 낮아지는 곳)")]
+        [Range(0, 4)] public int BasinPasses = 3;
+        [Tooltip("고개 폭(m)")]
+        public float BasinPassWidth = 1600f;
+        [Tooltip("분지 바닥 높이(해수면 위, m)")]
+        public float BasinFloorHeight = 40f;
+
         [Header("높이")]
         [Tooltip("해안 바로 안쪽 땅 높이(해수면 위, m)")]
         public float LowlandHeight = 20f;
@@ -165,11 +215,15 @@ namespace ACO
         public const int PRESET_PLATEAU = 5;
         public const int PRESET_RANGE = 6;
         public const int PRESET_CANYON = 7;
-        public const int PRESET_COUNT = 8;
+        public const int PRESET_COAST = 8;
+        public const int PRESET_VOLCANO = 9;
+        public const int PRESET_REEF = 10;
+        public const int PRESET_BASIN = 11;
+        public const int PRESET_COUNT = 12;
 
         // 이번 씨앗의 땅 모양(지형 로컬 X/Z). 씨앗 해시로 정해 모든 클라이언트가 같다.
         // 원(blob): 중심에서 1 - (거리/반지름)², 선분(seg, 산맥 능선): 선분까지 거리로 같은 식, 깎기(cut, 협곡): 땅은 그대로 두고 높이만 깎는다.
-        private const int MAX_BLOBS = 16;
+        private const int MAX_BLOBS = 48;   // 암초 군도가 작은 섬 수십 개
         private float[] _blobX = new float[MAX_BLOBS];
         private float[] _blobZ = new float[MAX_BLOBS];
         private float[] _blobR = new float[MAX_BLOBS];
@@ -192,6 +246,15 @@ namespace ACO
         private float[] _pathX = new float[MAX_PATH];
         private float[] _pathZ = new float[MAX_PATH];
         private int _preset;
+        // 새 프리셋의 기준점: 해안 방향·거리, 화산·분지 중심·반지름, 분지 고개 방향
+        private float _coastUX;
+        private float _coastUZ;
+        private float _coastD;
+        private float _featX;
+        private float _featZ;
+        private float _featR;
+        private float[] _passAngle = new float[4];
+        private int _passCount;
         private bool _shapesBuilt;
         private int _shapesSeed;
 
@@ -294,6 +357,10 @@ namespace ACO
             if (preset == PRESET_PLATEAU) { return "고원"; }
             if (preset == PRESET_RANGE) { return "산맥"; }
             if (preset == PRESET_CANYON) { return "협곡"; }
+            if (preset == PRESET_COAST) { return "해안"; }
+            if (preset == PRESET_VOLCANO) { return "화산섬"; }
+            if (preset == PRESET_REEF) { return "암초 군도"; }
+            if (preset == PRESET_BASIN) { return "분지"; }
             return "큰 섬";
         }
 
@@ -679,7 +746,93 @@ namespace ACO
             else if (_preset == PRESET_PLATEAU) { BuildLandmass(seed, R, PlateauRadius, 241); }
             else if (_preset == PRESET_RANGE) { BuildRange(seed, R); }
             else if (_preset == PRESET_CANYON) { BuildCanyon(seed, R); }
+            else if (_preset == PRESET_COAST) { BuildCoast(seed, R); }
+            else if (_preset == PRESET_VOLCANO) { BuildVolcano(seed, R); }
+            else if (_preset == PRESET_REEF) { BuildReef(seed, R); }
+            else if (_preset == PRESET_BASIN) { BuildBasin(seed, R); }
             else { BuildBigIsland(seed, R); }
+        }
+
+        // ───────────── 새 프리셋 (가운데 = 항모 자리를 피해 가장자리 쪽에 정점) ─────────────
+
+        /// 해안: 무작위 방향 한쪽이 큰 땅. 해안선은 가운데에서 CoastLandStart만큼(가운데 바다), 내륙으로 CoastRamp에 걸쳐 높아진다(ShapeMask가 반평면으로 계산).
+        /// 앞바다(해안선과 가운데 사이)에 작은 섬 몇 개.
+        private void BuildCoast(int seed, float R)
+        {
+            float a = Hash(311, 313, seed) * Mathf.PI * 2f;
+            _coastUX = Mathf.Cos(a);
+            _coastUZ = Mathf.Sin(a);
+            _coastD = CoastLandStart * R;
+            int n = Mathf.Clamp(CoastIslets, 0, MAX_BLOBS);
+            for (int k = 0; k < n; k++)
+            {
+                float side = (Hash(k, 317, seed) - 0.5f) * 1.6f * R;   // 해안선을 따라
+                float off = _coastD - Mathf.Lerp(0.05f, 0.14f, Hash(k, 331, seed)) * R;   // 해안선 앞바다
+                float r = Mathf.Lerp(SmallIslandRadiusMin, SmallIslandRadiusMax, Hash(k, 337, seed)) * 0.45f * R;
+                float x = _coastUX * off - _coastUZ * side;
+                float z = _coastUZ * off + _coastUX * side;
+                if (BlobFits(x, z, r)) { AddBlob(x, z, r); }
+            }
+        }
+
+        /// 화산섬: 가장자리 쪽(VolcanoOffset)에 원뿔 섬 하나 + 가끔 작은 섬 1~2개. 높이는 HeightAt이 화산 중심 거리로 정한다(꼭대기 분화구).
+        private void BuildVolcano(int seed, float R)
+        {
+            float a = Hash(347, 349, seed) * Mathf.PI * 2f;
+            float d = VolcanoOffset * R * Mathf.Lerp(0.95f, 1.05f, Hash(353, 359, seed));
+            _featX = Mathf.Cos(a) * d;
+            _featZ = Mathf.Sin(a) * d;
+            _featR = VolcanoRadius * R * Mathf.Lerp(0.9f, 1.1f, Hash(367, 373, seed));
+            AddBlob(_featX, _featZ, _featR);
+            int sats = 1 + Mathf.FloorToInt(Hash(379, 383, seed) * 1.999f);
+            for (int k = 0; k < sats; k++)
+            {
+                float sa = a + (Hash(k, 389, seed) - 0.5f) * 2.2f;
+                float sd = d + (Hash(k, 397, seed) - 0.3f) * 0.6f * _featR;
+                float r = Mathf.Lerp(SmallIslandRadiusMin, SmallIslandRadiusMax, Hash(k, 401, seed)) * 0.5f * R;
+                float x = Mathf.Cos(sa) * sd + Mathf.Cos(sa + 1.57f) * _featR * 1.2f * (k == 0 ? 1f : -1f);
+                float z = Mathf.Sin(sa) * sd + Mathf.Sin(sa + 1.57f) * _featR * 1.2f * (k == 0 ? 1f : -1f);
+                if (BlobFits(x, z, r)) { AddBlob(x, z, r); }
+            }
+        }
+
+        /// 암초 군도: 가운데(ReefInner 안)를 비우고 바깥 고리에 작은 바위섬 수십 개를 흩는다(서로 겹치지 않게).
+        private void BuildReef(int seed, float R)
+        {
+            int lo = Mathf.Clamp(ReefCountMin, 1, MAX_BLOBS);
+            int hi = Mathf.Clamp(ReefCountMax, lo, MAX_BLOBS);
+            int count = lo + Mathf.FloorToInt(Hash(409, 419, seed) * (hi - lo + 0.999f));
+            for (int k = 0; k < count; k++)
+            {
+                for (int attempt = 0; attempt < 6; attempt++)
+                {
+                    int key = k * 8 + attempt;
+                    float a = Hash(key, 421, seed) * Mathf.PI * 2f;
+                    float d = Mathf.Lerp(ReefInner, 0.9f, Mathf.Sqrt(Hash(key, 431, seed))) * R;
+                    float r = Mathf.Lerp(ReefIsletRadiusMin, ReefIsletRadiusMax, Hash(key, 433, seed));
+                    float x = Mathf.Cos(a) * d;
+                    float z = Mathf.Sin(a) * d;
+                    if (BlobFits(x, z, r)) { AddBlob(x, z, r); break; }
+                }
+            }
+        }
+
+        /// 분지: 가장자리 쪽(BasinOffset)에 산맥 고리(BasinRadius)로 둘러싼 저지대. 땅 모양은 고리보다 넓은 원 하나, 높이는 HeightAt이 고리 거리로 정한다.
+        /// 고개(고리가 낮아지는 곳) BasinPasses개 — 하나는 늘 가운데(항모) 쪽을 향해 바다에서 들어오는 길이 된다.
+        private void BuildBasin(int seed, float R)
+        {
+            float a = Hash(439, 443, seed) * Mathf.PI * 2f;
+            float d = BasinOffset * R;
+            _featX = Mathf.Cos(a) * d;
+            _featZ = Mathf.Sin(a) * d;
+            _featR = BasinRadius * R;
+            AddBlob(_featX, _featZ, _featR * 1.7f);
+            _passCount = Mathf.Clamp(BasinPasses, 0, _passAngle.Length);
+            float toCenter = Mathf.Atan2(-_featZ, -_featX);
+            for (int k = 0; k < _passCount; k++)
+            {
+                _passAngle[k] = k == 0 ? toCenter : toCenter + (k / (float)_passCount) * Mathf.PI * 2f + (Hash(k, 449, seed) - 0.5f) * 0.8f;
+            }
         }
 
         private int PickPreset(int seed)
@@ -973,6 +1126,13 @@ namespace ACO
                 float f = 1f - d * d;
                 if (f > best) { best = f; }
             }
+            if (_preset == PRESET_COAST)
+            {
+                // 반평면: 해안선(가운데에서 _coastD)에서 기준값, 내륙으로 CoastRamp에 걸쳐 1까지
+                float s = x * _coastUX + z * _coastUZ - _coastD;
+                float f = CoastThreshold + s / Mathf.Max(CoastRamp * FieldRadius, 1f) * (1f - CoastThreshold);
+                if (f > best) { best = f; }
+            }
             float edge = Mathf.Sqrt(x * x + z * z) / Mathf.Max(FieldRadius, 1f);
             return Mathf.Clamp01(best) * (1f - SmoothStep(1f - EdgeFalloff, 1f, edge));
         }
@@ -1119,6 +1279,65 @@ namespace ACO
                 float top = low + CanyonHeight * SmoothStep(0f, 0.3f, t) * Mathf.Lerp(0.85f, 1.15f, Fractal(x, z, seed ^ 0x2545f491));
                 float half = CanyonWidth * 0.5f;
                 h = Mathf.Lerp(low, top, SmoothStep(half, half + Mathf.Max(CanyonWallWidth, 1f), CutDistance(x, z)));
+            }
+            else if (_preset == PRESET_COAST)
+            {
+                // 해안: 해안 쪽은 낮은 평야, 내륙으로 갈수록 구릉·산(노이즈로 들쭉날쭉)
+                float hills = Mathf.Lerp(0.3f, 1f, Mathf.Pow(Fractal(x, z, seed ^ 0x5bd1e995), HeightExponent * 0.8f));
+                h = low + CoastHillHeight * Mathf.Pow(t, 1.6f) * hills;
+            }
+            else if (_preset == PRESET_VOLCANO)
+            {
+                float dx = x - _featX;
+                float dz = z - _featZ;
+                float dn = Mathf.Sqrt(dx * dx + dz * dz) / Mathf.Max(_featR, 1f);
+                if (dn >= 1f)
+                {
+                    // 곁의 작은 섬
+                    h = low + MaxHeight * 0.25f * t * Mathf.Pow(Fractal(x, z, seed ^ 0x5bd1e995), HeightExponent);
+                }
+                else
+                {
+                    float c = Mathf.Clamp(CraterRadius, 0.02f, 0.9f);
+                    if (dn >= c)
+                    {
+                        // 원뿔: 테두리에서 바깥으로 낮아지고, 방사형 골짜기(노이즈)로 비탈이 갈라진다
+                        float k = Mathf.Pow((1f - dn) / (1f - c), 1.3f);
+                        float gully = Mathf.Lerp(0.82f, 1.12f, Fractal(x * 3f, z * 3f, seed ^ 0x2545f491));
+                        h = low + VolcanoHeight * k * gully * SmoothStep(0f, 0.25f, t);
+                    }
+                    else
+                    {
+                        // 분화구: 테두리에서 바닥까지 그릇 모양
+                        float bowl = SmoothStep(0f, c, dn);
+                        h = low + VolcanoHeight - CraterDepth * (1f - bowl * bowl);
+                    }
+                }
+            }
+            else if (_preset == PRESET_REEF)
+            {
+                // 낮은 바위섬
+                h = low + ReefHeight * t * Mathf.Lerp(0.4f, 1f, Fractal(x * 2f, z * 2f, seed ^ 0x5bd1e995));
+            }
+            else if (_preset == PRESET_BASIN)
+            {
+                float dx = x - _featX;
+                float dz = z - _featZ;
+                float dist = Mathf.Sqrt(dx * dx + dz * dz);
+                float dn = dist / Mathf.Max(_featR, 1f);
+                float w = Mathf.Max(BasinRingWidth, 0.05f);
+                float ring = Mathf.Exp(-((dn - 1f) / w) * ((dn - 1f) / w));
+                // 고개: 그 방향의 고리를 낮춘다(고리 위 호 길이로 폭을 잰다)
+                float ang = Mathf.Atan2(dz, dx);
+                float pass = 1f;
+                for (int k = 0; k < _passCount; k++)
+                {
+                    float da = Mathf.Abs(Mathf.DeltaAngle(ang * Mathf.Rad2Deg, _passAngle[k] * Mathf.Rad2Deg)) * Mathf.Deg2Rad * _featR;
+                    pass = Mathf.Min(pass, SmoothStep(0f, Mathf.Max(BasinPassWidth, 1f), da));
+                }
+                ring *= Mathf.Lerp(0.12f, 1f, pass) * Mathf.Lerp(0.75f, 1.15f, Fractal(x * 2f, z * 2f, seed ^ 0x2545f491));
+                float floor = dn < 1f ? BasinFloorHeight : 0f;
+                h = low + Mathf.Max(floor, BasinRingHeight * ring) * SmoothStep(0f, 0.3f, t);
             }
             else
             {

@@ -4952,7 +4952,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: 81a7eb0c99712da4a8f1c4762682b8d3, type: 3}
-  m_PlayOnAwake: 0
+  m_PlayOnAwake: 1
   m_Volume: 1
   m_Pitch: 1
   Loop: 0
@@ -10242,7 +10242,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4408545885098337005}
-  - component: {fileID: 9128668089198133631}
   m_Layer: 0
   m_Name: Explosion
   m_TagString: Untagged
@@ -10267,102 +10266,6 @@ Transform:
   - {fileID: 59254863832181957}
   m_Father: {fileID: 6019896402484748690}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!82 &9128668089198133631
-AudioSource:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 553934953158327637}
-  m_Enabled: 1
-  serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: 81a7eb0c99712da4a8f1c4762682b8d3, type: 3}
-  m_PlayOnAwake: 1
-  m_Volume: 1
-  m_Pitch: 1
-  Loop: 0
-  Mute: 0
-  Spatialize: 0
-  SpatializePostEffects: 0
-  Priority: 128
-  DopplerLevel: 0
-  MinDistance: 1
-  MaxDistance: 500
-  Pan2D: 0
-  rolloffMode: 0
-  BypassEffects: 0
-  BypassListenerEffects: 0
-  BypassReverbZones: 0
-  rolloffCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 1
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  panLevelCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  spreadCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  reverbZoneMixCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
 --- !u!1 &2981144999725312032
 GameObject:
   m_ObjectHideFlags: 0
@@ -10496,7 +10399,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   serializationData:
-    SerializedFormat: 2
+    SerializedFormat: 0
     SerializedBytes: 
     ReferencedUnityObjects: []
     SerializedBytesString: 
@@ -10508,7 +10411,7 @@ MonoBehaviour:
   LaunchSpeed: 80
   MaxSpeed: 600
   Acceleration: 300
-  TurnRate: 25
+  TurnRate: 40
   FlyStraightTime: 0.35
   MaxLifetime: 20
   GuidanceMode: 0
@@ -10519,6 +10422,11 @@ MonoBehaviour:
   ColdLaunchSpeed: 30
   ColdLaunchTurnRate: 0
   ColdLaunchGravity: 1
+  TopAttack: 0
+  TopAttackAltitude: 500
+  TopAttackDiveAngle: 40
+  TopAttackMinDistance: 150
+  TopAttackClimbTurnRate: 45
   MaxTrackingAngle: 30
   UnlockTime: 0.1
   AnyCountermeasure: 1
@@ -10526,7 +10434,7 @@ MonoBehaviour:
   NotchHorizon: 5
   SendMissileIncoming: 1
   MissileIncomingName: missilesincoming
-  ProximityRadius: 0
+  ProximityRadius: 2
   Damage: 50
   WeaponType: 2
   SplashLayers:
@@ -10539,7 +10447,10 @@ MonoBehaviour:
     m_Bits: 2049
   ExplosionObject: {fileID: 553934953158327637}
   ExplosionSounds: []
-  ExplosionDuration: 10
+  ExplosionDuration: 20
+  SplashVisual: {fileID: 0}
+  SplashVisualRadius: 0.5
+  SplashVisualGrowTime: 0.25
   DisableOnExplode:
   - {fileID: 2981144999725312032}
   TrailParticles:
@@ -10686,7 +10597,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 5
+      scalar: 20
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -10857,7 +10768,7 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 30
+      scalar: 50
       minScalar: 1
       maxCurve:
         serializedVersion: 2

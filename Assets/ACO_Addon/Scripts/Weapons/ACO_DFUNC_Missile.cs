@@ -92,7 +92,8 @@ namespace ACO
         [Tooltip("켜면 유도 미사일도 터진 자리에 범위 피해를 준다(대지 미사일). 대공 미사일은 끈다")]
         public bool MissileSplash = false;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(내 미사일 빗나감/플레어에 속음 대사)")]
-        public ACO_Radio Radio;
+        [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
+        public ACO_Chatter Chatter;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(다른 플레이어를 노린 미사일의 방향/거리 표시)")]
         public ACO_RWR Rwr;
         [Tooltip("락온 진행 표시를 마름모 대신 십자로 그린다(특수무장 — 특수무장 슬롯 안의 모듈이면 Bake가 켠다)")]
@@ -147,6 +148,10 @@ namespace ACO
         [Header("HUD")]
         [Tooltip("현재 표적을 가리키는 HUD 요소. 락온되면 뒤집어진다(SAV DFUNC_AAM과 같은 방식)")]
         public Transform TargetIndicator;
+        [Tooltip("이 무장을 선택했을 때만 켜고, 선택을 풀거나 내리면(특수무장 교체 포함) 끄는 오브젝트")]
+        public GameObject[] SelectedObjects;
+        [Tooltip("켜면 슬롯 장전 막대(SlotBarTemplate로 만든 막대)를 이 무장을 선택했을 때만 보인다")]
+        public bool SlotBarsOnlyWhenSelected = true;
         [Tooltip("슬롯 막대 원본. 슬롯 수만큼 복제해 SlotBarSpacing 간격으로 늘어놓는다(강화로 슬롯 수가 바뀌면 다시 만든다). 원본은 꺼 둔다. "
             + "구성: 자식 'Fill' = 장전 진행도만큼 X로 늘어나는 막대(피벗이 왼쪽 끝이어야 왼쪽부터 찬다 — 빈 오브젝트 'Fill'을 왼쪽 끝에 두고 그 아래에 막대를 +X로 반 칸 옮겨 둔다), "
             + "자식 'Ready'(선택) = 장전 완료 시 켜진다. 'Fill'이 없으면 막대 자체가 늘어난다")]
@@ -204,6 +209,9 @@ namespace ACO
         private float _baseLockTime;
         private float _baseLockRange;
         private float _baseLockAngle;
+        // 시커 각도(미사일 프리팹의 MaxTrackingAngle) — 강화(STAT_LOCK_ANGLE = 시커 범위)는 이 값을 키운다. 발사할 때 락온 범위보다 좁지 않게 보낸다.
+        private float _baseSeeker = 90f;
+        private float _seekerFactor = 1f;
         private float _baseSplashRadius;
         private float _baseReloadTime;
 
@@ -228,7 +236,11 @@ namespace ACO
         // 특수무장 슬롯에서 지금 장착된 모듈인가(아니면 입력·HUD·막대를 모두 쉰다)
         private bool _equipped = true;
 
-        private int _numChildrenStart;
+        // 미사일 풀(기체 밖 — WorldParent 또는 씬 루트에 꺼 둔 채). 기체 계층에 자식을 넣고 빼면 기체 애니메이터가 다시 바인딩하면서
+        // 그 순간의 모습(격추 중이면 모델·좌석·콜라이더가 꺼진 모습)을 기본값으로 잡아, Write Defaults 상태(Respawn)가 그 모습으로 되돌린다
+        // — 재출격하면 모델·콜라이더 없는 기체에 앉게 된다. 그래서 풀은 기체 밖에 두고, 장전 막대도 처음 한 번만 만든다.
+        private GameObject[] _pool = new GameObject[0];
+        private int _poolCount;
 
         // 슬롯 막대(원본 복제본)
         private Transform[] _barFills;
@@ -266,16 +278,17 @@ namespace ACO
                 if (Targets[i]) { _targetEntities[i] = Targets[i].GetComponentInParent<SaccEntity>(); }
             }
 
-            _numChildrenStart = transform.childCount;
             if (Missile)
             {
-                for (int i = 0; i < NumPreInstantiated; i++) { InstantiateMissile(); }
-                GameObject sample = transform.childCount > _numChildrenStart ? transform.GetChild(_numChildrenStart).gameObject : InstantiateMissile();
-                _ordTemplate = sample.GetComponent<ACO_Ordnance>();
+                for (int i = 0; i < Mathf.Max(NumPreInstantiated, 1); i++) { ReturnToPool(InstantiateMissile()); }
+                _ordTemplate = _pool[0].GetComponent<ACO_Ordnance>();
+                ACO_Missile seekerTemplate = _pool[0].GetComponent<ACO_Missile>();
+                if (seekerTemplate) { _baseSeeker = seekerTemplate.MaxTrackingAngle; }
             }
             if (CcipReticle) { CcipReticle.gameObject.SetActive(false); }
 
             ResetAmmo();
+            RefreshSelectionVisuals();
         }
 
         public void SFEXT_O_PilotEnter()
@@ -299,6 +312,7 @@ namespace ACO
             // 선택하는 순간 쥐고 있던 트리거로 바로 발사하지 않는다.
             _triggerLastFrame = true;
             if (TargetIndicator) { TargetIndicator.gameObject.SetActive(true); }
+            RefreshSelectionVisuals();
         }
 
         public void DFUNC_Deselected() { Deselect(); }
@@ -316,6 +330,26 @@ namespace ACO
                 TargetIndicator.localScale = Vector3.one;
                 TargetIndicator.gameObject.SetActive(false);
             }
+            RefreshSelectionVisuals();
+        }
+
+        /// 선택 상태에 따라 SelectedObjects와 슬롯 막대를 켜고 끈다(막대는 장착된 모듈만).
+        private void RefreshSelectionVisuals()
+        {
+            bool selected = _selected && _equipped;
+            if (SelectedObjects != null)
+            {
+                for (int i = 0; i < SelectedObjects.Length; i++)
+                {
+                    GameObject g = SelectedObjects[i];
+                    if (g && g.activeSelf != selected) { g.SetActive(selected); }
+                }
+            }
+            if (_bars != null)
+            {
+                bool bars = _equipped && (!SlotBarsOnlyWhenSelected || _selected);
+                for (int i = 0; i < _bars.Length; i++) { if (_bars[i] && _bars[i].activeSelf != bars) { _bars[i].SetActive(bars); } }
+            }
         }
 
         /// 특수무장 슬롯이 이 모듈을 장착하거나 내린다. 내리면 락온·소리·HUD 막대를 끈다(잔탄 텍스트는 장착된 모듈이 쓴다).
@@ -324,10 +358,7 @@ namespace ACO
             Init();
             _equipped = on;
             if (!on) { Deselect(); }
-            if (_bars != null)
-            {
-                for (int i = 0; i < _bars.Length; i++) { if (_bars[i] && _bars[i].activeSelf != on) { _bars[i].SetActive(on); } }
-            }
+            RefreshSelectionVisuals();
             if (on) { UpdateAmmoVisuals(); }
         }
 
@@ -378,7 +409,8 @@ namespace ACO
         /// 잔탄: 늘어난(줄어든) 총 탄수만큼만 더하고 뺀다 — 다시 가득 채우지 않는다. 뺄 탄이 모자라면 빚으로 남겨 다음에 더할 때 먼저 갚는다
         /// (다 쏘고 내렸다 다시 타서 공짜로 채우는 일이 없게).
         /// lockSpeed는 락온 시간을 그만큼 줄인다(2 = 절반), blast는 폭탄/로켓 범위 반경.
-        public void ApplyUpgrades(float damage, float ammo, float turnRate, float lockSpeed, float lockRange, float lockAngle, float blast, float reload)
+        /// seeker = 시커 범위 배수(예전 '락온 범위' 강화 — 락온 각도 LockAngle은 그대로 두고 미사일 추적 각도를 키운다).
+        public void ApplyUpgrades(float damage, float ammo, float turnRate, float lockSpeed, float lockRange, float seeker, float blast, float reload)
         {
             Init();
             if (!_upgradeBaseSet)
@@ -397,7 +429,8 @@ namespace ACO
             TurnRate = _baseTurnRate * turnRate;
             LockTime = _baseLockTime / Mathf.Max(lockSpeed, 0.01f);
             LockRange = _baseLockRange * lockRange;
-            LockAngle = _baseLockAngle * lockAngle;
+            LockAngle = _baseLockAngle;
+            _seekerFactor = seeker;
             SplashRadius = _baseSplashRadius * blast;
             SlotReloadTime = _baseReloadTime / Mathf.Max(reload, 0.01f);   // 이미 장전 중인 슬롯은 다음 장전부터
 
@@ -452,10 +485,11 @@ namespace ACO
             UpdateAmmoVisuals();
         }
 
-        /// 슬롯 수만큼 막대를 만든다. 이미 있으면 지우고 다시 만든다(슬롯 수 강화).
+        /// 슬롯 수만큼 막대를 만든다. 슬롯 수가 같으면 그대로 둔다(격추·리스폰마다 기체 계층을 바꾸지 않게 — 위 풀 설명 참고).
         private void BuildSlotBars(int slots)
         {
             if (!SlotBarTemplate) { return; }
+            if (_bars != null && _bars.Length == slots) { return; }
             if (_bars != null)
             {
                 for (int i = 0; i < _bars.Length; i++) { if (_bars[i]) { Object.Destroy(_bars[i]); } }
@@ -490,8 +524,8 @@ namespace ACO
                 Transform ready = t.Find("Ready");
                 _barReady[i] = ready ? ready.gameObject : null;
                 _bars[i] = bar;
-                if (!_equipped) { bar.SetActive(false); }
             }
+            RefreshSelectionVisuals();
             Debug.Log("[ACO] " + gameObject.name + ": HUD 슬롯 막대 " + slots + "개를 만들었습니다(" + SlotBarTemplate.parent.name + ")");
         }
 
@@ -785,23 +819,30 @@ namespace ACO
             if (EntityControl) { EntityControl.SendEventToExtensions("SFEXT_O_AAMLaunch"); }
         }
 
-        /// 비행 성능은 이벤트에 실어 보낸다 — 강화 값이 다른 클라이언트에 없어도 같은 궤적으로 보인다.
+        /// 비행 성능과 폭발 반경은 이벤트에 실어 보낸다 — 강화 값이 다른 클라이언트에 없어도 같은 궤적·같은 폭발 범위 표시로 보인다.
+        /// 유도 방식·비례항법 상수는 강화로 바뀌지 않으므로 보내지 않고 받는 쪽이 자기 무장 값을 쓴다.
         private void SendLaunch(ushort target, int slot)
         {
             if (_ordTemplate)
             {
                 // 폭탄/로켓: SAV처럼 슬롯과 비행 성능만 보낸다. 받은 쪽은 자기 화면의 기체 발사 지점과 동기화 속도(CurrentVel)에서
                 // 쏜다 — 이벤트가 오는 동안 기체가 앞으로 간 만큼 궤적이 조금 어긋나지만(연출만), 피해는 쏜 사람 화면 기준이라 판정엔 영향이 없다.
-                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunchOrdnance), (byte)slot, MaxSpeed, Acceleration);
+                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunchOrdnance), (byte)slot, MaxSpeed, Acceleration, SplashRadius);
                 return;
             }
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunch),
-                target, (byte)slot, MaxSpeed, Acceleration, TurnRate, (byte)GuidanceMode, NavigationConstant, ProximityRadius);
+                target, (byte)slot, MaxSpeed, Acceleration, TurnRate, ProximityRadius, MissileSplash ? SplashRadius : 0f, GetSeekerAngle());
+        }
+
+        /// 이번 발사의 시커 각도(도): 미사일 기본 × 시커 범위 강화, 단 락온 범위보다 좁지 않게(락온한 표적을 쏘자마자 놓치지 않게), 최대 180.
+        public float GetSeekerAngle()
+        {
+            return Mathf.Min(Mathf.Max(_baseSeeker * _seekerFactor, LockAngle), 180f);
         }
 
         // 로켓 연사는 초당 10발 이상이므로 한도를 넉넉히 둔다(최대 100).
         [NetworkCallable(60)]
-        public void NetLaunchOrdnance(byte slot, float maxSpeed, float acceleration)
+        public void NetLaunchOrdnance(byte slot, float maxSpeed, float acceleration, float splash)
         {
             Init();
             ConsumeSlot(slot);
@@ -822,15 +863,17 @@ namespace ACO
             bool isShooter = NetworkCalling.CallingPlayer != null && NetworkCalling.CallingPlayer.isLocal;
             ordnance.EntityControl = EntityControl;
             ordnance.LaunchVelocity = InheritVelocity ? GetVehicleVelocity() : Vector3.zero;
-            ordnance.PoolParent = transform;
+            ordnance.PoolParent = null;
+            ordnance.PoolOwner = this;
             ordnance.IsShooter = isShooter;
             ordnance.MaxSpeed = maxSpeed;
             ordnance.Acceleration = acceleration;
+            // 반경은 쏜 사람 값(강화 반영)을 모든 화면에 — 폭발 범위 표시용. 범위 피해 자체는 쏜 사람 화면에서만 준다(IsShooter).
+            ordnance.SplashRadius = splash;
             // 피해는 쏜 사람의 값만 쓰인다.
             if (isShooter)
             {
                 ordnance.Damage = Damage;
-                ordnance.SplashRadius = SplashRadius;
                 ordnance.MinSplashFraction = MinSplashFraction;
             }
 
@@ -906,8 +949,7 @@ namespace ACO
 
         // 일제 발사는 한 프레임에 슬롯 수만큼 보내므로 기본 한도(초당 5회)보다 넉넉히 둔다.
         [NetworkCallable(20)]
-        public void NetLaunch(ushort target, byte slot, float maxSpeed, float acceleration, float turnRate,
-            byte guidance, float navConstant, float proximity)
+        public void NetLaunch(ushort target, byte slot, float maxSpeed, float acceleration, float turnRate, float proximity, float splash, float seeker)
         {
             Init();
             ConsumeSlot(slot);
@@ -930,22 +972,25 @@ namespace ACO
                 missile.EntityControl = EntityControl;
                 missile.LaunchTarget = target != NO_TARGET && target < Targets.Length ? Targets[target] : null;
                 missile.LaunchMissileType = MissileType;
-                missile.Radio = Radio;
+                missile.Chatter = Chatter;
                 missile.Rwr = Rwr;
                 missile.LaunchInheritSpeed = InheritVelocity ? GetVehicleSpeed() : 0f;
-                missile.PoolParent = transform;
+                missile.PoolParent = null;
+                missile.PoolOwner = this;
                 missile.ShooterJudgesHit = true;
                 missile.IsShooter = isShooter;
 
                 missile.MaxSpeed = maxSpeed;
                 missile.Acceleration = acceleration;
                 missile.TurnRate = turnRate;
-                missile.GuidanceMode = guidance;
-                missile.NavigationConstant = navConstant;
+                missile.GuidanceMode = GuidanceMode;              // 강화로 바뀌지 않아 받는 쪽 무장 값
+                missile.NavigationConstant = NavigationConstant;
                 missile.ProximityRadius = proximity;
+                missile.MaxTrackingAngle = seeker;               // 시커 범위(쏜 사람의 강화 반영 — 풀에서 돌려쓰므로 발사마다 넣는다)
                 // 피해는 명중을 판정하는 쏜 사람의 값만 쓰인다(범위 피해도 쏜 사람만 준다).
                 if (isShooter) { missile.Damage = Damage; }
-                missile.SplashRadius = isShooter && MissileSplash ? SplashRadius : 0f;
+                missile.SplashRadius = isShooter ? splash : 0f;
+                missile.VisualSplashRadius = splash;   // 폭발 범위 표시는 모든 화면(쏜 사람의 강화 반영 반경)
                 missile.MinSplashFraction = MinSplashFraction;
             }
 
@@ -974,18 +1019,42 @@ namespace ACO
             return 0f;
         }
 
+        /// 기체 밖(WorldParent 또는 씬 루트)에 만든다 — 기체 계층을 바꾸지 않는다.
         private GameObject InstantiateMissile()
         {
             GameObject m = Object.Instantiate(Missile);
-            m.transform.SetParent(transform);
+            if (WorldParent) { m.transform.SetParent(WorldParent); }
+            else { m.transform.SetParent(null); }
             m.SetActive(false);
             return m;
         }
 
         private GameObject TakeFromPool()
         {
-            if (transform.childCount - _numChildrenStart > 0) { return transform.GetChild(_numChildrenStart).gameObject; }
+            while (_poolCount > 0)
+            {
+                _poolCount--;
+                GameObject m = _pool[_poolCount];
+                _pool[_poolCount] = null;
+                if (m) { return m; }
+            }
             return InstantiateMissile();
+        }
+
+        /// 터진 미사일·폭탄이 돌아온다(ACO_Missile/ACO_Ordnance.MoveBackToPool). 꺼서 풀에 넣는다 — 부모는 바꾸지 않는다.
+        public void ReturnToPool(GameObject m)
+        {
+            if (!m) { return; }
+            m.SetActive(false);
+            for (int i = 0; i < _poolCount; i++) { if (_pool[i] == m) { return; } }
+            if (_poolCount >= _pool.Length)
+            {
+                GameObject[] grown = new GameObject[Mathf.Max(_pool.Length * 2, 8)];
+                for (int i = 0; i < _poolCount; i++) { grown[i] = _pool[i]; }
+                _pool = grown;
+            }
+            _pool[_poolCount] = m;
+            _poolCount++;
         }
 
         // ───────────── 표시 ─────────────

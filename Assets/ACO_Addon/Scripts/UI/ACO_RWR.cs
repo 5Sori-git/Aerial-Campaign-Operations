@@ -11,6 +11,7 @@ namespace ACO
     /// - 락온: 락온 중인 적 방향 바깥 반경에 얇은 호.
     /// - 경보음: 가장 가까운 미사일 방향(머리에서 SoundDistance)에서 울린다. 간격은 멀면 MaxBeepInterval, 가까우면 MinBeepInterval.
     /// 방향은 머리(시선) 기준 수평 방위다: 위 = 보는 쪽, 아래 = 뒤, 좌우 = 좌우.
+    /// 크기는 요소별(HUD 설정 패널): 링 반경(SizeScale), 미사일 표시(ChevronScale), 락온 호(LockArcScale). 색은 HUD 초록(멀면) → 빨강(가까우면), 락온 호 LockColor.
     /// 미사일은 모든 클라이언트가 로컬로 재현하므로 위치를 그대로 읽는다(네트워크 추가 없음). ACO_Missile이 경고를 켜고 끌 때 등록/해제하고,
     /// ACO_MissileLauncher의 락온 경보가 ReportLock을 부른다. 위협이 없으면 매 프레임 바로 돌아간다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -37,8 +38,12 @@ namespace ACO
         [Header("표시 (HUD 설정 패널이 바꾼다)")]
         [Tooltip("끄면 링과 경보음을 모두 끈다")]
         public bool ShowRwr = true;
-        [Tooltip("링 전체 크기 배율. 안쪽 반경은 크로스헤어 바깥(반지름 + 0.4°)보다 작아지지 않는다")]
+        [Tooltip("링 반경 배율(미사일이 놓이는 안쪽·바깥 반경과 락온 호 반경). 안쪽 반경은 크로스헤어 바깥(반지름 + 0.4°)보다 작아지지 않는다")]
         public float SizeScale = 1f;
+        [Tooltip("미사일 표시(쉐브론) 크기 배율")]
+        public float ChevronScale = 1f;
+        [Tooltip("락온 호 크기 배율(반경 — 바깥 반경보다 안쪽으로는 안 들어간다)")]
+        public float LockArcScale = 1f;
 
         [Header("링")]
         [Tooltip("한 번에 그리는 미사일 수(가까운 순)")]
@@ -63,8 +68,12 @@ namespace ACO
         [Header("색 / 깜빡임")]
         [Tooltip("끄면 쉐브론이 늘 FarColor")]
         public bool UseColor = true;
-        public Color FarColor = new Color(1f, 0.85f, 0.2f, 0.9f);
+        [Tooltip("먼 미사일 색(기본 HUD 초록)")]
+        public Color FarColor = new Color(0.35f, 1f, 0.45f, 0.9f);
+        [Tooltip("가까운 미사일 색(거리에 따라 FarColor에서 섞인다)")]
         public Color CloseColor = new Color(1f, 0.15f, 0.1f, 1f);
+        [Tooltip("락온 호 색")]
+        public Color LockColor = new Color(0.35f, 1f, 0.45f, 0.75f);
         [Tooltip("이 거리(m) 안의 미사일은 경보음 박자에 맞춰 깜빡인다")]
         public float BlinkRange = 1500f;
 
@@ -87,6 +96,7 @@ namespace ACO
         private float[] _lockUntil = new float[MAX_LOCKS];
 
         private Material[] _chevronMats;
+        private Material[] _arcMats;
         private float _nextBeep;
         private float _blinkOnUntil;
         private bool _visible;
@@ -103,6 +113,14 @@ namespace ACO
             int n = ChevronRenderers != null ? ChevronRenderers.Length : 0;
             _chevronMats = new Material[n];
             for (int i = 0; i < n; i++) { if (ChevronRenderers[i]) { _chevronMats[i] = ChevronRenderers[i].material; } }
+            int na = LockArcs != null ? LockArcs.Length : 0;
+            _arcMats = new Material[na];
+            for (int i = 0; i < na; i++)
+            {
+                if (!LockArcs[i]) { continue; }
+                MeshRenderer r = LockArcs[i].GetComponent<MeshRenderer>();
+                if (r) { _arcMats[i] = r.material; }
+            }
             HideAll();
         }
 
@@ -187,7 +205,7 @@ namespace ACO
             _innerDeg = InnerAngle * SizeScale;
             if (Markers != null && Markers.ShowCrosshair) { _innerDeg = Mathf.Max(_innerDeg, Markers.CrosshairAngle * 0.5f + 0.4f); }
             _outerDeg = Mathf.Max(OuterAngle * SizeScale, _innerDeg + 2f);
-            _arcDeg = Mathf.Max(LockArcAngle * SizeScale, _outerDeg + 0.8f);
+            _arcDeg = Mathf.Max(LockArcAngle * SizeScale * LockArcScale, _outerDeg + 0.8f);
 
             if (!Ring.gameObject.activeSelf) { Ring.gameObject.SetActive(true); }
             Ring.SetPositionAndRotation(headPos + headRot * Vector3.forward * d0, headRot);
@@ -278,7 +296,7 @@ namespace ACO
             c.localPosition = new Vector3(Mathf.Sin(bearing) * r, Mathf.Cos(bearing) * r, 0f);
             // 꼭짓점(+Y)이 가운데를 향하게: +Y를 (−sin b, −cos b)로 돌린다.
             c.localRotation = Quaternion.Euler(0f, 0f, 180f - bearing * Mathf.Rad2Deg);
-            float size = d0 * Mathf.Tan(ChevronAngle * SizeScale * Mathf.Deg2Rad) * Mathf.Lerp(CloseScale, 1f, t);
+            float size = d0 * Mathf.Tan(ChevronAngle * ChevronScale * Mathf.Deg2Rad) * Mathf.Lerp(CloseScale, 1f, t);
             c.localScale = new Vector3(size, size, size);
             if (ChevronRenderers != null && slot < ChevronRenderers.Length && ChevronRenderers[slot] != null)
             {
@@ -300,6 +318,7 @@ namespace ACO
             // 호의 가운데(+Y)를 (sin b, cos b)로 돌린다.
             a.localRotation = Quaternion.Euler(0f, 0f, -bearing * Mathf.Rad2Deg);
             a.localScale = new Vector3(r, r, r);
+            if (_arcMats != null && slot < _arcMats.Length && _arcMats[slot] != null) { _arcMats[slot].SetColor("_Color", LockColor); }
         }
 
         /// 터졌거나 회수됐거나, 내가 그 기체에서 내렸으면 목록에서 뺀다(경고 해제를 놓친 경우의 안전장치).

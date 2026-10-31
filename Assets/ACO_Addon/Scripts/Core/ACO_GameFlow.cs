@@ -15,7 +15,8 @@ namespace ACO
     /// - 브리핑 준비: 지형이 다 세워지고 그 위에 미리 배치가 끝나야(생성기 IsPreviewReady + 기다리던 씨앗) READY를 받는다. 그동안 READY·리롤 버튼은
     ///   PREPARING. 미리 배치가 없으면(미션 뒤 새 지형을 끈 경우, 생성기 오너가 배치 도중 나간 경우) 오너가 다시 요청한다.
     ///   월드를 연 뒤 RerollCooldown(30초) 동안은 리롤을 받지 않는다(첫 지형·배치와 겹치지 않게).
-    /// - 준비: 미션 전, 무장·강화를 마치고 READY. 명단 전원이 READY면 AllReadyDelay(10초) 출격 카운트다운 — 그동안 리롤·페이즈 변경을 잠그고,
+    /// - 준비: 미션 전, 무장·강화를 마치고 READY. 명단 전원이 READY면 AllReadyDelay(10초) 출격 카운트다운 — 그동안 리롤·페이즈 변경, READY 해제,
+    ///   새 참가(JOIN), 무장 변경·해금 구매(격납고), 강화 구매(상점)를 잠그고, 패널에 큰 카운트다운을 덮어 띄우며, 시작 순간 AllReadySound를 튼다.
     ///   누가 READY를 풀거나 새로 들어오면(전원 준비가 깨지면) 취소된다. 절반 이상이면 ReadyCountdown(60초) 뒤 READY 안 한 사람을 명단에서 빼고(관전자)
     ///   남은 전원으로 같은 출격 카운트다운에 들어간다. 참가자 기체가 하나라도 떠 있으면(미션 직후) READY·리롤을 받지 않는다.
     /// - 시작: 오너가 미션을 요청하고 모든 클라이언트에 일제 출격을 알린다. 미션 관리자가 RUNNING이 될 때까지(최대 StartTimeout) "시작 중"으로
@@ -36,6 +37,9 @@ namespace ACO
     /// - 귀환: 미션이 끝나면(성공/실패) ReturnDelay 뒤 모든 플레이어를 브리핑실(BriefingPoint)로 옮긴다(참가자 기체에 타고 있으면 내린 뒤).
     /// 이동(대기실·필드)은 자유 — ACO_Teleporter 버튼으로 오간다. 순간이동·출격은 화면 암전(ACO_ScreenFader)을 거친다.
     /// 브리핑실과 격납고는 한 방(대기실)이어도 된다: 콘솔(명단·리롤·페이즈)·격납고 패널(무장·상점·READY/LAUNCH)·작전 테이블을 한곳에 두고 HangarPoint를 비운다.
+    /// - 작전 콘솔(ACO_MissionConsole): 위 = 상태 배너(큰 상태 + "내 다음 할 일" + 거절 안내 6초), 왼쪽 = 작전 카드(공용 설정 — 페이즈 −/+,
+    ///   예상 시간, 지형 이름, NEW TERRAIN, 마지막으로 바꾼 사람), 오른쪽 = 명단 칸 카드(기체 이름·조종사·준비 — 빈 칸을 누르면 그 칸으로 참가,
+    ///   미션 전엔 칸 바꾸기), 아래 = 내 행동 버튼 하나(JOIN → READY/CANCEL READY → LAUNCH/SPECTATE) + LEAVE.
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_GameFlow : UdonSharpBehaviour
     {
@@ -43,7 +47,15 @@ namespace ACO
         public const int ACTION_TOGGLE_READY = 1;
         public const int ACTION_LAUNCH = 2;
         public const int ACTION_REROLL = 3;
+        public const int ACTION_PHASES_DOWN = 4;
+        public const int ACTION_PHASES_UP = 5;
+        /// 명단 칸 카드(ACO_FlowButton.Slot): 빈 칸이면 그 칸으로 참가(이미 명단이면 칸 바꾸기).
+        public const int ACTION_JOIN_SLOT = 6;
+        /// 내 행동 버튼: 명단 밖 = JOIN(미션 중 빈 칸이 없으면 SPECTATE), 미션 전 = READY/CANCEL READY, 미션 중 = LAUNCH.
+        public const int ACTION_PRIMARY = 7;
+        public const int ACTION_LEAVE = 8;
         private const int MAX_SLOTS = 8;
+        private const float MESSAGE_TIME = 6f;
 
         [Header("참조")]
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미션 관리자를 넣는다")]
@@ -62,10 +74,16 @@ namespace ACO
         public Transform SpectatePoint;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 화면 암전을 넣는다. 비면 바로 옮긴다")]
         public ACO_ScreenFader Fader;
+        [Tooltip("빌드 시 ACO_SceneBaker가 씬의 날씨를 넣는다(작전 카드·명단 글자에 날씨 이름). 비면 표시 안 함")]
+        public ACO_Weather Weather;
 
         [Header("진행")]
         [Tooltip("로비 콘솔에서 고르기 전의 페이즈 수")]
         [Range(1, 5)] public int DefaultPhases = 3;
+        [Tooltip("페이즈당 대략 걸리는 시간(분) — 작전 카드에 'ABOUT N MIN'으로 보인다")]
+        public float MinutesPerPhase = 5f;
+        [Tooltip("명단 칸(기체) 표시 이름(칸 순서). 비면 기체 오브젝트 이름")]
+        public string[] SlotNames;
         [Tooltip("명단의 절반 이상이 READY면 이 시간(초) 뒤 READY 안 한 사람을 명단에서 빼고 출격 카운트다운에 들어간다")]
         public float ReadyCountdown = 60f;
         [Tooltip("명단 전원이 READY면 이 시간(초) 뒤 출격한다. 그동안 리롤·페이즈 변경을 잠근다(READY를 풀거나 새로 들어오면 취소)")]
@@ -88,15 +106,42 @@ namespace ACO
         public bool NewTerrainAfterMission = true;
         [Tooltip("지형 프리셋 표시 이름(ACO_HexTerrain.PRESET_* 순서)")]
         public string[] TerrainNames = new string[] {
-            "BIG ISLAND", "ARCHIPELAGO", "TWIN ISLANDS", "ATOLL", "ISLAND CHAIN", "PLATEAU", "MOUNTAIN RANGE", "CANYON" };
+            "BIG ISLAND", "ARCHIPELAGO", "TWIN ISLANDS", "ATOLL", "ISLAND CHAIN", "PLATEAU", "MOUNTAIN RANGE", "CANYON",
+            "COASTLINE", "VOLCANO", "REEF ISLANDS", "BASIN" };
 
         [Header("표시 (프리팹 빌더가 채운다)")]
-        [Tooltip("명단·준비·상태(로비 콘솔과 격납고에 하나씩)")]
+        [Tooltip("명단·준비·상태(격납고, 옛 콘솔)")]
         public TextMeshProUGUI[] StatusTexts;
+        [Tooltip("작전 콘솔 상태 배너: 큰 상태 + 내 다음 할 일 + 거절 안내")]
+        public TextMeshProUGUI[] BannerTexts;
+        [Tooltip("작전 카드: 페이즈 수(큰 숫자)")]
+        public TextMeshProUGUI[] PhaseTexts;
+        [Tooltip("작전 카드: 예상 시간·바꾼 사람")]
+        public TextMeshProUGUI[] PhaseInfoTexts;
+        [Tooltip("작전 카드: 지형 이름·바꾼 사람")]
+        public TextMeshProUGUI[] TerrainTexts;
+
+        [Header("명단 칸 카드 색")]
+        public Color SlotOpenColor = new Color(0.05f, 0.1f, 0.08f, 1f);
+        public Color SlotTakenColor = new Color(0.08f, 0.2f, 0.12f, 1f);
+        public Color SlotMineColor = new Color(0.32f, 0.26f, 0.05f, 1f);
+        public Color SlotReadyColor = new Color(0.1f, 0.42f, 0.18f, 1f);
+        public Color SlotAirborneColor = new Color(0.07f, 0.24f, 0.4f, 1f);
         [Tooltip("JOIN/READY/LAUNCH/REROLL 버튼(빌드 시 Bake가 씬에서 모은다). 상태에 맞게 글자를 바꾸고, 지금 누를 수 없으면 회색으로 칠한다")]
         public ACO_FlowButton[] Buttons;
         [Tooltip("페이즈 수 버튼(빌드 시 Bake가 모은다). 고른 수는 밝게, 바꿀 수 없을 때(미션 중·출격 카운트다운)는 회색")]
         public ACO_MissionStartButton[] PhaseButtons;
+        [Tooltip("출격 카운트다운 때 패널 위에 덮어 띄우는 판(빌드 시 Bake가 콘솔·격납고 패널마다 만들고 모은다)")]
+        public GameObject[] CountdownOverlays;
+        [Tooltip("카운트다운 판의 큰 글자(CountdownOverlays와 같은 순서)")]
+        public TextMeshProUGUI[] CountdownTexts;
+
+        [Header("소리 (선택)")]
+        [Tooltip("모두 READY해 출격 카운트다운이 시작되는 순간 한 번(모든 클라이언트 각자). 2D 권장")]
+        public AudioSource AllReadySound;
+        [Tooltip("출격 카운트다운 마지막 TickSeconds초 동안 초마다(선택)")]
+        public AudioSource CountdownTickSound;
+        public int TickSeconds = 5;
 
         [UdonSynced] private int[] _roster = new int[0];   // 칸별 playerId, -1 = 빈 칸
         [UdonSynced] private int _readyMask;
@@ -107,6 +152,8 @@ namespace ACO
         [UdonSynced] private int _lastRerollMs;    // 마지막 리롤 서버 시각(0 = 없음)
         [UdonSynced] private bool _terrainPending; // 미션이 끝났고, 모두 내리면 지형을 새로 만든다
         [UdonSynced] private int _expectedSeed;    // 마지막으로 요청한 새 지형 씨앗(0 = 지금 지형) — 미리 배치가 이 지형에 놓여야 준비 완료
+        [UdonSynced] private int _phasesBy = -1;   // 페이즈를 마지막으로 바꾼 playerId(-1 = 기본값)
+        [UdonSynced] private int _terrainBy = -1;  // 지형을 마지막으로 바꾼 playerId(-1 = 자동)
 
         private bool _wasRunning;
         private float _pollTimer;
@@ -116,6 +163,10 @@ namespace ACO
         private int _pilotedSlot = -1;          // 지난 확인 때 내가 조종하던 참가자 기체(로컬)
         private float _previewRequestAt = -1000f; // 오너가 마지막으로 미리 배치를 요청한 시각(로컬, 다시 요청 간격)
         private string _message = "";
+        private float _messageTime;
+        private int _seenLaunchEndMs;      // 출격 카운트다운 시작 감지(로컬) — 늦게 들어온 사람은 소리 없이
+        private bool _launchSeenInit;
+        private int _lastCountdownSec = -1;
 
         // 기체별(로컬)
         private Vector3[] _homePos;
@@ -203,6 +254,9 @@ namespace ACO
         /// 전원 준비 출격 카운트다운 중(리롤·페이즈 변경 잠금).
         private bool IsLaunchCountdown() { return _launchEndMs != 0; }
 
+        /// 격납고(무장 변경·해금 구매)와 상점(강화 구매)이 본다: 출격 카운트다운·시작 중엔 잠근다.
+        public bool IsLoadoutLocked() { return IsLaunchCountdown() || IsStarting(); }
+
         /// 브리핑 준비 완료: 지형이 다 세워지고 그 위에 미리 배치가 끝났다(그리고 마지막으로 요청한 새 지형이다 — 리롤 직후 동기화가 늦게 와도
         /// 옛 배치를 준비 완료로 보지 않게). 생성기가 없으면 늘 준비 완료.
         private bool IsBriefingReady()
@@ -242,12 +296,51 @@ namespace ACO
         // ───────────── 버튼 (ACO_FlowButton, ACO_MissionStartButton) ─────────────
 
         /// 버튼이 부른다. 받아들였으면 true(버튼이 결정음), 조건이 안 맞아 안내만 띄웠으면 false(거절음).
-        public bool ButtonAction(int action)
+        public bool ButtonAction(int action) { return ButtonActionSlot(action, -1); }
+
+        /// slot = 명단 칸 카드의 칸 번호(ACTION_JOIN_SLOT), 다른 동작은 -1.
+        public bool ButtonActionSlot(int action, int slot)
         {
+            // 내 행동·LEAVE는 해당 동작으로 바꿔 아래에서 처리한다(U#은 재귀 호출이 안전하지 않다)
+            if (action == ACTION_PRIMARY)
+            {
+                if (LocalSlot() < 0) { action = IsRunning() && !HasOpenSlot() ? ACTION_LAUNCH : ACTION_TOGGLE_JOIN; }   // 빈 칸 없는 미션 중 = 관전
+                else { action = IsBusy() ? ACTION_LAUNCH : ACTION_TOGGLE_READY; }
+            }
+            else if (action == ACTION_LEAVE)
+            {
+                if (LocalSlot() < 0) { return Deny("YOU ARE NOT ON THE ROSTER"); }
+                action = ACTION_TOGGLE_JOIN;
+            }
+            if (action == ACTION_PHASES_DOWN || action == ACTION_PHASES_UP)
+            {
+                int want = _phases + (action == ACTION_PHASES_UP ? 1 : -1);
+                if (want < 1) { return Deny("MINIMUM 1 PHASE"); }
+                if (want > 5) { return Deny("MAXIMUM 5 PHASES"); }
+                return RequestPhases(want);
+            }
+            if (action == ACTION_JOIN_SLOT)
+            {
+                if (slot < 0 || slot >= SlotCount()) { return false; }
+                EnsureRoster();
+                int mine = LocalSlot();
+                if (mine == slot) { return Deny("THIS IS YOUR SLOT - PRESS LEAVE TO EXIT THE ROSTER"); }
+                if (_roster[slot] >= 0) { return Deny("SLOT TAKEN - PICK AN OPEN SLOT"); }
+                if (IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
+                if (Aircraft[slot] && Aircraft[slot].Occupied) { return Deny("THAT AIRCRAFT IS STILL IN USE"); }
+                if (mine >= 0)
+                {
+                    if (IsBusy()) { return Deny("MISSION IN PROGRESS - SLOTS LOCKED"); }
+                    if (Aircraft[mine] && Aircraft[mine].Occupied) { return Deny("LAND AND EXIT BEFORE CHANGING SLOTS"); }
+                }
+                SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetJoinSlot), slot);
+                return true;
+            }
             if (action == ACTION_TOGGLE_JOIN)
             {
                 int k = LocalSlot();
                 if (k >= 0 && k < SlotCount() && Aircraft[k] && Aircraft[k].Piloting) { return Deny("LAND AND EXIT BEFORE LEAVING THE ROSTER"); }
+                if (k < 0 && IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
                 if (k < 0 && !HasOpenSlot()) { return Deny("ROSTER FULL - YOU CAN SPECTATE"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, k >= 0 ? nameof(NetLeave) : nameof(NetJoin));
                 return true;
@@ -259,6 +352,7 @@ namespace ACO
                 if (IsRunning()) { return Deny("MISSION IN PROGRESS - USE LAUNCH"); }
                 if (AnyAircraftOccupied()) { return Deny("WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
                 bool readyNow = (_readyMask & (1 << LocalSlot())) != 0;
+                if (readyNow && IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, READY LOCKED"); }
                 if (!readyNow && !IsBriefingReady()) { return Deny("PREPARING TERRAIN AND ENEMY FORCES - PLEASE WAIT"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetToggleReady));
                 return true;
@@ -272,7 +366,7 @@ namespace ACO
                 if (!_terrain) { return false; }
                 if (!IsBriefingReady()) { return Deny("TERRAIN GENERATING - PLEASE WAIT"); }
                 int left = RerollCooldownLeft();
-                if (left > 0) { return Deny("REROLL AVAILABLE IN " + left + "s"); }
+                if (left > 0) { return Deny("NEW TERRAIN AVAILABLE IN " + left + "s"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetReroll));
                 return true;
             }
@@ -329,7 +423,7 @@ namespace ACO
             VRCPlayerApi p = NetworkCalling.CallingPlayer;
             if (!Utilities.IsValid(p)) { return; }
             EnsureRoster();
-            if (GetSlotOf(p.playerId) >= 0) { return; }
+            if (GetSlotOf(p.playerId) >= 0 || _launchEndMs != 0) { return; }   // 출격 카운트다운 중엔 새로 못 들어온다
             int slot = -1;
             for (int i = 0; i < _roster.Length; i++)
             {
@@ -339,6 +433,27 @@ namespace ACO
                 break;
             }
             if (slot < 0) { return; }
+            _roster[slot] = p.playerId;
+            Publish();
+            EvaluateReady();
+        }
+
+        /// 그 칸으로 참가한다. 이미 명단이면 칸을 바꾼다(미션 전, 기체에서 내린 뒤 — 준비는 풀린다).
+        [NetworkCallable]
+        public void NetJoinSlot(int slot)
+        {
+            VRCPlayerApi p = NetworkCalling.CallingPlayer;
+            if (!Utilities.IsValid(p)) { return; }
+            EnsureRoster();
+            if (slot < 0 || slot >= _roster.Length || _roster[slot] >= 0 || _launchEndMs != 0) { return; }
+            if (Aircraft[slot] && Aircraft[slot].Occupied) { return; }
+            int old = GetSlotOf(p.playerId);
+            if (old >= 0)
+            {
+                if (IsBusy() || (Aircraft[old] && Aircraft[old].Occupied)) { return; }
+                _roster[old] = -1;
+                _readyMask &= ~(1 << old);
+            }
             _roster[slot] = p.playerId;
             Publish();
             EvaluateReady();
@@ -359,7 +474,8 @@ namespace ACO
             int k = GetSlotOf(p.playerId);
             if (k < 0) { return; }
             bool turningOn = (_readyMask & (1 << k)) == 0;
-            if (turningOn && !IsBriefingReady()) { return; }   // 준비 해제는 언제든, 준비는 브리핑 준비가 끝난 뒤에만
+            if (turningOn && !IsBriefingReady()) { return; }   // 준비는 브리핑 준비가 끝난 뒤에만
+            if (!turningOn && _launchEndMs != 0) { return; }    // 출격 카운트다운 중엔 해제하지 못한다
             _readyMask ^= 1 << k;
             Publish();
             EvaluateReady();
@@ -376,6 +492,7 @@ namespace ACO
             _terrainPending = false;
             _readyMask = 0;
             _countdownEndMs = 0;
+            _terrainBy = p.playerId;
             Publish();
             NewTerrainAndPreview();
         }
@@ -385,6 +502,8 @@ namespace ACO
         {
             if (IsBusy() || IsLaunchCountdown()) { return; }
             _phases = Mathf.Clamp(phases, 1, 5);
+            VRCPlayerApi p = NetworkCalling.CallingPlayer;
+            _phasesBy = Utilities.IsValid(p) ? p.playerId : -1;
             Publish();
         }
 
@@ -572,6 +691,7 @@ namespace ACO
 
         void Update()
         {
+            UpdateCountdown();
             _pollTimer -= Time.deltaTime;
             if (_pollTimer > 0f) { return; }
             _pollTimer = 0.5f;
@@ -592,6 +712,7 @@ namespace ACO
 
             CheckShotDown(running);
             ReturnIdleAircraft(0.5f);
+            if (_message != "" && Time.time - _messageTime > MESSAGE_TIME) { _message = ""; }
             Refresh();
         }
 
@@ -619,6 +740,7 @@ namespace ACO
             {
                 _terrainPending = false;
                 _lastRerollMs = Now();
+                _terrainBy = -1;
                 Publish();
                 NewTerrainAndPreview();
             }
@@ -742,9 +864,40 @@ namespace ACO
 
         // ───────────── 표시 ─────────────
 
+        /// 매 프레임: 출격 카운트다운 시작 소리, 큰 카운트다운 판(초가 바뀔 때만 글자를 고친다), 마지막 몇 초 틱 소리.
+        private void UpdateCountdown()
+        {
+            int end = _launchEndMs;
+            if (!_launchSeenInit)
+            {
+                // 처음 본 상태(늦게 들어옴 포함)는 기준만 — 이미 진행 중인 카운트다운에 소리를 내지 않는다
+                _launchSeenInit = true;
+                _seenLaunchEndMs = end;
+            }
+            if (end != 0 && _seenLaunchEndMs == 0 && AllReadySound) { AllReadySound.Play(); }
+            _seenLaunchEndMs = end;
+
+            bool show = end != 0 && !IsBusy();
+            int sec = show ? Mathf.Max(Mathf.CeilToInt((end - Now()) / 1000f), 0) : -1;
+            if (sec == _lastCountdownSec) { return; }
+            if (show && CountdownTickSound && sec > 0 && sec <= TickSeconds && _lastCountdownSec > sec) { CountdownTickSound.Play(); }
+            _lastCountdownSec = sec;
+            if (CountdownOverlays != null)
+            {
+                for (int i = 0; i < CountdownOverlays.Length; i++)
+                {
+                    if (CountdownOverlays[i] && CountdownOverlays[i].activeSelf != show) { CountdownOverlays[i].SetActive(show); }
+                }
+            }
+            if (!show || CountdownTexts == null) { return; }
+            string text = "<size=40%>ALL READY - LAUNCH IN</size>\n" + sec + "\n<size=30%>LOADOUT AND UPGRADES LOCKED</size>";
+            for (int i = 0; i < CountdownTexts.Length; i++) { if (CountdownTexts[i]) { CountdownTexts[i].text = text; } }
+        }
+
         private void SetMessage(string s)
         {
             _message = s;
+            _messageTime = Time.time;
             Refresh();
         }
 
@@ -776,7 +929,7 @@ namespace ACO
             else if (_launchEndMs != 0)
             {
                 int sec = Mathf.Max(Mathf.CeilToInt((_launchEndMs - Now()) / 1000f), 0);
-                footer = "<color=#7FFF8A>ALL READY - LAUNCH IN " + sec + "s</color> - TERRAIN AND PHASES LOCKED";
+                footer = "<color=#7FFF8A>ALL READY - LAUNCH IN " + sec + "s</color> - ROSTER, READY, LOADOUT AND UPGRADES LOCKED";
             }
             else if (_countdownEndMs != 0)
             {
@@ -784,11 +937,12 @@ namespace ACO
                 footer = "<color=#FFD24D>AUTO START IN " + sec + "s</color> - PLAYERS NOT READY WILL BECOME SPECTATORS";
             }
             else if (!IsBriefingReady()) { footer = "<color=#FFD24D>PREPARING TERRAIN AND ENEMY FORCES...</color>"; }
-            else { footer = "JOIN, PICK YOUR LOADOUT (REROLL TERRAIN IF YOU LIKE), THEN PRESS READY - LAUNCH 10s AFTER ALL ARE READY"; }
+            else { footer = "JOIN, PICK YOUR LOADOUT (NEW TERRAIN IF YOU LIKE), THEN PRESS READY - LAUNCH 10s AFTER ALL ARE READY"; }
             s += "\n<size=60%>" + footer + "</size>";
             if (_message != "") { s += "\n<size=60%><color=#FF5544>" + _message + "</color></size>"; }
             SetTexts(StatusTexts, s);
 
+            RefreshConsole(running, starting, mySlot);
             RefreshButtons(running, starting, mySlot);
         }
 
@@ -804,12 +958,14 @@ namespace ACO
 
             // JOIN/LEAVE
             string joinLabel = participant ? "LEAVE" : "JOIN";
-            bool joinOn = participant ? !(mine != null && mine.Piloting) : HasOpenSlot();
-            if (!participant && !joinOn) { joinLabel = "ROSTER FULL"; }
+            bool joinOn = participant ? !(mine != null && mine.Piloting) : HasOpenSlot() && !locked;
+            if (!participant && locked) { joinLabel = "LOCKED"; }
+            else if (!participant && !joinOn) { joinLabel = "ROSTER FULL"; }
 
             // READY
             string readyLabel = myReady ? "CANCEL READY" : (!running && !starting && !briefingReady ? "PREPARING..." : "READY");
-            bool readyOn = participant && !running && !starting && !occupied && (myReady || briefingReady);
+            bool readyOn = participant && !running && !starting && !occupied && (myReady ? !locked : briefingReady);
+            if (myReady && locked) { readyLabel = "LAUNCHING..."; }
 
             // LAUNCH / SPECTATE
             string launchLabel = "LAUNCH";
@@ -824,7 +980,7 @@ namespace ACO
             }
 
             // REROLL(쿨타임 중엔 남은 시간)
-            string rerollLabel = "REROLL TERRAIN";
+            string rerollLabel = "NEW TERRAIN";
             bool rerollOn = false;
             if (running || starting) { }
             else if (locked) { rerollLabel = "TERRAIN LOCKED"; }
@@ -832,9 +988,22 @@ namespace ACO
             else
             {
                 int left = RerollCooldownLeft();
-                if (left > 0) { rerollLabel = "REROLL (" + left + "s)"; }
+                if (left > 0) { rerollLabel = "NEW TERRAIN (" + left + "s)"; }
                 else { rerollOn = participant && !occupied && _terrain != null; }
             }
+
+            // 내 행동 버튼(JOIN → READY → LAUNCH)
+            string primaryLabel;
+            bool primaryOn;
+            if (!participant)
+            {
+                if (running && !HasOpenSlot()) { primaryLabel = "SPECTATE"; primaryOn = SpectatePoint != null; }
+                else { primaryLabel = joinLabel; primaryOn = joinOn; }
+            }
+            else if (running || starting) { primaryLabel = starting ? "STARTING..." : launchLabel; primaryOn = !starting && launchOn; }
+            else { primaryLabel = readyLabel; primaryOn = readyOn; }
+            bool leaveOn = participant && !(mine != null && mine.Piloting);
+            bool phaseOn = !running && !starting && !locked;
 
             if (Buttons != null)
             {
@@ -846,11 +1015,15 @@ namespace ACO
                     else if (b.Action == ACTION_TOGGLE_READY) { b.SetState(readyLabel, readyOn); }
                     else if (b.Action == ACTION_LAUNCH) { b.SetState(launchLabel, launchOn); }
                     else if (b.Action == ACTION_REROLL) { b.SetState(rerollLabel, rerollOn); }
+                    else if (b.Action == ACTION_PRIMARY) { b.SetState(primaryLabel, primaryOn); }
+                    else if (b.Action == ACTION_LEAVE) { b.SetState("LEAVE", leaveOn); }
+                    else if (b.Action == ACTION_PHASES_DOWN) { b.SetState("-", phaseOn && _phases > 1); }
+                    else if (b.Action == ACTION_PHASES_UP) { b.SetState("+", phaseOn && _phases < 5); }
+                    else if (b.Action == ACTION_JOIN_SLOT) { RefreshSlotCard(b, running, mySlot, locked); }
                 }
             }
             if (PhaseButtons != null)
             {
-                bool phaseOn = !running && !starting && !locked;
                 for (int i = 0; i < PhaseButtons.Length; i++)
                 {
                     if (PhaseButtons[i]) { PhaseButtons[i].SetState(phaseOn, PhaseButtons[i].PhaseCount == _phases); }
@@ -858,12 +1031,140 @@ namespace ACO
             }
         }
 
+        private string TerrainName()
+        {
+            if (!_terrain) { return "-"; }
+            int preset = _terrain.GetBuiltPreset();
+            if (preset < 0) { return "GENERATING..."; }
+            return TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset;
+        }
+
+        private string PlayerName(int playerId)
+        {
+            if (playerId < 0) { return ""; }
+            VRCPlayerApi p = VRCPlayerApi.GetPlayerById(playerId);
+            return Utilities.IsValid(p) ? p.displayName : "";
+        }
+
+        private string SlotName(int k)
+        {
+            if (SlotNames != null && k < SlotNames.Length && SlotNames[k] != null && SlotNames[k] != "") { return SlotNames[k]; }
+            return k < SlotCount() && Aircraft[k] ? Aircraft[k].gameObject.name : "SLOT " + (k + 1);
+        }
+
+        /// 작전 콘솔: 상태 배너, 작전 카드(페이즈·지형).
+        private void RefreshConsole(bool running, bool starting, int mySlot)
+        {
+            bool hasBanner = BannerTexts != null && BannerTexts.Length > 0;
+            bool hasCards = (PhaseTexts != null && PhaseTexts.Length > 0) || (TerrainTexts != null && TerrainTexts.Length > 0);
+            if (!hasBanner && !hasCards) { return; }
+
+            int members = 0;
+            int ready = 0;
+            for (int i = 0; i < SlotCount(); i++)
+            {
+                if (_roster == null || i >= _roster.Length || _roster[i] < 0) { continue; }
+                members++;
+                if ((_readyMask & (1 << i)) != 0) { ready++; }
+            }
+            bool participant = mySlot >= 0;
+            SaccEntity mine = participant && mySlot < SlotCount() ? Aircraft[mySlot] : null;
+            bool myReady = participant && (_readyMask & (1 << mySlot)) != 0;
+
+            if (hasBanner)
+            {
+                string head;
+                string next;
+                if (starting) { head = "MISSION STARTING"; next = "STAND BY - LAUNCHING ALL PILOTS"; }
+                else if (running)
+                {
+                    head = "MISSION IN PROGRESS";
+                    if (participant)
+                    {
+                        if (mine != null && mine.Piloting) { next = "GOOD HUNTING - YOU ARE IN FLIGHT"; }
+                        else if (mine != null && mine.dead) { next = "YOUR AIRCRAFT IS RESPAWNING..."; }
+                        else { next = "NEXT: PRESS LAUNCH TO SORTIE"; }
+                    }
+                    else { next = HasOpenSlot() ? "NEXT: TAP AN OPEN SLOT TO JOIN, THEN LAUNCH" : "ROSTER FULL - PRESS SPECTATE TO WATCH FROM THE DECK"; }
+                }
+                else if (_launchEndMs != 0)
+                {
+                    int sec = Mathf.Max(Mathf.CeilToInt((_launchEndMs - Now()) / 1000f), 0);
+                    head = "<color=#7FFF8A>ALL READY - LAUNCH IN " + sec + "</color>";
+                    next = "ROSTER, READY, LOADOUT AND UPGRADES LOCKED";
+                }
+                else
+                {
+                    head = members > 0 ? "BRIEFING   <color=#7FFF8A>" + ready + " / " + members + " READY</color>" : "BRIEFING   <color=#8FA89A>NO PILOTS YET</color>";
+                    if (!IsBriefingReady()) { next = "<color=#FFD24D>PREPARING TERRAIN AND ENEMY FORCES...</color>"; }
+                    else if (!participant) { next = HasOpenSlot() ? "NEXT: TAP AN OPEN SLOT (OR JOIN) TO SIGN UP" : "ROSTER FULL - WAIT FOR AN OPEN SLOT"; }
+                    else if (AnyAircraftOccupied()) { next = "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"; }
+                    else if (!myReady) { next = "NEXT: PICK YOUR LOADOUT IN THE HANGAR, THEN PRESS READY"; }
+                    else
+                    {
+                        int left = members - ready;
+                        next = "READY - WAITING FOR " + left + " MORE PILOT" + (left > 1 ? "S" : "");
+                    }
+                    if (_countdownEndMs != 0)
+                    {
+                        int sec = Mathf.Max(Mathf.CeilToInt((_countdownEndMs - Now()) / 1000f), 0);
+                        next += "\n<color=#FFD24D>AUTO START IN " + sec + "s - PILOTS NOT READY BECOME SPECTATORS</color>";
+                    }
+                }
+                string b = head + "\n<size=55%>" + next + "</size>";
+                if (_message != "") { b += "\n<size=50%><color=#FF5544>" + _message + "</color></size>"; }
+                SetTexts(BannerTexts, b);
+            }
+
+            if (hasCards)
+            {
+                bool locked = running || starting || IsLaunchCountdown();
+                SetTexts(PhaseTexts, _phases.ToString());
+                string by = PlayerName(_phasesBy);
+                string info = "ABOUT " + Mathf.RoundToInt(_phases * MinutesPerPhase) + " MIN - LATER PHASES SCORE HIGHER";
+                info += "\n<size=80%>" + (locked ? "<color=#FFD24D>LOCKED</color>" : (by != "" ? "SET BY " + by : "TAP - / + TO CHANGE")) + "</size>";
+                SetTexts(PhaseInfoTexts, info);
+                string tby = PlayerName(_terrainBy);
+                string wx = Weather ? "WEATHER: " + Weather.GetWeatherName() + "   " : "";
+                string terrain = TerrainName() + "\n<size=45%>" + wx + (tby != "" ? "NEW TERRAIN BY " + tby : "SEE THE OPS TABLE") + "</size>";
+                SetTexts(TerrainTexts, terrain);
+            }
+        }
+
+        /// 명단 칸 카드: 기체 이름 + 조종사 + 상태(빈 칸은 "OPEN - TAP TO JOIN"). 칸 수보다 많은 카드는 숨긴다.
+        private void RefreshSlotCard(ACO_FlowButton b, bool running, int mySlot, bool locked)
+        {
+            int k = b.Slot;
+            bool exists = k >= 0 && k < SlotCount();
+            if (b.gameObject.activeSelf != exists) { b.gameObject.SetActive(exists); }
+            if (!exists) { return; }
+            int id = _roster != null && k < _roster.Length ? _roster[k] : -1;
+            VRCPlayerApi p = id >= 0 ? VRCPlayerApi.GetPlayerById(id) : null;
+            string head = "<size=65%>" + (k + 1) + ". " + SlotName(k) + "</size>";
+            if (!Utilities.IsValid(p))
+            {
+                bool inUse = Aircraft[k] && Aircraft[k].Occupied;
+                string open = locked ? "<color=#8FA89A>OPEN - LOCKED</color>" : (inUse ? "<color=#8FA89A>OPEN - AIRCRAFT IN USE</color>" : "<color=#9FE0B0>+ OPEN - TAP TO JOIN</color>");
+                b.SetStyle(head + "\n" + open, SlotOpenColor);
+                return;
+            }
+            string name = k == mySlot ? "<color=#FFD24D>" + p.displayName + " (YOU)</color>" : p.displayName;
+            string state;
+            Color bg = k == mySlot ? SlotMineColor : SlotTakenColor;
+            if (Aircraft[k] && Aircraft[k].Occupied) { state = "<color=#7FD0FF>AIRBORNE</color>"; bg = SlotAirborneColor; }
+            else if (running) { state = "<color=#B0C4B8>ON DECK</color>"; }
+            else if ((_readyMask & (1 << k)) != 0) { state = "<color=#7FFF8A>READY</color>"; bg = k == mySlot ? SlotMineColor : SlotReadyColor; }
+            else { state = "<color=#B0C4B8>ARMING</color>"; }
+            b.SetStyle(head + "\n" + name + "\n<size=65%>" + state + "</size>", bg);
+        }
+
         private string TerrainLabel()
         {
             if (!_terrain) { return ""; }
             int preset = _terrain.GetBuiltPreset();
             if (preset < 0) { return "   TERRAIN: GENERATING..."; }
-            return "   TERRAIN: " + (TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset);
+            return "   TERRAIN: " + (TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset)
+                + (Weather ? "   WEATHER: " + Weather.GetWeatherName() : "");
         }
 
         private void SetTexts(TextMeshProUGUI[] texts, string s)
