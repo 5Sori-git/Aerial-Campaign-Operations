@@ -819,7 +819,19 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!target || !Utilities.IsValid(me)) { return; }
             if (Fader) { Fader.FadeTeleport(target.position, target.rotation); }
-            else { me.TeleportTo(target.position, target.rotation); }
+            else
+            {
+                me.TeleportTo(target.position, target.rotation);
+                me.SetVelocity(Vector3.zero);
+                SendCustomEventDelayedFrames(nameof(_ZeroVelocity), 1);
+            }
+        }
+
+        /// 텔레포트 직후 몸에 남은 속도(방금 내린 항공기의 속도)를 없앤다 — 다음 프레임에 한 번 더(VRChat이 속도를 늦게 적용하는 경우).
+        public void _ZeroVelocity()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (Utilities.IsValid(me)) { me.SetVelocity(Vector3.zero); }
         }
 
         /// 새 지형을 만들고 그 위에 병력을 미리 배치한다(브리핑 작전 테이블용). 씨앗을 직접 넘겨 생성기가 새 지형을 기다리게 한다.

@@ -26,6 +26,8 @@ namespace ACO
         public ACO_Chatter Chatter;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(락온 방향·날아오는 미사일 방향/거리 표시)")]
         public ACO_RWR Rwr;
+        [Tooltip("빌드 시 ACO_SceneBaker가 씬의 레이더 접촉 목록을 넣는다(HUD 레이더에 날아가는 미사일 표시)")]
+        public ACO_RadarContacts Radar;
 
         [Header("발사 설정")]
         public GameObject AAM;
@@ -132,7 +134,12 @@ namespace ACO
                 _aimTargetIdx = targetIndex;
                 _lockProgress = 0f;
                 _warningTimer = 0f;
+                GameObject[] list = EntityControl ? EntityControl.AAMTargets : null;
+                GameObject marker = list != null && targetIndex < list.Length ? list[targetIndex] : null;
+                _aimSmoke = marker ? marker.GetComponentInParent<ACO_FlareDispenser>() : null;
             }
+            // 연막 속 표적은 락온할 수 없다(쌓인 락온도 잃는다)
+            if (_aimSmoke != null && _aimSmoke.IsObscured()) { _lockProgress = 0f; return; }
 
             _lockProgress += dt;
 
@@ -152,6 +159,8 @@ namespace ACO
             if (targetIndex < 0) { return; }
             SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(LockWarningEvent), (ushort)targetIndex);
         }
+
+        private ACO_FlareDispenser _aimSmoke;
 
         public void ReleaseAim()
         {
@@ -248,6 +257,7 @@ namespace ACO
                 acoMissile.LaunchMissileType = MissileType;
                 acoMissile.LaunchInheritSpeed = InheritVelocityFrom != null ? InheritVelocityFrom.Speed : 0f;
                 acoMissile.PoolParent = transform;
+                acoMissile.FromNpc = true;            // 작전판: 아군 유닛 격추로 표시(개인 점수 없음)
                 acoMissile.ShooterJudgesHit = false; // NPC 미사일은 피격자가 판정한다
                 acoMissile.IsShooter = false;
             }
@@ -258,6 +268,7 @@ namespace ACO
 
             UdonSharpBehaviour missileBehaviour = missile.GetComponent<UdonSharpBehaviour>();
             if (missileBehaviour) { missileBehaviour.SendCustomEvent("EnableWeapon"); }
+            if (Radar != null && acoMissile != null) { Radar.AddMissile(acoMissile); }
         }
 
         private Transform GetLaunchPoint()

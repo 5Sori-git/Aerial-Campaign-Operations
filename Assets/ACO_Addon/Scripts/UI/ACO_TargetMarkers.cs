@@ -71,6 +71,13 @@ namespace ACO
         public Color ObjectiveLabelColor = new Color(1f, 0.25f, 0.2f, 0.9f);
         public Color FriendlyLabelColor = new Color(0.4f, 0.75f, 1f, 0.9f);
 
+        [Header("아군기 (플레이어)")]
+        [Tooltip("빌드 시 Bake가 게임 진행을 넣는다 — 참가자 기체(칸)를 읽어 다른 플레이어가 탄 기체에 파란 테두리 + WINGMAN 칸 번호를 그린다")]
+        public ACO_GameFlow Flow;
+        public bool ShowWingmen = true;
+        [Tooltip("테두리 위 글자 앞부분(뒤에 칸 번호)")]
+        public string WingmanLabel = "WINGMAN ";
+
         [Header("호위 항로")]
         [Tooltip("호위 페이즈에 호위 대상의 남은 경유점과 목적지를 표시한다")]
         public bool ShowEscortRoute = true;
@@ -250,7 +257,10 @@ namespace ACO
             {
                 UdonSharpBehaviour g = Generator.GroundUnits[i];
                 if (g == null) { continue; }
-                AddUnit(g.transform, g.GetComponent<SaccTarget>(), KIND_GROUND, ReadLabel(g, "GND"), null, ACO_MissionGenerator.CAT_GROUND, i);
+                // 지상 풀의 헬리콥터(ACO_MobileUnit KIND_HELICOPTER)는 항공기 모양 마커
+                ACO_MobileUnit tank = g.GetComponent<ACO_MobileUnit>();
+                int kind = tank != null && tank.Kind == ACO_MobileUnit.KIND_HELICOPTER ? KIND_AIR : KIND_GROUND;
+                AddUnit(g.transform, g.GetComponent<SaccTarget>(), kind, ReadLabel(g, "GND"), null, ACO_MissionGenerator.CAT_GROUND, i);
             }
             for (int i = 0; i < hvts; i++)
             {
@@ -409,6 +419,30 @@ namespace ACO
                     focusDist = dist;
                 }
                 used++;
+            }
+
+            // 아군기: 다른 플레이어가 탄 참가자 기체 — 파란 테두리 + WINGMAN 칸 번호(목표처럼 멀리서도 보인다)
+            if (ShowWingmen && Flow != null && Flow.Aircraft != null)
+            {
+                for (int k = 0; k < Flow.Aircraft.Length && used < Markers.Length; k++)
+                {
+                    SaccEntity e = Flow.Aircraft[k];
+                    if (!e || !e.Occupied || e.Piloting || e.dead || !e.gameObject.activeInHierarchy) { continue; }
+                    Vector3 d = e.transform.position - headPos;
+                    float sq = d.sqrMagnitude;
+                    if (sq > objectiveMaxSq || sq < 1f) { continue; }
+                    float dist = Mathf.Sqrt(sq);
+                    Vector3 dir = d / dist;
+                    Transform m = Markers[used];
+                    if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
+                    m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+                    float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
+                    float size = baseSize * Mathf.Lerp(1f, FarScale, farT);
+                    m.localScale = new Vector3(size, size, size);
+                    if (_markerKind[used] != KIND_FRIENDLY_AIR) { SetMarkerKind(used, KIND_FRIENDLY_AIR); }
+                    SetTopText(used, WingmanLabel + (k + 1));
+                    used++;
+                }
             }
 
             // 호위 항로: 남은 경유점 + 목적지

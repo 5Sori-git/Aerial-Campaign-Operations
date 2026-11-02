@@ -8,7 +8,8 @@ namespace ACO
     /// 부위 파괴형 함선(본체). 무장은 자식 부위(Parts — VLS = ACO_SAMSite, 함포/CIWS = ACO_AAGunSite)가 맡고,
     /// 부위마다 자기 SaccTarget/히트박스/락온 마커가 있어 따로 락온·파괴된다. 본체 체력은 이 오브젝트의 SaccTarget.
     ///  - 부위가 파괴되면 본체도 최대 체력의 PartHullDamage만큼 깎인다(본체 오너가 적용). 부위를 먼저 정리할수록 빨리 가라앉는다.
-    ///  - 본체가 격침되면 남은 부위는 교전을 멈추고(Silence, 점수 없음) 함선은 그 자리에 멈춘다.
+    ///  - 본체가 격침되면 남은 부위도 파괴된다(Silence → 부위 SaccTarget.Explode — 락온·교전 끝, 점수 없음). 함선은 그 자리에 멈춘다.
+    ///    본체가 부활하면(AttachedSpawn/NetRespawn) 부위도 함께 부활한다.
     ///    가라앉는 연출은 본체 SaccTarget의 Animator(격침 애니메이션)와 HideOnDeath/ShowOnDeath로 한다 — 모델과 부위는 Body 아래에 두고 Body를 움직이면 된다.
     ///
     /// 순항: 스폰 지점(MissionSpawnPosition)을 중심으로 반경 CruiseRadius 원을 CruiseSpeed로 돈다.

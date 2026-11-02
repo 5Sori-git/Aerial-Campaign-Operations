@@ -60,7 +60,8 @@ namespace ACO
         public float TopAttackClimbTurnRate = 45f;
 
         [Header("시커 (SAV_AAMController와 같은 의미/기본값)")]
-        [Tooltip("기수와 타겟 방향이 이 각도(도)보다 벌어지면 그 프레임은 추적하지 못한다. 타겟을 지나치면 자연히 여기에 걸린다")]
+        [Tooltip("시커 범위(도): 기수와 타겟 방향이 이 각도보다 벌어지면 그 프레임은 추적하지 못한다. 타겟을 지나치면 자연히 여기에 걸린다. "
+            + "플레이어 무장(ACO_DFUNC_Missile)이 쏘면 발사마다 '이 프리팹 값 × 강화 SEEKER CONE'(무장 LockAngle 이상)으로 덮어쓴다 — 락온 각도와는 다른 값")]
         public float MaxTrackingAngle = 90f;
         [Tooltip("추적 불가 상태가 이 시간(초) 연속되면 타겟을 영구히 놓친다")]
         public float UnlockTime = 0.1f;
@@ -86,6 +87,10 @@ namespace ACO
         public float Damage = 50f;
         [Tooltip("SAV 무기 타입. 2 = 미사일 — SAV 기체는 이 값일 때 피격 시 무작위 회전력(MissilePushForce)을 스스로 넣는다")]
         public byte WeaponType = 2;
+        /// NPC 무기가 SaccTarget에 준 피해의 무기 종류에 더하는 값 — 작전판이 아군 유닛의 격추를 플레이어 격추와 가른다.
+        public const byte NPC_WEAPON_OFFSET = 100;
+        /// NPC 런처(ACO_MissileLauncher)가 쏜 미사일(발사할 때마다 런처가 넣는다).
+        [System.NonSerialized] public bool FromNpc;
         [Tooltip("범위 피해를 받는 레이어(지상 유닛의 SaccTarget 콜라이더). 범위 반경은 플레이어 런처(ACO_DFUNC_Missile, MissileSplash)가 쏠 때 넣는다")]
         public LayerMask SplashLayers = 1 << 17;
 
@@ -262,6 +267,8 @@ namespace ACO
         }
 
         /// 내 미사일의 결과를 무전으로 한 번 알린다(쏜 사람 화면에서만, 락온해 쏜 플레이어 미사일만).
+        private byte StaticWeaponType() { return FromNpc ? (byte)(WeaponType + NPC_WEAPON_OFFSET) : WeaponType; }
+
         private void ReportOutcome(int ev)
         {
             if (_outcomeReported) { return; }
@@ -389,6 +396,8 @@ namespace ACO
 
             if (!TargetIsValid() || _unlockTimer >= UnlockTime)
             {
+                // 표적이 살아 있는데 시커가 놓쳤다(시커 범위 밖 등) = 빗나감. 표적이 사라진 경우(격추)는 격추 대사가 맡는다.
+                if (TargetIsValid()) { ReportOutcome(ACO_Chatter.EV_MISSILE_MISS); }
                 LoseTarget();
                 return;
             }
@@ -609,6 +618,9 @@ namespace ACO
         /// 아직 표적을 쫓고 있는가(NPC가 플레어를 뿌릴지 판단할 때 읽는다).
         public bool IsTracking() { return _flying && !_exploded && !_targetLost; }
 
+        /// 날고 있는가(레이더 표시 — 표적을 놓쳐도 터지기 전까지는 true).
+        public bool IsFlying() { return _flying && !_exploded; }
+
         private bool TargetIsValid()
         {
             if (!_target || !_target.gameObject.activeInHierarchy) { return false; }
@@ -663,9 +675,8 @@ namespace ACO
 
             StopIncomingWarning();
             if (_targetFlares) { _targetFlares.UnregisterIncoming(this); }
-            // 맞혔으면 결과는 격추 대사(작전판)가 맡는다. 범위 피해 미사일은 빗나가도 피해를 줄 수 있어 알리지 않는다.
-            if (hitTarget || SplashRadius > 0f) { _outcomeReported = true; }
-            else { ReportOutcome(ACO_Chatter.EV_MISSILE_MISS); }
+            // 결과 대사: 맞혔으면 격추 대사(작전판), 놓친 건 표적을 잃는 순간(시커 이탈·플레어)에 이미 알렸다 — 터질 때는 따로 알리지 않는다.
+            _outcomeReported = true;
 
             // 데미지는 피격 대상의 오너에서만 적용한다.
             // SaccTarget/SaccEntity가 내부적으로 로컬 적용 + 다른 클라이언트 전파를 처리한다.
@@ -673,7 +684,7 @@ namespace ACO
             {
                 if (_targetStatic)
                 {
-                    _targetStatic.WeaponDamageTarget(Damage, gameObject, WeaponType);
+                    _targetStatic.WeaponDamageTarget(Damage, gameObject, StaticWeaponType());
                 }
                 else if (_targetEntity)
                 {
@@ -758,7 +769,7 @@ namespace ACO
                     if (d < best) { best = d; }
                 }
                 float t = Mathf.Clamp01(best / SplashRadius);
-                target.WeaponDamageTarget(Damage * Mathf.Lerp(1f, MinSplashFraction, t), gameObject, WeaponType);
+                target.WeaponDamageTarget(Damage * Mathf.Lerp(1f, MinSplashFraction, t), gameObject, StaticWeaponType());
                 if (damagedCount < MAX_SPLASH_HITS) { _splashDamaged[damagedCount] = target; damagedCount++; }
             }
         }

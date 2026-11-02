@@ -65,6 +65,7 @@ MonoBehaviour:
   PitBullIndicator: {fileID: 0}
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Radar: {fileID: 0}
   AAM: {fileID: 3697451406933362917, guid: 603186772b65bf94cbf05fd05a274111, type: 3}
   LaunchPoints:
   - {fileID: 6995656184037367282}
@@ -5672,6 +5673,7 @@ MonoBehaviour:
   PitBullIndicator: {fileID: 0}
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Radar: {fileID: 0}
   AAM: {fileID: 3697451406933362917, guid: 603186772b65bf94cbf05fd05a274111, type: 3}
   LaunchPoints:
   - {fileID: 5833965085752509177}
@@ -6234,6 +6236,8 @@ MonoBehaviour:
   ReactDistanceMultiplier: 1
   FlareCooldown: 3
   FlareGravity: 0.35
+  SmokeMode: 0
+  Friendly: 0
   FlareParticles: {fileID: 4648194837815280817}
   FlareUseEmitter: 0
   FlareParticleCount: 8
@@ -25952,6 +25956,12 @@ MonoBehaviour:
   LineDecoy: Which one of me are you aiming at?
   LineHalf: Not bad... Now I'm getting serious.
   LineDown: Impossible... Who ARE you people?
+  ClipSpawn: {fileID: 0}
+  ClipSalvo: {fileID: 0}
+  ClipDecoy: {fileID: 0}
+  ClipHalf: {fileID: 0}
+  ClipDown: {fileID: 0}
+  VoiceQueueDelay: 8
   AI: {fileID: 592600308041143460}
   TargetHealth: {fileID: 6893493083322060536}
   Flight: {fileID: 2474881416027185396}

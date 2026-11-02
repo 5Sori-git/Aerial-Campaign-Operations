@@ -32,6 +32,14 @@ namespace ACO
         public string LineDecoy = "Which one of me are you aiming at?";
         public string LineHalf = "Not bad... Now I'm getting serious.";
         public string LineDown = "Impossible... Who ARE you people?";
+        [Header("음성 (선택 — 위 대사와 짝, 비우면 자막만)")]
+        public AudioClip ClipSpawn;
+        public AudioClip ClipSalvo;
+        public AudioClip ClipDecoy;
+        public AudioClip ClipHalf;
+        public AudioClip ClipDown;
+        [Tooltip("음성 대사가 무전 줄에서 이보다 오래(초) 밀리면 버린다")]
+        public float VoiceQueueDelay = 8f;
 
         [Header("참조 (같은 기체 — 프리팹 빌더/Bake가 넣는다)")]
         public ACO_NPCFighterAI AI;
@@ -119,7 +127,7 @@ namespace ACO
             if (alive && !_wasAlive) { OnAceSpawn(); }
             if (!alive && _wasAlive)
             {
-                Say(LineDown);
+                Say(LineDown, ClipDown);
                 HideDecoys();
                 _salvoState = 0;
             }
@@ -129,7 +137,7 @@ namespace ACO
             if (!_halfSaid && TargetHealth != null && TargetHealth.FullHealth > 0f && TargetHealth.Health <= TargetHealth.FullHealth * 0.5f)
             {
                 _halfSaid = true;
-                Say(LineHalf);
+                Say(LineHalf, ClipHalf);
             }
 
             MoveDecoys(Time.deltaTime);
@@ -148,7 +156,7 @@ namespace ACO
             _nextDecoy = Time.time;
             _decoysLeft = DecoyCharges;
             HideDecoys();
-            Say(LineSpawn);
+            Say(LineSpawn, ClipSpawn);
         }
 
         // ───────────── 다연장 (오너) ─────────────
@@ -219,7 +227,7 @@ namespace ACO
             }
         }
 
-        public void NetSalvoCall() { Say(LineSalvo); }
+        public void NetSalvoCall() { Say(LineSalvo, ClipSalvo); }
 
         // ───────────── 기만체 ─────────────
 
@@ -248,7 +256,7 @@ namespace ACO
             _decoysOut = true;
             _decoyStart = Time.time;
             _decoyUntil = Time.time + DecoyLifetime;
-            Say(LineDecoy);
+            Say(LineDecoy, ClipDecoy);
         }
 
         /// 기체 기준 편대 자리(DecoyOffsets)에 붙인다. 처음 DecoySpreadTime 동안은 기체 자리에서 부드럽게 벌어지고, 자리마다 다른 박자로 살짝 흔들린다.
@@ -280,9 +288,11 @@ namespace ACO
             }
         }
 
-        private void Say(string text)
+        private void Say(string text, AudioClip clip)
         {
-            if (Chatter != null && !string.IsNullOrEmpty(text)) { Chatter.Say(AceName, SpeakerColor, text, ACO_Chatter.CH_ENEMY); }
+            if (Chatter == null || string.IsNullOrEmpty(text)) { return; }
+            if (clip != null) { Chatter.SayVoice(AceName, SpeakerColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
+            else { Chatter.Say(AceName, SpeakerColor, text, ACO_Chatter.CH_ENEMY); }
         }
     }
 }

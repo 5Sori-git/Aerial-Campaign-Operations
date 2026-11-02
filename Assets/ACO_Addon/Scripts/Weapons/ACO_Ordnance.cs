@@ -69,6 +69,8 @@ namespace ACO
         [System.NonSerialized] public Transform PoolParent;
         [System.NonSerialized] public ACO_DFUNC_Missile PoolOwner;   // 회수 시 돌아갈 플레이어 무장 풀(부모는 그대로)
         [System.NonSerialized] public bool IsShooter;
+        /// 적 곡사포(ACO_ArtilleryGun)가 쏜 포탄: 아군(호위 대상)만 범위 피해를 받고 나머지는 받지 않는다.
+        [System.NonSerialized] public bool HitFriendlies;
 
         private const int MAX_SPLASH_HITS = 32;
         private const int MAX_SPLASH_COLLIDERS = 256;   // 큰 반경이면 함선·지상 그룹 콜라이더가 많다 — 모자라면 일부 유닛이 빠진다
@@ -228,9 +230,10 @@ namespace ACO
                 SaccTarget target = c.GetComponentInParent<SaccTarget>();
                 if (!target || target.Health <= 0f) { continue; }
                 if (IsOwnVehicle(c)) { continue; }
-                // 아군(호위 대상)은 피해를 받지 않는다.
+                // 아군(호위 대상)은 피해를 받지 않는다. 적 포탄(HitFriendlies)은 반대로 아군만 맞는다.
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
-                if (escort != null && !escort.Hostile) { continue; }
+                bool friendly = escort != null && !escort.Hostile;
+                if (friendly == !HitFriendlies) { continue; }
 
                 // 같은 유닛은 가장 가까운 콜라이더로 한 번만 — 이미 준 대상이면 건너뛴다(가까운 것부터 오지 않으므로 최소 거리를 먼저 구한다).
                 bool done = false;

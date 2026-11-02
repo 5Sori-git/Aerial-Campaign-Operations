@@ -37,6 +37,8 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "HUD 설정 패널", Description = "ACO_HudSettings — 플레이어별 HUD 조정(점수 패널 위치·크기, 결과·안내 글자 위치·크기, 마커 테두리, 정보 각도, 크로스헤어·RWR 크기·거리), 영구 저장", PrefabNames = new[] { "ACO_HudSettings" } },
         new Entry { Label = "슈퍼에이스 (보너스 페이즈)", Description = "NPC_SuperAce — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적). 생성기 풀 아래에 하나 두면 보너스 페이즈에만 나온다", PrefabNames = new[] { "NPC_SuperAce" } },
         new Entry { Label = "적 폭격기 (요격 대상)", Description = "NPC_Bomber — 요격 페이즈. 도시 상공까지 항로 비행, 도착해 폭탄을 떨어뜨리면 미션 실패. 풀 아래에 4~6대", PrefabNames = new[] { "NPC_Bomber" } },
+        new Entry { Label = "공격 헬리콥터", Description = "NPC_Helicopter — 전차 항로 이동 + 지면·해수면 위 70m(바다·절벽 위로도), 아군 지상·공중 표적에 기관포. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Helicopter" } },
+        new Entry { Label = "곡사포 (자주포)", Description = "NPC_Artillery + 포탄 ACO_ArtilleryShell — 호위 항로에서 2.5~4.5km 떨어져 아군 콘보이·함선을 고각 포격. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Artillery", "ACO_ArtilleryShell" } },
     };
 
     private bool[] _selected;
@@ -164,6 +166,8 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[18]) { ACO_HUDBuilder.CreateHudSettingsPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_HudSettings")); }
         if (_selected[19]) { Log(built, ACO_PrefabBuilder.BuildSuperAce()); }
         if (_selected[20]) { Log(built, ACO_PrefabBuilder.BuildBomber()); }
+        if (_selected[21]) { Log(built, ACO_PrefabBuilder.BuildHelicopter()); }
+        if (_selected[22]) { Log(built, ACO_PrefabBuilder.BuildArtilleryShell()); Log(built, ACO_PrefabBuilder.BuildArtillery()); }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

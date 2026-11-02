@@ -11,7 +11,7 @@ namespace ACO
     /// 적용하고 내릴 때 원래대로 돌린다 — 기체는 여럿이 같이 쓰므로 조종사 화면에서만 바꾼다. 비행은 조종사(오너)가 계산하고, SAV 체력도
     /// 오너가 깎고 동기화하므로 조종사 값만 바꾸면 된다. 미사일 비행 성능은 발사 이벤트에 실려 가고 피해는 쏜 사람 값을 쓴다.
     ///
-    /// - 체력: SaccAirVehicle.FullHealth(남은 체력은 같은 비율로), 기동: PitchStrength/YawStrength/RollStrength, 추력: ThrottleStrength(+애프터버너),
+    /// - 체력: SaccAirVehicle.FullHealth(남은 체력은 같은 비율로), 기동: RollStrength × 배수, PitchStrength/YawStrength는 PitchYawShare만큼만, 추력: ThrottleStrength(+애프터버너),
     ///   연료 효율: FuelConsumption ÷ 배수(+애프터버너 소모량), 안정성: Lift × 배수 + ExtraVelLift에 (배수 − 1)을 더함(내릴 때 뺀다).
     /// - 소모품(진행도 CONS_*, 사 둔 것만): 장갑판 = 체력 배수, 연료탱크 = 연료 용량(SaccAirVehicle.FullFuel — 남은 연료는 같은 비율로),
     ///   대응탄 포드 = SAV 플레어(DFUNC_Flares.FullFlares, 채워서 시작), 탄약 증량 = 특수무장(대공·대지·폭탄 계열) 탄수 배수. 내릴 때 되돌린다.
@@ -34,6 +34,8 @@ namespace ACO
         public ACO_DFUNC_Missile[] Weapons;
         [Tooltip("이 기체의 SAV 플레어 기능(빌드 시 자동) — 대응탄 포드 소모품이 수를 늘린다")]
         public DFUNC_Flares[] Flares;
+        [Tooltip("이 기체의 기총 탄 파티클에 붙은 피해 강화(빌드 시 Bake가 붙이고 넣는다)")]
+        public ACO_GunDamageBonus[] GunBonuses;
         [Header("공중 충돌 방지 (Bake가 채운다)")]
         [Tooltip("이 기체의 충돌 콜라이더(트리거·바퀴 제외) — NPC 전투기와는 서로 통과한다(충돌 데미지 없음)")]
         public Collider[] BodyColliders;
@@ -42,6 +44,10 @@ namespace ACO
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(내가/아군이 격추됨 대사)")]
         [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
         public ACO_Chatter Chatter;
+
+        [Header("기동성 강화 배분")]
+        [Tooltip("기동성 강화 중 피치·요에 주는 몫(0~1). 롤은 강화를 다 받는다. 피치까지 다 키우면 받음각이 순간 튀어 리미터를 지나 실속하기 쉬워서 기본 절반")]
+        [Range(0f, 1f)] public float PitchYawShare = 0.5f;
 
         [Header("소모품 외형 (CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크 — 비워도 된다)")]
         [Tooltip("사 둔 소모품으로 탑승하면 켜고(모든 플레이어 화면) 내리면 끈다. 여러 개면 빈 부모로 묶어 부모를 넣는다")]
@@ -250,15 +256,17 @@ namespace ACO
                 if (oldFull > 0f) { AirVehicle.Health = AirVehicle.Health * (newFull / oldFull); }
                 AirVehicle.FullHealth = newFull;
 
-                AirVehicle.PitchStrength = _basePitch * mobility;
-                AirVehicle.YawStrength = _baseYaw * mobility;
+                // 롤은 강화를 다 받고, 피치·요는 PitchYawShare만큼만(10단계 ×1.3이면 피치·요 ×1.15)
+                float pitchYaw = 1f + (mobility - 1f) * PitchYawShare;
+                AirVehicle.PitchStrength = _basePitch * pitchYaw;
+                AirVehicle.YawStrength = _baseYaw * pitchYaw;
                 AirVehicle.RollStrength = _baseRoll * mobility;
 
                 AirVehicle.ThrottleStrength = _baseThrottle * engine;
                 // SAV가 시작할 때 한 번 계산해 두는 값이라 같이 맞춘다.
                 AirVehicle.ThrottleStrengthAB = AirVehicle.ThrottleStrength * (AirVehicle.AfterburnerThrustMulti - 1f);
 
-                // 연료 효율: 소모량을 배수로 나눈다(5단계 x1.4 → 약 29% 덜 쓴다). 애프터버너 소모량도 SAV가 시작할 때 계산해 두므로 같이 맞춘다.
+                // 연료 효율: 소모량을 배수로 나눈다(10단계 x2.5 → 60% 덜 쓴다). 애프터버너 소모량도 SAV가 시작할 때 계산해 두므로 같이 맞춘다.
                 AirVehicle.FuelConsumption = _baseFuelConsumption / Mathf.Max(fuel, 0.01f);
                 AirVehicle.FuelConsumptionAB = AirVehicle.FuelConsumption * (AirVehicle.FuelConsumptionABMulti - 1f);
 
@@ -275,6 +283,13 @@ namespace ACO
                 float velLiftDelta = stability - 1f;
                 AirVehicle.ExtraVelLift += velLiftDelta - _velLiftAdded;
                 _velLiftAdded = velLiftDelta;
+            }
+
+            // 기총 피해: 탄 파티클의 덤 피해 배수(충돌은 조종사 화면에서만 일어난다)
+            if (GunBonuses != null)
+            {
+                float gun = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_GUN) : 1f;
+                for (int i = 0; i < GunBonuses.Length; i++) { if (GunBonuses[i]) { GunBonuses[i].Factor = gun; } }
             }
 
             // 대응탄 포드: SAV 플레어 최대 수를 늘리고 채운다(내릴 때 원래 수로 채운다)
@@ -318,7 +333,7 @@ namespace ACO
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_TURN),
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_LOCK_SPEED),
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_LOCK_RANGE),
-                    Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_LOCK_ANGLE),
+                    Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_SEEKER),
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_BLAST),
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_RELOAD));
             }

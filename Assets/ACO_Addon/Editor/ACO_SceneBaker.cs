@@ -114,6 +114,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeHudSettings();
         BakeRadio();
         BakeRwr();
+        BakeRadar();
         BakeSeatRecenter();
         BakeUiSound();
         BakeSuperAces();
@@ -258,6 +259,66 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (linked > 0) { Debug.Log($"[ACO] RWR '{rwr.name}'을 {linked}곳에 연결했습니다.", rwr); }
     }
 
+    /// 레이더 접촉 목록(HUD 레이더와 같은 오브젝트, 씬에 하나) ↔ 생성기·게임 진행, HUD 레이더 ↔ HUD 설정 패널,
+    /// NPC 미사일 런처(날아가는 미사일 등록), 조종석 지도(기체마다).
+    private static void BakeRadar()
+    {
+        ACO_RadarContacts contacts = null;
+        ACO_HudRadar hud = null;
+        ACO_MissionGenerator generator = null;
+        ACO_GameFlow flow = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (contacts == null) { contacts = root.GetComponentInChildren<ACO_RadarContacts>(true); }
+            if (hud == null) { hud = root.GetComponentInChildren<ACO_HudRadar>(true); }
+            if (generator == null) { generator = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
+            if (flow == null) { flow = root.GetComponentInChildren<ACO_GameFlow>(true); }
+        }
+        if (contacts == null) { return; }
+        if (contacts.Generator != generator || contacts.Flow != flow) { contacts.Generator = generator; contacts.Flow = flow; MarkChanged(contacts); }
+        if (hud != null && hud.Contacts != contacts) { hud.Contacts = contacts; MarkChanged(hud); }
+        int launchers = 0;
+        int maps = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_MissileLauncher c in root.GetComponentsInChildren<ACO_MissileLauncher>(true)) { if (c.Radar != contacts) { c.Radar = contacts; MarkChanged(c); launchers++; } }
+            foreach (ACO_HudSettings c in root.GetComponentsInChildren<ACO_HudSettings>(true)) { if (hud != null && c.HudRadar != hud) { c.HudRadar = hud; MarkChanged(c); } }
+            foreach (ACO_CockpitMap m in root.GetComponentsInChildren<ACO_CockpitMap>(true))
+            {
+                bool changed = false;
+                if (m.Contacts != contacts) { m.Contacts = contacts; changed = true; }
+                if (m.EntityControl == null) { m.EntityControl = m.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true); changed = true; }
+                if (changed) { MarkChanged(m); }
+                maps++;
+            }
+        }
+        if (flow == null || flow.Aircraft == null || flow.Aircraft.Length == 0) { Debug.LogWarning("[ACO] 레이더: 게임 진행의 참가자 기체(Aircraft)가 없어 HUD 레이더·조종석 지도가 내 기체를 알 수 없습니다.", contacts); }
+        Debug.Log($"[ACO] 레이더 연결: 미사일 런처 {launchers}곳 새로 연결, 조종석 지도 {maps}개" + (maps == 0 ? " (ACO → Player Vehicle → Add Cockpit Map to Selected Vehicles로 기체에 단다)" : ""), contacts);
+    }
+
+    /// 플레이어 기체의 기총 탄(충돌 메시지를 보내는 파티클 — 플레어 파티클은 빼고)에 ACO_GunDamageBonus를 붙인다(이미 있으면 그대로).
+    private static ACO_GunDamageBonus[] EnsureGunBonuses(SaccFlightAndVehicles.SaccEntity entity, SaccFlightAndVehicles.DFUNC_Flares[] flares)
+    {
+        var flareSystems = new List<ParticleSystem>();
+        if (flares != null) { foreach (var f in flares) { if (f != null && f.FlareParticles != null) { flareSystems.AddRange(f.FlareParticles); } } }
+        var list = new List<ACO_GunDamageBonus>();
+        foreach (ParticleSystem ps in entity.GetComponentsInChildren<ParticleSystem>(true))
+        {
+            if (flareSystems.Contains(ps)) { continue; }
+            var col = ps.collision;
+            if (!col.enabled || !col.sendCollisionMessages) { continue; }
+            if (ps.GetComponentInParent<ACO_Missile>(true) != null || ps.GetComponentInParent<ACO_Ordnance>(true) != null) { continue; }
+            ACO_GunDamageBonus b = ps.GetComponent<ACO_GunDamageBonus>();
+            if (b == null)
+            {
+                b = UdonSharpEditor.UdonSharpUndo.AddComponent<ACO_GunDamageBonus>(ps.gameObject);
+                Debug.Log($"[ACO] 기총 피해 강화: '{entity.name}/{ps.name}'에 ACO_GunDamageBonus를 붙였습니다.", ps);
+            }
+            list.Add(b);
+        }
+        return list.ToArray();
+    }
+
     private static bool ColorClose(Color a, Color b)
     {
         return Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f && Mathf.Abs(a.a - b.a) < 0.01f;
@@ -315,7 +376,63 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
             finally { Object.DestroyImmediate(temp); }
         }
+        AppendMissingChatterLines(radio);
         if (linked > 0) { Debug.Log($"[ACO] 무전 채터 '{radio.name}'를 {linked}곳에 연결했습니다.", radio); }
+    }
+
+    /// 새로 생긴 상황(EV_*)의 기본 대사가 씬의 대사 표에 하나도 없으면 끝에 더하고, 확률·쿨타임 배열도 늘린다(손으로 고친 대사·음성은 그대로).
+    private static void AppendMissingChatterLines(ACO_Chatter radio)
+    {
+        var temp = new GameObject("ACO_ChatterDefaults") { hideFlags = HideFlags.HideAndDontSave };
+        try
+        {
+            ACO_Chatter d = temp.AddComponent<ACO_Chatter>();
+            var ev = new List<int>(radio.LineEvent ?? new int[0]);
+            var sp = new List<int>(radio.LineSpeaker ?? new int[0]);
+            var tx = new List<string>(radio.LineText ?? new string[0]);
+            var cl = new List<AudioClip>(radio.LineClip ?? new AudioClip[0]);
+            var present = new HashSet<int>(ev);
+            int added = 0;
+            for (int i = 0; i < d.LineEvent.Length; i++)
+            {
+                if (present.Contains(d.LineEvent[i])) { continue; }
+                while (sp.Count < ev.Count) { sp.Add(0); }
+                while (tx.Count < ev.Count) { tx.Add(""); }
+                while (cl.Count < ev.Count) { cl.Add(null); }
+                ev.Add(d.LineEvent[i]);
+                sp.Add(i < d.LineSpeaker.Length ? d.LineSpeaker[i] : 0);
+                tx.Add(d.LineText[i]);
+                cl.Add(null);
+                added++;
+            }
+            bool grow = (radio.EventChance == null || radio.EventChance.Length < ACO_Chatter.EV_COUNT)
+                || (radio.EventCooldown == null || radio.EventCooldown.Length < ACO_Chatter.EV_COUNT);
+            if (added == 0 && !grow) { return; }
+            Undo.RecordObject(radio, "ACO chatter lines");
+            if (added > 0)
+            {
+                radio.LineEvent = ev.ToArray();
+                radio.LineSpeaker = sp.ToArray();
+                radio.LineText = tx.ToArray();
+                radio.LineClip = cl.ToArray();
+            }
+            if (grow)
+            {
+                radio.EventChance = GrowTo(radio.EventChance, d.EventChance);
+                radio.EventCooldown = GrowTo(radio.EventCooldown, d.EventCooldown);
+            }
+            MarkChanged(radio);
+            Debug.Log($"[ACO] 무전 채터: 새 상황 대사 {added}줄을 표 끝에 더했습니다(아군 플레어·연막, 콘보이 피격·파괴).", radio);
+        }
+        finally { Object.DestroyImmediate(temp); }
+    }
+
+    private static float[] GrowTo(float[] current, float[] defaults)
+    {
+        int n = defaults.Length;
+        var r = new float[n];
+        for (int i = 0; i < n; i++) { r[i] = current != null && i < current.Length ? current[i] : defaults[i]; }
+        return r;
     }
 
     /// HUD 설정 패널 ↔ 씬의 HUD(점수 패널·표적 마커). 비어 있을 때만 채운다.
@@ -480,6 +597,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (ACO_Loadout l in root.GetComponentsInChildren<ACO_Loadout>(true)) { if (l.Flow != flow) { l.Flow = flow; MarkChanged(l); } }
+            foreach (ACO_TargetMarkers tm in root.GetComponentsInChildren<ACO_TargetMarkers>(true)) { if (tm.Flow != flow) { tm.Flow = flow; MarkChanged(tm); } }
             foreach (ACO_Shop sh in root.GetComponentsInChildren<ACO_Shop>(true)) { if (sh.Flow != flow) { sh.Flow = flow; MarkChanged(sh); } }
         }
         flow.Buttons = buttons.ToArray();
@@ -488,67 +606,37 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         Debug.Log($"[ACO] 게임 진행 '{flow.name}'를 연결했습니다(기체 {slots}, 상태 글자 {status.Count}, 카운트다운 판 {overlays.Count}, 진행 버튼 {buttons.Count}, 페이즈 버튼 {phaseButtons.Count}).", flow);
     }
 
-    /// 진행도(재화·강화·해금, 씬에 하나)를 격납고·상점·작전판·기체 강화 확장에 연결한다.
-    /// 기체 강화 확장(ACO_VehicleUpgrades): 기체의 ACO_DFUNC_Missile 전부(받을 강화는 무장 인스펙터의 UpgradeFamily).
-    /// SaccEntity.ExtensionUdonBehaviours에 없으면 넣는다(그래야 탑승/폭발 이벤트를 받는다).
-    // 예전(23항목) 강화 저장 ID 순서. 재장전 속도(27항목)를 넣기 전의 씬 값을 옮길 때만 쓴다.
-    private static readonly string[] OldUpgradeKeys23 = {
-        "hull", "mobility", "engine", "fuel", "stability",
-        "msl_damage", "msl_ammo", "msl_turn", "msl_lock_speed", "msl_lock_range", "msl_lock_angle",
-        "aam_damage", "aam_ammo", "aam_turn", "aam_lock_speed", "aam_lock_range", "aam_lock_angle",
-        "agm_damage", "agm_ammo", "agm_blast",
-        "bomb_damage", "bomb_ammo", "bomb_blast" };
-
-    /// 강화 항목이 늘면 씬의 진행도에 저장된 이름·배수·가격 배열 길이가 맞지 않는다(항목 번호가 탭 순서로 이어져 자리도 밀린다).
-    /// 새 기본값 위에 예전 값을 저장 ID가 같은 자리로 옮긴다(직접 바꾼 이름·배수·가격 유지). 예전 배치를 모르면 기본값으로 되돌린다.
+    /// 씬 진행도의 강화 배열(이름·배수·1단계 가격·단계 가격 배수)이 지금 항목 수·최대 단계(10)와 다르면 새 기본값으로 되돌린다(DESIGN.md 6-31).
     private static void MigrateUpgradeArrays(ACO_PlayerProgress progress)
     {
-        int n = ACO_PlayerProgress.UPGRADE_COUNT;
-        if (progress.UpgradeNames != null && progress.UpgradeNames.Length == n && progress.UpgradeSteps != null && progress.UpgradeSteps.Length == n
-            && progress.UpgradeBaseCosts != null && progress.UpgradeBaseCosts.Length == n) { return; }
-
         var temp = new GameObject("ACO_ProgressDefaults");
         ACO_PlayerProgress defaults = temp.AddComponent<ACO_PlayerProgress>();
-        var keyField = typeof(ACO_PlayerProgress).GetField("_upgradeKeys", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        string[] newKeys = keyField != null ? keyField.GetValue(defaults) as string[] : null;
         string[] names = (string[])defaults.UpgradeNames.Clone();
         float[] steps = (float[])defaults.UpgradeSteps.Clone();
         int[] costs = (int[])defaults.UpgradeBaseCosts.Clone();
+        float[] scale = (float[])defaults.LevelCostScale.Clone();
         Object.DestroyImmediate(temp);
 
-        bool mapped = newKeys != null && newKeys.Length == n;
-        int kept = 0;
-        for (int i = 0; mapped && i < n; i++)
-        {
-            int old = System.Array.IndexOf(OldUpgradeKeys23, newKeys[i]);
-            if (old < 0) { continue; }
-            if (progress.UpgradeNames != null && progress.UpgradeNames.Length == OldUpgradeKeys23.Length) { names[i] = progress.UpgradeNames[old]; kept++; }
-            if (progress.UpgradeSteps != null && progress.UpgradeSteps.Length == OldUpgradeKeys23.Length) { steps[i] = progress.UpgradeSteps[old]; }
-            if (progress.UpgradeBaseCosts != null && progress.UpgradeBaseCosts.Length == OldUpgradeKeys23.Length) { costs[i] = progress.UpgradeBaseCosts[old]; }
-        }
-        Undo.RecordObject(progress, "ACO upgrade migrate");
+        int n = ACO_PlayerProgress.UPGRADE_COUNT;
+        bool current = progress.UpgradeNames != null && progress.UpgradeNames.Length == n
+            && progress.UpgradeSteps != null && progress.UpgradeSteps.Length == n
+            && progress.UpgradeBaseCosts != null && progress.UpgradeBaseCosts.Length == n
+            && progress.LevelCostScale != null && progress.LevelCostScale.Length == scale.Length;
+        if (current) { return; }
+        Undo.RecordObject(progress, "ACO upgrade defaults");
         progress.UpgradeNames = names;
         progress.UpgradeSteps = steps;
         progress.UpgradeBaseCosts = costs;
+        progress.LevelCostScale = scale;
         MarkChanged(progress);
-        Debug.Log(kept > 0
-            ? $"[ACO] 진행도 '{progress.name}': 강화 항목이 {n}개로 늘어 이름·배수·가격 배열을 새 배치로 옮겼습니다(기존 값 유지, 새 항목은 기본값)."
-            : $"[ACO] 진행도 '{progress.name}': 강화 배열 길이가 맞지 않아 기본값({n}항목)으로 되돌렸습니다.", progress);
+        Debug.Log($"[ACO] 진행도 '{progress.name}': 강화 배열을 새 기본값({n}항목, 최대 {scale.Length}단계)으로 바꿨습니다.", progress);
     }
 
+    /// 진행도(재화·강화·해금, 씬에 하나)를 격납고·상점·작전판·기체 강화 확장에 연결한다.
+    /// 기체 강화 확장(ACO_VehicleUpgrades): 기체의 ACO_DFUNC_Missile 전부(받을 강화는 무장 인스펙터의 UpgradeFamily).
+    /// SaccEntity.ExtensionUdonBehaviours에 없으면 넣는다(그래야 탑승/폭발 이벤트를 받는다).
     private static void BakePlayerProgress()
     {
-        // 예전 이름 "LOCK CONE" → "SEEKER CONE"(강화가 락온 각도가 아니라 미사일 시커 범위를 키운다)
-        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
-        {
-            foreach (ACO_PlayerProgress pp in root.GetComponentsInChildren<ACO_PlayerProgress>(true))
-            {
-                if (pp.UpgradeNames == null) { continue; }
-                bool renamed = false;
-                for (int k = 0; k < pp.UpgradeNames.Length; k++) { if (pp.UpgradeNames[k] == "LOCK CONE") { pp.UpgradeNames[k] = "SEEKER CONE"; renamed = true; } }
-                if (renamed) { MarkChanged(pp); }
-            }
-        }
         var progresses = new List<ACO_PlayerProgress>();
         var upgrades = new List<ACO_VehicleUpgrades>();
         ACO_MissionManager manager = null;
@@ -624,6 +712,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
             up.Weapons = weapons.ToArray();
             up.Flares = entity.GetComponentsInChildren<SaccFlightAndVehicles.DFUNC_Flares>(true);   // 대응탄 포드 소모품
+            up.GunBonuses = EnsureGunBonuses(entity, up.Flares);
             MarkChanged(up);
             ACO_PlayerMissileSetup.EnsureSeatRecenter(entity);
 
@@ -719,6 +808,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 if (ACO_HUDBuilder.EnsureLockVisuals(markers)) { Debug.Log($"[ACO] 표적 마커 '{markers.name}'에 락온 표시(마름모·머티리얼)를 만들었습니다.", markers); }
                 if (ACO_HUDBuilder.EnsureCrosshair(markers)) { Debug.Log($"[ACO] 표적 마커 '{markers.name}'에 크로스헤어를 만들었습니다.", markers); }
                 if (ACO_HUDBuilder.EnsureRwr(markers)) { Debug.Log($"[ACO] 표적 마커 '{markers.name}'에 RWR(위협 링·경보음)을 만들었습니다.", markers); }
+                if (ACO_RadarBuilder.EnsureHudRadar(markers)) { Debug.Log($"[ACO] 표적 마커 '{markers.name}'에 HUD 레이더(RADAR)를 만들었습니다.", markers); }
                 PrefabUtility.RecordPrefabInstancePropertyModifications(markers);
                 EditorUtility.SetDirty(markers);
             }
@@ -749,9 +839,9 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             foreach (ACO_AAGunSite aa in poolRoot.GetComponentsInChildren<ACO_AAGunSite>(true))
             {
                 // 전차의 포탑도 전차가 데리고 다닌다(전차 자신이 지상 풀에 들어간다).
-                if (aa.GetComponentInParent<ACO_Warship>(true) == null && aa.GetComponentInParent<ACO_Tank>(true) == null && aa.GetComponentInParent<ACO_EscortUnit>(true) == null) { ground.Add(aa); }
+                if (aa.GetComponentInParent<ACO_Warship>(true) == null && aa.GetComponentInParent<ACO_MobileUnit>(true) == null && aa.GetComponentInParent<ACO_EscortUnit>(true) == null) { ground.Add(aa); }
             }
-            ground.AddRange(poolRoot.GetComponentsInChildren<ACO_Tank>(true));
+            ground.AddRange(poolRoot.GetComponentsInChildren<ACO_MobileUnit>(true));
             // 함선: HighValue(전함)는 고가치 표적 풀, 아니면(구축함) 지상 풀 — 생성기가 둘 다 바다에 놓는다.
             var hvts = new List<UdonSharp.UdonSharpBehaviour>();
             hvts.AddRange(poolRoot.GetComponentsInChildren<ACO_StaticTarget>(true));
@@ -763,6 +853,14 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             generator.GroundUnits = ground.ToArray();
             generator.HighValueTargets = hvts.ToArray();
             generator.EscortUnits = poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true);
+            // 곡사포는 생성기의 호위 대상 목록에서 표적을 고른다.
+            foreach (ACO_ArtilleryGun art in poolRoot.GetComponentsInChildren<ACO_ArtilleryGun>(true))
+            {
+                if (art.Generator == generator) { continue; }
+                art.Generator = generator;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(art);
+                EditorUtility.SetDirty(art);
+            }
             // 씬에 육각 지형이 있으면 연결한다(미션마다 새 씨앗으로 다시 만든다). 칸 크기는 기둥 프리팹 메시와 같게 맞춘다.
             foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects())
             {

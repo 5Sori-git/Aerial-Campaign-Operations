@@ -19,7 +19,7 @@ namespace ACO
     ///  - 폭격기 요격(INTERCEPT): 적 폭격기(ACO_EscortUnit.Hostile) 편대가 삼각 대형으로 도시 상공으로 날아온다(적 호위 전투기 편대 동행). 전부 격추하면 클리어,
     ///    한 대라도 도시 상공(항로 끝)에 닿아 폭탄을 떨어뜨리면 그 즉시 미션 실패(실패 사유 FAIL_CITY_BOMBED).
     ///  - 지상 호위(CONVOY): 아군 콘보이(지상 ACO_EscortUnit 여러 대)가 지상 항로 끝까지 가면 클리어(살아남은 비율만큼 보너스),
-    ///    전멸하면 그 즉시 미션 실패(FAIL_CONVOY_LOST). 항로 옆에 전차 매복조(ACO_Tank)와 방공 시설이 놓인다.
+    ///    전멸하면 그 즉시 미션 실패(FAIL_CONVOY_LOST). 항로 옆에 전차 매복조(ACO_MobileUnit)와 방공 시설이 놓인다.
     /// 페이즈 종류는 그 페이즈가 시작되는 순간에 고르고, 고르기 전에 배치가 가능한지(풀 여유, 근처 지면/바다, 항로) 확인한다 —
     /// 안 되는 종류는 빼고 다른 종류를 고른다. 확인을 통과했는데 실제 배치가 실패하면(생성기 오너 쪽 자리 찾기 실패 등)
     /// 페이즈를 건너뛰지 않고 그 종류를 막은 채 다른 종류로 같은 페이즈를 다시 시작한다.
@@ -607,7 +607,7 @@ namespace ACO
                 int units = Mathf.Min(Generator.CountFreeEscorts(ACO_EscortUnit.MOVE_GROUND), Mathf.Max(ConvoySize, 1));
                 int seed = NewSeed();
                 // 콘보이를 위협할 전차가 있어야 지상 호위가 성립한다.
-                ok = units >= 1 && Generator.CountFreeTankUnits() >= 1
+                ok = units >= 1 && Generator.CountFreeMobileUnits() >= 1
                     && Generator.CanBuildEscortRoute(ACO_EscortUnit.MOVE_GROUND, focus, ConvoyRouteLength, units, seed);
                 if (ok) { _planSeed = seed; _planSite = Generator.GetLastRouteSite(); }
             }

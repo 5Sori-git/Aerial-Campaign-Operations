@@ -532,6 +532,9 @@ namespace ACO
         /// 부모(함선)가 격침됐다: 모델은 그대로 두고(같이 가라앉는다) 교전만 멈추고 히트박스를 끈다.
         public void Silence()
         {
+            // 본체가 격침되면 부위도 파괴한다 — 예전엔 교전만 잠깐 멈췄는데, 부위 체력이 남아 있어 락온 마커가 살아 있고
+            // _disabled가 체력(> 0)으로 다시 계산되며 사격이 되살아났다. 부활은 본체가 AttachedSpawn/NetRespawn으로 함께 한다.
+            if (TargetHealth && TargetHealth.Health > 0f && Networking.IsOwner(TargetHealth.gameObject)) { TargetHealth.Explode(); }
             _disabled = true;
             if (Gun) { Gun.ForceStop(); }
             BindTarget(-1);

@@ -209,7 +209,7 @@ def i_lock_range(c):
         arc(c, 50, 88, r, 232, 308)
 
 
-def i_lock_angle(c):
+def i_seeker(c):
     ax, ay = 50, 88
     for a in (232, 308):
         seg(c, (ax, ay), (ax + 76 * math.cos(math.radians(a)), ay + 76 * math.sin(math.radians(a))))
@@ -379,7 +379,7 @@ def i_credits(c):
 ICONS = [
     ("hull", i_hull), ("mobility", i_mobility), ("engine", i_engine), ("fuel", i_fuel), ("stability", i_stability),
     ("damage", i_damage), ("ammo", i_ammo), ("turn", i_turn), ("lock_speed", i_lock_speed), ("lock_range", i_lock_range),
-    ("lock_angle", i_lock_angle), ("blast", i_blast), ("reload", i_reload),
+    ("seeker", i_seeker), ("blast", i_blast), ("reload", i_reload),
     ("tab_airframe", i_tab_airframe), ("tab_missile", i_tab_missile), ("tab_sp_aam", i_tab_sp_aam),
     ("tab_sp_agm", i_tab_sp_agm), ("tab_sp_bomb", i_tab_sp_bomb),
     ("weapon_4aam", i_w_4aam), ("weapon_ugb", i_w_ugb), ("weapon_rkt", i_w_rkt), ("weapon_none", i_w_none),

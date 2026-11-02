@@ -25,7 +25,7 @@
 | 고가치 표적 (공장/벙커, 방공 호위 링) | ✅ | `ACO_StaticTarget` |
 | 미션 진행 — 페이즈 1~5개(타격/방공망 제압/점수 할당량/시한 표적/제공권/보스/호위/지상 호위, 무작위·연속 중복 없음), 웨이브, 이벤트 | ✅ | `ACO_MissionManager` |
 | 호위 대상(아군 수송기/콘보이 — 서버 시간 항로, 적 우선 공격, 이동 방식 공중/해상/지상, 행렬) | ✅ | `ACO_EscortUnit` (해상 호위 페이즈는 ⏳) |
-| 전차(지상 항로 순찰/매복, 아군 지상 표적 포격) | ✅ | `ACO_Tank` + `ACO_AAGunSite`(포탑) |
+| 전차(지상 항로 순찰/매복, 아군 지상 표적 포격) | ✅ | `ACO_MobileUnit` + `ACO_AAGunSite`(포탑) |
 | 육각 기둥 지형(씨앗 생성, 미션마다 새 지형, 경사 치마로 차량 통행) | ✅ | `ACO_HexTerrain` + `ACO_HexColumn` |
 | 작전 콘솔(페이즈 수 선택 버튼) | ✅ | `ACO_MissionStartButton` |
 | 전투기 숙련도 (신병/베테랑/에이스, 편대 단위) | ✅ | 생성기 + AI |
@@ -174,7 +174,7 @@ Assets/ACO_Addon/
       ACO_SAMSite.cs               SAM 포대(함선 VLS 겸용): 탐지, 포탑 조준, 원거리 잠재우기, 격추/부활
       ACO_AAGunSite.cs             대공포(함포/CIWS 겸용): 늦은 속도 리드 + 조준 흔들림, ACO_NPCGun 사격, 원거리 잠재우기, 격추/부활
       ACO_StaticTarget.cs          고가치 표적(공장/벙커): 무장 없음, 체력은 SaccTarget, 잔해 전환, 미션 계약
-      ACO_Tank.cs                  전차: 서버 시간 지상 항로(순찰 고리/매복), 지면 추종, 거리 LOD, 포탑은 같은 오브젝트의 ACO_AAGunSite
+      ACO_MobileUnit.cs                  이동 유닛(전차·헬리콥터·곡사포, Kind): 서버 시간 지상 항로(순찰 고리/매복), 지면 추종, 거리 LOD, 포탑은 같은 오브젝트의 ACO_AAGunSite
       ACO_EscortUnit.cs            호위 대상(아군): 서버 시간 항로(Catmull-Rom), 이동 방식 공중/해상/지상, 적 우선순위, 격추 연출
       ACO_Warship.cs               부위 파괴형 함선(전함/구축함): 본체 체력, 부위 파괴 → 본체 피해, 서버 시간 원 순항, 편대 호위, 격침 연출 필드
     Weapons/
@@ -540,7 +540,7 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
   | 호위 | 공중 호위 대상 1기 + 항로 |
   | 지상 호위 | 지상 호위 대상 1대 + 전차 1대 + 지상 항로(행렬 길이 포함) |
 
-  생성기 조회: `CountFreeLandGround/CountFreeHvt(ships)/CountFreeFighterUnits/CountFreeTankUnits/CountFreeEscorts(moveMode)`, `HasGroundNear/HasShipSiteNear/CanBuildEscortRoute`("쓸 수 있는" = 쓰지 않던 것 + 파괴된 것).
+  생성기 조회: `CountFreeLandGround/CountFreeHvt(ships)/CountFreeFighterUnits/CountFreeMobileUnits/CountFreeEscorts(moveMode)`, `HasGroundNear/HasShipSiteNear/CanBuildEscortRoute`("쓸 수 있는" = 쓰지 않던 것 + 파괴된 것).
 - **확인한 그대로 배치**: 확인이 찾은 결과를 배치 계획(`_plan*`)으로 남기고, 그 종류로 시작할 때 그대로 넘긴다 — 같은 클라이언트(기본: 둘 다 인스턴스 오너)에서는 **확인이 통과하면 배치도 반드시 성공**한다.
   - 자리(타격/방공망/사냥터/첫 시한 표적): 확인이 찾은 좌표(`GetCheckedPoint`)를 **정한 자리**로 넘긴다 — `RequestDeployObjective`의 `minDist < 0`이면 생성기는 그 자리만 같은 Raycast로 다시 확인해 놓는다. 타격은 `tier` 칸에 첫 표적 종류(0 육상 / 1 함선)를 싣고, 두 번째 표적부터는 첫 표적 근처(`HighValueMinSeparation` 0.5~1.5배)에서 찾는다.
   - 항로(호위/지상 호위): 6점 항로는 네트워크 이벤트에 못 실으므로 **무작위 씨앗**을 넘긴다. 확인(`CanBuildEscortRoute(…, seed)`)과 배치(`RequestDeployEscort(…, routeSeed)`)가 같은 씨앗으로 `Random.InitState` 후 같은 함수·같은 인자로 항로를 만들므로 같은 항로가 나온다(항로 앞에 다른 무작위 호출이 끼면 안 된다). 쓴 뒤엔 서버 시각으로 무작위를 다시 흩뜨린다.
@@ -655,15 +655,15 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
 - **격추 연출**: `HideOnDeath`/`ShowOnDeath`(프리팹 `DeathEffects`)/`DisableCollidersOnDeath`. 공중이면 `CrashFallTime`(8초) 동안 관성 + 중력으로 떨어진 뒤 `HideAfterCrash`(모델)를 숨긴다(연출 전용, 클라이언트마다 로컬).
 - **생성기**: 풀 `EscortUnits`(베이커가 `ACO_EscortUnit` 수집), 동기화 배열 `_escortUsed/_escortSerial/_escortTimeMs/_escortTag/_escortRouteCount/_escortRoute`(유닛당 6칸). 후보 = 쓰지 않던 것 → 파괴된 것. `RequestDeployEscort(태그, 기준점, 항로 길이, 방공 시설 수)`, `RequestReleaseTag`는 호위 대상도 거둬들인다.
 
-### 6-10. 전차 / 지상 호위 ✅ (`ACO_Tank`, `NPC_Tank` / `NPC_ConvoyTruck`, 페이즈 CONVOY)
+### 6-10. 전차 / 지상 호위 ✅ (`ACO_MobileUnit`, `NPC_Tank` / `NPC_ConvoyTruck`, 페이즈 CONVOY)
 
-- **전차**(`ACO_Tank`, 지상 풀): 미션 생성기가 준 **지상 항로를 서버 시간으로** 따라간다(경유점 최대 6, Catmull-Rom, `Speed` 10m/s). 위치 = f(항로, 배치 시각, 경과 시간)라 동기화가 없다. 지면은 0.2초마다 Raycast(`GroundLayers`)로 재서 따라가고, 로컬 플레이어가 `LodDistance`(12km)보다 멀면 자세를 `LodInterval`(1초)마다만 갱신한다 — 쏘고 맞는 쪽(가까운 플레이어) 화면에선 매 프레임 정확하다.
+- **전차**(`ACO_MobileUnit`, 지상 풀): 미션 생성기가 준 **지상 항로를 서버 시간으로** 따라간다(경유점 최대 6, Catmull-Rom, `Speed` 10m/s). 위치 = f(항로, 배치 시각, 경과 시간)라 동기화가 없다. 지면은 0.2초마다 Raycast(`GroundLayers`)로 재서 따라가고, 로컬 플레이어가 `LodDistance`(12km)보다 멀면 자세를 `LodInterval`(1초)마다만 갱신한다 — 쏘고 맞는 쪽(가까운 플레이어) 화면에선 매 프레임 정확하다.
   - **포탑/사격 = 같은 오브젝트의 `ACO_AAGunSite`**(재사용): 표적 레이어 = **아군 지상 26**(SaccEntity `AAMTargetsLayer`도 26 — 빌드 시 콘보이/플레이어 지상 차량 마커로 채워짐), `MinTargetAltitude` 해제, 포탑 30°/s·10°/s, 고각 −8~20°. 사격은 `ACO_NPCGun`의 체류 판정을 단발포처럼(체류 1.5초 → 0.25초 사격, 한 발 35, 휴식 4초). 판정은 피격자(타겟 오너). 원거리 잠재우기(2.9)도 그대로 — 콘보이(SaccEntity 없는 표적)가 가까이 오면 깬다. `RequireLineOfSight`라 지형에 가리면 쏘지 않는다.
   - 체력 SaccTarget(150, 장갑 2 → 미사일 직격 50%)은 포탑과 공유, `ExplodeOther` = 포탑 + 전차. 격파되면 멈추고 포탑만 숨긴다(차체 = 잔해, `DeathEffects` 켬).
   - 생성기 배치: 지상 그룹/방공 링/증원에는 쓰지 않는다(함선과 같은 "스스로 움직이는 지상 유닛").
     - **순찰 소대** `BackgroundTankPlatoons`(2) × `TankGroupSize`(3): 공역 아무 곳 지면에 반경 `TankPatrolRadius`(700m) 사각 고리(네 점 모두 지면) — 소대원은 같은 고리를 `TankSpacing`(40m) 간격으로 계속 돈다.
     - **매복조**(지상 호위 페이즈): 호위 항로를 따라 고르게, 항로 옆 `AmbushDistanceMin~Max`(0.4~0.9km) 매복 지점까지 `AmbushApproachDistance`(1.5km) 바깥에서 달려와 멈춘다. 지면이 있는 곳만.
-  - 동기화: 전차 칸(`_tankSlot`, 지상 풀 순서로 정해짐)마다 항로 `_tankRoute`(6칸)/`_tankRouteCount`/`_tankLoop`/`_tankOffset`(소대 안 앞선 거리). 출발 시각 = 지상 유닛 배치 시각. 적용 시 `SetRoute` → `SetStartTime` → `MissionSpawn`.
+  - 동기화: 전차 칸(`_mobileSlot`, 지상 풀 순서로 정해짐)마다 항로 `_mobileRoute`(6칸)/`_mobileRouteCount`/`_mobileLoop`/`_mobileOffset`(소대 안 앞선 거리). 출발 시각 = 지상 유닛 배치 시각. 적용 시 `SetRoute` → `SetStartTime` → `MissionSpawn`.
 - **아군 콘보이**(`NPC_ConvoyTruck` = `ACO_EscortUnit` 지상 이동 방식, `Speed` 20m/s, 락온 마커 **레이어 26**, 체력 250, 플레이어 기총 오사 방지): `ConvoySize`(3)대가 같은 지상 항로를 `EscortConvoySpacing`(60m) 간격 행렬로 간다(선두가 앞 — 유닛별 `_escortOffset`). 짧은 항로는 옆 흩뜨림을 길이의 15%로 줄인다.
   - **지상 항로 만들기**: 목적지(도시/비행장 가장자리, 없으면 아무 곳)에서 거꾸로 직선 위에 경유점 `EscortRoutePoints`(4)개(중간 경유점은 옆으로 흩뜨림). ① 경유점과 그 사이 3곳을 빠르게 확인해 일찍 버리고, ② **차량이 실제로 달리는 Catmull-Rom 곡선**(ACO_EscortUnit과 같은 식)을 `RouteCheckSpacing`(150m)마다 다시 확인한다 — 각 점이 지상 배치 조건(공역, 안전지대, 표면 경사 `MaxGroundSlope`) + **마른 지면**(물 콜라이더 `SeaSurfaceLayers`에 먼저 맞거나 해수면 + `RouteWaterMargin`(1m)보다 낮으면 버림, `AvoidWaterOnGroundRoutes`), 이웃 확인점 사이 **오르내림 경사 `MaxRouteGrade`(18°) 이하**(절벽/급한 둑). 한 점이라도 걸리면 다른 방향으로 다시(`MaxPlacementAttempts` 40회). 해상 항로도 같은 곡선 확인(전부 바다).
   - 확인은 무작위를 쓰지 않아 항로 씨앗 재현(6-4)에 영향이 없다. 비용은 6km 항로 한 번에 Raycast 약 80개 × 시도 수 — 페이즈 시작 때 한 번(사전 확인 + 배치)뿐이다.
@@ -764,7 +764,7 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
   | SP. BOMB | 피해 +8% / 탄수 +15% / 폭발 반경 +6% / **재장전 속도 +8%** | 2,500 / 2,000 / 2,000 / **3,500** | 특수 폭탄·로켓(UGB, RKT) |
 
   - 대지 미사일 범위 피해: `ACO_DFUNC_Missile.MissileSplash`를 켜면 유도 미사일(`ACO_Missile`)도 터진 자리(명중·지형 충돌)에 `SplashRadius` 범위 피해를 준다 — 폭탄/로켓과 같은 규칙(SaccTarget마다 가장 가까운 콜라이더 거리로 한 번, 중심 `Damage` → 가장자리 `MinSplashFraction`, 쏜 기체·호위 대상 제외, 정통으로 맞은 표적은 중복 없음, 레이어 `ACO_Missile.SplashLayers` 17). 쏜 사람 화면에서만 판정한다. 대지 계열인데 꺼져 있으면 Bake가 경고한다.
-  - 적용 수치: 피해 `Damage`, 탄수 `MaxAmmo`, 선회 `TurnRate`, 락온 속도 = `LockTime ÷ 배수`, 락온 거리 `LockRange`, **시커 범위** = 미사일 추적 각도 `ACO_Missile.MaxTrackingAngle` × 배수(락온 각도 `LockAngle`은 강화하지 않는다 — 예전 "락온 범위" 강화는 락온만 넓어져 시커 밖 표적을 놓쳤다. 발사 이벤트 `NetLaunch`의 8번째 값으로 보내고, 락온 범위보다 좁지 않게 = max(기본 × 배수, LockAngle), 최대 180°. 저장 ID `*_lock_angle`은 그대로, 이름 "SEEKER CONE" — 예전 이름은 Bake가 바꾼다), 폭발 반경 `SplashRadius`, 재장전 = `SlotReloadTime ÷ 배수`(5단계 ×1.4 → 장전 시간 약 29% 짧게, 장전 중인 슬롯은 다음 장전부터). 저장 ID `msl_reload`·`aam_reload`·`agm_reload`·`bomb_reload`. 항목이 늘면 씬 진행도의 이름·배수·가격 배열을 Bake가 저장 ID 기준으로 새 배치에 옮긴다(직접 바꾼 값 유지, `MigrateUpgradeArrays`).
+  - 적용 수치: 피해 `Damage`, 탄수 `MaxAmmo`, 선회 `TurnRate`, 락온 속도 = `LockTime ÷ 배수`, 락온 거리 `LockRange`, **시커 범위** = 미사일 추적 각도 `ACO_Missile.MaxTrackingAngle` × 배수(락온 각도 `LockAngle`은 강화하지 않는다 — 예전 "락온 범위" 강화는 락온만 넓어져 시커 밖 표적을 놓쳤다. 발사 이벤트 `NetLaunch`의 8번째 값으로 보내고, 락온 범위보다 좁지 않게 = max(기본 × 배수, LockAngle), 최대 180°. 저장 ID `msl_seeker`·`aam_seeker`, 이름 "SEEKER CONE"), 폭발 반경 `SplashRadius`, 재장전 = `SlotReloadTime ÷ 배수`(10단계 ×2 → 장전 시간 절반, 장전 중인 슬롯은 다음 장전부터). 저장 ID `msl_reload`·`aam_reload`·`agm_reload`·`bomb_reload`. 씬 진행도의 이름·배수·가격·단계 가격 배열이 항목 수·최대 단계와 다르면 Bake가 새 기본값으로 되돌린다(`MigrateUpgradeArrays`).
   - 무장 계열: 무장 모듈 인스펙터의 `ACO_DFUNC_Missile.UpgradeFamily` 드롭다운(enum `ACO_UpgradeFamily`: Missile / SpecialAAM / SpecialAGM / SpecialBomb / None, 기본 Missile)으로 **직접 고른다** — Bake는 레이어를 보지 않는다. None이면 강화를 받지 않는다. 셋업 메뉴의 4AAM 프리셋은 SpecialAAM, UGB/RKT 프리셋은 SpecialBomb을 넣는다. SpecialAGM인데 `MissileSplash`가 꺼져 있으면 Bake가 경고한다.
   - 적용(`ACO_VehicleUpgrades`, 기체의 `ExtensionUdonBehaviours`): 탑승할 때 내 강화로, 내릴 때 원래대로 — **조종사 화면에서만** 바꾼다(비행·SAV 체력은 오너 계산, 미사일 비행 성능은 발사 이벤트에 실림, 피해는 쏜 사람 값). 다음 탑승부터 적용.
   - 미사일 잔탄은 늘어난 총 탄수만큼만 더하고 뺀다(`ACO_DFUNC_Missile.ApplyUpgrades`) — 다시 채우지 않는다. 못 뺀 만큼은 빚으로 남겨 다음 탑승 때 먼저 갚는다(다 쏘고 내렸다 타서 공짜로 채우지 못하게). 폭발/리스폰의 `ResetAmmo`가 빚을 지운다.
@@ -785,7 +785,7 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
  "분류는 무장 정의의 `Category`(드롭다운: Auto / AirToAir / AirToGround / Bomb / Other) — Auto면 모듈의 강화 계열(SpecialAAM → 공대공, SpecialAGM → 공대지, SpecialBomb → 폭탄, 그 밖 → 기타). Bake(무장 목록 맞추기)가 `SpecialCategories`에 넣는다.
 - **특수무장 해금**: 격납고 `ACO_Loadout.SpecialPrices`(**4AAM 6,000**, UGB 8,000, RKT 8,000 — 모두 잠긴 채 시작). 잠긴 무장을 누르면 설명·가격만 보이고 BUY 버튼으로 사면 바로 장착. 마지막으로 고른 무장은 저장된다. 해금한 무장이 없으면 **특수무장 없이 출격**(슬롯 비움, `NetEquip(255)`). 고른 무장이 기체에 없으면 해금된 첫 모듈을 쓴다.
 - **격납고 패널**(`ACO_Hangar` 2.8 × 1.5m): 위 = 크레딧·지난 보상, 왼쪽 = 특수무장(선택/구매), 오른쪽 = 분류 탭 5개 + 강화 줄 6칸(`이름 [##---] +20% 4,000 CR`, 살 수 있으면 녹색·모자라면 회색·최대면 밝은 녹색, 남는 줄은 숨김).
-- **아이콘**(HUD 라인 — 흰 선 + 알파, Image 색으로 물든다): `Textures/Icons/aco_icon_*.png` — 기체 강화 5(hull, mobility, engine, fuel, stability), 능력치 8(damage, ammo, turn, lock_speed, lock_range, lock_angle, blast, reload — 미사일/특수 계열이 같이 쓴다), 탭 5(tab_*), 특수무장 4(weapon_4aam/ugb/rkt/none), lock, credits. 프리팹 빌더가 Sprite(밉맵, 256)로 가져오게 설정해 붙인다: 강화 줄 왼쪽(`ACO_Shop.RowIcons` + 강화 ID별 `UpgradeIcons` — 탭에 따라 바뀜), 탭 왼쪽, 특수무장 버튼 위(ID로 고름, 모르면 미사일 그림) + 잠긴 무장 구석 자물쇠(`ACO_Loadout.LockIcons`), 크레딧 옆. 다시 그리려면 `Tools/aco_icons.py <출력 폴더> <미리보기.png>`(표준 파이썬만) 후 격납고 프리팹을 다시 만든다.
+- **아이콘**(HUD 라인 — 흰 선 + 알파, Image 색으로 물든다): `Textures/Icons/aco_icon_*.png` — 기체 강화 5(hull, mobility, engine, fuel, stability), 능력치 8(damage, ammo, turn, lock_speed, lock_range, seeker, blast, reload — 미사일/특수 계열이 같이 쓴다), 탭 5(tab_*), 특수무장 4(weapon_4aam/ugb/rkt/none), lock, credits. 프리팹 빌더가 Sprite(밉맵, 256)로 가져오게 설정해 붙인다: 강화 줄 왼쪽(`ACO_Shop.RowIcons` + 강화 ID별 `UpgradeIcons` — 탭에 따라 바뀜), 탭 왼쪽, 특수무장 버튼 위(ID로 고름, 모르면 미사일 그림) + 잠긴 무장 구석 자물쇠(`ACO_Loadout.LockIcons`), 크레딧 옆. 다시 그리려면 `Tools/aco_icons.py <출력 폴더> <미리보기.png>`(표준 파이썬만) 후 격납고 프리팹을 다시 만든다.
 - Bake가 진행도를 관리자·격납고·상점·작전판·기체 강화 확장에 연결하고, 강화 확장의 일반 미사일/특수무장/SaccAirVehicle을 굽고, `ExtensionUdonBehaviours`에 없으면 넣는다. 확장이 없는 플레이어 기체는 경고한다.
 - ⚠ 저장 값은 각자 컴퓨터(클라이언트)에서 계산한다 — PvE라 조작 방지는 하지 않는다.
 
@@ -975,3 +975,48 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
 ### 6-27. 기체 자동화(자동 캐노피 / 기어·후크 연동 / 리스폰 복구) ✅ (`ACO_VehicleAutomation` — `Scripts/Vehicle`, 셋업 메뉴 `Editor/ACO_VehicleAutomationSetup`)
 
 - 한 번 지웠다가 다시 들였다(내용 그대로). 자동 캐노피(움직이거나 캐터펄트면 닫고, 지상에서 멈추면 2초 뒤 열기), 기어·후크 연동(공중에서 기어를 따라 후크, 지면 3초면 후크 올림), 리스폰 복구(다시 나타난 뒤 폭발 클립이 끈 오브젝트를 켜고 `Animator.Rebind()` — 기체 애니메이터에 리스폰 애니메이션을 넣었다면 `RebindOnRespawn`을 꺼도 된다). 셋업: `ACO → Player Vehicle → Add Auto Canopy + Gear-Hook Link to Selected Vehicles`(기체 아래 오브젝트 + 확장 목록, 캐노피·후크를 다이얼에서 뺄지 선택). 셋업 스크립트는 UnityEditor를 쓰므로 반드시 Editor 폴더에 둔다(빌드 실패 방지).
+
+### 6-28. 플레이 테스트 개선 묶음 (2026-11)
+
+- **아군 유닛 격추 점수**: NPC 무기(ACO_NPCGun, NPC 런처의 ACO_Missile — `FromNpc`)가 SaccTarget에 주는 피해의 무기 종류에 `ACO_Missile.NPC_WEAPON_OFFSET`(100)을 더한다. 작전판은 그 값이면 조종사 칸에 파란 `ALLY UNIT`, 개인 점수·조종사 집계·격추 대사 없음(팀 점수는 관리자가 그대로 센다). 플레이어 기체(SaccEntity)에 주는 피해는 SAV 킬피드 때문에 원래 값 그대로.
+- **텔레포트 속도 0**: 게임 진행·텔레포터·화면 암전의 TeleportTo 직후 `SetVelocity(0)` + 다음 프레임 한 번 더(방금 내린 항공기 속도로 튕기지 않게).
+- **함선 격침 → 부위 파괴**: 원인 — 격침 때 부위에 보내던 `Silence`는 교전만 잠깐 멈췄고, 부위 SaccTarget 체력이 남아 락온 마커가 살아 있었으며 `_disabled`가 체력(> 0)으로 다시 계산되며 사격이 되살아났다. 이제 `Silence`가 부위 SaccTarget을 터뜨린다(오너, `SaccTarget.Explode`). 본체 부활(AttachedSpawn/NetRespawn) 때 부위도 함께 부활한다.
+- **대사 분리**(EV_COUNT 21): `EV_ALLY_FLARE`(아군 플레어 — 장치의 `Friendly`, 호위 유닛이 출발할 때 `!Hostile`), `EV_CONVOY_HIT`/`EV_CONVOY_LOST`(호위 대상 중 지상·해상 = 콘보이, 공중 = 수송기 EV_ESCORT_*), `EV_ALLY_SMOKE`. 새 상황 기본 대사는 Bake가 씬의 대사 표 끝에 더한다(확률·쿨타임 배열도 늘림). 슈퍼에이스는 대사별 음성(`ClipSpawn/Salvo/Decoy/Half/Down`) — 있으면 `SayVoice`. **미사일 빗나감 대사**는 터질 때가 아니라 살아 있는 표적을 시커가 놓친 순간(UnlockTime 연속 무력화·시커 범위 밖)에, 플레어에 속으면 기존 DECOYED.
+- **연막**(`ACO_FlareDispenser.SmokeMode`, 지상·해상 호위 유닛): 같은 반응 규칙으로 뿌리고, 미사일이 끌려가는 지점이 뿌린 자리에 머문다. 켜진 동안(`FlareActiveTime` — 6~8초 권장) `IsObscured()` — 적 NPC 기총(ACO_NPCGun)은 조준·사격·피해를 멈추고 NPC 미사일 런처는 락온을 잃는다. FlareParticles에 연막 파티클을 넣는다.
+- **기총 피해 강화**(진행도 `UP_GUN` = 기체 탭 6번째, 저장 ID `gun_damage`, 단계당 +8%, 28항목 — Bake가 27항목 배열을 저장 ID로 옮긴다): SAV 기총 피해는 탄 오브젝트에 묶여 플레이어별로 바꿀 수 없어서, 기총 탄 파티클(충돌 메시지를 보내는 것 — 조종사 화면에서만 충돌)에 `ACO_GunDamageBonus`를 붙여 같은 충돌에 '10 ÷ 표적 장갑'(또는 'd:값')의 (배수 − 1)만큼 덤 피해를 준다. Bake가 플레이어 기체의 탄 파티클에 붙이고 강화 확장(`GunBonuses`)에 연결한다.
+- **아군기 표시**(`ACO_TargetMarkers.Flow`, Bake 연결): 다른 플레이어가 탄 참가자 기체에 파란 테두리(아군 항공기 모양) + `WINGMAN 칸 번호`(`WingmanLabel`), 목표처럼 멀리서도 보인다(`ShowWingmen`).
+
+### 6-29. 공격 헬리콥터 / 곡사포 (ACO_MobileUnit.Kind — 지상 풀)
+
+- **공통**: 전차와 같은 이동 유닛 스크립트(`ACO_MobileUnit`, 예전 이름 ACO_Tank)를 쓴다 — 서버 시간 항로(동기화 없음), 생성기 계약, 지상 풀(Bake가 ACO_MobileUnit로 모은다). `Kind` 0 전차 / 1 헬리콥터 / 2 곡사포. 생성기는 종류별 후보(`CollectFreeMobilesOfKind`)로 나눠 놓는다.
+- **헬리콥터**(`NPC_Helicopter`): 높이만 '지면 또는 해수면(`SeaLevel`) + `HoverHeight`(70m)'. 0.2초마다 바로 아래와 `HeliLookAhead`(120m) 앞의 지면 중 높은 쪽을 따라 절벽 앞에서 미리 오르고, 아래 지형이 없거나 해수면보다 낮으면 해수면 기준 — 바다·절벽 위로 다닌다. 지면 + 높이의 절반 아래로는 내려가지 않는다. 전진 중 기수 `HoverPitch` 숙임. 격추되면 돌며 중력으로 떨어져 지면/해수면에서 멈춘다(늦게 들어온 플레이어는 바닥 잔해). 턱 밑 기관포(ACO_AAGunSite)가 아군 지상·공중(26·25)을 쏜다. 락온 마커는 적 공중(29) — 공대공 미사일로 잡고, 표적 마커도 항공기 모양.
+  - 생성기: 순찰 소대를 `HelicopterPlatoonShare` 확률로 헬리콥터 편대(`HelicopterGroupSize`, 고리 반경 2배, 바다·급경사 허용 — `SampleHeliPoint`, 길 막힘 검사 없음), 호위 매복조를 `HelicopterAmbushShare` 확률로 헬리콥터.
+- **곡사포**(`NPC_Artillery` + 포탄 `ACO_ArtilleryShell`): 대공포 스크립트 대신 `ACO_ArtilleryGun`. 표적 = 생성기 호위 대상 중 아군 지상·해상(콘보이·함선, 공중 수송기 제외), `MinRange`~`MaxRange`의 가장 가까운 것. 탄착 예고 없음(플레이어가 아니라 호위 대상을 노린다).
+  - 오너가 표적 진행 방향 × 속도로 비행 시간만큼 앞을 예측해(3회 반복) 고각 탄도(tanθ = (v² + √(v⁴ − g(gx² + 2yv²))) / gx)를 풀고, `FireInterval`(+지터)마다 `Spread` 안 무작위 탄착점으로 `NetFire(초속도)`를 모두에게 보낸다. 모든 클라이언트가 같은 초속도로 포탄(ACO_Ordnance, 중력 × `ShellGravityScale` 3 — 4km 비행 약 27초)을 쏜다.
+  - 범위 피해는 오너 화면에서만, `ACO_Ordnance.HitFriendlies` — 아군 호위 대상만 맞고 적 유닛은 맞지 않는다(플레이어 폭탄은 반대로 아군을 건너뛴다).
+  - 생성기: 매복조를 `ArtilleryAmbushShare` 확률로 곡사포(지상·해상 호위만) — 항로 옆 `ArtilleryStandoffMin`~`Max`(2.5~4.5km)의 마른 지면, 출발점은 `ArtilleryApproachDistance`(400m) 뒤 → 짧게 와서 멈춘 뒤에만 쏜다(`ACO_MobileUnit.IsStopped`). 순찰에는 쓰지 않는다.
+  - Bake가 곡사포의 `Generator`를 연결한다.
+
+### 6-30. 레이더 — HUD 레이더 / 조종석 지도 (로컬 전용, 네트워크 없음)
+
+- **접촉 목록**(`ACO_RadarContacts`, 표적 마커 아래 `RADAR`, 씬에 하나): 생성기 풀(전투기·지상·고가치 표적·호위 대상) + 참가자 기체를 처음에 한 번 훑고, 0.5초마다 배치·생존·종류(적/목표/아군 × 공중/지상 — 지상 풀 헬리콥터는 공중)를 다시 본다. 위치는 그리는 쪽이 트랜스폼을 바로 읽는다. NPC 미사일은 런처(`ACO_MissileLauncher.Radar`, Bake 연결)가 쏠 때 `AddMissile` — 날고 있는 동안만(`ACO_Missile.IsFlying`). `LocalVehicle` = 내가 탄 참가자 기체(`SaccEntity.InVehicle`). 아무 기체에도 안 탔고 미리보기도 아니면 쉰다.
+- **HUD 레이더**(`ACO_HudRadar`): 기체에 탔을 때 시야 왼쪽 아래(`HeadOffset`, 점수 패널과 같은 거리)에 원형 스코프. 반경 `Range`(10km 고정) 안의 적(빨강)·목표(노랑)·아군(파랑)·미사일(주황 마름모), 나(흰 삼각형). 항공기는 진행 방향 삼각형, 지상·함선은 사각형. **바라보는 방향이 위** — 점은 북쪽 기준으로 그리고 판(Spin)을 머리 방위만큼 매 프레임 돌린다(테두리 N 표시 = 북쪽, `HeadingFromVehicle`이면 기체 기수). 점 메시는 0.1초마다 정점만 다시 채운다(오브젝트 수 고정). 항상 맨 위(ZTest Always).
+  - HUD 설정 패널 `RADAR` 카드(항목 19~23, 저장 ID `radar`/`radar_size`/`radar_x`/`radar_y`/`radar_alpha`): 켜기, 크기, 좌우, 상하, 불투명도(20~100% — 배경·고리·점 머티리얼 알파에 곱한다, `Renderers`). 패널 판이 2.8m × 1.75m로 커졌다(프리팹 다시 만들기).
+  - **HUD 따라오는 지연**(SCORE PANEL 카드 FOLLOW DELAY, 항목 24, 저장 ID `hud_follow`): 0~0.5초(0 = 바로 붙음). 점수 패널·결과 글자·무전 자막·HUD 레이더의 `FollowSharpness` = 1 ÷ 지연. 기본 = 점수 패널 값(10 → 0.1초).
+- **조종석 지도**(`ACO_CockpitMap`, 기체마다, 메뉴 `ACO → Player Vehicle → Add Cockpit Map to Selected Vehicles`): **북쪽이 위인 고정 방위**로 공역 전체 — 바다 바탕 + 육각 지형 윗면(높이대 색, 처음 탔을 때·지형이 바뀔 때 프레임마다 나눠 만든다) + 공역 테두리 + 적·목표·아군 + 나. 내가 이 기체에 타고 있을 때만 화면(Screen)을 켜고 0.25초마다 갱신한다(다른 기체 화면은 꺼짐 — 테두리만). 깊이 검사(조종석에 가려진다), 겹침 순서는 렌더 큐. 위치는 조종석 의자 앞 대략 자리에 만들어지니 계기판 자리로 옮긴다.
+- 셰이더 `ACO/RadarVertexColor`(정점 색 × _Color, `_ZTest`), 메시·머티리얼 `Generated/ACO_Radar*`.
+
+### 6-31. 강화 10단계 / 시커 범위 이름 정리
+
+- **최대 단계 10**(`LevelCostScale` 길이). 단계당 값 = (최대 배수 − 1) ÷ 10:
+  - ×2.5: 피해, 락온 거리, 폭발 반경, 기총 피해, 연료 효율. ×2: 탄수, 재장전(둘이 곱해지면 화력이 너무 커서 한 단계 낮춤), 추력.
+  - ×1.5(성능에 민감): 미사일 선회, 락온 속도, 시커 범위. 체력 ×4. 기동성 ×1.3 — 롤은 다 받고 피치·요는 `ACO_VehicleUpgrades.PitchYawShare`(0.5)만큼만(×1.15). 안정성 ×1.5.
+  - 가격: n단계 = 1단계 가격 × `LevelCostScale[n−1]` = 1, 1.4, 1.9, 2.6, 3.5, 4.6, 6, 7.8, 10, 13(합 ≈ 51.8배). 민감한 항목(기동·선회·락온 속도·시커)은 1단계 가격부터 높다.
+  - Bake(`MigrateUpgradeArrays`)가 씬 진행도의 예전(5단계) 배열을 새 기본값으로 바꾼다. 산 단계(저장 값)는 그대로, 효과만 새 단계당 값으로.
+  - 상점 단계 칸은 10칸이라 작게·고정 폭(`<size=78%><mspace=0.5em>`).
+- **추력 ×2 = 최고 속도 거의 ×2**: SAV 공기 저항은 속도에 비례(`AirFriction × 속도`)라 최고 속도가 추력에 비례한다(음속 부근 `SoundBarrierStrength` 혹만 예외). 양력은 속도² × `Lift`이지만 `MaxLift`에서 막혀서 빨라져도 하중(G)은 그 위로 안 오르고 선회율(도/초)은 오히려 준다.
+- **시커 범위 ≠ 락온 각도**: 강화 `SEEKER CONE`(상수 `STAT_SEEKER`)은 발사된 미사일의 추적 각도 `ACO_Missile.MaxTrackingAngle`을 키운다. 무장의 `LockAngle`(HUD 탐색 원 — 락온이 걸리는 각도)은 강화하지 않는다. 저장 ID `msl_seeker`/`aam_seeker`(예전 `*_lock_angle`에서 바꿨다 — 그 항목에 산 단계는 0부터 다시), 아이콘 `aco_icon_seeker`.
+- **SAV 리미터 권장값**(DFUNC_Limits — `Limits`가 하중 방향 피치 입력과 요 입력을 줄인다):
+  - 받음각: `AoALimiter`(완전히 막는 각) ≤ 실속각 `MaxAngleOfAttackPitch` × 0.65, `AoALimiter_Begin` = 그보다 5~6° 낮게. SF-1(실속 25°)이면 Begin 11 / Limit 16(기본 10/14도 안전). 기동 강화로 피치가 세지면 순간 넘침이 커지므로 구간(Limit − Begin)을 좁히지 말 것.
+  - 하중: `GLimiter_Pos` ≈ `MaxGs` × 0.9, `GLimiter_Begin_Pos` = 그보다 6~8 낮게(SF-1 MaxGs 40 → 28 / 36). 음의 G는 -1(=양과 같게) 그대로.
+  - `DefaultLimitsOn` 켜기, 저속 실속은 리미터가 못 막는다(받음각을 줄이면 양력이 모자라 가라앉는다) — 안정성 강화(`Lift` ×1.5)가 실속 속도를 낮춘다.

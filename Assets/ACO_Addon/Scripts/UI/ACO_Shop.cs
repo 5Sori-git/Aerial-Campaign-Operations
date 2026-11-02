@@ -188,9 +188,10 @@ namespace ACO
                 if (RowTexts != null && row < RowTexts.Length && RowTexts[row])
                 {
                     // 기본 TMP 폰트(LiberationSans)에 있는 글자만 쓴다.
-                    string pips = "[";
+                    // 10단계라 칸이 길다 — 작게, 고정 폭으로(다음 칸을 밀지 않게)
+                    string pips = "<size=78%><mspace=0.5em>[";
                     for (int k = 0; k < max; k++) { pips += k < lv ? "#" : "-"; }
-                    pips += "]";
+                    pips += "]</mspace></size>";
                     int percent = Mathf.RoundToInt(Progress.GetUpgradeStep(id) * lv * 100f);
                     RowTexts[row].text = Progress.GetUpgradeName(id) + "<pos=36%>" + pips + "<pos=58%>+" + percent + "%"
                         + "<pos=70%>" + (cost < 0 ? "MAX" : cost.ToString("N0") + " CR");

@@ -85,7 +85,8 @@ namespace ACO
             if (targetIndex != _targetIdx) { BindTarget(targetIndex); }
             _targetVel = targetVelocity;
 
-            bool valid = targetIndex >= 0 && TargetIsValid();
+            // 연막 속 표적은 조준할 수 없다
+            bool valid = targetIndex >= 0 && TargetIsValid() && !(_targetSmoke != null && _targetSmoke.IsObscured());
             float dist = 0f;
             float angle = 180f;
             if (valid)
@@ -197,7 +198,10 @@ namespace ACO
             // 미사일과 같은 규칙: NPC는 SaccTarget이 체력을 소유하므로 우선한다(설계 2.4).
             _targetStatic = marker.GetComponentInParent<SaccTarget>();
             _targetEntity = marker.GetComponentInParent<SaccEntity>();
+            _targetSmoke = marker.GetComponentInParent<ACO_FlareDispenser>();
         }
+
+        private ACO_FlareDispenser _targetSmoke;   // 표적의 연막 장치(켜져 있으면 쏘지 않는다)
 
         private bool TargetIsValid()
         {
@@ -246,7 +250,8 @@ namespace ACO
         {
             if (_targetStatic)
             {
-                _targetStatic.WeaponDamageTarget(damage, gameObject, WeaponType);
+                // NPC 무기 표시(작전판이 아군 유닛 격추로 가른다)
+                _targetStatic.WeaponDamageTarget(damage, gameObject, (byte)(WeaponType + ACO_Missile.NPC_WEAPON_OFFSET));
             }
             else if (_targetEntity)
             {

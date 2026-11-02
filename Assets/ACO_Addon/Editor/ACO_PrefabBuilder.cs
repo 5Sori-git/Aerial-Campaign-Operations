@@ -552,7 +552,7 @@ public static class ACO_PrefabBuilder
     }
 
     /// 전차(적 지상 유닛): 대공포 포대 구조를 그대로 쓰되 포탑은 느리고 낮게, 표적은 아군 지상(레이어 26 — 콘보이, 플레이어 지상 차량),
-    /// 사격은 묵직한 단발(체류 1.5초 뒤 한 발 35). 이동은 ACO_Tank가 생성기 항로를 따라간다.
+    /// 사격은 묵직한 단발(체류 1.5초 뒤 한 발 35). 이동은 ACO_MobileUnit가 생성기 항로를 따라간다.
     public static GameObject BuildTank()
     {
         EnsurePrefabFolder();
@@ -586,7 +586,7 @@ public static class ACO_PrefabBuilder
         turret.HideOnDeath = turret.TurretYaw != null ? new GameObject[] { turret.TurretYaw.gameObject } : new GameObject[0];
         turret.ShowOnDeath = new GameObject[] { deathFx };
 
-        ACO_Tank tank = root.AddUdonSharpComponent<ACO_Tank>();
+        ACO_MobileUnit tank = root.AddUdonSharpComponent<ACO_MobileUnit>();
         tank.TargetHealth = health;
         tank.Turret = turret;
         tank.ScoreValue = spec.Score;
@@ -595,6 +595,148 @@ public static class ACO_PrefabBuilder
         entity.ExtensionUdonBehaviours = new UdonSharp.UdonSharpBehaviour[] { turret };
 
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_Tank.prefab");
+    }
+
+    /// 공격 헬리콥터(적, 지상 풀): 전차 구조에 ACO_MobileUnit.Kind = 헬리콥터 — 전차 항로를 지면(또는 해수면) 위 HoverHeight로 날아 바다·절벽 위로도 다닌다.
+    /// 턱 밑 기관포 포탑이 아군 지상·공중 표적(레이어 26·25)을 쏜다. 락온 마커는 적 공중 레이어(29) — 플레이어 공대공 미사일로 잡는다.
+    /// 모델은 임시 상자(동체 + 로터 판) — 직접 만든 모델로 바꿔 끼운다.
+    public static GameObject BuildHelicopter()
+    {
+        EnsurePrefabFolder();
+        var spec = new GunSpec
+        {
+            BodySize = new Vector3(2.4f, 2.6f, 12f), BarrelLength = 1.8f, BarrelThickness = 0.15f,
+            Health = 90f, Armor = 1f, Score = 250, Label = "HEL",
+            DetectRange = 2200f, LoseTargetRange = 2600f, YawRate = 60f, PitchRate = 40f, TrackingLag = 0.4f, AimError = 0.6f,
+            MaxRange = 2000f, MuzzleVelocity = 900f, FireStartAngle = 5f, EffectiveAngle = 2f, DwellTime = 0.8f,
+            BurstDuration = 1.2f, BurstCooldown = 3f, DamagePerTick = 5f, MinDamageInterval = 0.15f, MaxDamageInterval = 0.4f,
+            Spread = 0.6f, TracerRate = 15f,
+        };
+        GameObject root = CreateAAGunObject("NPC_Helicopter", spec);
+        ACO_AAGunSite turret = root.GetComponent<ACO_AAGunSite>();
+        SaccEntity entity = root.GetComponent<SaccEntity>();
+        SaccTarget health = root.GetComponent<SaccTarget>();
+
+        Transform marker = root.transform.Find("AAMTarget");
+        if (marker != null)
+        {
+            marker.gameObject.layer = LayerEnemyAir;
+            marker.localPosition = new Vector3(0f, 1.3f, 0f);
+            marker.GetComponent<SphereCollider>().radius = 6f;
+        }
+        int targets = (1 << LayerFriendlyGround) | (1 << LayerFriendlyAir);
+        entity.AAMTargetsLayer = targets;
+        turret.TargetLayers = targets;
+        turret.MinTargetAltitude = -100000f;
+        turret.MinPitch = -70f;
+        turret.MaxPitch = 30f;
+        // 턱 밑 포탑
+        if (turret.TurretYaw) { turret.TurretYaw.localPosition = new Vector3(0f, 0.1f, spec.BodySize.z * 0.38f); }
+        if (turret.TurretPitch) { turret.TurretPitch.localRotation = Quaternion.Euler(10f, 0f, 0f); }
+
+        GameObject rotor = new GameObject("Rotor");
+        rotor.transform.SetParent(root.transform, false);
+        rotor.transform.localPosition = new Vector3(0f, spec.BodySize.y + 0.5f, 0f);
+        AddBox(rotor.transform, "BladeA", Vector3.zero, new Vector3(14f, 0.08f, 0.5f));
+        AddBox(rotor.transform, "BladeB", Vector3.zero, new Vector3(0.5f, 0.08f, 14f));
+        AddBox(root.transform, "TailRotor", new Vector3(0.9f, spec.BodySize.y * 0.6f, -spec.BodySize.z * 0.5f), new Vector3(0.08f, 3f, 0.4f));
+
+        GameObject deathFx = new GameObject("DeathEffects");
+        deathFx.transform.SetParent(root.transform, false);
+        deathFx.transform.localPosition = new Vector3(0f, 2f, 0f);
+        deathFx.SetActive(false);
+        // 격추되면 포탑·로터를 숨기고 동체(잔해)는 돌며 떨어진다.
+        turret.HideOnDeath = turret.TurretYaw != null ? new GameObject[] { turret.TurretYaw.gameObject, rotor } : new GameObject[] { rotor };
+        turret.ShowOnDeath = new GameObject[] { deathFx };
+
+        ACO_MobileUnit tank = root.AddUdonSharpComponent<ACO_MobileUnit>();
+        tank.TargetHealth = health;
+        tank.Turret = turret;
+        tank.Kind = ACO_MobileUnit.KIND_HELICOPTER;
+        tank.Speed = 40f;
+        tank.HoverHeight = 70f;
+        tank.ScoreValue = spec.Score;
+        tank.MarkerLabel = spec.Label;
+        health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { turret, tank };
+        entity.ExtensionUdonBehaviours = new UdonSharp.UdonSharpBehaviour[] { turret };
+
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_Helicopter.prefab");
+    }
+
+    /// 곡사포 포탄: 중력(배수는 쏘는 포가 넣는다)으로 떨어지는 무유도 탄. 범위 피해는 아군 호위 대상만(ACO_Ordnance.HitFriendlies — 포가 넣는다).
+    public static GameObject BuildArtilleryShell()
+    {
+        EnsurePrefabFolder();
+        GameObject root = CreateOrdnanceObject("ACO_ArtilleryShell", new Vector3(0.25f, 0.6f, 0.25f));
+        ACO_Ordnance o = root.GetComponent<ACO_Ordnance>();
+        o.LaunchSpeed = 0f;
+        o.Acceleration = 0f;
+        o.GravityScale = 1f;
+        o.Drag = 0f;
+        o.ArmTime = 0.5f;
+        o.MaxLifetime = 60f;
+        o.Damage = 60f;
+        o.SplashRadius = 22f;
+        o.WeaponType = 4;
+        return SaveAndCleanup(root, PathOf("ACO_ArtilleryShell"));
+    }
+
+    /// 곡사포(자주포, 적 지상 풀): 전차 차체 + ACO_MobileUnit.Kind = 곡사포 + ACO_ArtilleryGun(대공포 스크립트 대신). 생성기가 호위 항로에서 멀리 떨어진 사격 위치로
+    /// 짧게 보내고, 멈춘 뒤 아군 지상·해상 호위 대상을 고각으로 포격한다(탄착 예고 없음). 포탄 프리팹(ACO_ArtilleryShell)이 없으면 같이 만든다.
+    public static GameObject BuildArtillery()
+    {
+        EnsurePrefabFolder();
+        GameObject shell = AssetDatabase.LoadAssetAtPath<GameObject>(PathOf("ACO_ArtilleryShell"));
+        if (shell == null) { shell = BuildArtilleryShell(); }
+        var spec = new GunSpec
+        {
+            BodySize = new Vector3(3.4f, 1.8f, 7.5f), BarrelLength = 7f, BarrelThickness = 0.3f,
+            Health = 120f, Armor = 2f, Score = 220, Label = "ART",
+        };
+        GameObject root = CreateAAGunObject("NPC_Artillery", spec);
+        ACO_AAGunSite aa = root.GetComponent<ACO_AAGunSite>();
+        SaccEntity entity = root.GetComponent<SaccEntity>();
+        SaccTarget health = root.GetComponent<SaccTarget>();
+        Transform yaw = aa.TurretYaw;
+        Transform pitch = aa.TurretPitch;
+
+        // 대공포 사격 부품(직사 기관포, 예광 파티클)은 쓰지 않는다 — 참조를 먼저 끊고 지운다.
+        health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[0];
+        entity.ExtensionUdonBehaviours = new UdonSharp.UdonSharpBehaviour[0];
+        if (aa.Gun != null) { Object.DestroyImmediate(aa.Gun.gameObject); }
+        UdonSharpEditorUtility.DestroyImmediate(aa);
+
+        GameObject muzzle = new GameObject("Muzzle");
+        muzzle.transform.SetParent(pitch, false);
+        muzzle.transform.localPosition = new Vector3(0f, 0f, spec.BarrelLength + 0.2f);
+        pitch.localRotation = Quaternion.Euler(-15f, 0f, 0f);
+
+        GameObject deathFx = new GameObject("DeathEffects");
+        deathFx.transform.SetParent(root.transform, false);
+        deathFx.transform.localPosition = new Vector3(0f, 2f, 0f);
+        deathFx.SetActive(false);
+
+        ACO_ArtilleryGun gun = root.AddUdonSharpComponent<ACO_ArtilleryGun>();
+        gun.TargetHealth = health;
+        gun.TurretYaw = yaw;
+        gun.TurretPitch = pitch;
+        gun.Muzzle = muzzle.transform;
+        gun.Shell = shell;
+        gun.HideOnDeath = new GameObject[] { yaw.gameObject };
+        gun.ShowOnDeath = new GameObject[] { deathFx };
+
+        ACO_MobileUnit tank = root.AddUdonSharpComponent<ACO_MobileUnit>();
+        tank.TargetHealth = health;
+        tank.Turret = null;
+        tank.Artillery = gun;
+        tank.Kind = ACO_MobileUnit.KIND_ARTILLERY;
+        tank.Speed = 8f;
+        tank.ScoreValue = spec.Score;
+        tank.MarkerLabel = spec.Label;
+        gun.Carrier = tank;
+        health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { gun, tank };
+
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_Artillery.prefab");
     }
 
     /// 아군 콘보이 차량(지상 호위 대상): 지면을 따라가는 트럭. 락온 마커를 아군 지상 레이어(26)에 둬서 적 전차가 노린다.

@@ -30,7 +30,7 @@ namespace ACO
     /// 페이즈 목표는 관리자가 RequestDeployObjective(종류, 태그, ...)로 그때그때 배치한다. 목표로 놓인 유닛은 태그(동기화)를 달아
     /// 관리자/마커가 "지금 목표인 유닛"을 알 수 있다. 태그 0 = 일반 유닛.
     ///
-    /// 지상 풀의 전차(ACO_Tank)는 지상 그룹에 섞지 않고 순찰 소대(BackgroundTankPlatoons)나 호위 항로 매복조로 놓는다 — 항로를 동기화하고 전차가 서버 시간으로 따라간다.
+    /// 지상 풀의 전차(ACO_MobileUnit)는 지상 그룹에 섞지 않고 순찰 소대(BackgroundTankPlatoons)나 호위 항로 매복조로 놓는다 — 항로를 동기화하고 전차가 서버 시간으로 따라간다.
     /// 지상 풀의 함선(HighValue를 끈 ACO_Warship — 구축함)은 지상 그룹에 섞지 않고 바다에 함대로 놓는다(BackgroundShipGroups, 전함 호위 EscortCount).
     /// 함선(ACO_Warship이 붙은 고가치 표적)은 바다(해수면 SeaLevel, 수심 MinSeaDepth, 순항 원 전체)에 놓고, 그 부위는 CAT_PART로 조회된다.
     ///
@@ -114,7 +114,7 @@ namespace ACO
         [Tooltip("전함(고가치 표적 함선)을 놓을 때 붙일 호위 구축함 수")]
         public int EscortCount = 2;
 
-        [Header("전차 (ACO_Tank — 지상 풀)")]
+        [Header("전차 (ACO_MobileUnit — 지상 풀)")]
         [Tooltip("전체 배치 때 놓을 순찰 소대 수(지면 위 닫힌 고리를 계속 돈다)")]
         public int BackgroundTankPlatoons = 2;
         [Tooltip("소대/매복조 하나의 전차 수")]
@@ -128,6 +128,27 @@ namespace ACO
         public float AmbushDistanceMax = 900f;
         [Tooltip("매복조 출발점: 매복 지점에서 항로 반대쪽으로 이만큼(m) 더 떨어진 곳")]
         public float AmbushApproachDistance = 1500f;
+
+        [Header("헬리콥터 / 곡사포 (ACO_MobileUnit의 Kind — 지상 풀에 같이 둔다)")]
+        [Tooltip("순찰 소대를 헬리콥터 편대로 놓을 확률(풀에 헬리콥터가 있을 때). 헬리콥터는 바다·절벽 위로도 순찰한다")]
+        [Range(0f, 1f)] public float HelicopterPlatoonShare = 0.35f;
+        [Tooltip("호위 항로 매복조를 헬리콥터로 놓을 확률")]
+        [Range(0f, 1f)] public float HelicopterAmbushShare = 0.25f;
+        [Tooltip("호위 항로 매복조를 곡사포로 놓을 확률(지상·해상 호위만 — 수송기는 쏘지 않는다)")]
+        [Range(0f, 1f)] public float ArtilleryAmbushShare = 0.3f;
+        [Tooltip("헬리콥터 편대/매복조 하나의 기수")]
+        public int HelicopterGroupSize = 2;
+        [Tooltip("같은 항로를 가는 헬리콥터 사이 간격(m)")]
+        public float HelicopterSpacing = 120f;
+        [Tooltip("곡사포 포대 하나의 문 수")]
+        public int ArtilleryGroupSize = 2;
+        [Tooltip("곡사포 사격 위치: 호위 항로에서 옆으로 이 거리(m) 범위 — 곡사포 MaxRange(기본 6000)보다 짧게")]
+        public float ArtilleryStandoffMin = 2500f;
+        public float ArtilleryStandoffMax = 4500f;
+        [Tooltip("곡사포 출발점: 사격 위치에서 항로 반대쪽으로 이만큼(m) — 짧게 와서 자리 잡고 쏜다")]
+        public float ArtilleryApproachDistance = 400f;
+        [Tooltip("곡사포 사이 간격(m)")]
+        public float ArtillerySpacing = 60f;
 
         [Header("호위 대상 (ACO_EscortUnit — 아군)")]
         [Tooltip("호위 항로의 경유점 수(출발/도착 포함, 2~6)")]
@@ -322,21 +343,22 @@ namespace ACO
         [UdonSynced] private short[] _escortOffset = new short[0];   // 콘보이 행렬에서 앞선 거리(m)
         [UdonSynced] private short[] _escortLateral = new short[0];  // 편대에서 옆으로 벌어진 거리(m, 오른쪽 +) — 적 폭격기 삼각 대형
         [UdonSynced] private byte[] _escortArrival = new byte[0];   // 도착 방식(ACO_EscortUnit.ARRIVE_*)
-        // 전차 항로(전차마다 MAX_ROUTE_POINTS칸). 지상 풀 인덱스 → 전차 칸은 _tankSlot(풀 순서로 정해져 모든 클라이언트가 같다).
+        // 전차 항로(전차마다 MAX_ROUTE_POINTS칸). 지상 풀 인덱스 → 전차 칸은 _mobileSlot(풀 순서로 정해져 모든 클라이언트가 같다).
         // 전차 항로는 수평 좌표만(높이는 전차가 지면을 재서 따라간다)
-        [UdonSynced] private Vector2[] _tankRoute = new Vector2[0];
-        [UdonSynced] private byte[] _tankRouteCount = new byte[0];
-        [UdonSynced] private bool[] _tankLoop = new bool[0];
-        [UdonSynced] private short[] _tankOffset = new short[0];
-        private int[] _tankSlot;
-        private int _tankCount;
+        [UdonSynced] private Vector2[] _mobileRoute = new Vector2[0];
+        [UdonSynced] private byte[] _mobileRouteCount = new byte[0];
+        [UdonSynced] private bool[] _mobileLoop = new bool[0];
+        [UdonSynced] private short[] _mobileOffset = new short[0];
+        private int[] _mobileSlot;
+        private int _mobileCount;
+        private int[] _mobileKind;   // 지상 풀 인덱스 → ACO_MobileUnit.Kind(전차가 아니면 -1)
         private Vector3[] _routeScratch;
         // 마지막으로 만든 호위 항로의 목적지 지형 장식 자리(-1 = 없음), 경유점 수, 도착 방식, 목적지 후보 목록
         private int _routeDestSite = -1;
         private int _routeBuiltCount;
         private int _routeArrival;
         private int[] _destList;
-        private Vector3[] _tankRouteTmp;
+        private Vector3[] _mobileRouteTmp;
         // 적용 나누기(프레임당 ApplyPerFrame대)
         private int _applyBudget;
         private bool _applyMore;
@@ -688,7 +710,7 @@ namespace ACO
             int groups = _lastGroups;
             int groundPlaced = _lastPlaced + defensePlaced;
             groundPlaced += PlaceShipGroups(BackgroundShipGroups, now);
-            groundPlaced += PlaceTankPlatoons(BackgroundTankPlatoons, now);
+            groundPlaced += PlacePatrolPlatoons(BackgroundTankPlatoons, now);
 
             int fighterBudget = MaxFighters < 0 ? _fighterUsed.Length : Mathf.Min(MaxFighters, _fighterUsed.Length);
             if (PhasedMode && BackgroundFighters >= 0) { fighterBudget = Mathf.Min(fighterBudget, BackgroundFighters); }
@@ -791,13 +813,13 @@ namespace ACO
                 _escortLateral = new short[escortCount];
                 _escortArrival = new byte[escortCount];
             }
-            EnsureTankSlots();
-            if (_tankRouteCount.Length != _tankCount)
+            EnsureMobileSlots();
+            if (_mobileRouteCount.Length != _mobileCount)
             {
-                _tankRoute = new Vector2[_tankCount * ACO_Tank.MAX_ROUTE_POINTS];
-                _tankRouteCount = new byte[_tankCount];
-                _tankLoop = new bool[_tankCount];
-                _tankOffset = new short[_tankCount];
+                _mobileRoute = new Vector2[_mobileCount * ACO_MobileUnit.MAX_ROUTE_POINTS];
+                _mobileRouteCount = new byte[_mobileCount];
+                _mobileLoop = new bool[_mobileCount];
+                _mobileOffset = new short[_mobileCount];
             }
             if (_fighterUsed.Length != fighterCount)
             {
@@ -1262,32 +1284,41 @@ namespace ACO
         /// 함선/전차 — 지상 그룹/방공 링/증원에 쓰지 않고 따로 놓는 유닛.
         private bool IsGroundMover(int i)
         {
-            return IsGroundShip(i) || IsGroundTank(i);
+            return IsGroundShip(i) || IsMobileUnit(i);
         }
 
-        private bool IsGroundTank(int i)
+        private bool IsMobileUnit(int i)
         {
-            EnsureTankSlots();
-            return i >= 0 && i < _tankSlot.Length && _tankSlot[i] >= 0;
+            EnsureMobileSlots();
+            return i >= 0 && i < _mobileSlot.Length && _mobileSlot[i] >= 0;
         }
 
         /// 지상 풀 인덱스 → 전차 칸(풀 순서). 베이크된 배열이라 모든 클라이언트가 같다.
-        private void EnsureTankSlots()
+        private void EnsureMobileSlots()
         {
             int n = GroundUnits != null ? GroundUnits.Length : 0;
-            if (_tankSlot != null && _tankSlot.Length == n) { return; }
-            _tankSlot = new int[n];
-            _tankCount = 0;
+            if (_mobileSlot != null && _mobileSlot.Length == n) { return; }
+            _mobileSlot = new int[n];
+            _mobileKind = new int[n];
+            _mobileCount = 0;
             for (int i = 0; i < n; i++)
             {
-                bool tank = GroundUnits[i] != null && GroundUnits[i].GetComponent<ACO_Tank>() != null;
-                _tankSlot[i] = tank ? _tankCount : -1;
-                if (tank) { _tankCount++; }
+                ACO_MobileUnit t = GroundUnits[i] != null ? GroundUnits[i].GetComponent<ACO_MobileUnit>() : null;
+                bool tank = t != null;
+                _mobileSlot[i] = tank ? _mobileCount : -1;
+                _mobileKind[i] = tank ? t.Kind : -1;
+                if (tank) { _mobileCount++; }
             }
         }
 
-        /// 전차 후보: 쓰지 않던 전차(섞어서) → 파괴된 전차(섞어서). 살아 있는 전차는 제외.
-        private int CollectFreeTanks(int[] outList)
+        /// 전차 후보(모든 종류): 쓰지 않던 전차(섞어서) → 파괴된 전차(섞어서). 살아 있는 전차는 제외.
+        private int CollectFreeMobiles(int[] outList)
+        {
+            return CollectFreeMobilesOfKind(outList, -1);
+        }
+
+        /// 종류(ACO_MobileUnit.KIND_*, -1 = 전부)별 후보. 순서는 CollectFreeMobiles와 같다.
+        private int CollectFreeMobilesOfKind(int[] outList, int kind)
         {
             int n = 0;
             for (int pass = 0; pass < 2; pass++)
@@ -1295,7 +1326,8 @@ namespace ACO
                 int start = n;
                 for (int i = 0; i < _groundUsed.Length; i++)
                 {
-                    if (!IsGroundTank(i) || IsProtected(_groundTag, i)) { continue; }
+                    if (!IsMobileUnit(i) || IsProtected(_groundTag, i)) { continue; }
+                    if (kind >= 0 && _mobileKind[i] != kind) { continue; }
                     bool candidate = pass == 0 ? !_groundUsed[i] : (_groundUsed[i] && IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>()));
                     if (candidate) { outList[n] = i; n++; }
                 }
@@ -1305,75 +1337,127 @@ namespace ACO
         }
 
         /// 전차 하나에 항로를 주고 배치한다(배치 시각 = 출발 시각).
-        private void MarkTank(int i, Vector3[] pts, int count, bool loop, float offset, int now)
+        private void MarkMobile(int i, Vector3[] pts, int count, bool loop, float offset, int now)
         {
             Vector3 dir = count > 1 ? pts[1] - pts[0] : Vector3.forward;
             dir.y = 0f;
             Quaternion rot = dir.sqrMagnitude > 0.01f ? Quaternion.LookRotation(dir.normalized, Vector3.up) : Quaternion.identity;
             MarkGround(i, true, pts[0], rot, now);
-            int slot = _tankSlot[i];
-            int baseIdx = slot * ACO_Tank.MAX_ROUTE_POINTS;
-            for (int k = 0; k < count; k++) { _tankRoute[baseIdx + k] = new Vector2(pts[k].x, pts[k].z); }
-            _tankRouteCount[slot] = (byte)count;
-            _tankLoop[slot] = loop;
-            _tankOffset[slot] = (short)Mathf.RoundToInt(offset);
+            int slot = _mobileSlot[i];
+            int baseIdx = slot * ACO_MobileUnit.MAX_ROUTE_POINTS;
+            for (int k = 0; k < count; k++) { _mobileRoute[baseIdx + k] = new Vector2(pts[k].x, pts[k].z); }
+            _mobileRouteCount[slot] = (byte)count;
+            _mobileLoop[slot] = loop;
+            _mobileOffset[slot] = (short)Mathf.RoundToInt(offset);
         }
 
-        /// 공역 아무 곳 지면에 순찰 소대 groups개: 반경 TankPatrolRadius의 사각 고리(네 점 모두 지면), 소대원은 같은 고리를 간격을 두고 돈다.
-        private int PlaceTankPlatoons(int groups, int now)
+        /// 공역 아무 곳에 순찰 소대 groups개: 반경 TankPatrolRadius의 사각 고리, 소대원은 같은 고리를 간격을 두고 돈다.
+        /// 소대마다 전차(네 점 모두 지면, 길이 막히지 않음) 또는 헬리콥터(HelicopterPlatoonShare — 바다·절벽 위도 된다). 곡사포는 순찰하지 않는다.
+        private int PlacePatrolPlatoons(int groups, int now)
         {
             if (groups <= 0 || GroundUnits == null) { return 0; }
-            int[] cands = new int[_groundUsed.Length];
-            int candCount = CollectFreeTanks(cands);
+            int[] tanks = new int[_groundUsed.Length];
+            int[] helis = new int[_groundUsed.Length];
+            int tankCount = CollectFreeMobilesOfKind(tanks, ACO_MobileUnit.KIND_TANK);
+            int heliCount = CollectFreeMobilesOfKind(helis, ACO_MobileUnit.KIND_HELICOPTER);
             Vector3[] pts = new Vector3[4];
-            int next = 0;
+            int nextTank = 0;
+            int nextHeli = 0;
             int placed = 0;
-            for (int g = 0; g < groups && next < candCount; g++)
+            for (int g = 0; g < groups && (nextTank < tankCount || nextHeli < heliCount); g++)
             {
+                bool heli = nextHeli < heliCount && (nextTank >= tankCount || Random.value < HelicopterPlatoonShare);
                 bool found = false;
                 for (int attempt = 0; attempt < MaxPlacementAttempts && !found; attempt++)
                 {
                     float cx = Random.Range(AreaMin.x, AreaMax.x);
                     float cz = Random.Range(AreaMin.y, AreaMax.y);
                     float a0 = Random.Range(0f, Mathf.PI * 2f);
+                    float radius = heli ? TankPatrolRadius * 2f : TankPatrolRadius;
                     found = true;
                     for (int k = 0; k < 4 && found; k++)
                     {
                         float a = a0 + k * Mathf.PI * 0.5f + Random.Range(-0.3f, 0.3f);
-                        float r = TankPatrolRadius * Random.Range(0.7f, 1.2f);
+                        float r = radius * Random.Range(0.7f, 1.2f);
                         float x = cx + Mathf.Cos(a) * r;
                         float z = cz + Mathf.Sin(a) * r;
-                        if (!SampleGround(x, z)) { found = false; break; }
+                        if (!(heli ? SampleHeliPoint(x, z) : SampleGround(x, z))) { found = false; break; }
                         pts[k] = new Vector3(x, _sampleY, z);
                     }
-                    for (int k = 0; k < 4 && found; k++) { found = PathClear(pts[k], pts[(k + 1) % 4]); }
+                    for (int k = 0; k < 4 && found && !heli; k++) { found = PathClear(pts[k], pts[(k + 1) % 4]); }
                 }
-                if (!found) { break; }
-                int size = Mathf.Min(Mathf.Max(TankGroupSize, 1), candCount - next);
-                for (int k = 0; k < size; k++)
+                if (!found) { continue; }
+                if (heli)
                 {
-                    MarkTank(cands[next], pts, 4, true, k * TankSpacing, now);
-                    next++;
-                    placed++;
+                    int size = Mathf.Min(Mathf.Max(HelicopterGroupSize, 1), heliCount - nextHeli);
+                    for (int k = 0; k < size; k++)
+                    {
+                        MarkMobile(helis[nextHeli], pts, 4, true, k * HelicopterSpacing, now);
+                        nextHeli++;
+                        placed++;
+                    }
+                }
+                else
+                {
+                    int size = Mathf.Min(Mathf.Max(TankGroupSize, 1), tankCount - nextTank);
+                    for (int k = 0; k < size; k++)
+                    {
+                        MarkMobile(tanks[nextTank], pts, 4, true, k * TankSpacing, now);
+                        nextTank++;
+                        placed++;
+                    }
                 }
             }
             return placed;
         }
 
+        /// 헬리콥터 항로 점: 공역 안, 안전지대 밖이면 어디든(바다·급경사도). 높이(_sampleY)는 지형 또는 해수면 중 높은 쪽 — 실제 비행 높이는 전차 스크립트가 정한다.
+        private bool SampleHeliPoint(float x, float z)
+        {
+            if (x < AreaMin.x || x > AreaMax.x || z < AreaMin.y || z > AreaMax.y) { return false; }
+            if (InSafeZone(x, z)) { return false; }
+            _sampleY = SeaLevel;
+            RaycastHit hit;
+            if (Physics.Raycast(new Vector3(x, RaycastHeight, z), Vector3.down, out hit, RaycastDistance, GroundLayers, QueryTriggerInteraction.Ignore))
+            {
+                _sampleY = Mathf.Max(hit.point.y, SeaLevel);
+            }
+            return true;
+        }
+
         /// 호위 항로(_escortRoute[offset..]) 옆 groups곳에 매복조: 항로에서 멀리 떨어진 출발점 → 항로 옆 매복 지점까지 가서 멈춘다.
         /// 매복 지점은 항로를 따라 고르게(앞쪽부터), 지면이 있는 곳만. 목표 아님(태그 없음).
-        private int PlaceAmbushes(int offset, int count, int groups, int now)
+        /// 조마다 종류를 고른다: 곡사포(ArtilleryAmbushShare — 지상·해상 호위만, 항로에서 ArtilleryStandoff 떨어진 지면에 자리 잡고 포격),
+        /// 헬리콥터(HelicopterAmbushShare — 지면이 아니어도 된다), 나머지는 전차. 고른 종류가 풀에 없으면 남은 종류로.
+        private int PlaceAmbushes(int offset, int count, int groups, int now, int moveMode)
         {
             if (groups <= 0 || GroundUnits == null) { return 0; }
             int saved = _markTag;
             _markTag = 0;
-            int[] cands = new int[_groundUsed.Length];
-            int candCount = CollectFreeTanks(cands);
+            int[] tanks = new int[_groundUsed.Length];
+            int[] helis = new int[_groundUsed.Length];
+            int[] guns = new int[_groundUsed.Length];
+            int tankCount = CollectFreeMobilesOfKind(tanks, ACO_MobileUnit.KIND_TANK);
+            int heliCount = CollectFreeMobilesOfKind(helis, ACO_MobileUnit.KIND_HELICOPTER);
+            int gunCount = moveMode != ACO_EscortUnit.MOVE_AIR ? CollectFreeMobilesOfKind(guns, ACO_MobileUnit.KIND_ARTILLERY) : 0;
             Vector3[] pts = new Vector3[2];
-            int next = 0;
+            int nextTank = 0;
+            int nextHeli = 0;
+            int nextGun = 0;
             int placed = 0;
-            for (int g = 0; g < groups && next < candCount; g++)
+            for (int g = 0; g < groups && (nextTank < tankCount || nextHeli < heliCount || nextGun < gunCount); g++)
             {
+                // 종류 고르기
+                int kind = ACO_MobileUnit.KIND_TANK;
+                float roll = Random.value;
+                if (roll < ArtilleryAmbushShare) { kind = ACO_MobileUnit.KIND_ARTILLERY; }
+                else if (roll < ArtilleryAmbushShare + HelicopterAmbushShare) { kind = ACO_MobileUnit.KIND_HELICOPTER; }
+                if (kind == ACO_MobileUnit.KIND_ARTILLERY && nextGun >= gunCount) { kind = ACO_MobileUnit.KIND_TANK; }
+                if (kind == ACO_MobileUnit.KIND_HELICOPTER && nextHeli >= heliCount) { kind = ACO_MobileUnit.KIND_TANK; }
+                if (kind == ACO_MobileUnit.KIND_TANK && nextTank >= tankCount) { kind = nextHeli < heliCount ? ACO_MobileUnit.KIND_HELICOPTER : ACO_MobileUnit.KIND_ARTILLERY; }
+                bool heli = kind == ACO_MobileUnit.KIND_HELICOPTER;
+                bool gun = kind == ACO_MobileUnit.KIND_ARTILLERY;
+
                 float f = (g + 1) / (float)(groups + 1) * (count - 1);
                 int k = Mathf.Min(Mathf.FloorToInt(f), count - 2);
                 Vector3 a = _escortRoute[offset + k];
@@ -1383,33 +1467,44 @@ namespace ACO
                 dir.y = 0f;
                 if (dir.sqrMagnitude < 1f) { dir = Vector3.forward; }
                 Vector3 side = new Vector3(-dir.z, 0f, dir.x).normalized;
+                float distMin = gun ? ArtilleryStandoffMin : AmbushDistanceMin;
+                float distMax = gun ? ArtilleryStandoffMax : AmbushDistanceMax;
+                float approach = gun ? ArtilleryApproachDistance : AmbushApproachDistance;
                 bool found = false;
-                for (int attempt = 0; attempt < 8 && !found; attempt++)
+                for (int attempt = 0; attempt < (gun ? 16 : 8) && !found; attempt++)
                 {
                     float sign = Random.value < 0.5f ? -1f : 1f;
-                    float d = Random.Range(AmbushDistanceMin, AmbushDistanceMax);
+                    float d = Random.Range(distMin, distMax);
                     Vector3 ambush = onRoute + side * (d * sign) + dir.normalized * Random.Range(-300f, 300f);
-                    Vector3 start = ambush + side * (AmbushApproachDistance * sign);
-                    if (!SampleDryGround(ambush.x, ambush.z)) { continue; }
+                    Vector3 start = ambush + side * (approach * sign);
+                    if (!(heli ? SampleHeliPoint(ambush.x, ambush.z) : SampleDryGround(ambush.x, ambush.z))) { continue; }
                     pts[1] = new Vector3(ambush.x, _sampleY, ambush.z);
-                    if (!SampleDryGround(start.x, start.z)) { continue; }
+                    if (!(heli ? SampleHeliPoint(start.x, start.z) : SampleDryGround(start.x, start.z))) { continue; }
                     pts[0] = new Vector3(start.x, _sampleY, start.z);
-                    if (!PathClear(pts[0], pts[1])) { continue; }
+                    if (!heli && !PathClear(pts[0], pts[1])) { continue; }
                     found = true;
                 }
                 if (!found) { continue; }
-                int size = Mathf.Min(Mathf.Max(TankGroupSize, 1), candCount - next);
+                int[] cands = heli ? helis : (gun ? guns : tanks);
+                int candCount = heli ? heliCount : (gun ? gunCount : tankCount);
+                int next = heli ? nextHeli : (gun ? nextGun : nextTank);
+                int groupSize = heli ? HelicopterGroupSize : (gun ? ArtilleryGroupSize : TankGroupSize);
+                float spacing = heli ? HelicopterSpacing : (gun ? ArtillerySpacing : TankSpacing);
+                int size = Mathf.Min(Mathf.Max(groupSize, 1), candCount - next);
                 for (int m = 0; m < size; m++)
                 {
                     // 매복조는 끝점에서 멈추므로, 앞선 거리를 주면 끝에서 겹치지 않게 출발점을 조금씩 옆으로 민다.
-                    Vector3 shift = dir.normalized * ((m - (size - 1) * 0.5f) * TankSpacing);
+                    Vector3 shift = dir.normalized * ((m - (size - 1) * 0.5f) * spacing);
                     Vector3[] own = new Vector3[2];
                     own[0] = pts[0] + shift;
                     own[1] = pts[1] + shift;
-                    MarkTank(cands[next], own, 2, false, 0f, now);
+                    MarkMobile(cands[next], own, 2, false, 0f, now);
                     next++;
                     placed++;
                 }
+                if (heli) { nextHeli = next; }
+                else if (gun) { nextGun = next; }
+                else { nextTank = next; }
             }
             _markTag = saved;
             return placed;
@@ -1646,7 +1741,7 @@ namespace ACO
         {
             if (!used || unit == null) { return false; }
             // 순항하는 함선은 배치 위치가 실제 위치가 아니라 엄호 대상에서 뺀다.
-            if (unit.GetComponent<ACO_Warship>() != null || unit.GetComponent<ACO_Tank>() != null) { return false; }
+            if (unit.GetComponent<ACO_Warship>() != null || unit.GetComponent<ACO_MobileUnit>() != null) { return false; }
             if (placedTimeMs == _deployNowMs) { return true; }
             return !IsDestroyed(unit.GetComponent<SaccTarget>());
         }
@@ -1783,7 +1878,7 @@ namespace ACO
             }
 
             int placedSites = PlaceRouteSites(leadOffset, count, sites, now);
-            int placedAmbush = PlaceAmbushes(leadOffset, count, ambushGroups, now);
+            int placedAmbush = PlaceAmbushes(leadOffset, count, ambushGroups, now, moveMode);
 
             _deployCount++;
             RequestSerialization();
@@ -2145,10 +2240,10 @@ namespace ACO
             return CollectFreeFighters(new int[_fighterUsed.Length]);
         }
 
-        public int CountFreeTankUnits()
+        public int CountFreeMobileUnits()
         {
             EnsureArrays();
-            return CollectFreeTanks(new int[_groundUsed.Length]);
+            return CollectFreeMobiles(new int[_groundUsed.Length]);
         }
 
         /// 이동 방식이 moveMode인 호위 대상 중 쓸 수 있는 수.
@@ -3084,21 +3179,21 @@ namespace ACO
                     unit.SetProgramVariable("MissionSpawnPosition", pos[i]);
                     unit.SetProgramVariable("MissionSpawnRotation", YawRot(yaw[i]));
                     unit.SetProgramVariable("MissionRevive", timeMs[i] - _joinTimeMs > 0);
-                    if (units == GroundUnits && IsGroundTank(i))
+                    if (units == GroundUnits && IsMobileUnit(i))
                     {
-                        ACO_Tank tank = unit.GetComponent<ACO_Tank>();
-                        int slot = _tankSlot[i];
-                        if (tank != null && slot < _tankRouteCount.Length)
+                        ACO_MobileUnit tank = unit.GetComponent<ACO_MobileUnit>();
+                        int slot = _mobileSlot[i];
+                        if (tank != null && slot < _mobileRouteCount.Length)
                         {
                             // 수평 좌표만 받았으니 높이 0으로 펼쳐 넘긴다(전차가 지면을 재서 높이를 맞춘다).
-                            if (_tankRouteTmp == null) { _tankRouteTmp = new Vector3[ACO_Tank.MAX_ROUTE_POINTS]; }
-                            int baseIdx = slot * ACO_Tank.MAX_ROUTE_POINTS;
-                            for (int k = 0; k < ACO_Tank.MAX_ROUTE_POINTS; k++)
+                            if (_mobileRouteTmp == null) { _mobileRouteTmp = new Vector3[ACO_MobileUnit.MAX_ROUTE_POINTS]; }
+                            int baseIdx = slot * ACO_MobileUnit.MAX_ROUTE_POINTS;
+                            for (int k = 0; k < ACO_MobileUnit.MAX_ROUTE_POINTS; k++)
                             {
-                                Vector2 q = _tankRoute[baseIdx + k];
-                                _tankRouteTmp[k] = new Vector3(q.x, 0f, q.y);
+                                Vector2 q = _mobileRoute[baseIdx + k];
+                                _mobileRouteTmp[k] = new Vector3(q.x, 0f, q.y);
                             }
-                            tank.SetRoute(_tankRouteTmp, 0, _tankRouteCount[slot], _tankLoop[slot], _tankOffset[slot]);
+                            tank.SetRoute(_mobileRouteTmp, 0, _mobileRouteCount[slot], _mobileLoop[slot], _mobileOffset[slot]);
                             tank.SetStartTime(timeMs[i]);
                         }
                     }

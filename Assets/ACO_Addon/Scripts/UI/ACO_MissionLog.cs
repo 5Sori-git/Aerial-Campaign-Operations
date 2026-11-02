@@ -282,8 +282,10 @@ namespace ACO
             int points = Manager.GetKillScore(category, i);
 
             VRCPlayerApi killer = health.LastHitByPlayer;
-            bool valid = Utilities.IsValid(killer);
-            string pilot = valid ? Shorten(killer.displayName) : "UNKNOWN";
+            // 아군 NPC(호위·대공 등)의 무기 — 팀 점수에는 들어가지만(관리자가 센다) 개인 점수·조종사 집계에는 넣지 않는다.
+            bool npcKill = health.LastHitWeaponType >= ACO_Missile.NPC_WEAPON_OFFSET;
+            bool valid = !npcKill && Utilities.IsValid(killer);
+            string pilot = npcKill ? "<color=#66BBFF>ALLY UNIT</color>" : (valid ? Shorten(killer.displayName) : "UNKNOWN");
             bool mine = valid && killer.isLocal;
 
             string target;
@@ -304,7 +306,7 @@ namespace ACO
             if (mine) { row = "<color=#FFD24D>" + row + "</color>"; }
 
             PushRow(row);
-            AddPilotScore(pilot, points);
+            if (!npcKill) { AddPilotScore(pilot, points); }
             if (mine && Progress) { Progress.AddPersonalScore(points); }
             if (Chatter && valid) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
         }
@@ -463,6 +465,7 @@ namespace ACO
 
         private string WeaponLabel(byte type)
         {
+            if (type >= ACO_Missile.NPC_WEAPON_OFFSET) { type = (byte)(type - ACO_Missile.NPC_WEAPON_OFFSET); }
             if (type == 1 || type == 8) { return "GUN"; }
             if (type == 2) { return "AAM"; }
             if (type == 3) { return "AGM"; }

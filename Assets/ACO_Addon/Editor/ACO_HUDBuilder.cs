@@ -1141,10 +1141,11 @@ public static class ACO_HUDBuilder
     private static Sprite[] BuildUpgradeIcons(ACO_PlayerProgress p)
     {
         var icons = new Sprite[ACO_PlayerProgress.UPGRADE_COUNT];
-        string[] airframe = { "hull", "mobility", "engine", "fuel", "stability" };
-        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_STABILITY };
+        string[] airframe = { "hull", "mobility", "engine", "fuel", "stability", "damage" };
+        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_STABILITY, ACO_PlayerProgress.UP_GUN };
         for (int i = 0; i < airIds.Length; i++) { if (airIds[i] < icons.Length) { icons[airIds[i]] = LoadIcon(airframe[i]); } }
-        string[] stats = { "damage", "ammo", "turn", "lock_speed", "lock_range", "lock_angle", "blast", "reload" };
+        // STAT_* 순서
+        string[] stats = { "damage", "ammo", "turn", "lock_speed", "lock_range", "seeker", "blast", "reload" };
         for (int f = ACO_PlayerProgress.FAMILY_MISSILE; f <= ACO_PlayerProgress.FAMILY_SP_BOMB; f++)
         {
             for (int s = 0; s < stats.Length; s++)
@@ -1179,8 +1180,8 @@ public static class ACO_HUDBuilder
     private static readonly HudCategory[] HudCategories =
     {
         new HudCategory(0, "SCORE PANEL",
-            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE },
-            new[] { "LEFT / RIGHT", "UP / DOWN", "DISTANCE", "SIZE" }),
+            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE, ACO_HudSettings.ITEM_HUD_FOLLOW },
+            new[] { "LEFT / RIGHT", "UP / DOWN", "DISTANCE", "SIZE", "FOLLOW DELAY" }),
         new HudCategory(0, "RESULT / NOTICE TEXT",
             new[] { ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y, ACO_HudSettings.ITEM_RESULT_SCALE },
             new[] { "LEFT / RIGHT", "UP / DOWN", "SIZE" }),
@@ -1196,9 +1197,12 @@ public static class ACO_HUDBuilder
         new HudCategory(2, "RWR",
             new[] { ACO_HudSettings.ITEM_RWR, ACO_HudSettings.ITEM_RWR_SIZE, ACO_HudSettings.ITEM_RWR_MISSILE_SIZE, ACO_HudSettings.ITEM_RWR_LOCK_SIZE },
             new[] { "SHOW", "RING SIZE", "MISSILE MARK SIZE", "LOCK ARC SIZE" }),
+        new HudCategory(1, "RADAR",
+            new[] { ACO_HudSettings.ITEM_RADAR, ACO_HudSettings.ITEM_RADAR_SIZE, ACO_HudSettings.ITEM_RADAR_X, ACO_HudSettings.ITEM_RADAR_Y, ACO_HudSettings.ITEM_RADAR_ALPHA },
+            new[] { "SHOW", "SIZE", "LEFT / RIGHT", "UP / DOWN", "OPACITY" }),
     };
 
-    /// HUD 설정 패널 프리팹(판 2.8m x 1.25m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커 /
+    /// HUD 설정 패널 프리팹(판 2.8m x 1.75m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커, 레이더 /
     /// 크로스헤어, RWR) — 카드마다 제목 + 줄(이름 / − / 값 / +), 가운데 열 아래에 RESET. HUD(점수 패널·표적 마커·RWR·자막)는 씬 오브젝트라 Bake가 연결한다.
     public const string CreditsPath = "Assets/ACO_Addon/Credits/ACO_Credits.txt";
 
@@ -1248,11 +1252,11 @@ public static class ACO_HUDBuilder
         GameObject root = new GameObject("ACO_HudSettings");
         ACO_HudSettings settings = root.AddUdonSharpComponent<ACO_HudSettings>();
 
-        const float colWidth = 860f, rowH = 90f, headerH = 76f, cardGap = 30f, top = 470f;
+        const float colWidth = 860f, rowH = 90f, headerH = 76f, cardGap = 30f, top = 720f;
         float[] colX = { -900f, 0f, 900f };
         float[] colY = { top, top, top };
-        RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1250f);
-        MakeUiText(canvas, "Title", new Vector2(0f, 555f), new Vector2(2700f, 100f), 70f, font, "HUD SETTINGS");
+        RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1750f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 805f), new Vector2(2700f, 100f), 70f, font, "HUD SETTINGS");
         var values = new TextMeshProUGUI[ACO_HudSettings.ITEM_COUNT];
         var accent = new Color(1f, 0.85f, 0.35f, 1f);
         foreach (HudCategory cat in HudCategories)

@@ -47,12 +47,13 @@ namespace ACO
         [Tooltip("지상 활주 중에도 락온/발사를 허용한다")]
         public bool AllowFiringWhenGrounded = false;
 
-        [Header("락온 (강화 가능)")]
-        [Tooltip("락온 최대 거리(m)")]
+        [Header("락온 (거리·시간은 강화된다, 각도는 강화 안 됨)")]
+        [Tooltip("락온 최대 거리(m). 강화 LOCK RANGE가 키운다")]
         public float LockRange = 6000f;
-        [Tooltip("기준 방향에서 이 각도(도) 안에 있어야 락온된다")]
+        [Tooltip("락온 각도(도): 기준 방향에서 이 각도 안에 있어야 락온된다(HUD 탐색 원). 강화하지 않는다 — "
+            + "강화 SEEKER CONE은 발사된 미사일의 시커 범위(미사일 프리팹 ACO_Missile.MaxTrackingAngle)를 키운다")]
         public float LockAngle = 15f;
-        [Tooltip("표적을 이 시간(초) 동안 각도 안에 두면 락온 완료")]
+        [Tooltip("표적을 이 시간(초) 동안 각도 안에 두면 락온 완료. 강화 LOCK SPEED가 줄인다")]
         public float LockTime = 1f;
         [Tooltip("동시에 락온할 수 있는 표적 수(1 = 일반 미사일). 2 이상이면 트리거 한 번에 장전된 슬롯을 모두 일제 발사해 락온한 표적들에 차례로 나눠 쏜다(다중 유도 미사일)")]
         public int MaxLockTargets = 1;
@@ -208,8 +209,7 @@ namespace ACO
         private float _baseTurnRate;
         private float _baseLockTime;
         private float _baseLockRange;
-        private float _baseLockAngle;
-        // 시커 각도(미사일 프리팹의 MaxTrackingAngle) — 강화(STAT_LOCK_ANGLE = 시커 범위)는 이 값을 키운다. 발사할 때 락온 범위보다 좁지 않게 보낸다.
+        // 시커 범위(미사일 프리팹의 MaxTrackingAngle) — 강화 STAT_SEEKER(SEEKER CONE)는 이 값을 키운다. 발사할 때 락온 각도보다 좁지 않게 보낸다.
         private float _baseSeeker = 90f;
         private float _seekerFactor = 1f;
         private float _baseSplashRadius;
@@ -409,7 +409,7 @@ namespace ACO
         /// 잔탄: 늘어난(줄어든) 총 탄수만큼만 더하고 뺀다 — 다시 가득 채우지 않는다. 뺄 탄이 모자라면 빚으로 남겨 다음에 더할 때 먼저 갚는다
         /// (다 쏘고 내렸다 다시 타서 공짜로 채우는 일이 없게).
         /// lockSpeed는 락온 시간을 그만큼 줄인다(2 = 절반), blast는 폭탄/로켓 범위 반경.
-        /// seeker = 시커 범위 배수(예전 '락온 범위' 강화 — 락온 각도 LockAngle은 그대로 두고 미사일 추적 각도를 키운다).
+        /// seeker = 시커 범위 배수(미사일 추적 각도 MaxTrackingAngle을 키운다 — 락온 각도 LockAngle은 강화하지 않는다).
         public void ApplyUpgrades(float damage, float ammo, float turnRate, float lockSpeed, float lockRange, float seeker, float blast, float reload)
         {
             Init();
@@ -421,7 +421,6 @@ namespace ACO
                 _baseTurnRate = TurnRate;
                 _baseLockTime = LockTime;
                 _baseLockRange = LockRange;
-                _baseLockAngle = LockAngle;
                 _baseSplashRadius = SplashRadius;
                 _baseReloadTime = SlotReloadTime;
             }
@@ -429,7 +428,6 @@ namespace ACO
             TurnRate = _baseTurnRate * turnRate;
             LockTime = _baseLockTime / Mathf.Max(lockSpeed, 0.01f);
             LockRange = _baseLockRange * lockRange;
-            LockAngle = _baseLockAngle;
             _seekerFactor = seeker;
             SplashRadius = _baseSplashRadius * blast;
             SlotReloadTime = _baseReloadTime / Mathf.Max(reload, 0.01f);   // 이미 장전 중인 슬롯은 다음 장전부터
@@ -834,7 +832,7 @@ namespace ACO
                 target, (byte)slot, MaxSpeed, Acceleration, TurnRate, ProximityRadius, MissileSplash ? SplashRadius : 0f, GetSeekerAngle());
         }
 
-        /// 이번 발사의 시커 각도(도): 미사일 기본 × 시커 범위 강화, 단 락온 범위보다 좁지 않게(락온한 표적을 쏘자마자 놓치지 않게), 최대 180.
+        /// 이번 발사의 시커 범위(도): 미사일 기본 MaxTrackingAngle × 시커 범위 강화, 단 락온 각도(LockAngle)보다 좁지 않게(락온한 표적을 쏘자마자 놓치지 않게), 최대 180.
         public float GetSeekerAngle()
         {
             return Mathf.Min(Mathf.Max(_baseSeeker * _seekerFactor, LockAngle), 180f);
@@ -977,6 +975,7 @@ namespace ACO
                 missile.LaunchInheritSpeed = InheritVelocity ? GetVehicleSpeed() : 0f;
                 missile.PoolParent = null;
                 missile.PoolOwner = this;
+                missile.FromNpc = false;
                 missile.ShooterJudgesHit = true;
                 missile.IsShooter = isShooter;
 

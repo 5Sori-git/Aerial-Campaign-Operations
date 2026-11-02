@@ -202,7 +202,11 @@ namespace ACO
             _groundY = _route[0].y;
             ApplyPose(GetDistanceTravelled());
 
-            if (Flares) { Flares.ResetSalvos(); }
+            if (Flares)
+            {
+                Flares.Friendly = !Hostile;   // 무전 대사: 아군 플레어/연막 ↔ 적 플레어
+                Flares.ResetSalvos();
+            }
             SpawnGuns(revive);
             if (revive)
             {

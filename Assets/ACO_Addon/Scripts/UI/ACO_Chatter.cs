@@ -43,8 +43,12 @@ namespace ACO
         public const int EV_SELF_DOWN = 13;        // 내가 격추됨
         public const int EV_ALLY_DOWN = 14;        // 아군이 격추됨({name} = 아군)
         public const int EV_ESCORT_HIT = 15;       // 호위 대상이 공격받음
-        public const int EV_ESCORT_LOST = 16;      // 호위 대상 격추
-        public const int EV_COUNT = 17;
+        public const int EV_ESCORT_LOST = 16;      // 호위 대상(수송기) 격추
+        public const int EV_ALLY_FLARE = 17;       // 아군(호위 수송기 등)이 플레어
+        public const int EV_CONVOY_HIT = 18;       // 콘보이(지상·해상 호위 대상)가 공격받음
+        public const int EV_CONVOY_LOST = 19;      // 콘보이 차량 파괴
+        public const int EV_ALLY_SMOKE = 20;       // 아군 지상·해상 유닛이 연막
+        public const int EV_COUNT = 21;
 
         // 무전 채널(PTT 소리를 고른다)
         public const int CH_CONTROL = 0;   // 관제기(AWACS)
@@ -165,11 +169,13 @@ namespace ACO
         [Tooltip("상황이 생겼을 때 대사가 나올 확률(0~1)")]
         public float[] EventChance = new float[] {
             1f, 1f, 1f, 1f, 1f, 1f, 1f,
-            0.5f, 0.3f, 0.5f, 0.7f, 0.35f, 0.6f, 1f, 0.9f, 0.5f, 1f };
+            0.5f, 0.3f, 0.5f, 0.7f, 0.35f, 0.6f, 1f, 0.9f, 0.5f, 1f,
+            0.5f, 0.5f, 1f, 0.6f };
         [Tooltip("같은 상황의 대사가 다시 나오기까지 최소 간격(초)")]
         public float[] EventCooldown = new float[] {
             0f, 0f, 0f, 0f, 10f, 0f, 0f,
-            6f, 10f, 8f, 8f, 12f, 6f, 0f, 3f, 15f, 0f };
+            6f, 10f, 8f, 8f, 12f, 6f, 0f, 3f, 15f, 0f,
+            12f, 15f, 0f, 12f };
         [Tooltip("적 플레어 대사는 이 거리(m) 안의 적기만")]
         public float FlareCalloutRange = 3000f;
 
@@ -187,7 +193,11 @@ namespace ACO
             EV_SELF_DOWN, EV_SELF_DOWN,
             EV_ALLY_DOWN, EV_ALLY_DOWN, EV_ALLY_DOWN,
             EV_ESCORT_HIT, EV_ESCORT_HIT, EV_ESCORT_HIT, EV_ESCORT_HIT,
-            EV_ESCORT_LOST };
+            EV_ESCORT_LOST,
+            EV_ALLY_FLARE, EV_ALLY_FLARE,
+            EV_CONVOY_HIT, EV_CONVOY_HIT,
+            EV_CONVOY_LOST,
+            EV_ALLY_SMOKE, EV_ALLY_SMOKE };
         [Tooltip("화자 번호(SpeakerNames)")]
         public int[] LineSpeaker = new int[] {
             0, 0, 0,
@@ -201,7 +211,11 @@ namespace ACO
             0, 0,
             0, 3, 0,
             2, 2, 2, 0,
-            2 };
+            2,
+            2, 2,
+            0, 0,
+            0,
+            0, 0 };
         [TextArea] public string[] LineText = new string[] {
             "This is Sky Eye. All aircraft, the operation has begun. Good hunting.",
             "Sky Eye to all units, you are cleared to engage. Make it count.",
@@ -239,7 +253,14 @@ namespace ACO
             "Transport under attack! Get them off us!",
             "We've been hit! Hurry!",
             "The transport is under fire. Clear the area!",
-            "Mayday, mayday... we're going down!" };
+            "Mayday, mayday... we're going down!",
+            "Transport deploying flares!",
+            "Countermeasures away - we're evading!",
+            "The convoy is taking fire! Cover them!",
+            "Convoy under attack - clear those hostiles!",
+            "We lost a convoy vehicle!",
+            "The convoy is laying smoke!",
+            "Smoke screen deployed - they've lost their lock!" };
         [Tooltip("대사별 음성(선택, 같은 순서 — 비워도 된다)")]
         public AudioClip[] LineClip;
 
@@ -611,8 +632,10 @@ namespace ACO
                 float before = _escortHealth[i];
                 _escortHealth[i] = h;
                 if (before < 0f) { continue; }   // 처음 본 값은 기준만
-                if (h <= 0f && before > 0f) { Report(EV_ESCORT_LOST, ""); }
-                else if (h < before - 0.01f) { Report(EV_ESCORT_HIT, ""); }
+                // 수송기(공중)와 콘보이(지상·해상)는 대사가 다르다
+                bool convoy = unit.MoveMode != ACO_EscortUnit.MOVE_AIR;
+                if (h <= 0f && before > 0f) { Report(convoy ? EV_CONVOY_LOST : EV_ESCORT_LOST, ""); }
+                else if (h < before - 0.01f) { Report(convoy ? EV_CONVOY_HIT : EV_ESCORT_HIT, ""); }
             }
         }
     }
