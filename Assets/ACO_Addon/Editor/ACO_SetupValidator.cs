@@ -217,6 +217,18 @@ public class ACO_SetupValidator : EditorWindow
                 });
             }
 
+            // 페이즈 모듈 — 기본 페이즈 코드가 없어 모듈이 없으면 페이즈가 나오지 않는다
+            ACO_MissionManager mgrModules = FindOne<ACO_MissionManager>();
+            if (mgrModules != null)
+            {
+                ACO_PhaseModule[] mods = mgrModules.GetComponentsInChildren<ACO_PhaseModule>(true);
+                int normal = 0;
+                int bonus = 0;
+                foreach (ACO_PhaseModule m in mods) { if (m.Enabled) { if (m.BonusOnly) { bonus++; } else { normal++; } } }
+                if (normal == 0) { Add(g, WARN, "미션 관리자 아래에 켜진 페이즈 모듈이 없습니다 — 페이즈가 나오지 않습니다. [고치기] = 기본 모듈 10개 만들기.", mgrModules, ACO_PhaseModuleSetup.CreateDefaults); }
+                else { Add(g, OK, $"페이즈 모듈 {normal}개, 보너스 모듈 {bonus}개", mgrModules); }
+            }
+
             // 보너스 페이즈(슈퍼에이스)
             ACO_NPCFighterAI ace = null;
             if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.SuperAce != null) { ace = f; break; } } }

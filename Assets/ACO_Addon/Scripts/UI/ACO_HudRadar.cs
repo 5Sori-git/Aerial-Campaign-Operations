@@ -6,9 +6,11 @@ namespace ACO
 {
     /// HUD 레이더(로컬 전용, 동기화 없음). 기체에 타고 있을 때 시야 한쪽(HeadOffset)에 원형 스코프를 띄워 내 주위 Range 안의 적·아군·목표와 날아가는 미사일을 점으로 그린다.
     /// - 방위: 바라보는 방향이 위(머리 기준 수평 방위, HeadingFromVehicle이면 기체 기수). 점은 북쪽 기준으로 그리고 Spin을 매 프레임 돌린다 — 테두리의 N 표시가 북쪽.
-    /// - 점: 항공기 = 진행 방향 삼각형, 지상·함선 = 사각형, 미사일 = 작은 마름모, 나 = 흰 삼각형(가운데, 기수 방향). 색은 종류별(적 빨강, 목표 노랑, 아군 파랑, 미사일 주황).
+    /// - 점: 항공기 = 진행 방향 쉐브론(뒤가 V로 파인 화살촉 — 앞·옆이 헷갈리지 않게), 지상·함선 = 사각형, 미사일 = 진행 방향으로 긴 막대, 나 = 흰 쉐브론(가운데, 기수 방향).
+    ///   색은 종류별(적 노랑, 목표 빨강, 아군 파랑, 미사일 흰색 — 모양이 막대라 가운데의 나와 헷갈리지 않는다).
     /// - 점 메시는 UpdateInterval마다 한 번에 다시 채운다(정점만 바꾼다 — 오브젝트를 늘리지 않는다). 접촉 목록은 같은 오브젝트의 ACO_RadarContacts.
-    /// - 범위는 Range(10km) 고정. 켜기·크기·위치·불투명도·따라오는 지연은 HUD 설정 패널이 바꾼다(거리는 점수 패널과 같다). 패널을 만지는 동안엔 기체 밖에서도 미리보기로 보인다.
+    /// - 표시 거리(Range, 최대 10km)·점 크기 배율(BlipScale)·켜기·크기·위치·불투명도·따라오는 지연은 HUD 설정 패널이 바꾼다(거리는 점수 패널과 같다).
+    ///   패널을 만지는 동안엔 기체 밖에서도 미리보기로 보인다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_HudRadar : UdonSharpBehaviour
     {
@@ -33,8 +35,10 @@ namespace ACO
         [Range(0.1f, 1f)] public float Opacity = 1f;
 
         [Header("동작")]
-        [Tooltip("탐지 반경(m) — 스코프 가장자리 거리(고정)")]
+        [Tooltip("표시 거리(m) — 스코프 가장자리 거리. HUD 설정 패널이 2~10km로 바꾼다(MaxRange 이하)")]
         public float Range = 10000f;
+        [Tooltip("표시 거리 최대(m)")]
+        public float MaxRange = 10000f;
         [Tooltip("불투명도를 적용할 렌더러(배경·고리·점). 비우면 Root 아래 전부")]
         public MeshRenderer[] Renderers;
 
@@ -44,16 +48,18 @@ namespace ACO
         public float UpdateInterval = 0.1f;
         [Tooltip("머리 회전을 따라가는 빠르기(1/s, 클수록 바로 따라온다). HUD 설정 패널의 FOLLOW DELAY가 바꾼다")]
         public float FollowSharpness = 12f;
-        [Tooltip("점 크기(스코프 반지름 대비)")]
-        public float BlipSize = 0.07f;
-        [Tooltip("미사일 점 크기(스코프 반지름 대비)")]
-        public float MissileSize = 0.05f;
+        [Tooltip("점 크기(스코프 지름 대비)")]
+        public float BlipSize = 0.045f;
+        [Tooltip("미사일 막대 길이(스코프 지름 대비 — 폭은 이것의 30%)")]
+        public float MissileSize = 0.035f;
+        [Tooltip("점 크기 배율 — HUD 설정 패널이 바꾼다")]
+        public float BlipScale = 1f;
 
         [Header("색")]
-        public Color EnemyColor = new Color(1f, 0.25f, 0.2f, 1f);
-        public Color ObjectiveColor = new Color(1f, 0.82f, 0.2f, 1f);
+        public Color EnemyColor = new Color(1f, 0.82f, 0.2f, 1f);
+        public Color ObjectiveColor = new Color(1f, 0.25f, 0.2f, 1f);
         public Color FriendlyColor = new Color(0.35f, 0.65f, 1f, 1f);
-        public Color MissileColor = new Color(1f, 0.55f, 0.1f, 1f);
+        public Color MissileColor = new Color(1f, 1f, 1f, 1f);
         public Color SelfColor = new Color(1f, 1f, 1f, 1f);
         public Color NorthColor = new Color(0.35f, 1f, 0.45f, 1f);
 
@@ -170,13 +176,14 @@ namespace ACO
         private void Rebuild(Vector3 center, Vector3 selfFwd, bool demo)
         {
             _n = 0;
-            float range = Mathf.Max(Range, 1f);
+            float range = Mathf.Clamp(Range, 1f, Mathf.Max(MaxRange, 1f));
             float k = 0.5f / range;   // 월드 m → 스코프(반지름 0.5)
             float rangeSq = range * range;
-            float s = BlipSize * 0.5f;
+            float scale = Mathf.Max(BlipScale, 0.1f);
+            float s = BlipSize * 0.5f * scale;
 
-            // 북쪽 표시: 테두리 안쪽, 가운데를 향하는 삼각형
-            Tri(new Vector3(0f, 0.47f, 0f), 180f, s * 0.9f, NorthColor);
+            // 북쪽 표시: 테두리 안쪽, 가운데를 향하는 삼각형(점 크기 배율과 상관없이 같은 크기)
+            Tri(new Vector3(0f, 0.47f, 0f), 180f, 0.03f, NorthColor);
 
             ACO_RadarContacts c = Contacts;
             if (c != null && c.Targets != null)
@@ -196,30 +203,32 @@ namespace ACO
                     if (air)
                     {
                         Vector3 f = t.forward;
-                        Tri(p, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg, s, col);
+                        Chevron(p, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg, s, col);
                     }
-                    else { Square(p, s * 0.75f, col); }
+                    else { Square(p, s * 0.7f, col); }
                 }
-                float ms = MissileSize * 0.5f;
+                float ms = MissileSize * 0.5f * scale;
                 for (int i = 0; i < c.MissileCount && _n < MAX_BLIPS - 1; i++)
                 {
                     if (!c.IsMissileFlying(i)) { continue; }
-                    Vector3 d = c.Missiles[i].position - center;
+                    Transform mt = c.Missiles[i];
+                    Vector3 d = mt.position - center;
                     if (d.x * d.x + d.z * d.z > rangeSq) { continue; }
-                    Diamond(new Vector3(d.x * k, d.z * k, 0f), ms, MissileColor);
+                    Vector3 mf = mt.forward;
+                    Bar(new Vector3(d.x * k, d.z * k, 0f), Mathf.Atan2(mf.x, mf.z) * Mathf.Rad2Deg, ms, MissileColor);
                 }
             }
             if (demo)
             {
                 // 미리보기 예시: 적기 둘, 목표, 아군, 미사일
-                Tri(new Vector3(0.18f, 0.3f, 0f), 200f, s, EnemyColor);
-                Tri(new Vector3(-0.25f, 0.2f, 0f), 120f, s, EnemyColor);
-                Square(new Vector3(0.05f, -0.32f, 0f), s * 0.75f, ObjectiveColor);
-                Tri(new Vector3(-0.1f, -0.12f, 0f), 30f, s, FriendlyColor);
-                Diamond(new Vector3(0.1f, 0.12f, 0f), MissileSize * 0.5f, MissileColor);
+                Chevron(new Vector3(0.18f, 0.3f, 0f), 200f, s, EnemyColor);
+                Chevron(new Vector3(-0.25f, 0.2f, 0f), 120f, s, EnemyColor);
+                Square(new Vector3(0.05f, -0.32f, 0f), s * 0.7f, ObjectiveColor);
+                Chevron(new Vector3(-0.1f, -0.12f, 0f), 30f, s, FriendlyColor);
+                Bar(new Vector3(0.1f, 0.12f, 0f), 215f, MissileSize * 0.5f * scale, MissileColor);
             }
             // 나: 가운데, 기수 방향
-            Tri(Vector3.zero, Mathf.Atan2(selfFwd.x, selfFwd.z) * Mathf.Rad2Deg, s * 1.1f, SelfColor);
+            Chevron(Vector3.zero, Mathf.Atan2(selfFwd.x, selfFwd.z) * Mathf.Rad2Deg, s * 1.15f, SelfColor);
 
             // 남은 칸은 접는다
             for (int v = _n * 4; v < _v.Length; v++) { _v[v] = Vector3.zero; }
@@ -250,6 +259,37 @@ namespace ACO
             Fill(v, col);
         }
 
+        /// 진행 방향을 향하는 쉐브론(화살촉): 꼭짓점 → 오른쪽 뒤 → 뒤 가운데 파인 곳 → 왼쪽 뒤. 뒤가 V로 파여 앞·옆이 헷갈리지 않는다.
+        /// 삼각형 두 개(꼭짓점·오른쪽·파인 곳 / 꼭짓점·파인 곳·왼쪽)라 점 한 칸(정점 4개)에 들어간다.
+        private void Chevron(Vector3 p, float bearingDeg, float s, Color col)
+        {
+            if (_n >= MAX_BLIPS) { return; }
+            float a = bearingDeg * Mathf.Deg2Rad;
+            Vector3 f = new Vector3(Mathf.Sin(a), Mathf.Cos(a), 0f);
+            Vector3 r = new Vector3(f.y, -f.x, 0f);
+            int v = _n * 4;
+            _v[v] = p + f * (s * 1.3f);
+            _v[v + 1] = p - f * (s * 0.9f) + r * (s * 0.9f);
+            _v[v + 2] = p - f * (s * 0.2f);
+            _v[v + 3] = p - f * (s * 0.9f) - r * (s * 0.9f);
+            Fill(v, col);
+        }
+
+        /// 진행 방향으로 긴 막대(미사일): 길이 2 × len, 폭 0.6 × len.
+        private void Bar(Vector3 p, float bearingDeg, float len, Color col)
+        {
+            if (_n >= MAX_BLIPS) { return; }
+            float a = bearingDeg * Mathf.Deg2Rad;
+            Vector3 f = new Vector3(Mathf.Sin(a), Mathf.Cos(a), 0f) * len;
+            Vector3 r = new Vector3(f.y, -f.x, 0f) * 0.3f;
+            int v = _n * 4;
+            _v[v] = p + f - r;
+            _v[v + 1] = p + f + r;
+            _v[v + 2] = p - f + r;
+            _v[v + 3] = p - f - r;
+            Fill(v, col);
+        }
+
         private void Square(Vector3 p, float s, Color col)
         {
             if (_n >= MAX_BLIPS) { return; }
@@ -258,17 +298,6 @@ namespace ACO
             _v[v + 1] = p + new Vector3(s, s, 0f);
             _v[v + 2] = p + new Vector3(s, -s, 0f);
             _v[v + 3] = p + new Vector3(-s, -s, 0f);
-            Fill(v, col);
-        }
-
-        private void Diamond(Vector3 p, float s, Color col)
-        {
-            if (_n >= MAX_BLIPS) { return; }
-            int v = _n * 4;
-            _v[v] = p + new Vector3(0f, s, 0f);
-            _v[v + 1] = p + new Vector3(s, 0f, 0f);
-            _v[v + 2] = p + new Vector3(0f, -s, 0f);
-            _v[v + 3] = p + new Vector3(-s, 0f, 0f);
             Fill(v, col);
         }
 

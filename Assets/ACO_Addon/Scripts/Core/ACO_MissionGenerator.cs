@@ -47,8 +47,8 @@ namespace ACO
         [Header("안전지대 (지상 유닛 스폰 금지)")]
         [Tooltip("이 콜라이더들의 영역(바운딩 박스, 수평 X/Z 기준) 안에는 지상 유닛을 스폰하지 않는다. 트리거 박스로 기지 주변을 덮어 두면 된다")]
         public Collider[] SafeZones;
-        [Tooltip("안전지대 경계에서 이만큼(m) 더 떨어져야 스폰한다")]
-        public float SafeZoneMargin = 500f;
+        [Tooltip("안전지대 경계에서 이만큼(m) 더 떨어져야 스폰한다 — 지상 유닛과 적 함선(함대 순항 원 전체) 모두. 대공 무기가 항모·기지에서 막 이륙한 기체를 노리지 않게 넉넉히")]
+        public float SafeZoneMargin = 5000f;
 
         [Header("고가치 표적 (공장/벙커 등)")]
         [Tooltip("전체 배치 때 놓을 고가치 표적 수. 음수면 풀 전체")]
@@ -150,6 +150,46 @@ namespace ACO
         [Tooltip("곡사포 사이 간격(m)")]
         public float ArtillerySpacing = 60f;
 
+        [Header("상륙전 (ACO_PhaseAmphibious — 초수평선 상륙: 강습상륙함 대기 → LCAC·공격헬기 출발)")]
+        [Tooltip("상륙 지점 2순위: 도시 둘레 이 거리(m) 안의 해안(1순위 항구가 안 될 때)")]
+        public float CityCoastRadius = 3000f;
+        [Tooltip("상륙 지점 3순위: 지도 아무 곳에서 이 거리(m) 안의 해안")]
+        public float AnyCoastRadius = 4000f;
+        [Tooltip("2·3순위 해안 찾기 시도 수(각각)")]
+        public int LandingCoastAttempts = 12;
+        [Tooltip("절벽이 아닌 해변: 해안선 둘레 지면이 해수면 위 이 높이(m) 이하")]
+        public float BeachMaxHeight = 25f;
+        [Tooltip("절벽이 아닌 해변: 20m 간격 이웃 점 사이 경사(도) 이하")]
+        public float BeachMaxGrade = 30f;
+        [Tooltip("바다 항로(LCAC)가 끝나는 자리: 상륙 지점(항구·해안선)에서 바다 쪽으로 이 거리(m). 여기서 해변까지 올라간다")]
+        public float LandingStandoff = 800f;
+        [Tooltip("LCAC가 멈추는 해변: 항구에서 육지 쪽으로 이 거리(m)")]
+        public float LcacBeachInland = 60f;
+        [Tooltip("LCAC 횡대 간격(m) — 나란히 해변으로 간다")]
+        public float LcacSpacing = 70f;
+        [Tooltip("호위함이 강습상륙함 옆으로 벌어지는 거리(m)")]
+        public float AmphibiousGuardLateral = 450f;
+        [Tooltip("아군 공격헬기: 해수면/지면 위 높이(m), 헬기끼리 옆 간격(m), 항구에서 육지 쪽으로 이 거리(m) 상공에 멈춰 싸운다")]
+        public float HeliAltitude = 90f;
+        public float HeliSpacing = 150f;
+        public float HeliHoverInland = 700f;
+        [Tooltip("항로 마지막 구간이 바다로 남아야 하는 거리(m) — 이만큼 앞의 바다를 보고 항구의 바다 쪽 방향을 정한다")]
+        public float LandingApproachCheck = 3000f;
+        [Tooltip("항구에서 육지 쪽으로 이 거리(m)에 해안 방공 시설(SAM/대공포 링)의 중심")]
+        public float ShoreDefenseInland = 700f;
+        [Tooltip("해안 전차: 내륙 이 거리(m)에서 출발해 해안선 근처(ShoreTankBeach)까지 와서 멈춘다")]
+        public float ShoreTankApproach = 1500f;
+        public float ShoreTankBeach = 250f;
+        [Tooltip("해안 전차·적 헬리콥터가 항구 좌우로 퍼지는 범위(m)")]
+        public float ShoreSpread = 1200f;
+        [Tooltip("해안 곡사포: 상륙 지점에서 육지 쪽으로 이 거리(m) 범위 — LCAC가 앞바다(LandingStandoff)부터 사거리에 들어오게 가깝게. "
+            + "곡사포 실제 사거리는 초속도² / (g × 중력 배수) — 기본 약 6km. 자리가 안 나면 시도마다 조금씩 더 가까이(최대 40%), 좌우로는 ShoreSpread의 60% 안")]
+        public float ShoreArtilleryMin = 1200f;
+        public float ShoreArtilleryMax = 2500f;
+        [Tooltip("적 함대: 항로 가운데에서 옆으로 이 거리(m) 범위의 바다")]
+        public float EnemyFleetOffsetMin = 2500f;
+        public float EnemyFleetOffsetMax = 4500f;
+
         [Header("호위 대상 (ACO_EscortUnit — 아군)")]
         [Tooltip("호위 항로의 경유점 수(출발/도착 포함, 2~6)")]
         [Range(2, 6)] public int EscortRoutePoints = 4;
@@ -235,6 +275,8 @@ namespace ACO
         public float[] TierGunDwellMultiplier = new float[] { 1.5f, 1f, 0.6f };
         [Tooltip("미사일 발사 허용각 배율. 클수록 공격적이다")]
         public float[] TierMissileConeMultiplier = new float[] { 0.7f, 1f, 1.3f };
+        [Tooltip("최대 체력 배율(전투기의 BaseHealth = 베테랑 체력에 곱한다 — 공격기 포함, 슈퍼에이스는 제외). BaseHealth 150이면 신병 99 / 베테랑 150 / 에이스 199.5")]
+        public float[] TierHealthMultiplier = new float[] { 0.66f, 1f, 1.33f };
 
         [Header("목표 지점 증원 (ReinforceAt — 미션 관리자가 사용)")]
         [Tooltip("목표 지점 증원 시 지상 그룹을 놓을 반경(m)")]
@@ -378,6 +420,8 @@ namespace ACO
         public const int OBJ_HUNT = 4;
         /// 슈퍼에이스 1기(태그) + 호위 에이스 count기(태그 없음), focus 쪽으로 진입 — 보너스 페이즈
         public const int OBJ_SUPER_ACE = 5;
+        /// 공격기(GroundAttacker) count기, 2기 편대로 focus 쪽으로 진입 — 지상·해상 호위 페이즈(콘보이·상륙전)만 부른다
+        public const int OBJ_ATTACK = 6;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -899,7 +943,7 @@ namespace ACO
                 for (int i = 0; i < _fighterUsed.Length; i++)
                 {
                     ACO_NPCFighterAI fighter = Fighters[i];
-                    if (fighter == null || fighter.SuperAce != null) { continue; }
+                    if (fighter == null || fighter.SuperAce != null || fighter.GroundAttacker) { continue; }
                     if (IsProtected(_fighterTag, i)) { continue; }
                     bool candidate = pass == 0 ? (_fighterUsed[i] && IsDestroyed(fighter.TargetHealth)) : !_fighterUsed[i];
                     if (candidate) { outList[n] = i; n++; }
@@ -1525,6 +1569,7 @@ namespace ACO
         }
 
         /// (x, z)를 중심으로 반경 radius(+SeaClearance) 순항 원 전체가 바다면 true, 높이는 _sampleY(= SeaLevel).
+        /// 안전지대는 순항 원 둘레까지 피한다.
         private bool SampleSea(float x, float z, float radius)
         {
             if (x < AreaMin.x || x > AreaMax.x || z < AreaMin.y || z > AreaMax.y) { return false; }
@@ -1813,6 +1858,7 @@ namespace ACO
         {
             if (!Networking.IsOwner(gameObject) || EscortUnits == null) { return; }
             EnsureArrays();
+            if (tag != 0 && HasTaggedUnits(CAT_ESCORT, tag)) { Debug.LogWarning("[ACO] 호위 배치 요청 무시: 태그 " + tag + "가 이미 출발했다(중복 요청)"); return; }
             int now = Networking.GetServerTimeInMilliseconds();
             bool hostile = (moveMode & ESCORT_HOSTILE) != 0;
             moveMode &= 0xFF;
@@ -1826,7 +1872,7 @@ namespace ACO
                 for (int i = 0; i < _escortUsed.Length && pickedCount < units; i++)
                 {
                     ACO_EscortUnit u = EscortUnits[i];
-                    if (u == null || u.MoveMode != moveMode || u.Hostile != hostile) { continue; }
+                    if (u == null || u.MoveMode != moveMode || u.Hostile != hostile || u.Role != ACO_EscortUnit.ROLE_VIP) { continue; }
                     bool candidate = pass == 0 ? !_escortUsed[i] : (_escortUsed[i] && IsDestroyed(u.TargetHealth));
                     if (!candidate) { continue; }
                     bool dup = false;
@@ -1885,6 +1931,469 @@ namespace ACO
             Debug.Log("[ACO] 호위 출발 #" + _deployCount + ": 태그 " + tag + ", " + pickedCount + "대, 경유점 " + count
                 + ", 방공 시설 " + placedSites + "곳, 매복 전차 " + placedAmbush + "대");
             ApplyChanges();
+        }
+
+        // ───────────── 상륙전 (ACO_PhaseAmphibious, 오너) ─────────────
+        // 초수평선 상륙: 강습상륙함(해상, ROLE_MOTHERSHIP)이 항구에서 routeLength 떨어진 바다에 자리 잡고 대기, 호위함(해상, ROLE_GUARD)이 그 좌우에서 대기.
+        // 상륙함에서 LCAC(공기부양, ROLE_VIP — 지켜야 하는 대상)가 횡대로 나와 바다 항로로 해변까지 올라가 멈추고,
+        // 아군 공격헬기(공중, ROLE_GUARD)는 같은 길을 낮게 먼저 날아가(더 빠르다) 해안 상공에 멈춰 적과 싸운다.
+        // 모두 오프셋 0(행렬 기준 거리가 섞이지 않게) — 대형은 옆 거리(lateral)로만 벌린다.
+        // 항구 둘레엔 해안 방어(방공 시설 링, 해안 전차, 곡사포, 적 헬리콥터), 항로 옆엔 적 함대 — 목표 아님(태그 없음).
+        // 수는 int 하나에 4비트씩(네트워크 이벤트 인자 8개 제한): units = LCAC | 상륙함 << 4 | 호위함 << 8 | 공격헬기 << 12,
+        // defense = 방공 시설 | 전차 조 << 4 | 곡사포 조 << 8 | 적 헬리콥터 조 << 12 | 적 함대 << 16.
+
+        private Vector3 _amphPort;     // 마지막으로 만든 상륙 항로의 항구 위치와 바다 쪽 방향(배치에 쓴다)
+        private Vector3 _amphSeaDir;
+
+        public void RequestDeployAmphibious(int tag, float routeLength, int units, int defense, int routeSeed)
+        {
+            if (Networking.IsOwner(gameObject)) { DeployAmphibious(tag, routeLength, units, defense, routeSeed); }
+            else { SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.Owner, nameof(NetDeployAmphibious), tag, routeLength, units, defense, routeSeed); }
+        }
+
+        [NetworkCallable]
+        public void NetDeployAmphibious(int tag, float routeLength, int units, int defense, int routeSeed)
+        {
+            DeployAmphibious(tag, routeLength, units, defense, routeSeed);
+        }
+
+        /// LCAC 항로 경유점 수(바다 구간) — 끝에 해변 한 점을 더하므로 MAX_ROUTE_POINTS보다 하나 적게.
+        private int AmphibiousSeaPoints() { return Mathf.Clamp(EscortRoutePoints, 2, ACO_EscortUnit.MAX_ROUTE_POINTS - 1); }
+
+        /// 상륙 항로를 만들 수 있는지(상륙 지점 — 항구 → 도시 근처 해안 → 해변 — 이 있고 거기까지 바다 항로가 나는지) — 모듈의 사전 확인. 같은 씨앗이면 배치 때 같은 항로.
+        public bool CanBuildAmphibiousRoute(float routeLength, int seed)
+        {
+            if (_routeScratch == null) { _routeScratch = new Vector3[ACO_EscortUnit.MAX_ROUTE_POINTS]; }
+            Random.InitState(seed);
+            bool ok = BuildAmphibiousRoute(routeLength, AmphibiousSeaPoints(), _routeScratch, 0);
+            ReseedRandom();
+            return ok;
+        }
+
+        public void DeployAmphibious(int tag, float routeLength, int units, int defense, int routeSeed)
+        {
+            if (!Networking.IsOwner(gameObject) || EscortUnits == null) { return; }
+            EnsureArrays();
+            if (tag != 0 && HasTaggedUnits(CAT_ESCORT, tag)) { Debug.LogWarning("[ACO] 상륙전 배치 요청 무시: 태그 " + tag + "가 이미 출발했다(중복 요청)"); return; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            int[] lcacs = new int[16];
+            int[] ships = new int[16];
+            int[] guards = new int[16];
+            int[] helis = new int[16];
+            int lcacCount = PickAmphibiousUnits(ACO_EscortUnit.MOVE_HOVER, ACO_EscortUnit.ROLE_VIP, lcacs, Mathf.Max(units & 0xF, 1));
+            int shipCount = PickAmphibiousUnits(ACO_EscortUnit.MOVE_SEA, ACO_EscortUnit.ROLE_MOTHERSHIP, ships, (units >> 4) & 0xF);
+            int guardCount = PickAmphibiousUnits(ACO_EscortUnit.MOVE_SEA, ACO_EscortUnit.ROLE_GUARD, guards, (units >> 8) & 0xF);
+            int heliCount = PickAmphibiousUnits(ACO_EscortUnit.MOVE_AIR, ACO_EscortUnit.ROLE_GUARD, helis, (units >> 12) & 0xF);
+            if (lcacCount == 0) { Debug.LogWarning("[ACO] 상륙전: LCAC(공기부양 — MoveMode 3, Role VIP)가 풀에 없습니다"); return; }
+
+            // LCAC 항로: 바다 구간(상륙함 자리 → 항구 앞) + 해변 한 점
+            int sea = AmphibiousSeaPoints();
+            int lead = lcacs[0];
+            int leadOffset = lead * ACO_EscortUnit.MAX_ROUTE_POINTS;
+            if (routeSeed != 0) { Random.InitState(routeSeed); }
+            bool built = BuildAmphibiousRoute(routeLength, sea, _escortRoute, leadOffset);
+            if (routeSeed != 0) { ReseedRandom(); }
+            if (!built) { Debug.LogWarning("[ACO] 상륙전: 상륙 지점(항구·도시 근처 해안·해변)까지 바다 항로를 만들지 못했습니다(해안 없음/바다 부족)"); return; }
+            Vector3 beach = _amphPort - _amphSeaDir * LcacBeachInland;
+            beach.y = GroundHeightAt(beach.x, beach.z);
+            _escortRoute[leadOffset + sea] = beach;
+            int count = sea + 1;
+            Vector3 start = _escortRoute[leadOffset];
+            Vector3 heading = _escortRoute[leadOffset + 1] - start;
+            heading.y = 0f;
+            heading = heading.sqrMagnitude > 1f ? heading.normalized : -_amphSeaDir;
+
+            // LCAC: 같은 항로, 횡대
+            for (int k = 0; k < lcacCount; k++)
+            {
+                SetAmphibiousUnit(lcacs[k], _escortRoute, leadOffset, count, (k - (lcacCount - 1) * 0.5f) * LcacSpacing, tag, now);
+            }
+            // 공격헬기: LCAC 바다 항로를 HeliAltitude로, 끝은 해안 안쪽 HeliHoverInland 상공(지면 + HeliAltitude)
+            if (heliCount > 0)
+            {
+                int h0 = helis[0] * ACO_EscortUnit.MAX_ROUTE_POINTS;
+                for (int j = 0; j < sea; j++)
+                {
+                    Vector3 p = _escortRoute[leadOffset + j];
+                    p.y = Mathf.Max(GroundHeightAt(p.x, p.z), SeaLevel) + HeliAltitude;
+                    _escortRoute[h0 + j] = p;
+                }
+                Vector3 hover = _amphPort - _amphSeaDir * HeliHoverInland;
+                hover.y = Mathf.Max(GroundHeightAt(hover.x, hover.z), SeaLevel) + HeliAltitude;
+                _escortRoute[h0 + sea] = hover;
+                for (int k = 0; k < heliCount; k++)
+                {
+                    SetAmphibiousUnit(helis[k], _escortRoute, h0, count, (k - (heliCount - 1) * 0.5f) * HeliSpacing, tag, now);
+                }
+            }
+            // 강습상륙함·호위함: 상륙함 자리 300m 뒤에서 그 자리로 와 멈춘다(사실상 대기)
+            if (shipCount > 0 || guardCount > 0)
+            {
+                int s0 = (shipCount > 0 ? ships[0] : guards[0]) * ACO_EscortUnit.MAX_ROUTE_POINTS;
+                _escortRoute[s0] = start - heading * 300f;
+                _escortRoute[s0 + 1] = start;
+                for (int k = 0; k < shipCount; k++)
+                {
+                    SetAmphibiousUnit(ships[k], _escortRoute, s0, 2, (k - (shipCount - 1) * 0.5f) * AmphibiousGuardLateral * 0.6f, tag, now);
+                }
+                for (int j = 0; j < guardCount; j++)
+                {
+                    float side = (j % 2 == 0 ? -1f : 1f) * AmphibiousGuardLateral * (1 + j / 2);
+                    SetAmphibiousUnit(guards[j], _escortRoute, s0, 2, side, tag, now);
+                }
+            }
+
+            // 해안 방어·적 함대(목표 아님)
+            int saved = _markTag;
+            _markTag = 0;
+            Vector3 mid = _escortRoute[leadOffset + sea / 2];
+            int sites = PlaceShoreSites(defense & 0xF, now);
+            int tanks = PlaceShoreMobiles(ACO_MobileUnit.KIND_TANK, (defense >> 4) & 0xF, now);
+            int guns = PlaceShoreMobiles(ACO_MobileUnit.KIND_ARTILLERY, (defense >> 8) & 0xF, now);
+            int enemyHelis = PlaceShoreMobiles(ACO_MobileUnit.KIND_HELICOPTER, (defense >> 12) & 0xF, now);
+            int fleets = PlaceFleetsNear(mid, (defense >> 16) & 0xF, now);
+            _markTag = saved;
+
+            _deployCount++;
+            RequestSerialization();
+            Debug.Log("[ACO] 상륙전 시작 #" + _deployCount + ": 태그 " + tag + ", LCAC " + lcacCount + ", 공격헬기 " + heliCount + ", 강습상륙함 " + shipCount + ", 호위함 " + guardCount
+                + " / 해안 방공 " + sites + "곳, 전차 " + tanks + ", 곡사포 " + guns + ", 적 헬리콥터 " + enemyHelis + ", 적 함선 " + fleets);
+            ApplyChanges();
+        }
+
+        /// 아군·이동 방식·역할이 맞는 호위 대상을 want개까지 고른다: 쓰지 않던 것 → 파괴된 것.
+        private int PickAmphibiousUnits(int moveMode, int role, int[] outList, int want)
+        {
+            want = Mathf.Min(want, outList.Length);
+            int n = 0;
+            for (int pass = 0; pass < 2 && n < want; pass++)
+            {
+                for (int i = 0; i < _escortUsed.Length && i < EscortUnits.Length && n < want; i++)
+                {
+                    ACO_EscortUnit u = EscortUnits[i];
+                    if (u == null || u.MoveMode != moveMode || u.Hostile || u.Role != role) { continue; }
+                    bool candidate = pass == 0 ? !_escortUsed[i] : (_escortUsed[i] && IsDestroyed(u.TargetHealth));
+                    if (!candidate) { continue; }
+                    bool dup = false;
+                    for (int k = 0; k < n; k++) { if (outList[k] == i) { dup = true; } }
+                    if (dup) { continue; }
+                    outList[n] = i;
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        /// route[srcOffset..+count)를 이 유닛 칸에 복사하고 정지 도착·옆 거리를 준다(앞선 거리는 0).
+        private void SetAmphibiousUnit(int idx, Vector3[] route, int srcOffset, int count, float lateral, int tag, int now)
+        {
+            int dst = idx * ACO_EscortUnit.MAX_ROUTE_POINTS;
+            if (dst != srcOffset) { for (int j = 0; j < count; j++) { _escortRoute[dst + j] = route[srcOffset + j]; } }
+            _escortRouteCount[idx] = (byte)count;
+            _escortArrival[idx] = (byte)ACO_EscortUnit.ARRIVE_STOP;
+            _escortOffset[idx] = 0;
+            _escortLateral[idx] = (short)Mathf.RoundToInt(lateral);
+            MarkEscort(idx, true, tag, now);
+        }
+
+        /// 상륙 지점을 정하고, 거기서 LandingStandoff 앞 바다에 끝나는 해상 항로를 거꾸로 만든다. 상륙 지점 순위:
+        ///  1) 항구(SITE_PORT) — MaxPlacementAttempts번
+        ///  2) 도시(SITE_CITY) 둘레 CityCoastRadius 안의 해안 — LandingCoastAttempts번
+        ///  3) 지도 아무 곳의 해안 — LandingCoastAttempts번
+        /// 2)·3)의 해안은 무작위 방향으로 걸어가다 땅·바다가 바뀌는 곳(해안선)이고, 절벽이 아니어야 한다(IsGentleBeach — 해변 높이·경사).
+        /// 출발 → 목적지 방향은 '바다 쪽 반대'에서 ±35°. 경유점과 실제 곡선이 모두 바다여야 한다.
+        /// 결과 dst[offset..], 상륙 지점 _amphPort(해안선)·_amphSeaDir(바다 쪽), 이름 붙일 자리 _routeDestSite(3순위는 가까운 자리, 없으면 -1).
+        private bool BuildAmphibiousRoute(float routeLength, int count, Vector3[] dst, int offset)
+        {
+            _routeDestSite = -1;
+            _routeBuiltCount = count;
+            int total = Features != null && Features.HasSites() ? Features.GetSiteCount() : 0;
+
+            // 1순위: 항구
+            int ports = CountSites(ACO_TerrainFeatures.SITE_PORT, total);
+            for (int attempt = 0; attempt < MaxPlacementAttempts && ports > 0; attempt++)
+            {
+                int site = NthSite(ACO_TerrainFeatures.SITE_PORT, Random.Range(0, ports), total);
+                if (TryLandingAt(Features.GetSitePosition(site), false, routeLength, count, dst, offset)) { _routeDestSite = site; return true; }
+            }
+            // 2순위: 도시 근처 해안
+            int cities = CountSites(ACO_TerrainFeatures.SITE_CITY, total);
+            for (int attempt = 0; attempt < LandingCoastAttempts && cities > 0; attempt++)
+            {
+                int site = NthSite(ACO_TerrainFeatures.SITE_CITY, Random.Range(0, cities), total);
+                if (!FindCoastNear(Features.GetSitePosition(site), CityCoastRadius)) { continue; }
+                if (TryLandingAt(_coastFound, true, routeLength, count, dst, offset)) { _routeDestSite = site; return true; }
+            }
+            // 3순위: 아무 해변(절벽 아님)
+            for (int attempt = 0; attempt < LandingCoastAttempts; attempt++)
+            {
+                Vector3 c = new Vector3(Random.Range(AreaMin.x, AreaMax.x), SeaLevel, Random.Range(AreaMin.y, AreaMax.y));
+                if (!FindCoastNear(c, AnyCoastRadius)) { continue; }
+                if (TryLandingAt(_coastFound, true, routeLength, count, dst, offset))
+                {
+                    _routeDestSite = Features != null ? Features.FindSiteNear(_coastFound.x, _coastFound.z, CityCoastRadius) : -1;
+                    return true;
+                }
+            }
+            _routeDestSite = -1;
+            return false;
+        }
+
+        private int CountSites(int kind, int total)
+        {
+            int n = 0;
+            for (int i = 0; i < total; i++) { if (Features.GetSiteKind(i) == kind) { n++; } }
+            return n;
+        }
+
+        /// kind 종류 자리 중 nth번째(자리 번호 순 — 씨앗 재현).
+        private int NthSite(int kind, int nth, int total)
+        {
+            for (int i = 0; i < total; i++)
+            {
+                if (Features.GetSiteKind(i) != kind) { continue; }
+                if (nth == 0) { return i; }
+                nth--;
+            }
+            return -1;
+        }
+
+        /// shore(해안선)에 상륙: 바다 쪽 방향을 찾고(checkBeach면 그 방향으로 절벽이 아닌지도 본다) 바다 항로를 만든다. 성공하면 _amphPort·_amphSeaDir.
+        private bool TryLandingAt(Vector3 shore, bool checkBeach, float routeLength, int count, Vector3[] dst, int offset)
+        {
+            if (!FindSeaDirection(shore)) { return false; }
+            Vector3 seaDir = _seaDirFound;
+            if (checkBeach && !IsGentleBeach(shore, seaDir)) { return false; }
+            Vector3 end = shore + seaDir * LandingStandoff;
+            end.y = SeaLevel;
+            if (!InArea(end) || !IsSeaAt(end.x, end.z)) { return false; }
+            float ang = Mathf.Atan2(-seaDir.z, -seaDir.x) + Random.Range(-35f, 35f) * Mathf.Deg2Rad;
+            Vector3 dir = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));   // 출발 → 상륙 지점
+            Vector3 side = new Vector3(-dir.z, 0f, dir.x);
+            float spread = Mathf.Min(EscortRouteLateral, routeLength * 0.15f);
+            for (int k = 0; k < count; k++)
+            {
+                float f = k / (float)(count - 1);
+                // 마지막 두 점 사이는 곧게(해안 앞 접근), 가운데만 흩뜨린다
+                float lateral = (k == 0 || k >= count - 2) ? 0f : Random.Range(-spread, spread);
+                Vector3 pt = end - dir * (routeLength * (1f - f)) + side * lateral;
+                pt.y = SeaLevel;
+                if (!InArea(pt) || !RoutePointHeight(ACO_EscortUnit.MOVE_SEA, pt.x, pt.z)) { return false; }
+                dst[offset + k] = pt;
+                if (k > 0)
+                {
+                    Vector3 prev = dst[offset + k - 1];
+                    for (int j = 1; j < 4; j++)
+                    {
+                        Vector3 m = Vector3.Lerp(prev, pt, j / 4f);
+                        if (!IsSeaAt(m.x, m.z)) { return false; }
+                    }
+                }
+            }
+            if (!CheckRouteCurve(ACO_EscortUnit.MOVE_SEA, dst, offset, count)) { return false; }
+            _routeArrival = ACO_EscortUnit.ARRIVE_STOP;
+            _amphPort = shore;
+            _amphSeaDir = seaDir;
+            return true;
+        }
+
+        private Vector3 _coastFound;
+
+        /// center에서 무작위 방향으로 radius까지 100m씩 걸어가며 처음 땅 ↔ 바다가 바뀌는 곳(해안선의 땅 쪽 점) → _coastFound. 바다 쪽이 바로 앞에서
+        /// LandingStandoff까지 이어지지 않으면(작은 만·호수) 다음 방향. 방향 4번까지.
+        private bool FindCoastNear(Vector3 center, float radius)
+        {
+            float step = 100f;
+            for (int t = 0; t < 4; t++)
+            {
+                float ang = Random.value * Mathf.PI * 2f;
+                Vector3 d = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+                Vector3 prev = center;
+                bool prevSea = IsSeaAt(center.x, center.z);
+                for (float r = step; r <= radius; r += step)
+                {
+                    Vector3 p = center + d * r;
+                    if (!InArea(p)) { break; }
+                    bool sea = IsSeaAt(p.x, p.z);
+                    if (sea == prevSea) { prev = p; continue; }
+                    // 바뀐 곳: 땅 쪽 점과 바다 쪽 방향
+                    Vector3 land = sea ? prev : p;
+                    Vector3 seaward = sea ? d : -d;
+                    Vector3 off = land + seaward * LandingStandoff;
+                    if (IsSeaAt(off.x, off.z))
+                    {
+                        land.y = GroundHeightAt(land.x, land.z);
+                        _coastFound = land;
+                        return true;
+                    }
+                    break;
+                }
+            }
+            return false;
+        }
+
+        /// 절벽이 아닌 해변인지: 해안선 shore에서 바다 쪽 100m → 육지 쪽(LcacBeachInland + 60m)을 20m마다 —
+        /// 지면이 해수면 위 BeachMaxHeight 이하이고, 이웃 점 사이 경사가 BeachMaxGrade 이하(LCAC가 올라갈 수 있는 비탈).
+        private bool IsGentleBeach(Vector3 shore, Vector3 seaDir)
+        {
+            float maxGrade = Mathf.Tan(Mathf.Clamp(BeachMaxGrade, 1f, 89f) * Mathf.Deg2Rad);
+            float stepLen = 20f;
+            float prevH = SeaLevel;
+            bool first = true;
+            for (float d = -100f; d <= LcacBeachInland + 60f; d += stepLen)
+            {
+                Vector3 p = shore - seaDir * d;
+                float h = GroundHeightAt(p.x, p.z);
+                if (h - SeaLevel > BeachMaxHeight) { return false; }
+                if (!first && (h - prevH) / stepLen > maxGrade) { return false; }
+                prevH = h;
+                first = false;
+            }
+            return true;
+        }
+
+        /// 마지막으로 만든(확인한) 상륙 항로의 상륙 지점(해안선) — 공격기가 들어오는 쪽.
+        public Vector3 GetLastLandingPoint() { return _amphPort; }
+
+        private Vector3 _seaDirFound;
+
+        /// 항구에서 바다가 가장 멀리 이어지는 방향(16방향 중, LandingStandoff ~ LandingApproachCheck 사이가 모두 바다) → _seaDirFound. 없으면 false.
+        private bool FindSeaDirection(Vector3 port)
+        {
+            _seaDirFound = Vector3.forward;
+            float best = -1f;
+            for (int a = 0; a < 16; a++)
+            {
+                float ang = a * Mathf.PI / 8f;
+                Vector3 d = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+                float reach = 0f;
+                for (float r = LandingStandoff * 0.5f; r <= LandingApproachCheck * 2f; r += 250f)
+                {
+                    Vector3 p = port + d * r;
+                    if (!IsSeaAt(p.x, p.z)) { break; }
+                    reach = r;
+                }
+                if (reach >= LandingApproachCheck && reach > best) { best = reach; _seaDirFound = d; }
+            }
+            return best >= 0f;
+        }
+
+        /// 항구 뒤 육지에 방공 시설 링 sites곳(항구 좌우로 퍼뜨림).
+        private int PlaceShoreSites(int sites, int now)
+        {
+            if (sites <= 0 || GroundUnits == null) { return 0; }
+            _groundOrder = new int[_groundUsed.Length];
+            _groundBudget = CollectFree(GroundUnits, _groundUsed, _groundOrder);
+            _groundNext = 0;
+            Vector3 side = new Vector3(-_amphSeaDir.z, 0f, _amphSeaDir.x);
+            int placed = 0;
+            for (int s = 0; s < sites && _groundNext < _groundBudget; s++)
+            {
+                for (int attempt = 0; attempt < 6; attempt++)
+                {
+                    float along = sites == 1 ? Random.Range(-400f, 400f) : Mathf.Lerp(-ShoreSpread, ShoreSpread, s / (float)(sites - 1)) + Random.Range(-200f, 200f);
+                    Vector3 c = _amphPort - _amphSeaDir * (ShoreDefenseInland * Random.Range(0.8f, 1.4f)) + side * along;
+                    if (!SampleDryGround(c.x, c.z)) { continue; }
+                    if (PlaceRing(new Vector3(c.x, _sampleY, c.z), EscortSiteSize, DefenseRadius, now) > 0) { placed++; }
+                    break;
+                }
+            }
+            return placed;
+        }
+
+        /// 이동 유닛(kind) groups조를 해안에: 전차 = 내륙에서 해안선 근처까지 와서 멈춤, 곡사포 = 내륙 사격 위치로 짧게, 헬리콥터 = 내륙에서 상륙 지점 앞바다 상공까지.
+        private int PlaceShoreMobiles(int kind, int groups, int now)
+        {
+            if (groups <= 0 || GroundUnits == null) { return 0; }
+            int[] cands = new int[_groundUsed.Length];
+            int candCount = CollectFreeMobilesOfKind(cands, kind);
+            bool heli = kind == ACO_MobileUnit.KIND_HELICOPTER;
+            bool gun = kind == ACO_MobileUnit.KIND_ARTILLERY;
+            int size = heli ? HelicopterGroupSize : (gun ? ArtilleryGroupSize : TankGroupSize);
+            float spacing = heli ? HelicopterSpacing : (gun ? ArtillerySpacing : TankSpacing);
+            Vector3 side = new Vector3(-_amphSeaDir.z, 0f, _amphSeaDir.x);
+            Vector3[] pts = new Vector3[2];
+            int next = 0;
+            int placed = 0;
+            for (int g = 0; g < groups && next < candCount; g++)
+            {
+                bool found = false;
+                for (int attempt = 0; attempt < 10 && !found; attempt++)
+                {
+                    // 곡사포는 상륙 지점 좌우로 덜 퍼뜨린다(LCAC 접근 해역에서 너무 비켜나지 않게)
+                    float along = Random.Range(-ShoreSpread, ShoreSpread) * (gun ? 0.6f : 1f);
+                    Vector3 stop;
+                    Vector3 start;
+                    if (heli)
+                    {
+                        stop = _amphPort + _amphSeaDir * (LandingStandoff * 0.6f) + side * along;
+                        start = _amphPort - _amphSeaDir * 4000f + side * along;
+                        if (!SampleHeliPoint(stop.x, stop.z)) { continue; }
+                        stop.y = _sampleY;
+                        if (!SampleHeliPoint(start.x, start.z)) { continue; }
+                        start.y = _sampleY;
+                    }
+                    else
+                    {
+                        // 곡사포: 자리가 안 나면(물·막힌 길) 시도마다 조금씩 더 해안 쪽으로 — 멀리 밀려나지 않는다
+                        float inland = gun ? Random.Range(ShoreArtilleryMin, ShoreArtilleryMax) * Mathf.Lerp(1f, 0.6f, attempt / 9f) : ShoreTankBeach;
+                        float approach = gun ? ArtilleryApproachDistance : ShoreTankApproach;
+                        stop = _amphPort - _amphSeaDir * inland + side * along;
+                        start = stop - _amphSeaDir * approach;
+                        if (!SampleDryGround(stop.x, stop.z)) { continue; }
+                        stop.y = _sampleY;
+                        if (!SampleDryGround(start.x, start.z)) { continue; }
+                        start.y = _sampleY;
+                        if (!PathClear(start, stop)) { continue; }
+                    }
+                    pts[0] = start;
+                    pts[1] = stop;
+                    found = true;
+                }
+                if (!found) { continue; }
+                int n = Mathf.Min(Mathf.Max(size, 1), candCount - next);
+                for (int m = 0; m < n; m++)
+                {
+                    Vector3 shift = side * ((m - (n - 1) * 0.5f) * spacing);
+                    Vector3[] own = new Vector3[2];
+                    own[0] = pts[0] + shift;
+                    own[1] = pts[1] + shift;
+                    MarkMobile(cands[next], own, 2, false, 0f, now);
+                    next++;
+                    placed++;
+                }
+            }
+            return placed;
+        }
+
+        /// 항로 가운데(mid) 옆 바다에 적 함대 groups개(기함 + 호위 ShipGroupSize).
+        private int PlaceFleetsNear(Vector3 mid, int groups, int now)
+        {
+            if (groups <= 0 || GroundUnits == null) { return 0; }
+            int[] cands = new int[_groundUsed.Length];
+            int candCount = CollectFreeShips(cands);
+            int next = 0;
+            int placed = 0;
+            for (int g = 0; g < groups && next < candCount; g++)
+            {
+                int size = Mathf.Min(Random.Range(Mathf.Max(ShipGroupSizeMin, 1), Mathf.Max(ShipGroupSizeMax, ShipGroupSizeMin) + 1), candCount - next);
+                int lead = cands[next];
+                ACO_Warship leader = GroundUnits[lead].GetComponent<ACO_Warship>();
+                if (!PickSeaNear(mid, EnemyFleetOffsetMin, EnemyFleetOffsetMax, leader != null ? FleetRadius(leader) : 1000f)) { break; }
+                Vector3 center = new Vector3(_pickX, SeaLevel, _pickZ);
+                Quaternion rot = HvtRotation(true);
+                MarkGround(lead, true, center, rot, now);
+                next++;
+                placed++;
+                for (int k = 0; k < size - 1; k++)
+                {
+                    MarkGround(cands[next], true, center, rot, now);
+                    _groundLeader[cands[next]] = (short)(lead * 16 + k);
+                    next++;
+                    placed++;
+                }
+            }
+            return placed;
         }
 
         /// 행렬 길이(m) — 선두가 맨 뒤보다 앞선 거리: 콘보이 = 한 줄(EscortConvoySpacing 간격), 적 폭격기 = 삼각 대형(줄마다 BomberFormationBack).
@@ -2258,7 +2767,22 @@ namespace ACO
             for (int i = 0; i < _escortUsed.Length && i < EscortUnits.Length; i++)
             {
                 ACO_EscortUnit u = EscortUnits[i];
-                if (u == null || u.MoveMode != moveMode || u.Hostile != hostile) { continue; }
+                if (u == null || u.MoveMode != moveMode || u.Hostile != hostile || u.Role != ACO_EscortUnit.ROLE_VIP) { continue; }
+                if (!_escortUsed[i] || IsDestroyed(u.TargetHealth)) { c++; }
+            }
+            return c;
+        }
+
+        /// 쉬는(또는 격추된) 아군 호위 대상 중 이동 방식·역할(ACO_EscortUnit.ROLE_*)이 맞는 수.
+        public int CountFreeEscortsRole(int moveMode, int role)
+        {
+            EnsureArrays();
+            int c = 0;
+            if (EscortUnits == null) { return 0; }
+            for (int i = 0; i < _escortUsed.Length && i < EscortUnits.Length; i++)
+            {
+                ACO_EscortUnit u = EscortUnits[i];
+                if (u == null || u.MoveMode != moveMode || u.Hostile || u.Role != role) { continue; }
                 if (!_escortUsed[i] || IsDestroyed(u.TargetHealth)) { c++; }
             }
             return c;
@@ -2327,8 +2851,17 @@ namespace ACO
             _vetChance = VeteranChance;
             _aceChance = AceChance;
             _focusActive = false;
+            // 같은 태그·같은 분류가 이미 놓여 있으면 다시 놓지 않는다 — 관리자 오너가 바뀌는 순간 배치 요청이 두 번 올 수 있다
+            // (생성기 상태는 나갔는데 관리자 '요청함' 상태는 못 보낸 채 오너가 나감 — Tools/aco_sync_sim.py 시나리오 D).
+            // 점수 할당량은 같은 태그로 지상(사냥터)과 편대를 따로 부르므로 분류별로 본다.
+            if (tag != 0 && HasTaggedUnits(ObjectiveCategory(kind), tag))
+            {
+                Debug.LogWarning("[ACO] 목표 배치 요청 무시: 태그 " + tag + "가 이미 배치돼 있다(중복 요청)");
+                return;
+            }
             // 이 태그가 페이즈 목표가 된다. 이전 목표의 파괴된 유닛은 이제 증원/다음 목표에 다시 쓸 수 있다.
-            _protectTag = tag;
+            // 태그 없는 배치(호위 요격 편대·공격기)는 목표가 아니므로 지금 페이즈 목표의 보호를 풀지 않는다.
+            if (tag != 0) { _protectTag = tag; }
             count = Mathf.Max(count, 0);
 
             int placed;
@@ -2338,13 +2871,30 @@ namespace ACO
             else if (kind == OBJ_GROUND) { placed = DeploySingles(tag, count, focus, minDist, maxDist, now); label = "목표 배치(시한 표적)"; }
             else if (kind == OBJ_HUNT) { placed = DeployHunt(tag, count, focus, minDist, maxDist, now); label = "목표 배치(사냥터)"; }
             else if (kind == OBJ_SUPER_ACE) { placed = DeploySuperAce(tag, count, focus, minDist, maxDist, now); label = "목표 배치(슈퍼에이스)"; }
-            else { placed = DeployFlight(tag, count, tier, focus, minDist, maxDist, now); label = "목표 배치(편대)"; }
+            else if (kind == OBJ_ATTACK) { placed = DeployFlight(tag, count, tier, focus, minDist, maxDist, now, true); label = "공격기 배치"; }
+            else { placed = DeployFlight(tag, count, tier, focus, minDist, maxDist, now, false); label = "목표 배치(편대)"; }
             _markTag = 0;
 
             _deployCount++;
             RequestSerialization();
             Debug.Log("[ACO] " + label + " #" + _deployCount + ": 태그 " + tag + ", " + placed + "/" + count);
             ApplyChanges();
+        }
+
+        /// 목표 종류(OBJ_*)가 놓이는 분류(CAT_*).
+        private int ObjectiveCategory(int kind)
+        {
+            if (kind == OBJ_HVT) { return CAT_HVT; }
+            if (kind == OBJ_FLIGHT || kind == OBJ_SUPER_ACE || kind == OBJ_ATTACK) { return CAT_FIGHTER; }
+            return CAT_GROUND;
+        }
+
+        /// 분류 category에 태그 tag로 놓인(쓰는 중인) 유닛이 있는가.
+        private bool HasTaggedUnits(int category, int tag)
+        {
+            int n = GetUnitCount(category);
+            for (int i = 0; i < n; i++) { if (IsUnitUsed(category, i) && GetUnitTag(category, i) == tag) { return true; } }
+            return false;
         }
 
         public void ReleaseTag(int tag)
@@ -2404,6 +2954,12 @@ namespace ACO
 
         private int CollectFreeFighters(int[] outList)
         {
+            return CollectFreeFighters(outList, false);
+        }
+
+        /// 쉬는(안 쓰거나 격추된) 전투기. attackers면 공격기만, 아니면 일반 전투기만(슈퍼에이스·공격기 제외).
+        private int CollectFreeFighters(int[] outList, bool attackers)
+        {
             int n = 0;
             if (Fighters == null) { return 0; }
             for (int pass = 0; pass < 2; pass++)
@@ -2412,7 +2968,7 @@ namespace ACO
                 for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
                 {
                     ACO_NPCFighterAI fighter = Fighters[i];
-                    if (fighter == null || fighter.SuperAce != null) { continue; }
+                    if (fighter == null || fighter.SuperAce != null || fighter.GroundAttacker != attackers) { continue; }
                     bool candidate = pass == 0 ? !_fighterUsed[i] : (_fighterUsed[i] && IsDestroyed(fighter.TargetHealth));
                     if (candidate) { outList[n] = i; n++; }
                 }
@@ -2597,14 +3153,14 @@ namespace ACO
             return _lastPlaced;
         }
 
-        /// 일반 배치에 쓸 전투기 번호(슈퍼에이스 제외), 섞어서.
+        /// 일반 배치에 쓸 전투기 번호(슈퍼에이스·공격기 제외), 섞어서.
         private int[] RegularFighterOrder()
         {
             int count = 0;
-            for (int i = 0; i < _fighterUsed.Length; i++) { if (!IsSuperAceSlot(i)) { count++; } }
+            for (int i = 0; i < _fighterUsed.Length; i++) { if (!IsReservedFighterSlot(i)) { count++; } }
             int[] order = new int[count];
             int n = 0;
-            for (int i = 0; i < _fighterUsed.Length; i++) { if (!IsSuperAceSlot(i)) { order[n] = i; n++; } }
+            for (int i = 0; i < _fighterUsed.Length; i++) { if (!IsReservedFighterSlot(i)) { order[n] = i; n++; } }
             ShuffleRange(order, 0, count);
             return order;
         }
@@ -2612,6 +3168,20 @@ namespace ACO
         private bool IsSuperAceSlot(int i)
         {
             return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].SuperAce != null;
+        }
+
+        /// 일반 배치에 쓰지 않는 전투기(슈퍼에이스 = 보너스 페이즈, 공격기 = 지상·해상 호위 페이즈).
+        private bool IsReservedFighterSlot(int i)
+        {
+            return IsSuperAceSlot(i) || (Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].GroundAttacker);
+        }
+
+        /// 내보낼 수 있는 공격기 수(쓰지 않거나 격추된 것). 호위 페이즈가 몇 기 부를지 정할 때 본다.
+        public int CountFreeAttackers()
+        {
+            EnsureArrays();
+            int[] cands = new int[_fighterUsed.Length];
+            return CollectFreeFighters(cands, true);
         }
 
         /// 내보낼 수 있는 슈퍼에이스 번호(쓰지 않거나 격추된 것), 없으면 -1.
@@ -2679,18 +3249,19 @@ namespace ACO
             return placed;
         }
 
-        private int DeployFlight(int tag, int count, int tier, Vector3 focus, float minDist, float maxDist, int now)
+        /// 편대 배치. attackers면 공격기(GroundAttacker)만 2기 편대로, 아니면 일반 전투기만.
+        private int DeployFlight(int tag, int count, int tier, Vector3 focus, float minDist, float maxDist, int now, bool attackers)
         {
             int[] cands = new int[_fighterUsed.Length];
-            int candCount = CollectFreeFighters(cands);
+            int candCount = CollectFreeFighters(cands, attackers);
             int budget = Mathf.Min(count, candCount);
             int next = 0;
             _markTag = tag;
 
             while (next < budget)
             {
-                // 숙련도를 고정한 편대(보스)는 4기 편대로 묶는다.
-                int size = (tier >= 0 || Random.value < FourShipChance) ? 4 : 2;
+                // 숙련도를 고정한 편대(보스)는 4기 편대로 묶는다. 공격기는 2기씩.
+                int size = attackers ? 2 : ((tier >= 0 || Random.value < FourShipChance) ? 4 : 2);
                 size = Mathf.Min(size, budget - next);
 
                 Vector3 spawn;
@@ -3078,7 +3649,8 @@ namespace ACO
                     fighter.gameObject.SetActive(true);
                     int tier = i < _fighterTier.Length ? Mathf.Clamp(_fighterTier[i], 0, 2) : ACO_NPCFighterAI.SKILL_VETERAN;
                     fighter.ApplySkill(tier, TierValue(TierTurnGMultiplier, tier), TierValue(TierSpeedMultiplier, tier),
-                        TierValue(TierLockTimeMultiplier, tier), TierValue(TierGunDwellMultiplier, tier), TierValue(TierMissileConeMultiplier, tier));
+                        TierValue(TierLockTimeMultiplier, tier), TierValue(TierGunDwellMultiplier, tier), TierValue(TierMissileConeMultiplier, tier),
+                        TierValue(TierHealthMultiplier, tier));
                     fighter.MissionSpawn(_fighterPos[i], YawRot(_fighterYaw[i]), _fighterIngress[i], _fighterTimeMs[i] - _joinTimeMs > 0);
                 }
                 else

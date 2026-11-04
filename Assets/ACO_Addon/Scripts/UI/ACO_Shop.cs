@@ -6,10 +6,12 @@ using TMPro;
 namespace ACO
 {
     /// 격납고 강화 상점(로컬 전용, 동기화 없음). 분류 탭(ACO_PlayerProgress.CAT_*: 기체/일반 미사일/특수 대공/특수 대지/특수 폭탄)을 고르면
-    /// 그 분류의 강화 항목이 줄마다 버튼 하나로 보인다 — 누르면 다음 단계를 산다. 줄은 분류 중 가장 긴 것(6)만큼 있고 남는 줄은 숨긴다.
+    /// 그 분류의 강화 항목이 줄마다 버튼 하나로 보인다. 줄은 분류 중 가장 긴 것만큼 있고 남는 줄은 숨긴다.
+    /// 구매는 두 단계다(클릭 실수 방지): 줄을 누르면 고르기만 하고(줄이 강조되고 아래 구매 버튼에 다음 단계와 가격), 구매 버튼(BuyButton)을 눌러야 산다.
+    /// 구매 버튼이 없는 예전 격납고 프리팹이면 줄을 누르자마자 산다.
     /// 버튼 글자: "이름  [##---]  +20%  4,000 CR". 보유 크레딧과 지난 미션 보상도 보여 준다. 진행도 값이 바뀔 때만 다시 그린다.
     /// 패널은 격납고 프리팹(ACO_Hangar)에 같이 있다 — 프리팹 빌더가 만든다. 강화는 다음 탑승부터 적용된다.
-    /// 마지막 탭(TAB_SUPPLY)은 소모품: 줄마다 "이름  효과  READY/가격" — 누르면 산다(종류마다 1개, 출격한 미션이 끝나면 사라진다).
+    /// 마지막 탭(TAB_SUPPLY)은 소모품: 줄마다 "이름  효과  READY/가격" — 고르고 구매 버튼으로 산다(종류마다 1개, 출격한 미션이 끝나면 사라진다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Shop : UdonSharpBehaviour
     {
@@ -44,13 +46,24 @@ namespace ACO
         public GameObject[] ConsumablePreviewVisuals;
         [Tooltip("안내/오류 한 줄")]
         public TextMeshProUGUI MessageText;
+        [Tooltip("고른 줄을 사는 버튼(ACO_HangarButton, Action = 상점 구매). 비우면 줄을 누르자마자 산다(예전 방식)")]
+        public GameObject BuyButton;
+        [Tooltip("구매 버튼 글자(\"BUY LV3  4,000 CR\" 등)")]
+        public TextMeshProUGUI BuyText;
         public Color NormalColor = new Color(0.08f, 0.3f, 0.14f, 1f);
         public Color MaxedColor = new Color(0.25f, 0.75f, 0.35f, 1f);
         public Color TooExpensiveColor = new Color(0.12f, 0.14f, 0.13f, 1f);
+        [Tooltip("고른 줄 색")]
+        public Color SelectedRowColor = new Color(0.45f, 0.4f, 0.12f, 1f);
         public Color TabColor = new Color(0.08f, 0.3f, 0.14f, 1f);
         public Color TabSelectedColor = new Color(0.25f, 0.75f, 0.35f, 1f);
+        [Tooltip("구매 버튼 색: 살 수 있을 때 / 못 살 때(고른 게 없음·크레딧 부족·최대 단계)")]
+        public Color BuyColor = new Color(0.45f, 0.4f, 0.12f, 1f);
+        public Color BuyDisabledColor = new Color(0.16f, 0.17f, 0.17f, 1f);
 
         private int _tab;
+        private int _selectedRow = -1;   // 지금 탭에서 고른 줄(-1 = 없음)
+        private Image _buyImage;
         private bool _dirty = true;
         private int _seenVersion = -1;
         private int _seenReward = -1;
@@ -70,11 +83,35 @@ namespace ACO
         public void SelectTab(int cat)
         {
             _tab = Mathf.Clamp(cat, 0, TAB_SUPPLY);
+            _selectedRow = -1;
             SetMessage("");
             _dirty = true;
         }
 
-        /// 줄 버튼(ACO_HangarButton, Action = 강화 구매)이 부른다. row = 지금 탭 안의 줄 번호.
+        /// 줄 버튼(ACO_HangarButton, Action = 강화 줄)이 부른다. row = 지금 탭 안의 줄 번호. 구매 버튼이 있으면 고르기만 하고(클릭음),
+        /// 없으면(예전 프리팹) 바로 산다. 효과음 종류(ACO_UiSound.KIND_*)를 돌려준다.
+        public int ClickRow(int row)
+        {
+            if (!BuyButton) { return BuyRow(row); }
+            if (!Progress || row < 0) { return ACO_UiSound.KIND_DENY; }
+            int length = _tab == TAB_SUPPLY ? ACO_PlayerProgress.CONSUMABLE_COUNT : Progress.GetCategoryLength(_tab);
+            if (row >= length) { return ACO_UiSound.KIND_DENY; }
+            _selectedRow = row;
+            SetMessage("");
+            _dirty = true;
+            return ACO_UiSound.KIND_CLICK;
+        }
+
+        /// 구매 버튼(ACO_HangarButton, Action = 상점 구매)이 부른다: 고른 줄을 산다. 고른 줄은 그대로 둔다(다음 단계를 이어 사려면 구매 버튼만 다시).
+        public int BuySelected()
+        {
+            if (_selectedRow < 0) { SetMessage("SELECT AN ITEM FIRST"); return ACO_UiSound.KIND_DENY; }
+            int kind = BuyRow(_selectedRow);
+            _dirty = true;
+            return kind;
+        }
+
+        /// 실제 구매(고른 줄 또는 예전 방식의 줄 클릭). row = 지금 탭 안의 줄 번호.
         /// 효과음 종류(ACO_UiSound.KIND_*)를 돌려준다: 산 경우만 결정음, 아니면 거절음.
         public int BuyRow(int row)
         {
@@ -132,9 +169,36 @@ namespace ACO
                 }
                 if (RowImages != null && row < RowImages.Length && RowImages[row])
                 {
-                    RowImages[row].color = owned ? MaxedColor : (credits >= price ? NormalColor : TooExpensiveColor);
+                    RowImages[row].color = row == _selectedRow ? SelectedRowColor : (owned ? MaxedColor : (credits >= price ? NormalColor : TooExpensiveColor));
                 }
             }
+        }
+
+        /// 구매 버튼 글자·색: 고른 줄의 다음 단계와 가격(살 수 있으면 BuyColor, 아니면 회색 — 그래도 누르면 이유를 알려 준다).
+        private void RefreshBuyButton()
+        {
+            if (!BuyButton) { return; }
+            string label = "SELECT AN ITEM";
+            bool can = false;
+            int credits = Progress.GetCredits();
+            if (_selectedRow >= 0 && _tab == TAB_SUPPLY)
+            {
+                string name = Progress.GetConsumableName(_selectedRow);
+                int price = Progress.GetConsumablePrice(_selectedRow);
+                if (Progress.HasConsumable(_selectedRow)) { label = name + " LOADED"; }
+                else { label = "BUY " + name + "   " + price.ToString("N0") + " CR"; can = credits >= price; }
+            }
+            else if (_selectedRow >= 0)
+            {
+                int id = Progress.GetCategoryStart(_tab) + _selectedRow;
+                int cost = Progress.GetUpgradeCost(id);
+                string name = Progress.GetUpgradeName(id);
+                if (cost < 0) { label = name + " MAX LEVEL"; }
+                else { label = "BUY " + name + " LV" + (Progress.GetLevel(id) + 1) + "   " + cost.ToString("N0") + " CR"; can = credits >= cost; }
+            }
+            if (BuyText && BuyText.text != label) { BuyText.text = label; }
+            if (_buyImage == null) { _buyImage = BuyButton.GetComponent<Image>(); }
+            if (_buyImage != null) { _buyImage.color = can ? BuyColor : BuyDisabledColor; }
         }
 
         private void SetMessage(string s)
@@ -170,7 +234,7 @@ namespace ACO
                 }
             }
 
-            if (_tab == TAB_SUPPLY) { RefreshSupply(); return; }
+            if (_tab == TAB_SUPPLY) { RefreshSupply(); RefreshBuyButton(); return; }
             int start = Progress.GetCategoryStart(_tab);
             int length = Progress.GetCategoryLength(_tab);
             int max = Progress.GetMaxLevel();
@@ -204,9 +268,10 @@ namespace ACO
                 }
                 if (RowImages != null && row < RowImages.Length && RowImages[row])
                 {
-                    RowImages[row].color = cost < 0 ? MaxedColor : (credits >= cost ? NormalColor : TooExpensiveColor);
+                    RowImages[row].color = row == _selectedRow ? SelectedRowColor : (cost < 0 ? MaxedColor : (credits >= cost ? NormalColor : TooExpensiveColor));
                 }
             }
+            RefreshBuyButton();
         }
     }
 }

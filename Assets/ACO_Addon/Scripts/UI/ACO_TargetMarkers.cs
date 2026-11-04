@@ -12,7 +12,7 @@ namespace ACO
     ///  - MaxDistance(10km) 안의 유닛만, 거리와 무관하게 항상 같은 화면 크기로, 지형/구름 뒤에서도 보이게 그린다
     ///  - 호위 페이즈(공중/지상)에는 호위 대상 항로의 남은 경유점(옅은 파란 마름모 + WP 번호)과 목적지(큰 마름모 + DEST + 거리)를 그린다
     ///  - 시선 방향(머리 정면)에서 LookAngle 안에 있는 유닛 중 가장 가운데 것 하나에 종류와 거리를 띄운다
-    ///    (전투기: ACE/VET/NOV, 지상: SAM/AAG, 고가치 표적: FAC/BNK 등 — 각 유닛의 MarkerLabel)
+    ///    (전투기: 종류 + 숙련도 "FTR ACE"·"ATK VET" 등, 지상: SAM/AAG, 고가치 표적: FAC/BNK 등 — 각 유닛의 MarkerLabel)
     ///  - 락온(내가 조종 중인 기체의 ACO_DFUNC_Missile): 락온 대상이 되면 그 테두리가 깜빡이고 이름표(종류/거리/체력)가 그 표적에 고정된다.
     ///    조준하는 동안 마름모가 무작위 방향에서 다가오고(락온 진행도), 락온되면 테두리에 겹쳐지며 테두리와 함께 빨갛게 바뀐다.
     ///    다중 락온 무기(4AAM 류)는 락온 칸마다 따로 그린다(마름모 풀 LockDiamonds, 최대 MAX_LOCKS개).
@@ -77,6 +77,8 @@ namespace ACO
         public bool ShowWingmen = true;
         [Tooltip("테두리 위 글자 앞부분(뒤에 칸 번호)")]
         public string WingmanLabel = "WINGMAN ";
+        [Tooltip("TAC 네임(콜사인) — Bake가 씬의 ACO_TacName을 넣는다. 아군기 테두리 위에 조종사 콜사인(없으면 WingmanLabel + 칸 번호)")]
+        public ACO_TacName TacNames;
 
         [Header("호위 항로")]
         [Tooltip("호위 페이즈에 호위 대상의 남은 경유점과 목적지를 표시한다")]
@@ -112,6 +114,10 @@ namespace ACO
         public float LockBlinkRate = 8f;
         [Tooltip("마름모가 출발하는 거리(마커 크기 배수). 락온 진행도에 따라 표적 중심으로 다가온다")]
         public float DiamondStartDistance = 2.5f;
+        [Tooltip("락온 중인 표적의 테두리를 다른 마커보다 이 비율만큼 가까이(표시 거리 × 이 값) — 겹친 마커와 그리는 순서가 깜빡이지(z-fighting) 않게. 크기도 같은 비율이라 화면에선 그대로")]
+        [Range(0.8f, 1f)] public float LockedFrameNear = 0.97f;
+        [Tooltip("락온 마름모·십자는 그보다도 가까이 — 늘 테두리 위에")]
+        [Range(0.8f, 1f)] public float LockMarkNear = 0.94f;
         [Tooltip("마름모 크기(마커 크기 배수). 0.71이면 꼭짓점이 테두리 변의 가운데에 닿는다 — 조금 크게 해서 테두리와 겹치게 한다")]
         public float DiamondScale = 0.8f;
         [Tooltip("특수무장(ACO_DFUNC_Missile.CrossLockIndicator)의 락온 진행 표시 — 십자 메시(빌더/Bake가 만든다). 같은 표시 오브젝트의 메시만 바꿔 쓴다")]
@@ -377,7 +383,12 @@ namespace ACO
 
                 bool objective = _unitObjective[u];
                 bool friendly = _unitFriendly[u];
-                Vector3 d = t.position - headPos;
+                // 락온 중인 표적: 테두리를 락온 지점(락온 표적 오브젝트 — 마름모가 쫓는 자리)에 그린다(유닛 기준점과 달라 위에서 보면 어긋났다)
+                int lockK = -1;
+                for (int k = 0; k < MAX_LOCKS; k++) { if (_lockUnit[k] == u) { lockK = k; break; } }
+                Vector3 point = t.position;
+                if (lockK >= 0 && _lockObj[lockK] != null && _lockObj[lockK].activeInHierarchy) { point = _lockObj[lockK].transform.position; }
+                Vector3 d = point - headPos;
                 float sq = d.sqrMagnitude;
                 if (sq > ((objective || friendly) ? objectiveMaxSq : maxSq) || sq < 1f) { continue; }
 
@@ -389,25 +400,26 @@ namespace ACO
 
                 Transform m = Markers[used];
                 if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
-                m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+                // 락온 중인 표적은 다른 마커보다 조금 앞(LockedFrameNear)에 — 겹친 마커와 그리는 순서가 깜빡이지 않게(크기는 같은 비율로 줄여 화면 크기는 그대로)
+                float near = lockK >= 0 ? LockedFrameNear : 1f;
+                m.SetPositionAndRotation(headPos + dir * (DisplayDistance * near), Quaternion.LookRotation(dir, headUp));
                 // 원근감: NearDistance까지 1배, MaxDistance에서 FarScale배, 사이는 log(거리)에 비례.
                 float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
                 float size = baseSize * Mathf.Lerp(1f, FarScale, farT);
                 if (kind >= KIND_OBJECTIVE) { size *= ObjectiveScale; }
-                m.localScale = new Vector3(size, size, size);
+                float shown = size * near;
+                m.localScale = new Vector3(shown, shown, shown);
 
                 if (_markerKind[used] != kind) { SetMarkerKind(used, kind); }
                 // 아군 위 이름은 유닛마다 다를 수 있다.
                 if (friendly) { SetTopText(used, _unitLabel[u]); }
 
-                for (int k = 0; k < MAX_LOCKS; k++)
+                if (lockK >= 0)
                 {
-                    if (_lockUnit[k] != u) { continue; }
-                    _lockMarker[k] = used;
-                    _lockDist[k] = dist;
-                    _lockSize[k] = size;
-                    StyleLockMarker(used, k);
-                    break;
+                    _lockMarker[lockK] = used;
+                    _lockDist[lockK] = dist;
+                    _lockSize[lockK] = size;
+                    StyleLockMarker(used, lockK);
                 }
 
                 float angle = Vector3.Angle(headFwd, dir);
@@ -440,7 +452,9 @@ namespace ACO
                     float size = baseSize * Mathf.Lerp(1f, FarScale, farT);
                     m.localScale = new Vector3(size, size, size);
                     if (_markerKind[used] != KIND_FRIENDLY_AIR) { SetMarkerKind(used, KIND_FRIENDLY_AIR); }
-                    SetTopText(used, WingmanLabel + (k + 1));
+                    // 조종사의 TAC 네임(콜사인 — 중복이면 뒤에 숫자), 없으면 WINGMAN 칸 번호
+                    string tac = TacNames != null ? TacNames.GetLabel(Networking.GetOwner(e.gameObject)) : "";
+                    SetTopText(used, tac.Length > 0 ? tac : WingmanLabel + (k + 1));
                     used++;
                 }
             }
@@ -623,9 +637,11 @@ namespace ACO
                 float p = locked ? 1f : Mathf.Clamp01(_lockProgress[k]);
                 float remain = (1f - p) * (1f - p);
                 Vector2 from = _diamondFrom[k];
-                Vector3 offset = rot * new Vector3(from.x, from.y, 0f) * (size * DiamondStartDistance * remain);
-                diamond.SetPositionAndRotation(headPos + dir * DisplayDistance + offset, _shapeCross ? rot : rot * Quaternion.Euler(0f, 0f, 45f));
-                float sc = size * (_shapeCross ? CrossScale : DiamondScale);
+                // 락온 테두리보다도 앞(LockMarkNear) — 테두리·다른 마커와 겹쳐도 늘 위에. 거리·출발 거리·크기를 같은 비율로 줄여 화면에선 그대로
+                float near = LockMarkNear;
+                Vector3 offset = rot * new Vector3(from.x, from.y, 0f) * (size * DiamondStartDistance * remain * near);
+                diamond.SetPositionAndRotation(headPos + dir * (DisplayDistance * near) + offset, _shapeCross ? rot : rot * Quaternion.Euler(0f, 0f, 45f));
+                float sc = size * (_shapeCross ? CrossScale : DiamondScale) * near;
                 diamond.localScale = new Vector3(sc, sc, sc);
 
                 if (_diamondLockedLook[k] != locked || !wasOn)
@@ -791,16 +807,17 @@ namespace ACO
             if (fighter != null)
             {
                 if (fighter.SuperAce != null) { return fighter.SuperAce.AceName; }
-                int tier = fighter.GetSkillTier();
-                if (tier == ACO_NPCFighterAI.SKILL_ACE) { return "ACE"; }
-                if (tier == ACO_NPCFighterAI.SKILL_VETERAN) { return "VET"; }
-                return "NOV";
+                return fighter.GetDisplayLabel(fighter.GetSkillTier());   // "FTR ACE", "ATK VET"
             }
             return _unitLabel[u];
         }
 
+        [Tooltip("거리 단위(HUD 설정 DISTANCE UNIT) — Bake가 넣는다")]
+        public ACO_Units Units;
+
         private string FormatDistance(float meters)
         {
+            if (Units != null) { return Units.Distance(meters); }
             if (meters < 1000f) { return Mathf.RoundToInt(meters) + "m"; }
             return (meters * 0.001f).ToString("0.0") + "km";
         }

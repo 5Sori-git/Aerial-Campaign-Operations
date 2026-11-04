@@ -103,6 +103,8 @@ namespace ACO
             if (!inRange || !IOwnTarget()) { ResetDwell(); return; }
 
             if (angle > EffectiveAngle) { ResetDwell(); return; }
+            // 조준당한 순간(체류 시작 — 조준 한 번에 한 번): 연막 유닛이 연막을 굴린다. 여기는 표적 오너 = 연막을 정하는 쪽이라 네트워크가 필요 없다
+            if (_dwell <= 0f && _targetSmoke != null) { _targetSmoke.ReportGunThreat(); }
             _dwell += dt;
 
             // 연사를 쉬는 동안엔 트레이서가 안 나가므로 데미지도 멈춘다(체류 시간은 유지).
@@ -156,6 +158,15 @@ namespace ACO
             // 해가 없으면(탄이 타겟을 따라잡지 못함) 거리/탄속으로 근사한다.
             if (t < 0f) { t = d.magnitude / speed; }
             return targetPos + relVel * t;
+        }
+
+        /// CIWS 미사일 요격 연출(ACO_AAGunSite가 매 프레임 부른다): 포신이 조준점(리드)을 대략 향하면 예광탄·소리를 켠다. 피해는 없다 — 요격 판정은 미사일이 한다.
+        public void InterceptFire(Vector3 aimPoint)
+        {
+            _inBurst = false;
+            _burstTimer = 0f;
+            ResetDwell();
+            SetFiring(Vector3.Angle(MuzzleForward(), aimPoint - MuzzlePosition()) <= FireStartAngle * 2f);
         }
 
         /// 격추 등으로 즉시 멈출 때.

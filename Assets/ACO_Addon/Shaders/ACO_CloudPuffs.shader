@@ -8,7 +8,7 @@
 //  - 가장자리: 알파 투 커버리지(MSAA에서 부드럽게, 정렬 불필요, 깊이 기록) — MSAA가 없으면 알파 테스트처럼 그려진다
 //  - 가까이(_NearFadeEnd → _NearFadeStart) 오면 디더링으로 사라진다(구름 속은 ACO_CloudField가 안개로 채운다)
 //  - 멀리(_LodStart → _LodEnd)는 퍼프 일부를 접고(_LodKeep만 남김) 남은 퍼프를 키운다
-//  - _Darken: 날씨(비·폭풍)로 어두운 회색 구름
+//  - _Darken: 날씨(비·폭풍)로 어두운 회색 구름, _Flash: 번개(폭풍) — 두꺼운 속이 더 밝게 번쩍인다
 // 부드러운 반투명으로 바꾸려면: _Soft 켬, Src Blend = SrcAlpha, Dst Blend = OneMinusSrcAlpha, ZWrite Off, Alpha To Coverage Off, Render Queue 3000
 // (퍼프 정렬이 안 돼 겹친 순서가 틀릴 수 있고 구름 속에서 겹쳐 그리는 비용이 크다).
 Shader "ACO/CloudPuffs"
@@ -29,6 +29,8 @@ Shader "ACO/CloudPuffs"
         _SilverPower ("Silver lining focus", Range(1, 32)) = 8
         _Darken ("Weather darken", Range(0, 1)) = 0
         _StormColor ("Storm tint", Color) = (0.42, 0.44, 0.5, 1)
+        _Flash ("Lightning flash (script)", Range(0, 2)) = 0
+        _FlashColor ("Lightning glow", Color) = (0.85, 0.9, 1, 1)
 
         [Header(Shape)]
         _SizeScale ("Puff size scale", Float) = 1
@@ -140,8 +142,8 @@ Shader "ACO/CloudPuffs"
             #pragma target 3.0
             #include "UnityLightingCommon.cginc"
 
-            fixed4 _LitColor, _ShadeColor, _BottomColor, _StormColor;
-            float _Wrap, _PuffRound, _ThickShade, _Ambient, _Silver, _SilverPower, _Darken, _Soft;
+            fixed4 _LitColor, _ShadeColor, _BottomColor, _StormColor, _FlashColor;
+            float _Wrap, _PuffRound, _ThickShade, _Ambient, _Silver, _SilverPower, _Darken, _Soft, _Flash;
 
             struct v2f
             {
@@ -202,6 +204,8 @@ Shader "ACO/CloudPuffs"
                 col += _LightColor0.rgb * _Silver * pow(saturate(dot(V, L)), _SilverPower) * (1 - thick);
                 // 날씨: 어두운 회색
                 col = lerp(col, dot(col, float3(0.3, 0.5, 0.2)) * _StormColor.rgb * 1.6, _Darken);
+                // 번개: 두꺼운 곳(속)이 더 밝게 — 안에서 번쩍이는 느낌
+                col += _FlashColor.rgb * _Flash * (0.4 + 0.6 * thick);
 
                 float fw = max(fwidth(tex.a), 0.0001);
                 float a;

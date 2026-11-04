@@ -106,6 +106,7 @@ public static class ACO_PrefabBuilder
         ACO_NPCFlightController flight = root.GetComponent<ACO_NPCFlightController>();
         SaccEntity entity = root.GetComponent<SaccEntity>();
         health.Health = 600f;
+        ai.BaseHealth = 600f;   // 슈퍼에이스는 숙련도 배율을 받지 않는다
         ai.Flares.FlareSalvos = 12;
         ai.AceFlareChance = 1f;
 
@@ -163,6 +164,70 @@ public static class ACO_PrefabBuilder
         ace.Decoys = decoys;
 
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_SuperAce.prefab");
+    }
+
+    /// 공격기: 일반 NPC 전투기 기반 — 아군 지상(26: 콘보이 차량·LCAC·호위함)만 노리고 대지 미사일(ACO_Missile_AGM, 없으면 AAM)과 기총으로 치고 빠진다.
+    /// 플레이어는 노리지 않는다(쏘면 맞는다 — 락온 마커는 적 항공기 29). 미션 생성기가 일반 배치에 쓰지 않고 지상·해상 호위 페이즈(콘보이·상륙전)에서만
+    /// 2기 편대로 내보낸다(GroundAttacker). 전투기보다 느리고 튼튼하며 플레어가 적다. 생성기 풀(UnitPoolRoot) 아래에 4~6기 둔다.
+    /// 모델은 올리브색 상자 + 직선 날개 — 직접 만든 모델로 바꿔 끼운다.
+    public static GameObject BuildAttacker()
+    {
+        EnsurePrefabFolder();
+        GameObject missile = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/ACO_Missile_AGM.prefab");
+        if (missile == null) { missile = LoadOrBuildMissile(); }
+        GameObject root = CreateFighterObject("NPC_Attacker", missile);
+        ACO_NPCFighterAI ai = root.GetComponent<ACO_NPCFighterAI>();
+        SaccTarget health = root.GetComponent<SaccTarget>();
+        ACO_NPCFlightController flight = root.GetComponent<ACO_NPCFlightController>();
+        SaccEntity entity = root.GetComponent<SaccEntity>();
+
+        // 아군 지상(콘보이·LCAC·호위함)만 노린다 — 빌드 시 AAMTargets가 아군 지상 마커로 채워진다
+        entity.AAMTargetsLayer = 1 << LayerFriendlyGround;
+        ai.TargetLayers = 1 << LayerFriendlyGround;
+        ai.GroundAttacker = true;
+        ai.MarkerLabel = "ATK";   // 표적 마커 "ATK VET" 등
+        // 호위 항로 쪽 멀리서 들어오므로 넓게 찾고, 치고 빠지는 폭을 넓게
+        ai.DetectRange = 6000f;
+        ai.LoseTargetRange = 8000f;
+        ai.BreakOffDistance = 300f;
+        ai.ReEngageDistance = 1800f;
+        ai.MissileMaxRange = 3500f;
+        ai.MissileMinRange = 500f;
+        ai.MissileFireConeAngle = 20f;
+        health.Health = 150f;
+        ai.BaseHealth = 150f;
+        flight.CruiseSpeed = 120f;
+        flight.MaxSpeed = 220f;
+        ai.Flares.FlareSalvos = 2;
+        ai.Gun.DamagePerTick = 8f;
+        ai.MissileLauncher.LockTime = 2.5f;
+        ai.MissileLauncher.NumMissiles = 4;
+        ai.MissileLauncher.ReloadTime = 30f;
+
+        // 모델: 올리브색 + 직선 날개(전투기와 구분)
+        Transform model = root.transform.Find("Model");
+        if (model != null)
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/ACO_Addon/Generated")) { AssetDatabase.CreateFolder("Assets/ACO_Addon", "Generated"); }
+            string matPath = "Assets/ACO_Addon/Generated/ACO_AttackerBody.mat";
+            Material saved = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (saved == null)
+            {
+                saved = new Material(Shader.Find("Standard")) { color = new Color(0.33f, 0.38f, 0.22f) };
+                AssetDatabase.CreateAsset(saved, matPath);
+            }
+            model.GetComponent<MeshRenderer>().sharedMaterial = saved;
+            GameObject wing = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wing.name = "Wing";
+            wing.layer = LayerHitbox;
+            Object.DestroyImmediate(wing.GetComponent<Collider>());
+            wing.transform.SetParent(root.transform, false);
+            wing.transform.localPosition = new Vector3(0f, 0.1f, 0.3f);
+            wing.transform.localScale = new Vector3(9f, 0.15f, 1.6f);
+            wing.GetComponent<MeshRenderer>().sharedMaterial = saved;
+            ai.HideOnDeath = new GameObject[] { model.gameObject, wing };
+        }
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_Attacker.prefab");
     }
 
     public static GameObject BuildSAM()
@@ -793,6 +858,219 @@ public static class ACO_PrefabBuilder
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_ConvoyTruck.prefab");
     }
 
+    /// 상륙전 강습상륙함(아군 모선, 해상, Role MOTHERSHIP): 긴 평갑판 선체 + 함교 + 후미 도크. 무장 없음. 후방(초수평선)에서 대기하고
+    /// LCAC·아군 공격헬기가 여기서 나온다. 잃어도 실패가 아니다. 모델은 임시 상자 — 직접 만든 모델로 바꿔 끼운다.
+    public static GameObject BuildAssaultShip()
+    {
+        EnsurePrefabFolder();
+        GameObject root = CreateEscortShip("NPC_AssaultShip", new Vector3(30f, 14f, 190f), 2500f, "Assault Ship", "LHD", ACO_EscortUnit.ROLE_MOTHERSHIP);
+        root.GetComponent<ACO_EscortUnit>().Speed = 6f;
+        Transform model = root.transform.Find("Model");
+        AddBox(model, "Island", new Vector3(11f, 22f, 10f), new Vector3(6f, 16f, 34f));
+        AddBox(model, "WellDeck", new Vector3(0f, 6f, -88f), new Vector3(24f, 8f, 12f));
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_AssaultShip.prefab");
+    }
+
+    /// 상륙전 호위함(아군, 해상, Role GUARD): 선체 + 대공포 2문(적 항공기) + 함포 1문(적 항공기·적 지상). 강습상륙함 좌우에서 대기하며 지원한다.
+    /// 잃어도 실패가 아니다. 락온 마커는 아군 지상 레이어(26).
+    public static GameObject BuildGuardShip()
+    {
+        EnsurePrefabFolder();
+        GameObject root = CreateEscortShip("NPC_GuardShip", new Vector3(14f, 10f, 120f), 1200f, "Frigate", "FFG", ACO_EscortUnit.ROLE_GUARD);
+        root.GetComponent<ACO_EscortUnit>().Speed = 6f;
+        Transform model = root.transform.Find("Model");
+        AddBox(model, "Superstructure", new Vector3(0f, 14f, 6f), new Vector3(10f, 8f, 30f));
+        int air = 1 << LayerEnemyAir;
+        int both = (1 << LayerEnemyAir) | (1 << LayerEnemyGround);
+        GameObject gunFwd = CreateShipTurret(root.transform, "MainGun", new Vector3(0f, 10.5f, 42f), 0f, both, 4000f, 30f);
+        GameObject aaFwd = CreateShipTurret(root.transform, "AAGun_Fwd", new Vector3(0f, 18.5f, 18f), 0f, air, 2500f, 3f);
+        GameObject aaAft = CreateShipTurret(root.transform, "AAGun_Aft", new Vector3(0f, 10.5f, -45f), 180f, air, 2500f, 3f);
+        ACO_EscortUnit unit = root.GetComponent<ACO_EscortUnit>();
+        unit.DefenseGuns = new UdonSharp.UdonSharpBehaviour[] { gunFwd.GetComponent<ACO_AAGunSite>(), aaFwd.GetComponent<ACO_AAGunSite>(), aaAft.GetComponent<ACO_AAGunSite>() };
+        // 대공포 2문 = 아군 CIWS(함대 주변 아군을 노린 적 미사일을 요격), 함포는 요격 안 함
+        foreach (UdonSharp.UdonSharpBehaviour g in unit.DefenseGuns) { ACO_SceneBaker.ApplyInterceptDefaults((ACO_AAGunSite)g); }
+        unit.HideOnDeath = new GameObject[] { gunFwd, aaFwd, aaAft };
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_GuardShip.prefab");
+    }
+
+    /// 상륙전 LCAC(공기부양정 — 지켜야 하는 대상, MoveMode 공기부양, Role VIP): 바다를 건너 해변까지 올라가 멈춘다. 무장 없음.
+    /// 락온 마커는 아군 지상 레이어(26) — 해안 전차·곡사포·적 헬리콥터가 노린다. 모델은 임시 상자(갑판 + 스커트 + 프로펠러 덕트 2).
+    public static GameObject BuildLcac()
+    {
+        EnsurePrefabFolder();
+        GameObject root = CreateEscortShip("NPC_LCAC", new Vector3(14f, 5f, 27f), 450f, "LCAC", "LCAC", ACO_EscortUnit.ROLE_VIP);
+        BoxCollider col = root.GetComponent<BoxCollider>();
+        col.center = new Vector3(0f, 2.5f, 0f);
+        Transform model = root.transform.Find("Model");
+        Transform hull = model.Find("Hull");
+        if (hull != null) { hull.localPosition = new Vector3(0f, 1.2f, 0f); hull.localScale = new Vector3(14f, 2.4f, 27f); }
+        AddBox(model, "Deck", new Vector3(0f, 3f, 0f), new Vector3(10f, 1.2f, 22f));
+        AddBox(model, "Duct_L", new Vector3(-4f, 5f, -11f), new Vector3(3.5f, 4f, 2f));
+        AddBox(model, "Duct_R", new Vector3(4f, 5f, -11f), new Vector3(3.5f, 4f, 2f));
+        ACO_EscortUnit unit = root.GetComponent<ACO_EscortUnit>();
+        unit.MoveMode = ACO_EscortUnit.MOVE_HOVER;
+        unit.Speed = 30f;
+        unit.StopDistance = 150f;
+        unit.BobAngle = 0.4f;
+        Transform marker = root.transform.Find("AAMTarget");
+        if (marker != null) { marker.localPosition = new Vector3(0f, 2.5f, 0f); marker.GetComponent<SphereCollider>().radius = 10f; }
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_LCAC.prefab");
+    }
+
+    /// 상륙전 아군 공격헬기(공중, Role GUARD): LCAC보다 먼저 상륙 경로를 낮게(HeliAltitude) 날아가 해안 상공에 멈추고, 턱 밑 기관포로
+    /// 적 지상·적 항공기를 쏜다. 락온 마커는 아군 항공기 레이어(25) — 적 SAM·대공포·전투기가 노린다. 플레어 있음. 잃어도 실패가 아니다.
+    public static GameObject BuildFriendlyGunship()
+    {
+        EnsurePrefabFolder();
+        GameObject root = new GameObject("NPC_FriendlyGunship");
+        root.layer = LayerHitbox;
+        BoxCollider col = root.AddComponent<BoxCollider>();
+        col.size = new Vector3(2.4f, 2.6f, 12f);
+        col.center = new Vector3(0f, 1.3f, 0f);
+
+        GameObject model = new GameObject("Model");
+        model.transform.SetParent(root.transform, false);
+        AddBox(model.transform, "Body", new Vector3(0f, 1.3f, 0f), new Vector3(2.2f, 2.4f, 9f));
+        AddBox(model.transform, "Tail", new Vector3(0f, 1.8f, -7f), new Vector3(0.6f, 0.8f, 6f));
+        GameObject rotor = new GameObject("Rotor");
+        rotor.transform.SetParent(model.transform, false);
+        rotor.transform.localPosition = new Vector3(0f, 3.1f, 0f);
+        AddBox(rotor.transform, "BladeA", Vector3.zero, new Vector3(14f, 0.08f, 0.5f));
+        AddBox(rotor.transform, "BladeB", Vector3.zero, new Vector3(0.5f, 0.08f, 14f));
+
+        GameObject lockMarker = new GameObject("AAMTarget");
+        lockMarker.layer = LayerFriendlyAir;
+        lockMarker.transform.SetParent(root.transform, false);
+        lockMarker.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+        SphereCollider markerCol = lockMarker.AddComponent<SphereCollider>();
+        markerCol.isTrigger = true;
+        markerCol.radius = 6f;
+
+        GameObject effects = new GameObject("Effects");
+        effects.transform.SetParent(root.transform, false);
+        effects.SetActive(false);
+        GameObject deathFx = new GameObject("DeathEffects");
+        deathFx.transform.SetParent(root.transform, false);
+        deathFx.SetActive(false);
+
+        AddTargetAnimator(root);
+        SaccTarget health = root.AddUdonSharpComponent<SaccTarget>();
+        ACO_EscortUnit unit = root.AddUdonSharpComponent<ACO_EscortUnit>();
+        health.Health = 300f;
+        health.RespawnDelay = 0f;
+        health.DisableBulletHitEvent = true;
+        health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { unit };
+
+        unit.TargetHealth = health;
+        unit.TargetName = "Gunship";
+        unit.MarkerLabel = "HEL";
+        unit.Role = ACO_EscortUnit.ROLE_GUARD;
+        unit.MoveMode = ACO_EscortUnit.MOVE_AIR;
+        unit.Speed = 55f;
+        unit.BankPerTurnRate = 1f;
+        unit.MaxBank = 15f;
+        unit.StopDistance = 600f;
+        unit.AttackPriority = 500f;
+        unit.CrashFallTime = 6f;
+        unit.ShowOnDeath = new GameObject[] { deathFx };
+        unit.HideOnDeath = new GameObject[0];
+        unit.DisableCollidersOnDeath = new Collider[] { col };
+        unit.Flares = AddFlareDispenser(root, unit, health, new Vector3(0f, 0.5f, -4f), 0.6f, 6);
+
+        int targets = (1 << LayerEnemyGround) | (1 << LayerEnemyAir);
+        GameObject gun = CreateShipTurret(root.transform, "ChinGun", new Vector3(0f, 0f, 4f), 0f, targets, 2000f, 6f);
+        ACO_AAGunSite aa = gun.GetComponent<ACO_AAGunSite>();
+        aa.MinPitch = -70f;
+        aa.MaxPitch = 20f;
+        unit.DefenseGuns = new UdonSharp.UdonSharpBehaviour[] { aa };
+        unit.HideAfterCrash = new GameObject[] { model, gun };
+        return SaveAndCleanup(root, $"{PrefabDir}/NPC_FriendlyGunship.prefab");
+    }
+
+    /// 아군 해상 호위 대상 공통: 루트 = 해수면, 선체 박스는 흘수선 아래 3m부터. 플레이어 기총·범위 피해를 받지 않는다.
+    private static GameObject CreateEscortShip(string name, Vector3 hull, float hp, string targetName, string label, int role)
+    {
+        GameObject root = new GameObject(name);
+        root.layer = LayerHitbox;
+        BoxCollider col = root.AddComponent<BoxCollider>();
+        col.size = hull;
+        col.center = new Vector3(0f, hull.y * 0.5f - 3f, 0f);
+
+        GameObject model = new GameObject("Model");
+        model.transform.SetParent(root.transform, false);
+        AddBox(model.transform, "Hull", new Vector3(0f, hull.y * 0.5f - 3f, 0f), hull);
+
+        GameObject lockMarker = new GameObject("AAMTarget");
+        lockMarker.layer = LayerFriendlyGround;
+        lockMarker.transform.SetParent(root.transform, false);
+        lockMarker.transform.localPosition = new Vector3(0f, hull.y * 0.5f, 0f);
+        SphereCollider markerCol = lockMarker.AddComponent<SphereCollider>();
+        markerCol.isTrigger = true;
+        markerCol.radius = Mathf.Max(hull.x, 12f);
+
+        GameObject effects = new GameObject("Effects");
+        effects.transform.SetParent(root.transform, false);
+        effects.SetActive(false);
+        GameObject deathFx = new GameObject("DeathEffects");
+        deathFx.transform.SetParent(root.transform, false);
+        deathFx.SetActive(false);
+
+        AddTargetAnimator(root);
+        SaccTarget health = root.AddUdonSharpComponent<SaccTarget>();
+        ACO_EscortUnit escort = root.AddUdonSharpComponent<ACO_EscortUnit>();
+        health.Health = hp;
+        health.RespawnDelay = 0f;
+        health.DisableBulletHitEvent = true;
+        health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { escort };
+
+        escort.TargetHealth = health;
+        escort.TargetName = targetName;
+        escort.MarkerLabel = label;
+        escort.Role = role;
+        escort.MoveMode = ACO_EscortUnit.MOVE_SEA;
+        escort.Speed = 18f;
+        escort.StopDistance = 400f;
+        escort.BobAngle = 0.6f;
+        escort.AttackPriority = 0f;
+        escort.ShowOnDeath = new GameObject[] { deathFx };
+        escort.HideOnDeath = new GameObject[0];
+        escort.DisableCollidersOnDeath = new Collider[] { col };
+        escort.HideAfterCrash = new GameObject[0];
+        ACO_WaterFxBuilder.AddWake(root.transform);   // 항적(움직일 때만)
+        return root;
+    }
+
+    /// 아군 함선 포탑: 대공포(ACO_AAGunSite)를 배에 붙인다 — 자기 콜라이더·락온 마커 없음(맞으면 배가 맞는다). 살리고 멈추는 건 ACO_EscortUnit(DefenseGuns).
+    private static GameObject CreateShipTurret(Transform parent, string name, Vector3 localPos, float yaw, int targetLayers, float range, float damage)
+    {
+        bool heavy = damage >= 20f;
+        var spec = new GunSpec
+        {
+            BodySize = heavy ? new Vector3(3f, 1.6f, 3.5f) : new Vector3(1.8f, 1.2f, 1.8f), BarrelLength = heavy ? 5f : 2.5f, BarrelThickness = heavy ? 0.35f : 0.2f,
+            Health = 100f, Armor = 1f, Score = 0, Label = "GUN",
+            DetectRange = range, LoseTargetRange = range * 1.2f, YawRate = heavy ? 35f : 90f, PitchRate = heavy ? 15f : 70f, TrackingLag = heavy ? 0.3f : 0.5f, AimError = heavy ? 0.4f : 0.8f,
+            MaxRange = range, MuzzleVelocity = heavy ? 800f : 1000f, FireStartAngle = heavy ? 3f : 8f, EffectiveAngle = heavy ? 1.5f : 2.5f, DwellTime = heavy ? 1.5f : 0.5f,
+            BurstDuration = heavy ? 0.25f : 2f, BurstCooldown = heavy ? 4f : 1.5f, DamagePerTick = damage, MinDamageInterval = heavy ? 0.2f : 0.15f, MaxDamageInterval = heavy ? 0.2f : 0.5f,
+            Spread = heavy ? 0.2f : 0.8f, TracerRate = heavy ? 4f : 25f,
+        };
+        GameObject turret = CreateAAGunObject(name, spec);
+        turret.transform.SetParent(parent, false);
+        turret.transform.localPosition = localPos;
+        turret.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+        Object.DestroyImmediate(turret.GetComponent<BoxCollider>());
+        Transform marker = turret.transform.Find("AAMTarget");
+        if (marker != null) { Object.DestroyImmediate(marker.gameObject); }
+        ACO_AAGunSite aa = turret.GetComponent<ACO_AAGunSite>();
+        SaccEntity entity = turret.GetComponent<SaccEntity>();
+        entity.AAMTargetsLayer = targetLayers;
+        aa.TargetLayers = targetLayers;
+        aa.DisableCollidersOnDeath = new Collider[0];
+        aa.MinPitch = -10f;
+        aa.MaxPitch = heavy ? 60f : 85f;
+        aa.MinTargetAltitude = -100000f;
+        return turret;
+    }
+
     /// 구축함(일반 유닛 — 지상 풀): 본체 80m + VLS 1 + CIWS 1. 바다에 함대로 스폰되거나 전함 호위로 붙는다.
     public static GameObject BuildDestroyer()
     {
@@ -933,6 +1211,8 @@ public static class ACO_PrefabBuilder
         ACO_Missile missile = root.AddUdonSharpComponent<ACO_Missile>();
         missile.ExplosionObject = explosion;
         missile.DisableOnExplode = new GameObject[] { model };
+        ACO_WaterFxBuilder.AddMissileSpray(root.transform);   // 수면 가까이(시스키밍) 물보라
+        ACO_MissileFlybySetup.AddTo(missile);                 // 적 미사일이 스쳐 지나가는 소리
         return root;
     }
 
@@ -998,7 +1278,8 @@ public static class ACO_PrefabBuilder
         entity.ExtensionUdonBehaviours = new UdonSharp.UdonSharpBehaviour[] { ai };
 
         // 체력/데미지/리스폰은 SaccTarget이 소유하고, 격추되면 ExplodeOther로 AI에 직접 통지한다.
-        targetHealth.Health = 100f;
+        targetHealth.Health = 150f;
+        ai.BaseHealth = 150f;   // 숙련도 체력 배율의 기준(베테랑) — 신병 99, 에이스 199.5
         // 0 = 자동 부활 안 함. 스폰/웨이브 매니저가 ACO_NPCFighterAI.Respawn()을 호출한다.
         targetHealth.RespawnDelay = 0f;
         targetHealth.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { ai };
@@ -1033,6 +1314,7 @@ public static class ACO_PrefabBuilder
         flares.Flight = flight;
         flares.FlareParticles = CreateFlareParticle(root.transform, new Vector3(0f, -0.4f, -2.8f));
         ai.Flares = flares;
+        ACO_WaterFxBuilder.AddAircraftSpray(root.transform);   // 저공비행 물보라
 
         return root;
     }
@@ -1497,6 +1779,7 @@ public static class ACO_PrefabBuilder
             AttachPart(body, part, ps.Position);
             ACO_SAMSite sam = part.GetComponent<ACO_SAMSite>();
             ACO_AAGunSite aa = part.GetComponent<ACO_AAGunSite>();
+            if (aa != null) { ACO_SceneBaker.ApplyInterceptDefaults(aa); }   // CIWS = 적 요격(플레이어 미사일), 함포는 요격 안 함
             parts[i] = sam != null ? (UdonSharp.UdonSharpBehaviour)sam : aa;
         }
 
@@ -1524,6 +1807,7 @@ public static class ACO_PrefabBuilder
         ship.HideOnDeath = new GameObject[0];
         ship.DisableCollidersOnDeath = new Collider[] { hullCol, bridgeCol };
 
+        ACO_WaterFxBuilder.AddWake(root.transform);   // 항적(움직일 때만)
         return SaveAndCleanup(root, $"{PrefabDir}/{spec.PrefabName}.prefab");
     }
 
@@ -1633,6 +1917,145 @@ public static class ACO_PrefabBuilder
         Material mat = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
         if (mat) { renderer.sharedMaterial = mat; }
 
+        return ps;
+    }
+
+    /// SCM 탄체(ACO_Missile_SCM): LAGM 프리팹을 복사해 산탄 탄두(ACO_Dispenser + 자탄·폭발 파티클·폭발음)를 붙이고, 높이 올라갔다 가파르게 내리꽂게 한다.
+    /// LAGM 프리팹이 없으면 null(카탈로그는 기체의 일반 미사일을 쓰게 되니 산탄이 되지 않는다 — 에러로 알린다).
+    public static GameObject BuildScmMissile()
+    {
+        EnsurePrefabFolder();
+        string source = PathOf("ACO_Missile_LAGM");
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(source) == null)
+        {
+            Debug.LogError($"[ACO] SCM 탄체: 원본 {source}가 없습니다.");
+            return null;
+        }
+        GameObject root = PrefabUtility.LoadPrefabContents(source);
+        try
+        {
+            ACO_Missile missile = root.GetComponent<ACO_Missile>();
+            if (missile == null)
+            {
+                Debug.LogError($"[ACO] SCM 탄체: {source} 루트에 ACO_Missile이 없습니다.");
+                return null;
+            }
+            var go = new GameObject("Dispenser");
+            go.transform.SetParent(root.transform, false);
+            go.layer = root.layer;
+            ACO_Dispenser dispenser = go.AddUdonSharpComponent<ACO_Dispenser>();
+            dispenser.Missile = missile;
+            dispenser.Bomblets = CreateBombletParticles(go.transform, dispenser.BombletSpeed, dispenser.BurstDistance, dispenser.ConeAngle);
+            dispenser.Blasts = CreateBlastParticles(go.transform);
+            AudioClip clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ACO_Addon/Audio/Generated/ACO_Explosion_Small.wav");
+            var sounds = new AudioSource[3];
+            for (int i = 0; i < sounds.Length; i++)
+            {
+                var s = new GameObject("BlastSound_" + i);
+                s.transform.SetParent(go.transform, false);
+                s.layer = root.layer;
+                AudioSource a = s.AddComponent<AudioSource>();
+                a.clip = clip;
+                a.playOnAwake = false;
+                a.spatialBlend = 1f;
+                a.dopplerLevel = 0f;
+                a.minDistance = 60f;
+                a.maxDistance = 2500f;
+                sounds[i] = a;
+            }
+            dispenser.BlastSounds = sounds;
+
+            // 표적 위 700m까지 올라갔다 55도로 내리꽂아, 터지는 자리(표적 420m 앞)가 충분히 높고 자탄이 지면에 너무 길게 깔리지 않게
+            missile.Dispenser = dispenser;
+            missile.TopAttack = true;
+            missile.TopAttackAltitude = 700f;
+            missile.TopAttackDiveAngle = 55f;
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PathOf("ACO_Missile_SCM"));
+            Debug.Log($"[ACO] SCM 탄체 프리팹 생성 완료: {PathOf("ACO_Missile_SCM")}");
+            return prefab;
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// 자탄: 작은 불티가 원뿔로 곧게 날아간다(중력 없음 — 폭발 시각이 거리 / 탄속과 맞게). 수명은 표적까지 조금 넘게.
+    private static ParticleSystem CreateBombletParticles(Transform parent, float speed, float distance, float coneAngle)
+    {
+        GameObject go = new GameObject("Bomblets");
+        go.transform.SetParent(parent, false);
+        go.layer = parent.gameObject.layer;
+        ParticleSystem ps = go.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = ps.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.startLifetime = distance * 1.3f / Mathf.Max(speed, 1f);
+        main.startSpeed = speed;
+        main.startSize = 1.2f;
+        main.startColor = new Color(1f, 0.75f, 0.4f, 1f);
+        main.gravityModifier = 0f;
+        main.maxParticles = 64;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0f;
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = coneAngle;
+        shape.radius = 0.5f;
+
+        ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Stretch;
+        renderer.velocityScale = 0.03f;
+        renderer.lengthScale = 2f;
+        Material mat = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
+        if (mat) { renderer.sharedMaterial = mat; }
+        return ps;
+    }
+
+    /// 자탄 폭발: 불꽃이 퍼지며 어두운 연기로 사그라든다. 스크립트가 자리로 옮겨 Emit한다.
+    private static ParticleSystem CreateBlastParticles(Transform parent)
+    {
+        GameObject go = new GameObject("Blasts");
+        go.transform.SetParent(parent, false);
+        go.layer = parent.gameObject.layer;
+        ParticleSystem ps = go.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = ps.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.9f, 2f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(6f, 22f);
+        main.startSize = new ParticleSystem.MinMaxCurve(9f, 20f);
+        main.gravityModifier = -0.05f;
+        main.maxParticles = 256;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0f;
+
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Hemisphere;
+        shape.radius = 4f;
+        go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // 반구가 위를 보게
+
+        ParticleSystem.ColorOverLifetimeModule color = ps.colorOverLifetime;
+        color.enabled = true;
+        var gradient = new Gradient();
+        gradient.SetKeys(
+            new[] { new GradientColorKey(new Color(1f, 0.85f, 0.45f), 0f), new GradientColorKey(new Color(1f, 0.4f, 0.1f), 0.18f), new GradientColorKey(new Color(0.16f, 0.15f, 0.14f), 0.5f), new GradientColorKey(new Color(0.1f, 0.1f, 0.1f), 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.85f, 0.45f), new GradientAlphaKey(0f, 1f) });
+        color.color = new ParticleSystem.MinMaxGradient(gradient);
+
+        ParticleSystem.SizeOverLifetimeModule size = ps.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.45f, 1f, 1f));
+
+        ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
+        Material mat = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
+        if (mat) { renderer.sharedMaterial = mat; }
         return ps;
     }
 

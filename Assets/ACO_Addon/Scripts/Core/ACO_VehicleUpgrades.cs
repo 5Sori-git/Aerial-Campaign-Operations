@@ -41,6 +41,10 @@ namespace ACO
         public Collider[] BodyColliders;
         [Tooltip("씬의 NPC 전투기 전부")]
         public ACO_NPCFighterAI[] NPCFighters;
+        [Tooltip("씬의 다른 공중 유닛(헬기·폭격기·수송기·아군 공격헬기)의 충돌 방지 — 전투기 다음에 한 대씩 건다")]
+        public ACO_AirCollisionIgnore[] OtherAirUnits;
+        [Tooltip("이 기체의 데칼(Bake가 만든다) — 탑승하면 내 데칼을 보내고 내리면 끈다")]
+        public ACO_VehicleDecal Decal;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(내가/아군이 격추됨 대사)")]
         [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
         public ACO_Chatter Chatter;
@@ -96,6 +100,7 @@ namespace ACO
             if (Progress) { Progress.ReportPiloting(true); }
             Apply(true);
             SendConsumableVisuals();
+            if (Decal) { Decal.LocalPilotEnter(); }
             // 충돌 데미지는 조종사(오너) 화면에서 계산한다 — 탑승 때 SAV가 콜라이더 레이어를 바꾼 다음에 다시 건다.
             // 한 프레임에 몰지 않고 NPC 한 대씩 프레임마다 나눠 건다(끊김 방지).
             _ignoreIndex = 0;
@@ -112,18 +117,30 @@ namespace ACO
         /// 이 클라이언트가 지금 이 기체를 조종 중인가(NPC가 켜질 때 내 기체를 찾는다).
         public bool IsLocalPilot() { return _pilot; }
 
+        /// 전투기 → 다른 공중 유닛(헬기·폭격기·수송기) 순으로 프레임마다 한 대씩.
         public void IgnoreNextNPC()
         {
-            if (NPCFighters == null || _ignoreIndex >= NPCFighters.Length) { _ignoring = false; return; }
-            ACO_NPCFighterAI npc = NPCFighters[_ignoreIndex];
+            int fighters = NPCFighters != null ? NPCFighters.Length : 0;
+            int others = OtherAirUnits != null ? OtherAirUnits.Length : 0;
+            if (_ignoreIndex >= fighters + others) { _ignoring = false; return; }
+            if (_ignoreIndex < fighters)
+            {
+                ACO_NPCFighterAI npc = NPCFighters[_ignoreIndex];
+                if (npc) { npc.IgnoreWith(BodyColliders); }
+            }
+            else
+            {
+                ACO_AirCollisionIgnore unit = OtherAirUnits[_ignoreIndex - fighters];
+                if (unit) { unit.IgnoreWith(BodyColliders); }
+            }
             _ignoreIndex++;
-            if (npc) { npc.IgnoreWith(BodyColliders); }
             SendCustomEventDelayedFrames(nameof(IgnoreNextNPC), 1);
         }
 
         public void SFEXT_O_PilotExit()
         {
             Apply(false);
+            if (Decal) { Decal.LocalPilotExit(); }
             // 스스로 내렸으면(폭발이 아니면) 내린 자리를 알린다 — 안전지대 밖이면 격추로 센다.
             if (_pilot && !_exploded && Progress && EntityControl && !EntityControl.dead)
             {

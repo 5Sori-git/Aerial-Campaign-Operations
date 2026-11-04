@@ -47,8 +47,8 @@ namespace ACO
         [Header("색")]
         public Color[] HeightColors = new Color[] {
             new Color(0.62f, 0.58f, 0.40f), new Color(0.24f, 0.42f, 0.22f), new Color(0.40f, 0.37f, 0.34f), new Color(0.85f, 0.87f, 0.9f) };
-        public Color EnemyColor = new Color(1f, 0.25f, 0.2f, 1f);
-        public Color ObjectiveColor = new Color(1f, 0.82f, 0.2f, 1f);
+        public Color EnemyColor = new Color(1f, 0.82f, 0.2f, 1f);      // 적 노랑(HUD 레이더와 같다)
+        public Color ObjectiveColor = new Color(1f, 0.25f, 0.2f, 1f);  // 목표 빨강
         public Color FriendlyColor = new Color(0.35f, 0.65f, 1f, 1f);
         public Color SelfColor = new Color(1f, 1f, 1f, 1f);
 

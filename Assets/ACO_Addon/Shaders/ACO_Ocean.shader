@@ -7,6 +7,9 @@
 //  - (선택) 가까운 너울(정점 이동): 카메라를 따라다니는 촘촘한 원판 메시(_ACO_SWELL_MESH 머티리얼)가 반경 _SwellRadius 안에서 게르스트너 파도 4개로 출렁이고,
 //    평평한 바다(_ACO_SWELL_HOLE 머티리얼)는 같은 원 안을 비운다. 원 가장자리에선 너울이 0으로 잦아들어 두 면이 이음매 없이 이어진다.
 //    카메라가 _SwellFadeHeight보다 높으면 너울이 줄어든다(고공에선 안 보인다). 원판은 셰이더가 카메라 위치(VR이면 두 눈 가운데)로 옮긴다 — 스크립트 없음.
+//  - 물속에서 본 수면: 평소엔 뒷면을 버리고(_Cull = Back), 물속 연출(ACO_Underwater)이 내 화면의 너울 머티리얼 복사본만 _Cull = Off로 바꾼다.
+//    뒷면은 조명 없이 _UnderColor로 스스로 빛난다(바로 위일수록 밝게).
+//  - 비(전역 _UdonACORain — ACO_Rain): 가까운 바다(300m)에 빗방울 파문(격자마다 퍼지는 고리 두 겹), 반짝임 조금 거칠게.
 // 그림자 투사 패스가 없다(깊이 텍스처에 바다 자신이 들어가지 않게). 큐 Transparent-100(불투명 다음, 깊이 씀).
 Shader "ACO/Ocean"
 {
@@ -59,12 +62,17 @@ Shader "ACO/Ocean"
         _SwellWave2 ("Swell 2", Vector) = (5, 110, 0.8, 0.6)
         _SwellWave3 ("Swell 3", Vector) = (55, 68, 0.45, 0.5)
         _SwellWave4 ("Swell 4", Vector) = (-20, 37, 0.22, 0.4)
+
+        [Header(Underside seen from below ACO_Underwater turns culling off while underwater)]
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
+        _UnderColor ("Underside glow", Color) = (0.12, 0.42, 0.5, 1)
     }
     SubShader
     {
         Tags { "Queue" = "Transparent-100" "RenderType" = "Transparent" "IgnoreProjector" = "True" }
         LOD 300
         ZWrite On
+        Cull [_Cull]
 
         CGPROGRAM
         #pragma surface surf Standard vertex:vert alpha:premul nolightmap nodynlightmap nodirlightmap nometa noshadowmask
@@ -81,6 +89,9 @@ Shader "ACO/Ocean"
         float _ShallowDepth, _ClearDepth, _ShoreFoamWidth;
         float _SeaY, _SwellRadius, _SwellSnap, _SwellScale, _SwellFadeHeight;
         float4 _SwellWave1, _SwellWave2, _SwellWave3, _SwellWave4;
+        fixed4 _UnderColor;
+        // 비(ACO_Rain이 VRChat 셰이더 전역으로 넣는다 — 날씨 비 세기, 0 = 비 없음): 가까운 바다에 빗방울 파문
+        float _UdonACORain;
         #ifdef _ACO_DEPTH
         UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
         #endif
@@ -89,6 +100,7 @@ Shader "ACO/Ocean"
         {
             float3 worldPos;
             float4 screenPos;
+            float facing : VFACE;   // 뒷면(물속에서 올려다본 수면)이면 음수 — 컬링을 끈 때만 온다
         };
 
         float2 Rot(float2 d, float deg)
@@ -96,6 +108,28 @@ Shader "ACO/Ocean"
             float a = radians(deg);
             float s = sin(a), c = cos(a);
             return float2(d.x * c - d.y * s, d.x * s + d.y * c);
+        }
+
+        float RainHash(float2 p)
+        {
+            float3 p3 = frac(float3(p.xyx) * 0.1031);
+            p3 += dot(p3, p3.yzx + 33.33);
+            return frac((p3.x + p3.y) * p3.z);
+        }
+
+        // 빗방울 파문 한 겹: cell(m) 격자마다 고리 하나가 무작위 때에 퍼져 나간다. 반환 = 노멀 기울기(xz)
+        float2 RainRipple(float2 xz, float cell, float t)
+        {
+            float2 g = xz / cell;
+            float2 id = floor(g);
+            float h = RainHash(id);
+            float2 c = (float2(h, RainHash(id + 3.7)) - 0.5) * 0.6;
+            float2 dv = frac(g) - 0.5 - c;
+            float r = length(dv);
+            float age = frac(t * 0.9 + h * 5.3);            // 0 → 1: 고리가 퍼지며 사라진다
+            float front = age * 0.45;
+            float ring = sin((r - front) * 45) * smoothstep(0.12, 0, abs(r - front)) * (1 - age);
+            return r > 0.001 ? dv / r * ring : float2(0, 0);
         }
 
         // 너울 원의 중심: 카메라(VR이면 두 눈 가운데 — 눈마다 원이 어긋나지 않게)를 _SwellSnap 격자에 맞춘 XZ
@@ -191,6 +225,13 @@ Shader "ACO/Ocean"
             float3 n2 = UnpackNormal(tex2D(_NormalTex, uv2));
             float3 n3 = UnpackNormal(tex2D(_NormalTex, uv3));
             float2 bump = (n1.xy * nearW + n2.xy) * (_WaveStrength * rough) + n3.xy * _SwellStrength;
+            // 비: 가까운 바다(300m 안)에 빗방울 파문 두 겹(크기 다르게)
+            float rainNear = _UdonACORain * (1 - saturate(dist / 300));
+            if (rainNear > 0.001)
+            {
+                float2 rr = RainRipple(xz, 1.7, _Time.y) + RainRipple(xz + 17.3, 2.9, _Time.y * 0.8 + 0.5) * 0.7;
+                bump += rr * (0.35 * rainNear);
+            }
             o.Normal = normalize(float3(bump, 1));
 
             // 색: 내려다보면 깊은 색, 비스듬하면 수평선 색
@@ -221,8 +262,23 @@ Shader "ACO/Ocean"
             #endif
 
             col = lerp(col, _FoamColor.rgb, foam);
+
+            if (IN.facing < 0)
+            {
+                // 물속에서 올려다본 수면: 조명·반사 없이 밝은 물빛으로 스스로 빛난다. 바로 위일수록 밝고, 물결·거품이 조금 비친다(안개는 그 위에 덮인다)
+                float up = saturate(-v.y);
+                o.Normal = float3(0, 0, -1);
+                o.Albedo = 0;
+                o.Emission = _UnderColor.rgb * lerp(0.55, 1.25, up) * (0.85 + 0.3 * saturate(length(bump))) + _FoamColor.rgb * foam * 0.25;
+                o.Smoothness = 0;
+                o.Metallic = 0;
+                o.Alpha = 1;
+                return;
+            }
+
             o.Albedo = col;
-            o.Smoothness = lerp(lerp(_Smoothness, _FarSmoothness, far), 0.3, foam);
+            // 비가 오면 수면 반짝임이 조금 거칠다(빗방울에 흐트러진다)
+            o.Smoothness = lerp(lerp(_Smoothness, _FarSmoothness, far), 0.3, foam) * (1 - 0.08 * _UdonACORain);
             o.Metallic = 0;
             o.Alpha = alpha;
         }

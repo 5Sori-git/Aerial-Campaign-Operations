@@ -8,6 +8,10 @@ namespace ACO
     /// 이 스크립트는 프레임마다 머리 위치로 따라가며 머리의 속도(= 탄 기체 속도)를 머티리얼에 넘긴다 — 빗줄기가 상대 바람 방향으로 늘어난다.
     ///  - Intensity(0~1)로 켜고 끈다(FadeTime 동안 서서히). 0이면 렌더러·소리를 끄고 아무것도 안 한다.
     ///  - 지붕 아래(ShelterBoxes — 격납고 등)와 MaxAltitude 위(구름 위)에서는 내리지 않는다.
+    ///  - 캐노피 빗방울(CanopyRenderer, 셰이더 ACO/CanopyRain): 기체를 조종·탑승 중일 때(Contacts.LocalVehicle) 머리를 감싸는 구를 기체 자세로 돌려
+    ///    방울이 캐노피에 붙어 흐르게 한다 — 느리면 맺혀 흘러내리고 빠르면 위로 길게 넘어간다. 비가 안 오는 곳(지붕 아래·구름층 위)에 가면 CanopyDryTime 동안 마른다.
+    ///  - 날씨 비 세기를 VRChat 셰이더 전역으로 넘긴다(내가 지붕 아래·구름 위여도 날씨 값 — 바다·땅은 비를 맞고 있다):
+    ///    _UdonACORain(바다 빗방울 파문 — 비 세기를 FadeTime으로 섞은 값), _UdonACOWet(젖은 땅·나무 — WetTime 동안 젖고 DryTime 동안 마른다).
     ///  - 날씨가 쓸 API: SetIntensity.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Rain : UdonSharpBehaviour
@@ -27,11 +31,36 @@ namespace ACO
         public AudioSource RainSound;
         public float SoundVolume = 0.6f;
 
+        [Header("캐노피 빗방울")]
+        [Tooltip("캐노피 빗방울을 그린다(기본 끔 — 지금 모양은 쓰지 않는다)")]
+        public bool CanopyDrops = false;
+        [Tooltip("머리를 감싸는 구(ACO/CanopyRain, 반경 0.9m — ACO_SkyBuilder가 만든다). 기체에 탔을 때만 켠다")]
+        public Renderer CanopyRenderer;
+        [Tooltip("내가 탄 기체를 알려 준다(Bake가 씬의 레이더 접촉 목록을 넣는다)")]
+        public ACO_RadarContacts Contacts;
+        [Tooltip("비가 안 오는 곳에 가면 캐노피가 마르는 시간(초)")]
+        public float CanopyDryTime = 6f;
+
+        [Header("젖은 땅·바다 (셰이더 전역)")]
+        [Tooltip("비가 오기 시작해 땅이 다 젖는 시간(초)")]
+        public float WetTime = 25f;
+        [Tooltip("비가 그친 뒤 다 마르는 시간(초)")]
+        public float DryTime = 60f;
+
         private Material _material;
+        private Material _canopyMat;
         private float _current;
+        private float _canopy;
         private Vector3 _lastHead;
         private bool _hasLast;
         private Vector3 _velocity;
+        // 셰이더 전역(이름이 _Udon으로 시작해야 VRChat이 허락한다)
+        private int _idRain;
+        private int _idWet;
+        private float _weatherRain;
+        private float _wet;
+        private float _sentRain = -1f;
+        private float _sentWet = -1f;
 
         void Start()
         {
@@ -40,16 +69,26 @@ namespace ACO
                 _material = RainRenderer.material;
                 RainRenderer.enabled = false;
             }
+            if (CanopyRenderer)
+            {
+                _canopyMat = CanopyRenderer.material;
+                CanopyRenderer.gameObject.SetActive(false);
+            }
             if (RainSound) { RainSound.volume = 0f; }
+            _idRain = VRCShader.PropertyToID("_UdonACORain");
+            _idWet = VRCShader.PropertyToID("_UdonACOWet");
+            SendGlobals();
         }
 
         void Update()
         {
+            float dt = Mathf.Max(Time.deltaTime, 0.0001f);
+            UpdateGlobals(dt);
+
             VRCPlayerApi lp = Networking.LocalPlayer;
             if (!Utilities.IsValid(lp) || !_material) { return; }
-            if (Intensity <= 0f && _current <= 0f) { _hasLast = false; return; }
+            if (Intensity <= 0f && _current <= 0f && _canopy <= 0f) { _hasLast = false; return; }
 
-            float dt = Mathf.Max(Time.deltaTime, 0.0001f);
             Vector3 head = lp.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
             float target = Intensity;
             if (head.y > MaxAltitude || InShelter(head)) { target = 0f; }
@@ -63,7 +102,6 @@ namespace ACO
                 if (on && !RainSound.isPlaying) { RainSound.Play(); }
                 else if (!on && RainSound.isPlaying) { RainSound.Stop(); }
             }
-            if (!on) { _hasLast = false; return; }
 
             // 머리 속도(순간이동·리스폰은 무시)
             if (_hasLast)
@@ -74,9 +112,56 @@ namespace ACO
             _lastHead = head;
             _hasLast = true;
 
+            UpdateCanopy(lp, head, target, dt);
+            if (!on) { return; }
             transform.position = head;
             _material.SetVector("_CamVel", new Vector4(_velocity.x, _velocity.y, _velocity.z, 0f));
             _material.SetFloat("_Intensity", _current);
+        }
+
+        /// 캐노피 빗방울: 기체에 탔을 때만, 비 맞는 곳이면 빗방울이 늘고(FadeTime) 아니면 마른다(CanopyDryTime). 구는 머리 위치 + 기체 자세.
+        private void UpdateCanopy(VRCPlayerApi lp, Vector3 head, float rainHere, float dt)
+        {
+            if (!CanopyRenderer || !_canopyMat) { return; }
+            Transform vehicle = Contacts != null && Contacts.LocalVehicle != null ? Contacts.LocalVehicle.transform : null;
+            float want = vehicle != null && CanopyDrops ? rainHere : 0f;
+            float rate = want > _canopy ? 1f / Mathf.Max(FadeTime, 0.01f) : 1f / Mathf.Max(CanopyDryTime, 0.01f);
+            _canopy = Mathf.MoveTowards(_canopy, want, dt * rate);
+            bool on = _canopy > 0.001f && vehicle != null;
+            if (CanopyRenderer.gameObject.activeSelf != on) { CanopyRenderer.gameObject.SetActive(on); }
+            _canopyVehicle = on ? vehicle : null;
+            if (!on) { return; }
+            _canopyMat.SetFloat("_Intensity", _canopy);
+            _canopyMat.SetFloat("_Speed", Vector3.Dot(_velocity, vehicle.forward));
+        }
+
+        private Transform _canopyVehicle;
+
+        /// 캐노피 구는 머리 위치가 확정된 뒤 옮긴다(빠른 기체에서 머리가 구 밖으로 나가지 않게).
+        public override void PostLateUpdate()
+        {
+            if (_canopyVehicle == null) { return; }
+            VRCPlayerApi lp = Networking.LocalPlayer;
+            if (!Utilities.IsValid(lp)) { return; }
+            CanopyRenderer.transform.SetPositionAndRotation(lp.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position, _canopyVehicle.rotation);
+        }
+
+        /// 바다 파문(날씨 비 세기를 FadeTime으로 섞은 값)·젖은 땅(WetTime으로 젖고 DryTime으로 마른다) — 바뀐 만큼만 보낸다.
+        private void UpdateGlobals(float dt)
+        {
+            _weatherRain = Mathf.MoveTowards(_weatherRain, Intensity, dt / Mathf.Max(FadeTime, 0.01f));
+            float wetTarget = Mathf.Clamp01(Intensity * 1.2f);
+            float rate = wetTarget > _wet ? 1f / Mathf.Max(WetTime, 0.01f) : 1f / Mathf.Max(DryTime, 0.01f);
+            _wet = Mathf.MoveTowards(_wet, wetTarget, dt * rate);
+            if (Mathf.Abs(_weatherRain - _sentRain) > 0.002f || Mathf.Abs(_wet - _sentWet) > 0.002f) { SendGlobals(); }
+        }
+
+        private void SendGlobals()
+        {
+            _sentRain = _weatherRain;
+            _sentWet = _wet;
+            VRCShader.SetGlobalFloat(_idRain, _weatherRain);
+            VRCShader.SetGlobalFloat(_idWet, _wet);
         }
 
         private bool InShelter(Vector3 p)

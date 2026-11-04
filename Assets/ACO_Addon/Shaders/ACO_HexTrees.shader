@@ -57,6 +57,7 @@ Shader "ACO/HexTrees"
         float _ForestDensity, _LoneTrees, _ConiferHeight, _BroadleafHeight, _SizeJitter, _Jitter, _ConiferStart, _ConiferFull;
         float _FadeStart, _FadeEnd, _Wind;
         fixed4 _ConiferColor, _BroadleafColor, _DryLeafColor, _TrunkColor;
+        float _UdonACOWet;   // 비에 젖으면 조금 어둡게(ACO_Rain이 VRChat 셰이더 전역으로 넣는다)
 
         struct Input
         {
@@ -135,7 +136,7 @@ Shader "ACO/HexTrees"
             float dry = smoothstep(1 - _DryAmount - 0.15, 1 - _DryAmount + 0.15, IN.tree.z);
             leaf = lerp(leaf, _DryLeafColor.rgb, dry * 0.45 * (1 - IN.tree.x));
             leaf *= 0.8 + 0.4 * IN.tree.y;
-            o.Albedo = lerp(_TrunkColor.rgb, leaf, IN.vcol.a) * IN.vcol.r;
+            o.Albedo = lerp(_TrunkColor.rgb, leaf, IN.vcol.a) * IN.vcol.r * (1 - 0.2 * _UdonACOWet);
         }
         ENDCG
     }

@@ -221,6 +221,10 @@ namespace ACO
             return n;
         }
 
+        /// 장착한 모듈(없으면 null)과 그 무장 ID — 비행 HUD가 잔탄·조준 표시를 읽는다.
+        public UdonSharpBehaviour GetModule() { return Modules != null && _current >= 0 && _current < Modules.Length ? Modules[_current] : null; }
+        public string GetModuleId() { return ModuleIds != null && _current >= 0 && _current < ModuleIds.Length ? ModuleIds[_current] : ""; }
+
         /// ACO 모듈(장착/해제 신호를 받는다)인가. SAV 기능엔 그 이벤트가 없다.
         private bool IsAcoModule(UdonSharpBehaviour m)
         {

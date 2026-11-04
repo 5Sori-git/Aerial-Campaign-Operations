@@ -4,6 +4,7 @@
 //  - 경사: 수직 벽 = 절벽(지층 줄무늬), 경사 치마 = 약간 흙빛(_SlopeDirt)
 //  - 디테일: 가까이(_DetailScale)와 멀리(_DetailScale2) 두 배율로 섞어 반복 무늬를 숨기고, 멀어지면 잔결을 줄인다
 //  - 노멀: 디테일 노멀 두 배율 + 경사 치마를 위쪽으로 눕혀(_SlopeFlatten) 윗면과 치마 사이 음영 꺾임(육각 윤곽)을 줄인다
+//  - 비(전역 _UdonACOWet — ACO_Rain): 젖으면 어둡고 윗면에 물기 광택
 // 메시에 UV·탄젠트가 없어도 된다(정점 함수가 탄젠트를 만든다 — 기둥은 회전 없이 놓인다). GPU 인스턴싱 켬.
 Shader "ACO/HexTerrain"
 {
@@ -71,6 +72,8 @@ Shader "ACO/HexTerrain"
         fixed4 _WetSandColor, _SandColor, _GrassColor, _DryGrassColor, _ForestColor, _DirtColor, _RockColor, _CliffColor, _SnowColor;
         float _StrataScale;
         float _DetailStrength, _NormalStrength, _NormalStrength2, _SlopeFlatten, _Smoothness, _SnowSmoothness;
+        // 젖은 지면(ACO_Rain이 VRChat 셰이더 전역으로 넣는다 — 비가 오면 서서히 0 → 1, 그치면 천천히 마른다)
+        float _UdonACOWet;
 
         struct Input
         {
@@ -173,9 +176,12 @@ Shader "ACO/HexTerrain"
             bump *= 1 - snow * 0.6;
             o.Normal = normalize(float3(baseN.xy + bump, baseN.z));
 
+            // 비에 젖으면 어둡고 윗면에 물기 광택(눈은 그대로)
+            float rainWet = _UdonACOWet * (1 - snow);
+            col *= 1 - 0.32 * rainWet;
             o.Albedo = saturate(col);
             float wet = beach * (1 - smoothstep(1, 6, h));
-            o.Smoothness = max(max(_Smoothness, _SnowSmoothness * snow), 0.35 * wet);
+            o.Smoothness = max(max(max(_Smoothness, _SnowSmoothness * snow), 0.35 * wet), 0.3 * rainWet * flatTop);
             o.Metallic = 0;
         }
         ENDCG

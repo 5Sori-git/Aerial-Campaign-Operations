@@ -25,6 +25,11 @@ namespace ACO
         public ACO_NPCFighterNet Net;
         [Tooltip("슈퍼에이스면 그 스크립트(자식). 있으면 미션 생성기가 일반 배치에 쓰지 않고 보너스 페이즈만 내보낸다. 프리팹 빌더/Bake가 넣는다")]
         public ACO_SuperAce SuperAce;
+        [Tooltip("공격기: 켜면 미션 생성기가 일반 배치(증원·편대·호위 요격)에 쓰지 않고 지상·해상 호위 페이즈(콘보이·상륙전)에서만 내보낸다(OBJ_ATTACK). "
+            + "노리는 대상은 TargetLayers(공격기 프리팹 = 아군 지상 26)")]
+        public bool GroundAttacker = false;
+        [Tooltip("표적 마커·작전판에 숙련도와 함께 표시할 종류 약어 — \"FTR ACE\", \"ATK VET\"처럼. 전투기 FTR, 공격기 ATK")]
+        public string MarkerLabel = "FTR";
 
         [Header("숙련도 외형 (미션 생성기가 단계를 정한다)")]
         [Tooltip("신병일 때 켤 오브젝트(신병 모델 통째로, 도색 등). 다른 단계에선 꺼진다 — 등급마다 다른 모델을 쓰려면 단계마다 모델을 하나씩 넣는다")]
@@ -33,6 +38,11 @@ namespace ACO
         public GameObject[] VeteranVisuals;
         [Tooltip("에이스일 때 켤 오브젝트(에이스 모델 통째로, 전용 도색, 트레일 등). 다른 단계에선 꺼진다")]
         public GameObject[] AceVisuals;
+
+        [Header("체력 (숙련도 배율 기준)")]
+        [Tooltip("베테랑(배율 1) 최대 체력. 0이면 Bake가 채운다(SaccTarget 체력, 일반 전투기 기본 100은 150으로). 미션 생성기가 숙련도 배율(TierHealthMultiplier)을 곱해 "
+            + "SaccTarget.FullHealth로 넣고, 부활할 때 그만큼 채운다 — 슈퍼에이스는 배율 없이 이 값")]
+        public float BaseHealth = 0f;
 
         [Header("격추 연출")]
         [Tooltip("격추 시 숨길 오브젝트. SAV의 TargetExplode 애니메이션은 '루트'의 MeshRenderer/MeshCollider만 끄므로 자식에 있는 모델은 여기 넣어야 한다")]
@@ -373,7 +383,9 @@ namespace ACO
 
         /// 숙련도 적용(모든 클라이언트). 비행/락온은 오너에서, 기총 체류 시간은 피격자 쪽에서 쓰이므로 모두가 같은 값을 가져야 한다.
         /// 배율은 인스펙터 값 기준이라 여러 번 불러도 누적되지 않는다.
-        public void ApplySkill(int tier, float turnMul, float speedMul, float lockTimeMul, float gunDwellMul, float missileConeMul)
+        /// 체력: 최대 체력 = BaseHealth × healthMul(슈퍼에이스는 ×1). SaccTarget.FullHealth는 동기화되지 않고 SaccTarget.Start가 시작 체력으로 덮으므로
+        /// (풀에서 막 켠 유닛은 아직 Start 전) 2프레임 뒤 모든 클라이언트에서 넣는다 — 체력 바 비율이 화면마다 같게. 부활 체력 채우기(오너)도 이 값을 쓴다.
+        public void ApplySkill(int tier, float turnMul, float speedMul, float lockTimeMul, float gunDwellMul, float missileConeMul, float healthMul)
         {
             Init();
             if (!_hasSkillBase)
@@ -400,6 +412,8 @@ namespace ACO
             if (MissileLauncher) { MissileLauncher.LockTime = _baseLockTime * lockTimeMul; }
             if (Gun) { Gun.DwellTime = _baseGunDwell * gunDwellMul; }
             MissileFireConeAngle = _baseMissileCone * missileConeMul;
+            _tierFullHealth = BaseHealth > 0f ? BaseHealth * (SuperAce != null ? 1f : Mathf.Max(healthMul, 0.01f)) : 0f;
+            if (_tierFullHealth > 0f) { SendCustomEventDelayedFrames(nameof(_ApplyTierHealth), 2); }
 
             ApplyTierVisuals();
             // 플레어: 확률은 숙련도별 값, 반응 거리는 신병은 늦게(×0.7) 에이스는 일찍(×1.3).
@@ -411,6 +425,23 @@ namespace ACO
         }
 
         public int GetSkillTier() { return _skillTier; }
+
+        /// 표적 마커·작전판 표시 이름: 종류 + 숙련도("FTR ACE", "ATK VET" — 숙련도는 RKY 신병 / VET 베테랑 / ACE 에이스).
+        public string GetDisplayLabel(int tier)
+        {
+            string skill = tier == SKILL_ACE ? "ACE" : (tier == SKILL_VETERAN ? "VET" : "RKY");
+            return (string.IsNullOrEmpty(MarkerLabel) ? "FTR" : MarkerLabel) + " " + skill;
+        }
+
+        // 숙련도 배율을 곱한 최대 체력(0 = 건드리지 않음 — BaseHealth가 비었을 때)
+        private float _tierFullHealth;
+
+        /// 숙련도 최대 체력을 SaccTarget에 넣는다(ApplySkill 2프레임 뒤 — SaccTarget.Start 뒤, 모든 클라이언트). 남은 체력은 부활(RespawnTarget)이 채운다.
+        public void _ApplyTierHealth()
+        {
+            if (!TargetHealth || _tierFullHealth <= 0f) { return; }
+            TargetHealth.FullHealth = _tierFullHealth;
+        }
 
         /// 숙련도 단계의 외형만 켠다(단계별 모델 교체). 부활할 때 HideOnDeath가 모델을 다시 켜므로 그 뒤에도 다시 부른다.
         private void ApplyTierVisuals()
@@ -1164,7 +1195,9 @@ namespace ACO
         /// 바로 부르면 예외로 SaccTarget이 멈춘다(그 뒤로 피해·격추가 안 된다). 그래서 2프레임 뒤에 부른다.
         public void _RespawnTargetHealth()
         {
-            if (TargetHealth) { TargetHealth.RespawnTarget(); }
+            if (!TargetHealth) { return; }
+            _ApplyTierHealth();   // 숙련도 최대 체력으로 채운다(RespawnTarget = FullHealth)
+            TargetHealth.RespawnTarget();
         }
     }
 }

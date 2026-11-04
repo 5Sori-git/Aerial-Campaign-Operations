@@ -20,7 +20,6 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         return true;
     }
 
-    [MenuItem("ACO/Bake NPC References")]
     /// 물리 충돌을 만드는 콜라이더(트리거·바퀴 제외).
     private static Collider[] SolidColliders(Component root)
     {
@@ -33,6 +32,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         return list.ToArray();
     }
 
+    [MenuItem("ACO/Bake NPC References")]
     public static void BakeNeighbors()
     {
         var fighters = new List<ACO_NPCFighterAI>();
@@ -42,6 +42,59 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             // 풀에서 꺼져 있는 NPC도 포함해야 하므로 비활성까지 찾는다.
             fighters.AddRange(root.GetComponentsInChildren<ACO_NPCFighterAI>(true));
             directors.AddRange(root.GetComponentsInChildren<ACO_CombatDirector>(true));
+        }
+
+        // 숙련도 체력 배율의 기준(베테랑 최대 체력): 비었으면 SaccTarget 체력(프리팹 값). 일반 전투기의 예전 기본 100(빈 칸을 채운 값 포함)은 150으로.
+        int healthFilled = 0;
+        foreach (ACO_NPCFighterAI f in fighters)
+        {
+            // 표시 약어: 공격기인데 기본값(FTR)이면 ATK
+            if (f.GroundAttacker && (string.IsNullOrEmpty(f.MarkerLabel) || f.MarkerLabel == "FTR")) { f.MarkerLabel = "ATK"; MarkChanged(f); }
+            if (f.TargetHealth == null) { continue; }
+            float v = f.BaseHealth > 0f ? f.BaseHealth : f.TargetHealth.Health;
+            if (f.SuperAce == null && !f.GroundAttacker && v == 100f) { v = 150f; }
+            if (v <= 0f || v == f.BaseHealth) { continue; }
+            f.BaseHealth = v;
+            MarkChanged(f);
+            healthFilled++;
+        }
+        if (healthFilled > 0) { Debug.Log($"[ACO] NPC 전투기 {healthFilled}기의 기준 체력(BaseHealth, 베테랑)을 채웠습니다(일반 전투기 150) — 숙련도 배율(생성기 TierHealthMultiplier)을 곱해 쓴다."); }
+        // 체력 배율 예전 기본값(0.8/1/1.5, 1/1.5/2)으로 저장된 생성기는 새 기본값(0.66/1/1.33 — 신병 99·베테랑 150·에이스 199.5)으로. 직접 바꾼 값은 그대로.
+        // 안전지대 여유 예전 기본값(500m)도 새 기본값(5km — 지상 유닛·적 함선 모두)으로.
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_MissionGenerator g in root.GetComponentsInChildren<ACO_MissionGenerator>(true))
+            {
+                if (g.SafeZoneMargin == 500f)
+                {
+                    g.SafeZoneMargin = 5000f;
+                    MarkChanged(g);
+                    Debug.Log("[ACO] 미션 생성기 안전지대 여유를 500m → 5km로 바꿨습니다(지상 유닛·적 함선 모두).", g);
+                }
+                // 공중 호위 순항 고도: 잠깐 2100m로 올렸던 것을 1800m로 되돌린다(구름층 판은 셰이더가 기체 둘레를 비워 해결 — 고도는 그대로)
+                if (g.EscortAltitude == 2100f)
+                {
+                    g.EscortAltitude = 1800f;
+                    MarkChanged(g);
+                    Debug.Log("[ACO] 공중 호위 순항 고도를 1800m로 되돌렸습니다.", g);
+                }
+                // 상륙전 해안 곡사포: 예전 기본값(상륙 지점 뒤 2~3.5km)은 LCAC가 사거리에 잘 안 들어왔다 → 1.2~2.5km
+                if (g.ShoreArtilleryMin == 2000f && g.ShoreArtilleryMax == 3500f)
+                {
+                    g.ShoreArtilleryMin = 1200f;
+                    g.ShoreArtilleryMax = 2500f;
+                    MarkChanged(g);
+                    Debug.Log("[ACO] 상륙전 해안 곡사포 거리를 2~3.5km → 1.2~2.5km로 바꿨습니다.", g);
+                }
+                float[] t = g.TierHealthMultiplier;
+                if (t == null || t.Length != 3) { continue; }
+                bool old1 = t[0] == 0.8f && t[1] == 1f && t[2] == 1.5f;
+                bool old2 = t[0] == 1f && t[1] == 1.5f && t[2] == 2f;
+                if (!old1 && !old2) { continue; }
+                g.TierHealthMultiplier = new float[] { 0.66f, 1f, 1.33f };
+                MarkChanged(g);
+                Debug.Log("[ACO] 미션 생성기 숙련도 체력 배율을 0.66 / 1 / 1.33으로 바꿨습니다(베테랑 150 기준 — 신병 99·에이스 199.5).", g);
+            }
         }
 
         ACO_CombatDirector director = directors.Count > 0 ? directors[0] : null;
@@ -87,6 +140,37 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             EditorUtility.SetDirty(fighter);
         }
 
+        // 다른 공중 유닛(폭격기·수송기·아군 공격헬기 = 항로 비행 ACO_EscortUnit MOVE_AIR, 적 헬기 = ACO_MobileUnit KIND_HELICOPTER)도 같은 규칙으로 —
+        // 충돌 방지 컴포넌트(ACO_AirCollisionIgnore)를 유닛 루트에 붙이고 콜라이더·플레이어 기체를 채운다.
+        var airUnits = new List<ACO_AirCollisionIgnore>();
+        var airRoots = new List<GameObject>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_EscortUnit e in root.GetComponentsInChildren<ACO_EscortUnit>(true)) { if (e.MoveMode == ACO_EscortUnit.MOVE_AIR) { airRoots.Add(e.gameObject); } }
+            foreach (ACO_MobileUnit m in root.GetComponentsInChildren<ACO_MobileUnit>(true)) { if (m.Kind == ACO_MobileUnit.KIND_HELICOPTER) { airRoots.Add(m.gameObject); } }
+        }
+        int added = 0;
+        foreach (GameObject go in airRoots)
+        {
+            ACO_AirCollisionIgnore ign = go.GetComponent<ACO_AirCollisionIgnore>();
+            if (ign == null) { ign = go.AddUdonSharpComponent<ACO_AirCollisionIgnore>(); added++; }
+            ign.BodyColliders = SolidColliders(go.transform);
+            ign.PlayerVehicles = playerUpgrades.ToArray();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(ign);
+            EditorUtility.SetDirty(ign);
+            airUnits.Add(ign);
+        }
+        foreach (ACO_VehicleUpgrades up in playerUpgrades)
+        {
+            up.OtherAirUnits = airUnits.ToArray();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(up);
+            EditorUtility.SetDirty(up);
+        }
+        if (airUnits.Count > 0 && playerUpgrades.Count > 0)
+        {
+            Debug.Log($"[ACO] 공중 충돌 방지: 헬기·폭격기·수송기 등 {airUnits.Count}대" + (added > 0 ? $"(새로 붙임 {added})" : "") + " — 내 조종 기체와 서로 통과(충돌 데미지 없음).");
+        }
+
         if (fighters.Count > 0 && playerUpgrades.Count > 0)
         {
             int maxPlayer = 0;
@@ -106,20 +190,343 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         Debug.Log($"[ACO] NPC 전투기 {fighters.Count}기의 주변 NPC 목록을 베이크했습니다. {directorInfo}.");
 
         BakeMissionGenerators();
-        ACO_SpecialWeaponCatalog.SyncLoadouts();   // 격납고 특수무장 목록 = 무장 정의(SpecialWeapons 폴더)
+        // 새 예제 무장 정의를 만들고(코드에 더해진 예제만), 기체 특수무장 슬롯에 없는 모듈을 넣고, 격납고 목록을 정의에 맞춘다
+        ACO_SpecialWeaponCatalog.InstallForBake();
         BakePlayerMissiles();
         BakePlayerProgress();
         BakeGameFlow();
+        BakePhaseModules();
         BakeTacticalMaps();
         BakeHudSettings();
         BakeRadio();
         BakeRwr();
+        BakeCiws();
+        BakeUnderwater();
+        BakeDebugPanels();
+        BakeUiLayers();
         BakeRadar();
         BakeSeatRecenter();
         BakeUiSound();
         BakeSuperAces();
         BakeSky();
         BakeTargetAnimators();
+        BakeFxLayer();
+        BakeSpectators();
+        BakeFlightHud();
+        BakeDecals();
+    }
+
+    /// 데칼: 스튜디오(격납고) 미리보기 프로젝터를 샘플 기체 기준점 아래로, 샘플 메시에 콜라이더(데칼 건이 겨눈다 — 없는 것만 MeshCollider),
+    /// 플레이어 기체마다 ACO_VehicleDecal(기준점 = SaccEntity 루트 자식 "ACO_Decals" + 프로젝터 2개, 머티리얼은 기체마다 따로) ↔ 스튜디오·기체 강화 확장.
+    private static void BakeDecals()
+    {
+        ACO_DecalStudio studio = Object.FindObjectOfType<ACO_DecalStudio>(true);
+        var decals = new List<ACO_VehicleDecal>();
+        int made = 0;
+        int n = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true))
+            {
+                SaccFlightAndVehicles.SaccEntity e = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+                if (e == null) { continue; }
+                Transform holder = e.transform.Find("ACO_Decals");
+                ACO_VehicleDecal vd = holder != null ? holder.GetComponent<ACO_VehicleDecal>() : null;
+                if (vd == null)
+                {
+                    var go = new GameObject("ACO_Decals");
+                    Undo.RegisterCreatedObjectUndo(go, "ACO decals");
+                    go.transform.SetParent(e.transform, false);
+                    vd = go.AddUdonSharpComponent<ACO_VehicleDecal>();
+                    var pr = new Transform[2];
+                    var mats = new Material[2];
+                    for (int i = 0; i < 2; i++)
+                    {
+                        Material m;
+                        // 기체 기준점 자식(ACO_Decals는 원점) — 저장된 자리가 곧 기준점 기준 상대값
+                        pr[i] = ACO_HUDBuilder.CreateDecalProjector(go.transform, "Decal_" + (i + 1), "ACO_Decal_V" + n + "_" + i, out m);
+                        mats[i] = m;
+                    }
+                    vd.Projectors = pr;
+                    vd.Materials = mats;
+                    if (studio != null) { vd.DecalKey = studio.DecalKey; }
+                    made++;
+                }
+                if (vd.Studio != studio) { vd.Studio = studio; MarkChanged(vd); }
+                if (up.Decal != vd) { up.Decal = vd; MarkChanged(up); }
+                decals.Add(vd);
+                n++;
+            }
+        }
+        if (studio == null)
+        {
+            if (made > 0) { Debug.LogWarning("[ACO] 데칼: 플레이어 기체에 데칼을 달았지만 씬에 데칼 스튜디오(ACO_DecalStudio — 프리팹 생성 창)가 없어 이미지를 받을 수 없습니다."); }
+            return;
+        }
+        studio.VehicleDecals = decals.ToArray();
+        MarkChanged(studio);
+        if (studio.SampleRoot == null)
+        {
+            Debug.LogWarning("[ACO] 데칼 스튜디오: SampleRoot(격납고 샘플 기체 기준점 — 실기체 SaccEntity 루트와 같은 자리·같은 모델)를 넣으세요.", studio);
+        }
+        else
+        {
+            // 미리보기 프로젝터를 샘플 기준점 아래로(상대 자리 = 실기체와 같은 기준)
+            if (studio.PreviewProjectors != null)
+            {
+                foreach (Transform p in studio.PreviewProjectors)
+                {
+                    if (p != null && p.parent != studio.SampleRoot) { Undo.SetTransformParent(p, studio.SampleRoot, "ACO decal preview"); p.localPosition = Vector3.zero; p.localRotation = Quaternion.identity; MarkChanged(p); }
+                }
+            }
+            // 데칼 건이 겨눌 콜라이더(없는 메시만)
+            int cols = 0;
+            foreach (MeshFilter mf in studio.SampleRoot.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null || mf.GetComponent<Collider>() != null) { continue; }
+                MeshCollider mc = Undo.AddComponent<MeshCollider>(mf.gameObject);
+                mc.sharedMesh = mf.sharedMesh;
+                cols++;
+            }
+            if (cols > 0) { Debug.Log($"[ACO] 데칼 스튜디오: 샘플 기체 메시 {cols}개에 콜라이더를 붙였습니다(데칼 건이 겨눈다).", studio); }
+            foreach (ACO_VehicleDecal vd in decals)
+            {
+                if (vd.DecalKey != studio.DecalKey && vd.DecalKey == "default") { vd.DecalKey = studio.DecalKey; MarkChanged(vd); }
+            }
+        }
+        if (made > 0) { Debug.Log($"[ACO] 데칼: 플레이어 기체 {made}대에 데칼(프로젝터 2개)을 달았습니다 — 기종 DecalKey가 스튜디오와 같아야 그 자리를 쓴다.", studio); }
+    }
+
+    /// 비행 HUD(ACO_FlightHud): 플레이어 기체(ACO_VehicleUpgrades가 있는 SaccEntity)마다 SAV 비행·랜딩기어·플랩·후크·브레이크·기총·플레어,
+    /// ACO 기본 미사일(특수무장 슬롯 밖)·특수무장 슬롯, 기총 탄도(파티클 탄속·중력·물려받기·발사 속도)를 같은 순서로 채운다. 레이더 접촉 목록·거리 단위를 잇고,
+    /// 거리 단위를 표적 마커·페이즈 모듈·HUD 설정에, HideSavHud면 SAV HUD(SAV_HUDController)를 크기 0으로(끄면 다시 1로) 둔다.
+    private static void BakeFlightHud()
+    {
+        ACO_FlightHud hud = Object.FindObjectOfType<ACO_FlightHud>(true);
+        ACO_Units units = hud != null && hud.Units != null ? hud.Units : Object.FindObjectOfType<ACO_Units>(true);
+        ACO_TacName tac = Object.FindObjectOfType<ACO_TacName>(true);
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_TargetMarkers c in root.GetComponentsInChildren<ACO_TargetMarkers>(true))
+            {
+                if (c.Units != units || c.TacNames != tac) { c.Units = units; c.TacNames = tac; MarkChanged(c); }
+            }
+            foreach (ACO_PhaseModule c in root.GetComponentsInChildren<ACO_PhaseModule>(true)) { if (c.Units != units) { c.Units = units; MarkChanged(c); } }
+            foreach (ACO_HudSettings c in root.GetComponentsInChildren<ACO_HudSettings>(true))
+            {
+                if (c.Units != units || c.FlightHud != hud) { c.Units = units; c.FlightHud = hud; MarkChanged(c); }
+            }
+        }
+        if (hud == null) { return; }
+        bool changed = false;
+        if (hud.Units != units) { hud.Units = units; changed = true; }
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        if (hud.Contacts != contacts) { hud.Contacts = contacts; changed = true; }
+        if (contacts == null) { Debug.LogWarning("[ACO] 비행 HUD: 레이더 접촉 목록(ACO_RadarContacts — HUD 레이더와 같은 오브젝트)이 없어 내 기체를 알 수 없습니다.", hud); }
+
+        var vehicles = new List<SaccFlightAndVehicles.SaccEntity>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true))
+            {
+                SaccFlightAndVehicles.SaccEntity e = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+                if (e != null && !vehicles.Contains(e)) { vehicles.Add(e); }
+            }
+        }
+        int n = vehicles.Count;
+        var air = new SaccFlightAndVehicles.SaccAirVehicle[n];
+        var gears = new SaccFlightAndVehicles.DFUNC_Gear[n];
+        var flaps = new SaccFlightAndVehicles.DFUNC_Flaps[n];
+        var hooks = new SaccFlightAndVehicles.DFUNC_Hook[n];
+        var brakes = new SaccFlightAndVehicles.DFUNC_Brake[n];
+        var guns = new SaccFlightAndVehicles.DFUNC_Gun[n];
+        var flares = new SaccFlightAndVehicles.DFUNC_Flares[n];
+        var missiles = new ACO_DFUNC_Missile[n];
+        var specials = new ACO_DFUNC_Special[n];
+        var gunSpeed = new float[n];
+        var gunGravity = new float[n];
+        var gunInherit = new float[n];
+        var gunRate = new float[n];
+        int hidden = 0;
+        int savHuds = 0;
+        // Bake가 끈 SAV HUD 자식(다시 보이게 할 때 이것만 켠다 — 원래 꺼져 있던 건 건드리지 않는다)
+        var hiddenParts = new List<GameObject>();
+        if (hud.HiddenSavHudParts != null) { foreach (GameObject g in hud.HiddenSavHudParts) { if (g != null) { hiddenParts.Add(g); } } }
+        for (int i = 0; i < n; i++)
+        {
+            SaccFlightAndVehicles.SaccEntity e = vehicles[i];
+            air[i] = e.GetComponentInChildren<SaccFlightAndVehicles.SaccAirVehicle>(true);
+            gears[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Gear>(true);
+            flaps[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Flaps>(true);
+            hooks[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Hook>(true);
+            brakes[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Brake>(true);
+            guns[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Gun>(true);
+            flares[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Flares>(true);
+            specials[i] = e.GetComponentInChildren<ACO_DFUNC_Special>(true);
+            foreach (ACO_DFUNC_Missile m in e.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.GetComponentInParent<ACO_DFUNC_Special>(true) == null) { missiles[i] = m; break; }
+            }
+            // 기총 탄도: 데미지 파티클의 시작 속도·중력·속도 물려받기·초당 방출
+            gunSpeed[i] = 900f;
+            gunInherit[i] = 1f;
+            ParticleSystem ps = guns[i] != null && guns[i].GunDamageParticle != null ? guns[i].GunDamageParticle.GetComponent<ParticleSystem>() : null;
+            if (ps != null)
+            {
+                ParticleSystem.MainModule main = ps.main;
+                gunSpeed[i] = main.startSpeed.mode == ParticleSystemCurveMode.TwoConstants ? main.startSpeed.constantMax : main.startSpeed.constant;
+                gunGravity[i] = main.gravityModifier.constant;
+                ParticleSystem.InheritVelocityModule iv = ps.inheritVelocity;
+                gunInherit[i] = iv.enabled ? iv.curveMultiplier : 0f;
+                gunRate[i] = ps.emission.rateOverTime.constant;
+            }
+            // SAV HUD 숨기기: SAV_HUDController의 자식(SF-2·FA-18의 bigstuff 등)을 끈다. 크기를 줄이면 안 된다 — SAV HUD는 머리에서 멀리 띄운 큰 판이라
+            // 부모를 줄이면 거리와 크기가 같이 줄어 보이는 크기(시야각)가 그대로다(0으로 줄이면 SAV 속도 벡터 계산이 0 벡터가 돼 매 프레임 경고).
+            // 컨트롤러 자체는 켜 둔다(무장 스크립트가 위치·distance_from_head를 읽는다). 꺼진 자식 안에서 기능이 켜고 끄는 HUD 요소도 안 보인다.
+            foreach (SaccFlightAndVehicles.SAV_HUDController c in e.GetComponentsInChildren<SaccFlightAndVehicles.SAV_HUDController>(true))
+            {
+                savHuds++;
+                if (c.transform.localScale != Vector3.one)
+                {
+                    // 예전 방식(크기 0·0.001)에서 되돌린다
+                    Undo.RecordObject(c.transform, "ACO restore SAV HUD scale");
+                    c.transform.localScale = Vector3.one;
+                    MarkChanged(c.transform);
+                }
+                foreach (Transform child in c.transform)
+                {
+                    if (hud.HideSavHud)
+                    {
+                        if (!child.gameObject.activeSelf) { continue; }
+                        Undo.RecordObject(child.gameObject, "ACO hide SAV HUD");
+                        child.gameObject.SetActive(false);
+                        MarkChanged(child.gameObject);
+                        hiddenParts.Add(child.gameObject);
+                        hidden++;
+                    }
+                    else if (hiddenParts.Contains(child.gameObject) && !child.gameObject.activeSelf)
+                    {
+                        Undo.RecordObject(child.gameObject, "ACO show SAV HUD");
+                        child.gameObject.SetActive(true);
+                        MarkChanged(child.gameObject);
+                        hidden++;
+                    }
+                }
+            }
+        }
+        if (!SameRefs(hud.Vehicles, vehicles.ToArray())) { hud.Vehicles = vehicles.ToArray(); changed = true; }
+        hud.Air = air; hud.Gears = gears; hud.FlapFuncs = flaps; hud.Hooks = hooks; hud.Brakes = brakes;
+        hud.Guns = guns; hud.FlareFuncs = flares; hud.Missiles = missiles; hud.Specials = specials;
+        hud.GunSpeed = gunSpeed; hud.GunGravity = gunGravity; hud.GunInherit = gunInherit; hud.GunRate = gunRate;
+        if (!hud.HideSavHud) { hiddenParts.Clear(); }
+        hud.HiddenSavHudParts = hiddenParts.ToArray();
+        MarkChanged(hud);
+        // 바뀐 게 없어도 매번 상태를 알린다(이미 숨겨 둔 SAV HUD는 "숨긴 상태")
+        string savState = hud.HideSavHud ? "숨김" : "보임";
+        Debug.Log($"[ACO] 비행 HUD: 플레이어 기체 {n}대 연결, SAV HUD(SAV_HUDController) {savHuds}개 {savState} 상태"
+            + (hidden > 0 ? $" — 이번에 {hidden}개를 " + (hud.HideSavHud ? "숨겼습니다" : "다시 보이게 했습니다") : " — 바꾼 것 없음") + ".", hud);
+    }
+
+    private static bool SameRefs(Object[] a, Object[] b)
+    {
+        if (a == null || a.Length != b.Length) { return false; }
+        for (int i = 0; i < a.Length; i++) { if (a[i] != b[i]) { return false; } }
+        return true;
+    }
+
+    /// FX 레이어: 내 머리를 따라다니는 화면 효과(하늘 안개 돔·물안개 막·비·물속 물빛 벽) — 관전 카메라가 그리지 않는다(멀리서 보면 엉뚱한 구가 보인다).
+    /// 사용자 레이어가 모두 이름이 붙어 있어 SAV 경주용 Racing(28)을 같이 쓴다 — 이 효과들엔 콜라이더가 없어 경주 판정과 부딪히지 않고, 메인·VRChat 카메라엔 그대로 보인다.
+    public const int FxLayer = 28;
+    private static void BakeFxLayer()
+    {
+        var roots = new List<GameObject>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_CloudField c in root.GetComponentsInChildren<ACO_CloudField>(true))
+            {
+                if (c.SkyFog != null) { roots.Add(c.SkyFog.gameObject); }
+                if (c.CloudVeil != null) { roots.Add(c.CloudVeil.gameObject); }
+            }
+            foreach (ACO_Rain c in root.GetComponentsInChildren<ACO_Rain>(true))
+            {
+                if (c.RainRenderer != null) { roots.Add(c.RainRenderer.gameObject); }
+                if (c.CanopyRenderer != null) { roots.Add(c.CanopyRenderer.gameObject); }
+            }
+            foreach (ACO_Underwater c in root.GetComponentsInChildren<ACO_Underwater>(true)) { if (c.Backdrop != null) { roots.Add(c.Backdrop.gameObject); } }
+        }
+        int moved = 0;
+        foreach (GameObject r in roots)
+        {
+            foreach (Transform t in r.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.gameObject.layer == FxLayer || t.GetComponent<Collider>() != null) { continue; }
+                t.gameObject.layer = FxLayer;
+                MarkChanged(t.gameObject);
+                moved++;
+            }
+        }
+        if (moved > 0) { Debug.Log($"[ACO] 화면 효과 {moved}개(하늘 안개 돔·물안개 막·비·물빛 벽)를 FX 레이어({FxLayer})로 옮겼습니다 — 관전 카메라가 그리지 않습니다."); }
+    }
+
+    /// 관전 패널(ACO_SpectatorCam): 플레이어 기체(ACO_VehicleUpgrades가 있는 SaccEntity), 해수면·지면 레이어(미션 생성기), 카메라 전용 하늘 안개 돔 머티리얼,
+    /// 카메라가 그리는 레이어(UI·FX 빼기), 플레이어 미사일 무장 → 관전 패널(미사일·표적 캠).
+    private static void BakeSpectators()
+    {
+        var specs = new List<ACO_SpectatorCam>();
+        var vehicles = new List<SaccFlightAndVehicles.SaccEntity>();
+        ACO_MissionGenerator gen = null;
+        ACO_CloudField clouds = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            specs.AddRange(root.GetComponentsInChildren<ACO_SpectatorCam>(true));
+            foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true))
+            {
+                SaccFlightAndVehicles.SaccEntity e = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+                if (e != null && !vehicles.Contains(e)) { vehicles.Add(e); }
+            }
+            if (gen == null) { gen = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
+            if (clouds == null) { clouds = root.GetComponentInChildren<ACO_CloudField>(true); }
+        }
+        ACO_SpectatorCam first = specs.Count > 0 ? specs[0] : null;
+        if (specs.Count > 1) { Debug.LogWarning($"[ACO] 관전 패널이 {specs.Count}개입니다 — 미사일 캠은 첫 패널 '{first.name}'에만 연결됩니다(카메라를 여러 개 켜면 그만큼 무겁다).", first); }
+        foreach (ACO_SpectatorCam s in specs)
+        {
+            bool changed = false;
+            var arr = vehicles.ToArray();
+            bool same = s.Vehicles != null && s.Vehicles.Length == arr.Length;
+            for (int i = 0; same && i < arr.Length; i++) { same = s.Vehicles[i] == arr[i]; }
+            if (!same) { s.Vehicles = arr; changed = true; }
+            if (gen != null && (s.SeaLevel != gen.SeaLevel || s.GroundLayers != gen.GroundLayers)) { s.SeaLevel = gen.SeaLevel; s.GroundLayers = gen.GroundLayers; changed = true; }
+            if (s.SkyFogDome != null && clouds != null && clouds.SkyFog != null && s.SkyFogDome.sharedMaterial != clouds.SkyFog.sharedMaterial)
+            {
+                s.SkyFogDome.sharedMaterial = clouds.SkyFog.sharedMaterial;
+                MarkChanged(s.SkyFogDome);
+            }
+            if (s.SkyFogDome != null && s.SkyFogDome.gameObject.layer != ACO_HUDBuilder.SpectatorOnlyLayer)
+            {
+                s.SkyFogDome.gameObject.layer = ACO_HUDBuilder.SpectatorOnlyLayer;
+                MarkChanged(s.SkyFogDome.gameObject);
+            }
+            if (s.FullscreenOverlay != null && s.FullscreenOverlay.gameObject.layer != FxLayer)
+            {
+                s.FullscreenOverlay.gameObject.layer = FxLayer;   // 관전 카메라가 자기 화면을 다시 찍지 않게
+                MarkChanged(s.FullscreenOverlay.gameObject);
+            }
+            if (s.TextureHD == null || s.TextureFHD == null) { Debug.LogWarning($"[ACO] 관전 패널 '{s.name}': HD/FHD 렌더 텍스처가 비어 있습니다 — 프리팹 생성 창에서 관전 패널을 다시 만드세요(해상도 버튼·스트림 카메라 전체 화면).", s); }
+            if (s.Cam != null && s.Cam.cullingMask != ACO_HUDBuilder.SpectatorCullingMask())
+            {
+                s.Cam.cullingMask = ACO_HUDBuilder.SpectatorCullingMask();
+                MarkChanged(s.Cam);
+            }
+            if (changed) { MarkChanged(s); }
+            if (vehicles.Count == 0) { Debug.LogWarning($"[ACO] 관전 패널 '{s.name}': 플레이어 기체(ACO_VehicleUpgrades가 있는 SaccEntity)가 없습니다.", s); }
+        }
+        int linked = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Missile c in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true)) { if (c.Spectator != first) { c.Spectator = first; MarkChanged(c); linked++; } }
+        }
+        if (first != null && linked > 0) { Debug.Log($"[ACO] 관전 패널: 플레이어 기체 {vehicles.Count}대, 미사일 무장 {linked}개를 연결했습니다.", first); }
     }
 
     /// SaccTarget 애니메이터(Target.controller)는 'normal' 상태가 클립 없이 Write Defaults로 모델·락온 표적·콜라이더를 되살린다.
@@ -161,6 +568,38 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         {
             if (terrain != null && w.Terrain != terrain) { w.Terrain = terrain; MarkChanged(w); }
             if (w.Sun == null) { w.Sun = ACO_SkyBuilder.FindSun(); if (w.Sun != null) { MarkChanged(w); } }
+            // 구름층(비·폭풍 = 비구름층, 안개 = 낮은 안개층) — 예전 씬엔 칸이 없거나 4칸(폭풍 전)
+            if (w.CloudLayer == null || w.CloudLayer.Length < 4)
+            {
+                w.CloudLayer = new[] { ACO_CloudField.LAYER_NONE, ACO_CloudField.LAYER_NONE, ACO_CloudField.LAYER_FOG, ACO_CloudField.LAYER_DECK, ACO_CloudField.LAYER_DECK };
+                MarkChanged(w);
+            }
+            // 폭풍(WX_STORM): 날씨별 배열이 4칸이면 폭풍 값을 붙인다(기존 4칸 값은 그대로)
+            if (MigrateStorm(w)) { MarkChanged(w); Debug.Log("[ACO] 날씨: 폭풍(STORM)을 더했습니다 — 비율 0.8, 더 어두운 비구름층 + 센 비 + 번개.", w); }
+            // 캐노피 빗방울·번개(폭풍) — 예전 씬엔 없다
+            if (ACO_SkyBuilder.EnsureStormParts(w)) { Debug.Log("[ACO] 날씨: 캐노피 빗방울·번개(낙뢰 줄기·천둥)를 만들었습니다.", w); }
+            if (w.Lightning != null)
+            {
+                ACO_Lightning l = w.Lightning;
+                ACO_MissionGenerator gen = Object.FindObjectOfType<ACO_MissionGenerator>(true);
+                bool lc = false;
+                if (l.Clouds != w.Clouds) { l.Clouds = w.Clouds; lc = true; }
+                if (l.Sun != w.Sun) { l.Sun = w.Sun; lc = true; }
+                if (w.Clouds != null && !Mathf.Approximately(l.FieldRadius, w.Clouds.FieldRadius)) { l.FieldRadius = w.Clouds.FieldRadius; lc = true; }
+                if (gen != null && (l.SeaLevel != gen.SeaLevel || l.GroundLayers != gen.GroundLayers)) { l.SeaLevel = gen.SeaLevel; l.GroundLayers = gen.GroundLayers; lc = true; }
+                if (lc) { MarkChanged(l); }
+            }
+            if (w.Rain != null)
+            {
+                ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+                if (w.Rain.Contacts != contacts) { w.Rain.Contacts = contacts; MarkChanged(w.Rain); }
+            }
+            // 비는 비구름층 윗면 아래에서만
+            if (w.Rain != null && w.Clouds != null && !Mathf.Approximately(w.Rain.MaxAltitude, w.Clouds.DeckTop))
+            {
+                w.Rain.MaxAltitude = w.Clouds.DeckTop;
+                MarkChanged(w.Rain);
+            }
         }
         if (flow != null)
         {
@@ -173,6 +612,25 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             if (f.Clouds == null || f.Clouds.Length == 0)
             {
                 Debug.LogWarning($"[ACO] 구름 '{f.name}'에 구름 풀이 없습니다 — ACO → Environment → Create Clouds and Rain으로 다시 만드세요.", f);
+            }
+            // 예전 구름 속 안개 기본값 → 더 일찍·짙게(퍼프가 사라지기 전에 안개가 먼저 차오르게)
+            bool fogChanged = false;
+            // 뭉게구름 속만 짙게(0.006 — 퍼프가 사라지는 거리를 덮는다), 비구름층·안개층 속은 시정 약 2km(0.001) — 예전 기본값만 바꾼다
+            if (Mathf.Approximately(f.InsideFogDensity, 0.0035f) || Mathf.Approximately(f.InsideFogDensity, 0.001f)) { f.InsideFogDensity = 0.006f; fogChanged = true; }
+            if (Mathf.Approximately(f.DeckFogDensity, 0.006f)) { f.DeckFogDensity = 0.001f; fogChanged = true; }
+            if (Mathf.Approximately(f.FogLayerDensity, 0.004f)) { f.FogLayerDensity = 0.001f; fogChanged = true; }
+            if (Mathf.Approximately(f.FogOuter, 1.25f)) { f.FogOuter = 1.6f; fogChanged = true; }
+            if (Mathf.Approximately(f.FogInner, 0.7f)) { f.FogInner = 0.9f; fogChanged = true; }
+            if (fogChanged) { MarkChanged(f); }
+            // 하늘 안개 돔·구름층 판·물안개 막(예전 씬엔 없다)
+            if (ACO_SkyBuilder.EnsureSkyParts(f)) { Debug.Log("[ACO] 하늘 안개 돔·비구름층·안개층·물안개 막을 만들었습니다(ACO_Sky 아래).", f); }
+            ACO_SkyBuilder.SyncSkyFogBase(f);
+            // 물안개 막: 뭉게구름 속은 진하게(0.55), 비구름층 속은 스크립트가 DeckVeilStrength로 옅게 — 잠깐 쓰던 0.3이면 되돌린다
+            Material veil = f.CloudVeil != null ? f.CloudVeil.sharedMaterial : null;
+            if (veil != null && veil.HasProperty("_Opacity") && Mathf.Approximately(veil.GetFloat("_Opacity"), 0.3f))
+            {
+                veil.SetFloat("_Opacity", 0.55f);
+                EditorUtility.SetDirty(veil);
             }
         }
     }
@@ -212,6 +670,16 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             foreach (ACO_MissionStartButton c in root.GetComponentsInChildren<ACO_MissionStartButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_HangarButton c in root.GetComponentsInChildren<ACO_HangarButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_HudSettingButton c in root.GetComponentsInChildren<ACO_HudSettingButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_DebugButton c in root.GetComponentsInChildren<ACO_DebugButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_SpectatorButton c in root.GetComponentsInChildren<ACO_SpectatorButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            // 작전판 스크롤 버튼(예전 작전판엔 없다 — 만든다)
+            foreach (ACO_MissionLog c in root.GetComponentsInChildren<ACO_MissionLog>(true))
+            {
+                if (ACO_HUDBuilder.EnsureLogScrollButtons(c)) { Debug.Log($"[ACO] 작전판 '{c.name}'에 스크롤 버튼(NEWER · OLDER · LATEST)을 달았습니다.", c); }
+            }
+            foreach (ACO_LogScrollButton c in root.GetComponentsInChildren<ACO_LogScrollButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_TacName c in root.GetComponentsInChildren<ACO_TacName>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_DecalButton c in root.GetComponentsInChildren<ACO_DecalButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_Teleporter c in root.GetComponentsInChildren<ACO_Teleporter>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
         }
         if (linked > 0) { Debug.Log($"[ACO] 버튼 효과음을 버튼 {linked}개에 연결했습니다.", sound); }
@@ -277,6 +745,17 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (contacts == null) { return; }
         if (contacts.Generator != generator || contacts.Flow != flow) { contacts.Generator = generator; contacts.Flow = flow; MarkChanged(contacts); }
         if (hud != null && hud.Contacts != contacts) { hud.Contacts = contacts; MarkChanged(hud); }
+        if (hud != null)
+        {
+            // 예전 기본값 → 작은 점(분별이 잘 되게), 색 바꿈(적 노랑·목표 빨강)
+            bool changed = false;
+            if (Mathf.Approximately(hud.BlipSize, 0.07f)) { hud.BlipSize = 0.045f; changed = true; }
+            if (Mathf.Approximately(hud.MissileSize, 0.05f)) { hud.MissileSize = 0.035f; changed = true; }
+            if (SwapOldRadarColors(ref hud.EnemyColor, ref hud.ObjectiveColor)) { changed = true; }
+            // 미사일: 예전 주황은 노랑(적)과 헷갈려 흰색으로
+            if (SameColor(hud.MissileColor, new Color(1f, 0.55f, 0.1f, 1f))) { hud.MissileColor = Color.white; changed = true; }
+            if (changed) { MarkChanged(hud); Debug.Log("[ACO] HUD 레이더: 점을 작게 하고 색을 바꿨습니다(적 노랑, 목표 빨강, 미사일 흰색).", hud); }
+        }
         int launchers = 0;
         int maps = 0;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
@@ -288,12 +767,77 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 bool changed = false;
                 if (m.Contacts != contacts) { m.Contacts = contacts; changed = true; }
                 if (m.EntityControl == null) { m.EntityControl = m.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true); changed = true; }
+                if (SwapOldRadarColors(ref m.EnemyColor, ref m.ObjectiveColor)) { changed = true; }
                 if (changed) { MarkChanged(m); }
                 maps++;
             }
         }
         if (flow == null || flow.Aircraft == null || flow.Aircraft.Length == 0) { Debug.LogWarning("[ACO] 레이더: 게임 진행의 참가자 기체(Aircraft)가 없어 HUD 레이더·조종석 지도가 내 기체를 알 수 없습니다.", contacts); }
         Debug.Log($"[ACO] 레이더 연결: 미사일 런처 {launchers}곳 새로 연결, 조종석 지도 {maps}개" + (maps == 0 ? " (ACO → Player Vehicle → Add Cockpit Map to Selected Vehicles로 기체에 단다)" : ""), contacts);
+    }
+
+    /// 날씨 배열(WX_* 순서)이 4칸(폭풍 전)이면 폭풍 값을 붙인다. 바꿨으면 true.
+    private static bool MigrateStorm(ACO_Weather w)
+    {
+        bool changed = false;
+        changed |= AppendStorm(ref w.Weights, 0.8f);
+        changed |= AppendStorm(ref w.CloudCoverage, 1f);
+        changed |= AppendStorm(ref w.CloudDarkness, 0.9f);
+        changed |= AppendStorm(ref w.FogDensityScale, 9f);
+        changed |= AppendStorm(ref w.RainIntensity, 1f);
+        changed |= AppendStorm(ref w.SunScale, 0.3f);
+        if (w.LightningAmount == null || w.LightningAmount.Length < ACO_Weather.WEATHER_COUNT) { w.LightningAmount = new[] { 0f, 0f, 0f, 0f, 1f }; changed = true; }
+        if (w.CloudLayer != null && w.CloudLayer.Length == 4)
+        {
+            var c = new int[5];
+            System.Array.Copy(w.CloudLayer, c, 4);
+            c[4] = ACO_CloudField.LAYER_DECK;
+            w.CloudLayer = c;
+            changed = true;
+        }
+        if (w.WeatherNames != null && w.WeatherNames.Length == 4)
+        {
+            var n = new string[5];
+            System.Array.Copy(w.WeatherNames, n, 4);
+            n[4] = "STORM";
+            w.WeatherNames = n;
+            changed = true;
+        }
+        if (w.FogTint != null && w.FogTint.Length == 4)
+        {
+            var t = new Color[5];
+            System.Array.Copy(w.FogTint, t, 4);
+            t[4] = new Color(0.48f, 0.5f, 0.56f, 1f);
+            w.FogTint = t;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static bool AppendStorm(ref float[] a, float storm)
+    {
+        if (a == null || a.Length != 4) { return false; }
+        var n = new float[5];
+        System.Array.Copy(a, n, 4);
+        n[4] = storm;
+        a = n;
+        return true;
+    }
+
+    /// 레이더·조종석 지도 색: 예전 기본값(적 빨강, 목표 노랑)이면 바꾼다(적 노랑, 목표 빨강 — 목표가 더 눈에 띄게). 바꿨으면 true.
+    private static bool SwapOldRadarColors(ref Color enemy, ref Color objective)
+    {
+        Color oldRed = new Color(1f, 0.25f, 0.2f, 1f);
+        Color oldYellow = new Color(1f, 0.82f, 0.2f, 1f);
+        if (!SameColor(enemy, oldRed) || !SameColor(objective, oldYellow)) { return false; }
+        enemy = oldYellow;
+        objective = oldRed;
+        return true;
+    }
+
+    private static bool SameColor(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f && Mathf.Abs(a.a - b.a) < 0.01f;
     }
 
     /// 플레이어 기체의 기총 탄(충돌 메시지를 보내는 파티클 — 플레어 파티클은 빼고)에 ACO_GunDamageBonus를 붙인다(이미 있으면 그대로).
@@ -458,6 +1002,54 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
     }
 
     /// 작전 테이블 ↔ 생성기(유닛 풀·지형) / 게임 진행(참가자 기체). 비어 있을 때만 채운다.
+    /// 페이즈 모듈(ACO_PhaseModule 상속) ↔ 미션 관리자: 관리자 아래(자식)의 모듈을 순서대로 Modules에 넣고(종류 번호 = 20 + 순서) 관리자·생성기를 연결한다.
+    /// 모듈 변환 메뉴가 부른다(Bake 전체를 돌리지 않고 모듈 목록만).
+    public static void BakePhaseModulesNow() { BakePhaseModules(); }
+
+    private static void BakePhaseModules()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_MissionManager manager in root.GetComponentsInChildren<ACO_MissionManager>(true))
+            {
+                ACO_PhaseModule[] modules = manager.GetComponentsInChildren<ACO_PhaseModule>(true);
+                manager.Modules = modules;
+                MarkChanged(manager);
+                foreach (ACO_PhaseModule m in modules)
+                {
+                    if (m.Manager == manager && m.Generator == manager.Generator) { continue; }
+                    m.Manager = manager;
+                    m.Generator = manager.Generator;
+                    MarkChanged(m);
+                }
+                if (modules.Length > 0) { Debug.Log($"[ACO] 미션 관리자 '{manager.name}'에 페이즈 모듈 {modules.Length}개를 연결했습니다.", manager); }
+                // 상륙전: 해상 상륙함(VIP)이 풀에 없으면 늘 배치 불가로 걸러진다
+                if (manager.GetComponentInChildren<ACO_PhaseAmphibious>(true) != null && manager.Generator != null)
+                {
+                    int lcac = 0, heli = 0, ships = 0, guards = 0;
+                    if (manager.Generator.EscortUnits != null)
+                    {
+                        foreach (ACO_EscortUnit e in manager.Generator.EscortUnits)
+                        {
+                            if (e == null || e.Hostile) { continue; }
+                            if (e.MoveMode == ACO_EscortUnit.MOVE_HOVER)
+                            {
+                                if (e.Role == ACO_EscortUnit.ROLE_VIP) { lcac++; }
+                                // 공기부양정은 바다 위에서 해수면을 미끄러진다 — 생성기 해수면과 맞춘다
+                                if (!Mathf.Approximately(e.HoverSeaLevel, manager.Generator.SeaLevel)) { e.HoverSeaLevel = manager.Generator.SeaLevel; MarkChanged(e); }
+                            }
+                            else if (e.MoveMode == ACO_EscortUnit.MOVE_AIR && e.Role == ACO_EscortUnit.ROLE_GUARD) { heli++; }
+                            else if (e.MoveMode == ACO_EscortUnit.MOVE_SEA && e.Role == ACO_EscortUnit.ROLE_MOTHERSHIP) { ships++; }
+                            else if (e.MoveMode == ACO_EscortUnit.MOVE_SEA && e.Role == ACO_EscortUnit.ROLE_GUARD) { guards++; }
+                        }
+                    }
+                    if (lcac == 0) { Debug.LogWarning("[ACO] 상륙전 페이즈: 생성기 유닛 풀에 LCAC(공기부양, Role VIP)가 없어 이 페이즈는 나오지 않습니다 — 프리팹 생성 창의 상륙전 부대를 풀 아래에 두세요.", manager); }
+                    else { Debug.Log($"[ACO] 상륙전 페이즈: LCAC {lcac}, 공격헬기 {heli}, 강습상륙함 {ships}, 호위함 {guards}. 지형에 항구(도시가 바다에 닿을 때 — TerrainFeatures.PortPrefab)가 있어야 나옵니다.", manager); }
+                }
+            }
+        }
+    }
+
     private static void BakeTacticalMaps()
     {
         ACO_MissionGenerator generator = null;
@@ -677,6 +1269,13 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
             foreach (ACO_Shop shop in root.GetComponentsInChildren<ACO_Shop>(true))
             {
+                // 강화 항목 수가 바뀌었으면(예: 특수 대지에 락온 속도·거리 추가) 항목별 아이콘을 다시 채운다
+                if (shop.UpgradeIcons == null || shop.UpgradeIcons.Length != ACO_PlayerProgress.UPGRADE_COUNT)
+                {
+                    shop.UpgradeIcons = ACO_HUDBuilder.BuildUpgradeIcons(progress);
+                    MarkChanged(shop);
+                    Debug.Log($"[ACO] 상점 '{shop.name}': 강화 아이콘을 {ACO_PlayerProgress.UPGRADE_COUNT}항목에 맞게 다시 채웠습니다.", shop);
+                }
                 if (shop.Progress == progress) { continue; }
                 shop.Progress = progress;
                 MarkChanged(shop);
@@ -735,6 +1334,196 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
         }
         Debug.Log($"[ACO] 진행도 '{progress.name}'를 연결했습니다(기체 강화 확장 {upgrades.Count}개).", progress);
+    }
+
+    /// CIWS 미사일 요격: (1) 요격 기본값을 아직 안 넣은 대공포에 한 번 넣고(ApplyInterceptDefaults — 그 뒤 직접 바꾼 값은 그대로),
+    /// (2) 요격 CIWS 목록(InterceptProtectLayers가 있는 것)을 모든 무장(ACO_DFUNC_Missile)·NPC 런처(ACO_MissileLauncher)에 굽는다 — 미사일이 이 목록에서 자기를 덮는 CIWS를 찾는다.
+    private static void BakeCiws()
+    {
+        var sites = new List<ACO_AAGunSite>();
+        int defaults = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_AAGunSite aa in root.GetComponentsInChildren<ACO_AAGunSite>(true))
+            {
+                if (!aa.InterceptDefaultsApplied)
+                {
+                    if (ApplyInterceptDefaults(aa)) { defaults++; }
+                    MarkChanged(aa);
+                }
+                if (aa.InterceptProtectLayers.value != 0) { sites.Add(aa); }
+            }
+        }
+        ACO_AAGunSite[] list = sites.ToArray();
+        int linked = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Missile c in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (SameSites(c.InterceptSites, list)) { continue; }
+                c.InterceptSites = list; MarkChanged(c); linked++;
+            }
+            foreach (ACO_MissileLauncher c in root.GetComponentsInChildren<ACO_MissileLauncher>(true))
+            {
+                if (SameSites(c.InterceptSites, list)) { continue; }
+                c.InterceptSites = list; MarkChanged(c); linked++;
+            }
+        }
+        if (defaults > 0) { Debug.Log($"[ACO] 미사일 요격: 대공포 {defaults}문에 요격 기본값을 넣었습니다(함선 CIWS = 적 요격, 아군 호위함 대공포 = 아군 요격)."); }
+        if (linked > 0) { Debug.Log($"[ACO] 미사일 요격: 요격 CIWS {list.Length}문을 무장·런처 {linked}곳에 연결했습니다."); }
+    }
+
+    /// 머리·시야에 붙는 HUD 오버레이를 UI 레이어(5)로 — VRChat 카메라(사진·스트림)에 찍히지 않는다(카메라에서 "UI"를 켜야 찍힌다),
+    /// 상호작용 레이저도 막지 않는다. 대상: 점수 HUD·표적 마커(ACO_HUD), HUD 레이더, RWR, 무전 자막 패널, 화면 페이드 구, 물속 물빛 구.
+    /// UI 레이어는 VRChat 레이저 포인터가 무시하므로(메뉴를 열었을 때만 누른다) 누르는 패널(격납고·콘솔·HUD 설정·디버그 패널·작전판)은 옮기지 않고,
+    /// 대상 안에서도 버튼·VRCUiShape·콜라이더가 붙은 오브젝트는 건너뛴다.
+    private const int UiLayer = 5;
+    private static void BakeUiLayers()
+    {
+        var roots = new List<GameObject>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_ScoreHUD c in root.GetComponentsInChildren<ACO_ScoreHUD>(true)) { roots.Add(c.gameObject); }
+            foreach (ACO_TargetMarkers c in root.GetComponentsInChildren<ACO_TargetMarkers>(true)) { roots.Add(c.gameObject); }
+            foreach (ACO_HudRadar c in root.GetComponentsInChildren<ACO_HudRadar>(true)) { roots.Add(c.gameObject); }
+            foreach (ACO_RWR c in root.GetComponentsInChildren<ACO_RWR>(true)) { roots.Add(c.gameObject); }
+            foreach (ACO_Chatter c in root.GetComponentsInChildren<ACO_Chatter>(true)) { if (c.Panel != null) { roots.Add(c.Panel.gameObject); } }
+            foreach (ACO_ScreenFader c in root.GetComponentsInChildren<ACO_ScreenFader>(true)) { if (c.FadeRenderer != null) { roots.Add(c.FadeRenderer.gameObject); } }
+            foreach (ACO_Underwater c in root.GetComponentsInChildren<ACO_Underwater>(true)) { if (c.Tint != null) { roots.Add(c.Tint.gameObject); } }
+            foreach (ACO_FlightHud c in root.GetComponentsInChildren<ACO_FlightHud>(true)) { if (c.Root != null) { roots.Add(c.Root.gameObject); } }
+        }
+        int moved = 0;
+        var seen = new HashSet<GameObject>();
+        foreach (GameObject r in roots)
+        {
+            foreach (Transform t in r.GetComponentsInChildren<Transform>(true))
+            {
+                GameObject go = t.gameObject;
+                if (!seen.Add(go) || go.layer == UiLayer) { continue; }
+                if (IsInteractive(go)) { continue; }
+                go.layer = UiLayer;
+                MarkChanged(go);
+                moved++;
+            }
+        }
+        if (moved > 0) { Debug.Log($"[ACO] HUD 오버레이 오브젝트 {moved}개를 UI 레이어(5)로 옮겼습니다 — VRChat 카메라(사진)에 찍히지 않습니다."); }
+    }
+
+    /// 누르거나 부딪히는 오브젝트(UI 레이어로 옮기면 레이저·Interact가 안 된다). 누르는 캔버스(VRCUiShape) 아래는 통째로.
+    private static bool IsInteractive(GameObject go)
+    {
+        return go.GetComponentInParent<VRC.SDK3.Components.VRCUiShape>(true) != null
+            || go.GetComponent<UnityEngine.UI.Selectable>() != null
+            || go.GetComponent<Collider>() != null;
+    }
+
+    /// 디버그 패널(ACO_DebugPanel) ↔ 미션 관리자·생성기·진행도.
+    private static void BakeDebugPanels()
+    {
+        ACO_MissionManager manager = null;
+        ACO_MissionGenerator gen = null;
+        ACO_PlayerProgress progress = null;
+        ACO_Weather weather = null;
+        ACO_HexTerrain terrain = null;
+        ACO_GameFlow flow = null;
+        var panels = new List<ACO_DebugPanel>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (manager == null) { manager = root.GetComponentInChildren<ACO_MissionManager>(true); }
+            if (gen == null) { gen = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
+            if (progress == null) { progress = root.GetComponentInChildren<ACO_PlayerProgress>(true); }
+            if (weather == null) { weather = root.GetComponentInChildren<ACO_Weather>(true); }
+            if (terrain == null) { terrain = root.GetComponentInChildren<ACO_HexTerrain>(true); }
+            if (flow == null) { flow = root.GetComponentInChildren<ACO_GameFlow>(true); }
+            panels.AddRange(root.GetComponentsInChildren<ACO_DebugPanel>(true));
+        }
+        foreach (ACO_DebugPanel p in panels)
+        {
+            if (p.Manager == manager && p.Generator == gen && p.Progress == progress && p.Weather == weather && p.Terrain == terrain && p.Flow == flow) { continue; }
+            p.Manager = manager;
+            p.Generator = gen;
+            p.Progress = progress;
+            p.Weather = weather;
+            p.Terrain = terrain;
+            p.Flow = flow;
+            MarkChanged(p);
+        }
+        foreach (ACO_DebugPanel p in panels)
+        {
+            if (p.AllowedPlayers == null || p.AllowedPlayers.Length == 0)
+            {
+                Debug.LogWarning($"[ACO] 디버그 패널 '{p.name}'은 누구나 누를 수 있습니다(AllowedPlayers 비어 있음) — 공개 월드에 올릴 땐 이름을 넣거나 패널을 끄세요.", p);
+            }
+        }
+    }
+
+    /// 물속 연출(ACO_Underwater, 메뉴 ACO → Environment → Add Water Effects가 만든다): 해수면 = 미션 생성기 SeaLevel, 안개는 구름 필드와 같이 쓴다.
+    private static void BakeUnderwater()
+    {
+        ACO_Underwater uw = null;
+        ACO_MissionGenerator gen = null;
+        ACO_CloudField clouds = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (uw == null) { uw = root.GetComponentInChildren<ACO_Underwater>(true); }
+            if (gen == null) { gen = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
+            if (clouds == null) { clouds = root.GetComponentInChildren<ACO_CloudField>(true); }
+        }
+        if (uw == null) { return; }
+        bool changed = false;
+        if (gen != null && uw.SeaLevel != gen.SeaLevel) { uw.SeaLevel = gen.SeaLevel; changed = true; }
+        if (uw.Clouds != clouds) { uw.Clouds = clouds; changed = true; }
+        // 너울 원판(ACO_OceanSwell) — 셰이더와 같은 너울 높이로 물속을 판정하고 물속에선 뒷면을 그린다. 너울을 지웠으면 비운다(평평한 해수면).
+        Renderer swell = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.gameObject.name == ACO_OceanLook.SwellObjectName) { swell = r; break; }
+            }
+            if (swell != null) { break; }
+        }
+        if (uw.SwellRenderer != swell) { uw.SwellRenderer = swell; changed = true; }
+        // 예전 기본값(물빛 구 알파 0.45)은 물빛 벽이 하늘을 가리게 되며 옅게
+        if (Mathf.Approximately(uw.TintAlpha, 0.45f)) { uw.TintAlpha = 0.2f; changed = true; }
+        if (changed) { MarkChanged(uw); }
+        // 예전에 만든 물속 연출엔 물빛 벽이 없다 — 더한다
+        if (ACO_WaterFxBuilder.EnsureUnderwaterParts(uw)) { Debug.Log("[ACO] 물속 연출에 물빛 벽(Backdrop)을 더했습니다.", uw); }
+    }
+
+    private static bool SameSites(ACO_AAGunSite[] a, ACO_AAGunSite[] b)
+    {
+        if (a == null || a.Length != b.Length) { return false; }
+        for (int i = 0; i < a.Length; i++) { if (a[i] != b[i]) { return false; } }
+        return true;
+    }
+
+    /// 요격 기본값(프리팹 빌더·Bake 공용). 함선 CIWS(MarkerLabel "CIWS") = 적 요격: 적 항공기·지상(29, 30)을 노린 미사일, 사거리 1.2km, 방어 반경 600m,
+    /// 다른 함선 ×2. 아군 호위 유닛(ACO_EscortUnit, Hostile 아님)의 대공포(이름에 "AAGun") = 아군 요격: 아군 항공기·지상(25, 26), 사거리·반경 1.5km, 배수 1.
+    /// 그 밖(지상 대공포·함포 등)은 요격하지 않는다. 기본값을 넣었으면 true. 어느 쪽이든 InterceptDefaultsApplied를 켠다.
+    public static bool ApplyInterceptDefaults(ACO_AAGunSite aa)
+    {
+        aa.InterceptDefaultsApplied = true;
+        if (aa.InterceptProtectLayers.value != 0) { return false; }   // 이미 직접 정했다 — 덮어쓰지 않는다
+        ACO_EscortUnit escort = aa.GetComponentInParent<ACO_EscortUnit>(true);
+        if (aa.MarkerLabel == "CIWS")
+        {
+            aa.InterceptProtectLayers = (1 << 29) | (1 << 30);
+            aa.InterceptRange = 1200f;
+            aa.DefenseRadius = 600f;
+            aa.OtherDefenseFactor = 2f;
+        }
+        else if (escort != null && !escort.Hostile && aa.name.Contains("AAGun"))
+        {
+            aa.InterceptProtectLayers = (1 << 25) | (1 << 26);
+            aa.InterceptRange = 1500f;
+            aa.DefenseRadius = 1500f;
+            aa.OtherDefenseFactor = 1f;
+        }
+        else { return false; }
+        aa.InterceptReactionTime = 0.5f;
+        aa.InterceptKillTime = 0.5f;
+        return true;
     }
 
     private static void MarkChanged(Object o)

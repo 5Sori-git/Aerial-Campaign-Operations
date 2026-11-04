@@ -174,7 +174,7 @@ public static class ACO_PlayerMissileSetup
     private const int SpecialDialIndex = 2;
     private const KeyCode SpecialKey = KeyCode.Alpha3;
 
-    /// UGB: 무유도 폭탄. 누르고 있으면 0.3초마다 투하. 슬롯 2(좌우) / 총 24발 / 쏜 슬롯마다 4초 뒤 재장전. 범위 35m.
+    /// UGB: 무유도 폭탄. 누르고 있으면 0.3초마다 투하. 슬롯 2(좌우) / 총 24발 / 쏜 슬롯마다 4초 뒤 재장전. 범위 200m(F/A-18 설정 기준).
     public static void ApplyBombPreset(ACO_DFUNC_Missile m)
     {
         m.UpgradeFamily = ACO_UpgradeFamily.SpecialBomb;
@@ -187,7 +187,7 @@ public static class ACO_PlayerMissileSetup
         m.MaxAmmo = 24;
         m.SlotReloadTime = 4f;
         m.Damage = 150f;
-        m.SplashRadius = 35f;
+        m.SplashRadius = 200f;
         m.MinSplashFraction = 0.25f;
         m.MaxSpeed = 600f;
         m.Acceleration = 0f;
@@ -196,7 +196,7 @@ public static class ACO_PlayerMissileSetup
         m.NumPreInstantiated = 4;
     }
 
-    /// RKT: 무유도 로켓. 누르고 있으면 0.08초마다 연사. 슬롯 8 / 총 72발 / 쏜 슬롯마다 3초 뒤 재장전. 범위 12m.
+    /// RKT: 무유도 로켓. 누르고 있으면 0.08초마다 연사. 슬롯 8 / 총 72발 / 쏜 슬롯마다 3초 뒤 재장전. 피해 100, 범위 50m(F/A-18 설정 기준).
     public static void ApplyRocketPreset(ACO_DFUNC_Missile m)
     {
         m.UpgradeFamily = ACO_UpgradeFamily.SpecialBomb;
@@ -208,10 +208,10 @@ public static class ACO_PlayerMissileSetup
         m.SlotCount = 8;
         m.MaxAmmo = 72;
         m.SlotReloadTime = 3f;
-        m.Damage = 45f;
-        m.SplashRadius = 12f;
+        m.Damage = 100f;
+        m.SplashRadius = 50f;
         m.MinSplashFraction = 0.3f;
-        m.MaxSpeed = 450f;
+        m.MaxSpeed = 900f;
         m.Acceleration = 600f;
         m.InheritVelocity = true;
         m.AllowFiringWhenGrounded = false;
@@ -347,7 +347,7 @@ public static class ACO_PlayerMissileSetup
         EditorUtility.SetDirty(kb);
     }
 
-    /// 4AAM: 공중 표적 4개 동시 락온, 일제 발사. 슬롯 4 / 총 16발 / 일제 발사 뒤 12초에 다시 장전.
+    /// 4AAM: 공중 표적 4개 동시 락온, 일제 발사. 슬롯 4 / 총 16발 / 일제 발사 뒤 12초에 다시 장전. 넓은 탐색(60도), 피해 200(F/A-18 설정 기준).
     public static void Apply4AAMPreset(ACO_DFUNC_Missile m)
     {
         m.UpgradeFamily = ACO_UpgradeFamily.SpecialAAM;
@@ -359,13 +359,13 @@ public static class ACO_PlayerMissileSetup
         m.MaxAmmo = 16;
         m.SlotReloadTime = 12f;
         m.LockRange = 3500f;
-        m.LockAngle = 25f;
-        m.LockTime = 1.2f;
-        m.Damage = 100f;
-        m.MaxSpeed = 400f;
+        m.LockAngle = 60f;
+        m.LockTime = 1.5f;
+        m.Damage = 200f;
+        m.MaxSpeed = 900f;
         m.Acceleration = 300f;
-        m.TurnRate = 110f;
-        m.GuidanceMode = 2;
+        m.TurnRate = 50f;
+        m.GuidanceMode = 0;
         m.AllowUnguidedFire = false;
         m.NumPreInstantiated = 4;
     }

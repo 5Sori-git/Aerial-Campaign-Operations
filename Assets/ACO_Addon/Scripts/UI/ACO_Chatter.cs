@@ -48,7 +48,9 @@ namespace ACO
         public const int EV_CONVOY_HIT = 18;       // 콘보이(지상·해상 호위 대상)가 공격받음
         public const int EV_CONVOY_LOST = 19;      // 콘보이 차량 파괴
         public const int EV_ALLY_SMOKE = 20;       // 아군 지상·해상 유닛이 연막
-        public const int EV_COUNT = 21;
+        public const int EV_MISSILE_INTERCEPTED = 21; // 내 미사일이 적 CIWS에 요격됨
+        public const int EV_CIWS_SAVE = 22;        // 나를 노린 미사일을 아군 CIWS가 요격
+        public const int EV_COUNT = 23;
 
         // 무전 채널(PTT 소리를 고른다)
         public const int CH_CONTROL = 0;   // 관제기(AWACS)
@@ -105,44 +107,7 @@ namespace ACO
 
         // ───────────── 페이즈 대사 ─────────────
 
-        [Header("페이즈 대사 (칸 순서: 1 타격, 2 SEAD, 3 점수 할당, 4 시한 표적, 5 제공권, 6 보스, 7 공중 호위, 8 지상 호위, 9 폭격기 요격, 10 보너스)")]
-        [TextArea] public string[] StartTexts = new string[] {
-            "Primary target located. All aircraft, destroy the enemy facility.",
-            "Enemy air defense network detected. Suppress the SAM and AA sites.",
-            "Free hunting zone. Engage any target and meet the score quota.",
-            "High-value targets are on the move. Hit each one before it escapes!",
-            "Multiple bogeys inbound. Engage and take control of the airspace.",
-            "Caution - an enemy ace squadron has been sighted. Stay sharp.",
-            "The transport is taking off. Escort it to the drop zone.",
-            "The convoy is rolling out. Cover it from the ambush.",
-            "Enemy bombers are heading for the city! Intercept them before they arrive!",
-            "Unidentified fast mover... it's an ace. Everyone, watch yourselves." };
-        [TextArea] public string[] SuccessTexts = new string[] {
-            "Target destroyed. Good work, all aircraft.",
-            "Enemy air defenses are down. The skies are ours.",
-            "Score quota met. Outstanding hunting.",
-            "All time-sensitive targets eliminated.",
-            "Airspace secured. No more contacts.",
-            "The ace squadron has been shot down. Incredible.",
-            "The transport has reached the drop zone. Delivery confirmed.",
-            "The convoy made it through. Good cover.",
-            "All bombers down! The city is safe.",
-            "The ace is going down! I can't believe it!" };
-        [TextArea] public string[] FailTexts = new string[] {
-            "The target survived. Regroup.",
-            "Air defenses are still active.",
-            "We fell short of the quota.",
-            "A target got away!",
-            "We lost control of the airspace.",
-            "The ace squadron is pulling out.",
-            "The transport is down!",
-            "The convoy has been destroyed!",
-            "The bombers reached the city...",
-            "The ace is withdrawing... he got away." };
-        public AudioClip[] StartClips = new AudioClip[10];
-        public AudioClip[] SuccessClips = new AudioClip[10];
-        public AudioClip[] FailClips = new AudioClip[10];
-        [Header("공통 (유형별 칸이 비었을 때)")]
+        [Header("페이즈 대사 — 공통 기본(페이즈 대사는 페이즈 모듈 인스펙터에서 정한다 — 모듈 칸이 비었을 때 이것)")]
         public string DefaultStartText = "New objective. Check your HUD.";
         public string DefaultSuccessText = "Objective complete.";
         public string DefaultFailText = "Objective failed.";
@@ -152,7 +117,7 @@ namespace ACO
         [Header("미션 결과")]
         public string MissionCompleteText = "Mission accomplished. All aircraft, return to base.";
         public AudioClip MissionCompleteClip;
-        [Tooltip("실패 사유별(ACO_MissionManager.FAIL_*: 0 시간 초과, 1 도시 폭격, 2 호위 대상 격추, 3 콘보이 전멸, 4 시한 표적 도주)")]
+        [Tooltip("미션 실패 대사: 0 = 시간 초과(모듈 실패 대사가 비었을 때도 0번). 1~4는 예전 기본 페이즈 칸 — 쓰이지 않는다(모듈 실패 대사로 옮겼다)")]
         [TextArea] public string[] MissionFailedTexts = new string[] {
             "Time's up. Mission failed. All units, withdraw.",
             "The city has been bombed... Mission failed. All units, withdraw.",
@@ -170,12 +135,14 @@ namespace ACO
         public float[] EventChance = new float[] {
             1f, 1f, 1f, 1f, 1f, 1f, 1f,
             0.5f, 0.3f, 0.5f, 0.7f, 0.35f, 0.6f, 1f, 0.9f, 0.5f, 1f,
-            0.5f, 0.5f, 1f, 0.6f };
+            0.5f, 0.5f, 1f, 0.6f,
+            0.6f, 0.8f };
         [Tooltip("같은 상황의 대사가 다시 나오기까지 최소 간격(초)")]
         public float[] EventCooldown = new float[] {
             0f, 0f, 0f, 0f, 10f, 0f, 0f,
             6f, 10f, 8f, 8f, 12f, 6f, 0f, 3f, 15f, 0f,
-            12f, 15f, 0f, 12f };
+            12f, 15f, 0f, 12f,
+            8f, 8f };
         [Tooltip("적 플레어 대사는 이 거리(m) 안의 적기만")]
         public float FlareCalloutRange = 3000f;
 
@@ -197,7 +164,9 @@ namespace ACO
             EV_ALLY_FLARE, EV_ALLY_FLARE,
             EV_CONVOY_HIT, EV_CONVOY_HIT,
             EV_CONVOY_LOST,
-            EV_ALLY_SMOKE, EV_ALLY_SMOKE };
+            EV_ALLY_SMOKE, EV_ALLY_SMOKE,
+            EV_MISSILE_INTERCEPTED, EV_MISSILE_INTERCEPTED, EV_MISSILE_INTERCEPTED,
+            EV_CIWS_SAVE, EV_CIWS_SAVE };
         [Tooltip("화자 번호(SpeakerNames)")]
         public int[] LineSpeaker = new int[] {
             0, 0, 0,
@@ -215,6 +184,8 @@ namespace ACO
             2, 2,
             0, 0,
             0,
+            0, 0,
+            0, 3, 0,
             0, 0 };
         [TextArea] public string[] LineText = new string[] {
             "This is Sky Eye. All aircraft, the operation has begun. Good hunting.",
@@ -260,7 +231,12 @@ namespace ACO
             "Convoy under attack - clear those hostiles!",
             "We lost a convoy vehicle!",
             "The convoy is laying smoke!",
-            "Smoke screen deployed - they've lost their lock!" };
+            "Smoke screen deployed - they've lost their lock!",
+            "Missile intercepted! Their CIWS shot it down.",
+            "CIWS got your missile - take out the guns or saturate them.",
+            "Interception! That ship's close-in defense is good.",
+            "Friendly CIWS splashed that missile. You're covered.",
+            "Missile down - the fleet's guns have you covered!" };
         [Tooltip("대사별 음성(선택, 같은 순서 — 비워도 된다)")]
         public AudioClip[] LineClip;
 
@@ -525,17 +501,47 @@ namespace ACO
 
         // ───────────── 페이즈 대사 ─────────────
 
-        private void SayPhase(string[] texts, AudioClip[] clips, int type, string fallbackText, AudioClip fallbackClip)
+        /// which: 0 = 시작, 1 = 성공, 2 = 실패. 대사는 페이즈 모듈 인스펙터(비면 공통 기본 대사), 화자는 모듈이 정했으면 그 화자.
+        private void SayPhase(int type, string fallbackText, AudioClip fallbackClip, int which)
         {
-            int k = type - 1;
-            string text = texts != null && k >= 0 && k < texts.Length && !string.IsNullOrEmpty(texts[k]) ? texts[k] : fallbackText;
-            AudioClip clip = clips != null && k >= 0 && k < clips.Length && clips[k] != null ? clips[k] : fallbackClip;
-            SayVoice(SpeakerName(PhaseSpeaker), SpeakerColor(PhaseSpeaker), text, clip, PhaseQueueDelay, SpeakerChannel(PhaseSpeaker));
+            string text = fallbackText;
+            AudioClip clip = fallbackClip;
+            int speaker = PhaseSpeaker;
+            ACO_PhaseModule module = Manager.GetModule(type);
+            if (module != null)
+            {
+                string own = module.GetChatterText(which);
+                text = string.IsNullOrEmpty(own) ? fallbackText : own;
+                AudioClip ownClip = module.GetChatterClip(which);
+                clip = ownClip != null ? ownClip : fallbackClip;
+                speaker = ModuleSpeaker(module, which);
+            }
+            SayVoice(SpeakerName(speaker), SpeakerColor(speaker), text, clip, PhaseQueueDelay, SpeakerChannel(speaker));
+        }
+
+        /// 모듈 대사의 화자: 모듈이 정했으면(0 이상, 화자 수 안) 그 화자, 아니면 PhaseSpeaker.
+        private int ModuleSpeaker(ACO_PhaseModule module, int which)
+        {
+            int s = module.GetChatterSpeaker(which);
+            int n = SpeakerNames != null ? SpeakerNames.Length : 0;
+            return s >= 0 && s < n ? s : PhaseSpeaker;
         }
 
         private void SayMissionFailed()
         {
             int r = Manager.GetFailReason();
+            if (r == ACO_MissionManager.FAIL_MODULE)
+            {
+                // 모듈 페이즈 실패: 그 모듈의 실패 대사(비면 아래 기본 실패 대사)
+                ACO_PhaseModule module = Manager.GetModule(Manager.GetCurrentPhaseType());
+                string own = module != null ? module.GetChatterText(2) : "";
+                if (!string.IsNullOrEmpty(own))
+                {
+                    int speaker = ModuleSpeaker(module, 2);
+                    SayVoice(SpeakerName(speaker), SpeakerColor(speaker), own, module.GetChatterClip(2), PhaseQueueDelay, SpeakerChannel(speaker));
+                    return;
+                }
+            }
             string text = MissionFailedTexts != null && r >= 0 && r < MissionFailedTexts.Length ? MissionFailedTexts[r] : "";
             if (string.IsNullOrEmpty(text) && MissionFailedTexts != null && MissionFailedTexts.Length > 0) { text = MissionFailedTexts[0]; }
             AudioClip clip = MissionFailedClips != null && r >= 0 && r < MissionFailedClips.Length ? MissionFailedClips[r] : null;
@@ -578,14 +584,14 @@ namespace ACO
                 // 페이즈 끝: 시작할 때 본 유형으로 성공/실패
                 if (cleared > _seenCleared)
                 {
-                    if (Manager.GetLastPhaseFailed()) { SayPhase(FailTexts, FailClips, _seenPhaseType, DefaultFailText, DefaultFailClip); }
-                    else { SayPhase(SuccessTexts, SuccessClips, _seenPhaseType, DefaultSuccessText, DefaultSuccessClip); }
+                    if (Manager.GetLastPhaseFailed()) { SayPhase(_seenPhaseType, DefaultFailText, DefaultFailClip, 2); }
+                    else { SayPhase(_seenPhaseType, DefaultSuccessText, DefaultSuccessClip, 1); }
                 }
                 // 페이즈 시작, 또는 배치가 안 돼 같은 페이즈가 다른 유형으로 바뀜
                 bool changed = running && phase == _seenPhase && phase >= 0 && Manager.IsPhaseActive() && type != _seenPhaseType;
                 if (running && phase >= 0 && (phase > _seenPhase || changed))
                 {
-                    SayPhase(StartTexts, StartClips, type, DefaultStartText, DefaultStartClip);
+                    SayPhase(type, DefaultStartText, DefaultStartClip, 0);
                     _seenPhaseType = type;
                 }
                 if (running && waves > _seenWaves) { Report(EV_WAVE, ""); }
@@ -621,7 +627,8 @@ namespace ACO
             for (int i = 0; i < n; i++)
             {
                 ACO_EscortUnit unit = Generator.EscortUnits[i];
-                if (unit != null && unit.Hostile) { _escortHealth[i] = -1f; continue; }   // 적 폭격기는 호위 대사 대상이 아니다
+                // 적 폭격기·상륙전 호위함/공격헬기/모선은 호위 대사 대상이 아니다
+                if (unit != null && (unit.Hostile || unit.Role != ACO_EscortUnit.ROLE_VIP)) { _escortHealth[i] = -1f; continue; }
                 SaccTarget health = unit ? unit.GetComponent<SaccTarget>() : null;
                 if (!health || !Generator.IsUnitUsed(ACO_MissionGenerator.CAT_ESCORT, i))
                 {

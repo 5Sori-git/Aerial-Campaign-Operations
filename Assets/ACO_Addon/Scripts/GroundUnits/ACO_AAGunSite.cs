@@ -14,6 +14,11 @@ namespace ACO
     /// 동기화는 타겟 인덱스뿐이다. 포탑 각도와 발포 여부는 각 클라이언트가 자기 화면의 타겟 위치로 계산하므로,
     /// 피격자(타겟 오너)는 자기 화면에서 포신이 자신을 향할 때만 맞는다.
     /// 원거리 잠재우기: 조종 중인 플레이어 기체가 (탐지 거리 + SleepMargin) 밖이면 탐지/조준/기총을 멈추고 SleepCheckInterval마다 깨울지만 본다.
+    ///
+    /// 미사일 요격(CIWS, InterceptProtectLayers가 0이 아닐 때): 판정은 미사일(ACO_Missile)이 한다 — 미사일이 0.1초마다 이 CIWS가 자기를 덮는지(CanIntercept)
+    /// 확인하고 매 프레임 InterceptTick을 부른다. CIWS는 한 번에 한 발만 상대하고, (쉬다가 처음이면 반응 시간 +) 격추 시간이 차면 그 미사일이 요격된다.
+    /// 미사일 궤적·함선 위치·생사가 모든 화면에서 같아 동기화 없이 같은 결과가 나오고, 피해 판정자(플레이어 미사일 = 쏜 사람, NPC 미사일 = 맞는 쪽) 화면이 결과다.
+    /// 요격 중에는 비행기보다 미사일을 먼저 겨누고(연출 — 예광탄만, 피해 없음), 잠들어 있어도 깬다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_AAGunSite : UdonSharpBehaviour
     {
@@ -61,6 +66,23 @@ namespace ACO
         public float AimError = 0.8f;
         [Tooltip("흔들림 속도(Hz 정도)")]
         public float AimErrorFrequency = 0.7f;
+
+        [Header("미사일 요격 (CIWS)")]
+        [Tooltip("이 레이어의 락온 마커를 노린 유도 미사일(ACO_Missile)을 쏘아 떨어뜨린다. 0 = 요격 안 함. "
+            + "적 CIWS = 적 항공기·지상(29, 30 — 플레이어 미사일을 막는다), 아군 CIWS = 아군 항공기·지상(25, 26 — 적 미사일을 막는다). 폭탄·로켓은 막지 않는다")]
+        public LayerMask InterceptProtectLayers = 0;
+        [Tooltip("요격 사거리(m): 미사일이 이 CIWS에서 이 거리 안에 있어야 쏜다")]
+        public float InterceptRange = 1200f;
+        [Tooltip("방어 반경(m): 미사일의 표적이 이 CIWS에서 이 거리 안이어야 막는다(함대 방어 — 옆 함선·근처 아군기). 자기 유닛을 노린 미사일은 늘 막는다")]
+        public float DefenseRadius = 600f;
+        [Tooltip("쉬다가(1초 넘게 교전 없음) 처음 교전할 때 더 걸리는 시간(초)")]
+        public float InterceptReactionTime = 0.5f;
+        [Tooltip("미사일 한 발을 떨어뜨리는 데 걸리는 시간(초). 한 번에 한 발만 상대한다 — 일제 발사는 일부가 뚫는다")]
+        public float InterceptKillTime = 0.5f;
+        [Tooltip("자기 유닛이 아닌 표적(옆 함선·아군기)을 노린 미사일은 걸리는 시간에 이 배수를 곱한다")]
+        public float OtherDefenseFactor = 2f;
+        // Bake가 함선 CIWS·아군 함선 대공포에 요격 기본값을 한 번 넣었다(그 뒤로 직접 바꾼 값은 건드리지 않는다)
+        [HideInInspector] public bool InterceptDefaultsApplied;
 
         [Header("원거리 잠재우기")]
         [Tooltip("조종 중인 플레이어 기체가 (탐지/추적 거리 + 이 거리)(m) 안에 하나도 없으면 잠든다 — 탐지/조준 계산을 건너뛴다. 0 이하면 잠재우지 않는다")]
@@ -111,6 +133,17 @@ namespace ACO
         private float _sleepTimer;
         private SaccEntity[] _aamEntities;
 
+        // 미사일 요격: 지키는 유닛(함선 본체·호위 유닛 — 이 아래를 노린 미사일은 '자기 유닛'), 지금 상대하는 미사일과 진행
+        private Transform _defendedRoot;
+        private ACO_Missile _icMissile;
+        private float _icLastTick = -100f;
+        private float _icProgress;
+        private float _icNeed;
+        // 상대하던 미사일이 이 시간(초) 넘게 틱하지 않으면(터졌거나 사거리 밖) 다른 미사일을 받는다
+        private const float IC_HOLD = 0.15f;
+        // 이 시간(초) 넘게 교전이 없었으면 다음 교전에 반응 시간이 붙는다
+        private const float IC_IDLE = 1f;
+
         // 미션 생성기 계약(ACO_MissionGenerator가 SetProgramVariable로 넣고 MissionSpawn을 부른다)
         [System.NonSerialized] public Vector3 MissionSpawnPosition;
         [System.NonSerialized] public Quaternion MissionSpawnRotation = Quaternion.identity;
@@ -135,6 +168,13 @@ namespace ACO
             if (!Gun) { Gun = GetComponentInChildren<ACO_NPCGun>(); }
             _isOwner = Networking.IsOwner(gameObject);
 
+            ACO_Warship ship = GetComponentInParent<ACO_Warship>();
+            ACO_EscortUnit escortUnit = GetComponentInParent<ACO_EscortUnit>();
+            if (ship) { _defendedRoot = ship.transform; }
+            else if (escortUnit) { _defendedRoot = escortUnit.transform; }
+            else if (EntityControl) { _defendedRoot = EntityControl.transform; }
+            else { _defendedRoot = transform; }
+
             // 포대마다 흔들림 위상이 달라야 여러 문이 같은 박자로 움직이지 않는다. 위치 해시라 모든 클라이언트가 같다.
             Vector3 p = transform.position;
             int h = Mathf.RoundToInt(p.x) * 73856093 ^ Mathf.RoundToInt(p.z) * 83492791;
@@ -153,7 +193,9 @@ namespace ACO
                 _isOwner = Networking.IsOwner(gameObject);
             }
 
-            // 원거리 잠재우기: 잠든 동안엔 주기적으로 깨울지만 확인한다.
+            bool intercepting = IsIntercepting();
+
+            // 원거리 잠재우기: 잠든 동안엔 주기적으로 깨울지만 확인한다. 미사일을 요격하는 동안은 깨어 있고, 끝나면 포탑만 쉬는 자세로 돌린다.
             if (SleepMargin > 0f)
             {
                 _sleepTimer -= dt;
@@ -162,9 +204,26 @@ namespace ACO
                     _sleepTimer = SleepCheckInterval;
                     UpdateSleep();
                 }
-                if (_sleeping) { return; }
+                if (_sleeping && !intercepting)
+                {
+                    if (!TurretAtRest()) { ReturnToRest(dt); }
+                    if (Gun) { Gun.ForceStop(); }
+                    return;
+                }
             }
             else { _sleeping = false; }
+
+            // 미사일 요격이 비행기보다 먼저다(조준·예광탄 연출만 — 요격 판정은 미사일이 InterceptTick으로 한다)
+            if (intercepting)
+            {
+                _noTargetTime = 0f;
+                Vector3 mpos = _icMissile.transform.position;
+                Vector3 aimPoint = Gun != null ? Gun.LeadPoint(mpos, _icMissile.GetVelocity()) : mpos;
+                Vector3 origin = TurretPitch != null ? TurretPitch.position : transform.position;
+                RotateTurret(aimPoint - origin, dt);
+                if (Gun) { Gun.InterceptFire(aimPoint); }
+                return;
+            }
 
             // 시야 확인은 비용이 있어 주기적으로만 한다. 타겟 선택은 오너만, 시야 갱신은 모든 클라이언트가 한다.
             _scanTimer -= dt;
@@ -335,7 +394,13 @@ namespace ACO
                 float ny = (Mathf.PerlinNoise(_noiseSeed, t) - 0.5f) * 2f * AimError;
                 aimDir = Quaternion.LookRotation(aimDir.normalized, Vector3.up) * Quaternion.Euler(nx, ny, 0f) * Vector3.forward;
             }
+            RotateTurret(aimDir, dt);
+        }
 
+        /// 포탑을 조준 방향으로 돌린다(방위·고각 회전 속도 한계).
+        private void RotateTurret(Vector3 aimDir, float dt)
+        {
+            if (aimDir.sqrMagnitude < 0.000001f) { return; }
             if (TurretYaw)
             {
                 Vector3 flat = new Vector3(aimDir.x, 0f, aimDir.z);
@@ -440,6 +505,52 @@ namespace ACO
         }
 
         public bool IsSleeping() { return _sleeping; }
+
+        // ───────────── 미사일 요격 (판정은 ACO_Missile이 부른다) ─────────────
+
+        private bool IsIntercepting()
+        {
+            return _icMissile != null && Time.time - _icLastTick < IC_HOLD;
+        }
+
+        /// 이 CIWS가 이 미사일을 막을 수 있는가: 살아 있음, 지키는 레이어의 표적, 미사일이 요격 사거리 안, 표적이 자기 유닛이거나 방어 반경 안.
+        public bool CanIntercept(Vector3 missilePos, Transform target)
+        {
+            if (InterceptProtectLayers.value == 0 || _disabled || !gameObject.activeInHierarchy || !target) { return false; }
+            Init();
+            if (TargetHealth && TargetHealth.Health <= 0f) { return false; }
+            if (((1 << target.gameObject.layer) & InterceptProtectLayers.value) == 0) { return false; }
+            Vector3 p = transform.position;
+            if ((missilePos - p).sqrMagnitude > InterceptRange * InterceptRange) { return false; }
+            if (_defendedRoot && target.IsChildOf(_defendedRoot)) { return true; }
+            return (target.position - p).sqrMagnitude <= DefenseRadius * DefenseRadius;
+        }
+
+        /// 미사일이 매 프레임 부른다. -1 = 못 맡음(덮지 못하거나 다른 미사일을 쏘는 중 — 미사일은 다른 CIWS를 찾는다), 0 = 쏘는 중, 1 = 요격했다.
+        public int InterceptTick(ACO_Missile missile, Transform target, float dt)
+        {
+            if (!missile || !CanIntercept(missile.transform.position, target))
+            {
+                if (_icMissile == missile) { _icMissile = null; }
+                return -1;
+            }
+            float now = Time.time;
+            if (_icMissile != missile)
+            {
+                if (IsIntercepting()) { return -1; }
+                bool idle = now - _icLastTick > IC_IDLE;
+                bool own = _defendedRoot && target.IsChildOf(_defendedRoot);
+                _icMissile = missile;
+                _icProgress = 0f;
+                _icNeed = ((idle ? InterceptReactionTime : 0f) + InterceptKillTime) * (own ? 1f : Mathf.Max(OtherDefenseFactor, 0.01f));
+                if (_sleeping) { _sleeping = false; _sleepTimer = SleepCheckInterval; }
+            }
+            _icLastTick = now;
+            _icProgress += dt;
+            if (_icProgress < _icNeed) { return 0; }
+            _icMissile = null;
+            return 1;
+        }
 
         // ───────────── 네트워크 / 격추 / 부활 ─────────────
 

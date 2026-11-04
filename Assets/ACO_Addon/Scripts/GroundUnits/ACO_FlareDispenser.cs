@@ -13,6 +13,7 @@ namespace ACO
     /// 등급이 있는 유닛(NPC 전투기)은 AI가 FlareChance·ReactDistanceMultiplier를 등급에 맞게 넣는다. 출격할 때 유닛이 ResetSalvos로 횟수를 채운다.
     /// 연막(SmokeMode, 지상·해상 호위 유닛): 같은 규칙으로 뿌리되 미사일이 끌려가는 지점이 뿌린 자리에 머물고(연막 구름), 켜져 있는 동안(FlareActiveTime —
     /// 연막은 6~8초 권장) 적 NPC 기총·미사일 런처가 이 유닛을 조준하지 못한다(IsObscured — 사격·락온을 멈춘다). FlareParticles에 연막 파티클을 넣는다.
+    /// 연막은 적 NPC 기총이 조준하기 시작할 때도(ReportGunThreat — 기총이 표적 오너 화면에서 부른다) GunSmokeChance로 굴린다.
     /// Friendly: 아군 유닛(호위 대상)이면 켠다(EscortUnit이 출발할 때 넣는다) — 무전 대사가 적 플레어가 아니라 아군 플레어/연막이 된다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_FlareDispenser : UdonSharpBehaviour
@@ -43,6 +44,8 @@ namespace ACO
 
         [Tooltip("연막: 미사일이 끌려가는 지점이 뿌린 자리에 머물고, 켜져 있는 동안 적 NPC가 조준하지 못한다(지상·해상 호위 유닛)")]
         public bool SmokeMode = false;
+        [Tooltip("연막: 적 NPC 기총이 나를 조준하기 시작할 때(조준 한 번에 한 번) 연막을 뿌릴 확률. 횟수·간격은 미사일과 같이 쓴다")]
+        [Range(0f, 1f)] public float GunSmokeChance = 0.5f;
         [Tooltip("아군 유닛(호위 대상). 호위 유닛이 출발할 때 넣는다 — 무전 대사 구분용")]
         public bool Friendly = false;
 
@@ -71,6 +74,7 @@ namespace ACO
         private float _checkTimer;
         private float _emitStopAt;
         private bool _started;
+        private bool _gunThreat;   // 적 기총이 조준하기 시작했다(오너 — 다음 확인 때 굴린다)
 
         void Start()
         {
@@ -154,6 +158,13 @@ namespace ACO
         /// 연막이 켜져 있다 — 적 NPC 기총·미사일 런처가 이 유닛을 조준하지 않는다.
         public bool IsObscured() { return SmokeMode && IsFlareActive(); }
 
+        /// 적 NPC 기총이 나를 조준하기 시작했다(ACO_NPCGun — 표적 오너 화면에서만, 조준 한 번에 한 번). 연막 유닛만, 뿌릴 수 있을 때만 받아 둔다.
+        public void ReportGunThreat()
+        {
+            if (!SmokeMode || _salvosLeft <= 0 || Time.time < _nextFlare || IsFlareActive()) { return; }
+            _gunThreat = true;
+        }
+
         /// 오너: 나를 쫓는 미사일이 반응 거리 안으로 들어오면 미사일마다 한 번 확률을 굴려 뿌린다.
         void Update()
         {
@@ -161,9 +172,21 @@ namespace ACO
             if (_checkTimer > 0f) { return; }
             _checkTimer = 0.2f;
             if (!_started) { Start(); }
-            if (!Networking.IsOwner(gameObject)) { return; }
-            if (_salvosLeft <= 0 || Time.time < _nextFlare) { return; }
-            if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
+            if (!Networking.IsOwner(gameObject)) { _gunThreat = false; return; }
+            if (_salvosLeft <= 0 || Time.time < _nextFlare) { _gunThreat = false; return; }
+            if (TargetHealth != null && TargetHealth.Health <= 0f) { _gunThreat = false; return; }
+
+            // 연막: 적 기총이 조준하기 시작했으면 한 번 굴린다
+            if (_gunThreat)
+            {
+                _gunThreat = false;
+                if (Random.value <= GunSmokeChance)
+                {
+                    SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetFlare));
+                    _nextFlare = Time.time + FlareCooldown;
+                    return;
+                }
+            }
 
             float react = FlareReactDistance * ReactDistanceMultiplier;
             float reactSq = react * react;

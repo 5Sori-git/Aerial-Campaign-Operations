@@ -26,6 +26,8 @@ namespace ACO
         public ACO_Chatter Chatter;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(락온 방향·날아오는 미사일 방향/거리 표시)")]
         public ACO_RWR Rwr;
+        [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미사일 요격 CIWS를 넣는다 — 아군을 노린 이 런처의 미사일은 아군 CIWS(호위함 등)에 요격될 수 있다")]
+        public ACO_AAGunSite[] InterceptSites;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 레이더 접촉 목록을 넣는다(HUD 레이더에 날아가는 미사일 표시)")]
         public ACO_RadarContacts Radar;
 
@@ -260,6 +262,9 @@ namespace ACO
                 acoMissile.FromNpc = true;            // 작전판: 아군 유닛 격추로 표시(개인 점수 없음)
                 acoMissile.ShooterJudgesHit = false; // NPC 미사일은 피격자가 판정한다
                 acoMissile.IsShooter = false;
+                acoMissile.InterceptSites = InterceptSites;
+                // 플레이어 무장이 넣는 특수 동작은 NPC 미사일에선 늘 끈다(풀은 이 런처 것)
+                acoMissile.SeaSkim = false;
             }
 
             missile.SetActive(true);

@@ -288,6 +288,36 @@ def dashed(c, a, b, dash=7.0, gap=5.0, w=5.0):
         t = e + gap
 
 
+def dashed_arc_to(c, cx, cy, r, a0, a1, step=8.0, w=4.5):
+    # 점선 호: 끝점(a1)부터 점·빈칸을 세어 끝이 늘 점으로 끝난다(표적 상자에 정확히 닿게).
+    pts = arc_pts(cx, cy, r, a0, a1, step)
+    pts.reverse()
+    for i in range(0, len(pts) - 1, 2):
+        seg(c, pts[i], pts[i + 1], w)
+
+
+def target_box_below(c, x, y, size=20.0, w=5.0):
+    # 위 변 가운데가 (x, y)인 표적 상자 — 점선이 위에서 수직으로 내려와 여기서 끝난다.
+    h = size * 0.5
+    poly(c, [(x - h, y), (x + h, y), (x + h, y + size), (x - h, y + size)], w)
+
+
+def i_w_lgb(c):
+    # 유도 폭탄: 폭탄 + 휘어 내려가는 점선(폭탄 밑에서 시작 — 호 중심이 폭탄 바로 아래라 끝에서 수직) → 위 변 가운데에 닿는 표적 상자
+    bomb(c, 26, 40, 0.6)
+    dashed_arc_to(c, 26, 76, 46, 270, 360)
+    target_box_below(c, 72, 76)
+
+
+def i_w_lgr(c):
+    # 유도 로켓: 로켓 포드 → 오른쪽으로 나가 휘어 내려가는 점선(포드 출구에서 수평으로 시작, 끝에서 수직) → 위 변 가운데에 닿는 표적 상자
+    rrect(c, 6, 18, 42, 42, 6)
+    for y in (26, 34):
+        seg(c, (42, y), (50, y), 4)
+    dashed_arc_to(c, 50, 66, 36, 270, 360)
+    target_box_below(c, 86, 66)
+
+
 def i_w_4agm(c):
     for i, x in enumerate((17, 39, 61, 83)):
         missile(c, x, 40 if i % 2 == 0 else 46, 90, 62, 4.5, 12, 5, 10, fill=True)
@@ -298,6 +328,30 @@ def i_w_lagm(c):
     missile(c, 26, 26, 45, 46, 5.5, 12, 7, 10)
     dashed(c, (46, 46), (70, 70))
     poly(c, [(72, 72), (90, 72), (90, 90), (72, 90)], 5)
+
+
+def i_w_scm(c):
+    # 클러스터: 내려오던 탄체가 터져 자탄이 지면 위로 부채꼴로 퍼진다
+    missile(c, 20, 14, 40, 34, 5.5, 12, 7, 10)
+    for x, y in ((46, 48), (60, 44), (72, 52), (40, 62), (54, 62), (68, 66), (84, 62),
+                 (32, 76), (46, 78), (60, 80), (74, 80), (88, 76)):
+        seg(c, (x, y), (x + 0.1, y), 6.5)
+    seg(c, (6, 92), (94, 92), 5)
+
+
+def i_w_lasm(c):
+    # 대함: 파도 바로 위로 깔려 가는 미사일 → 함선
+    missile(c, 30, 56, 0, 40, 5.5, 12, 7, 10)
+    dashed(c, (52, 56), (64, 56))
+    fill_poly(c, [(66, 60), (96, 60), (90, 70), (70, 70)])
+    seg(c, (78, 60), (78, 48), 4.5)
+    seg(c, (74, 52), (84, 52), 4.5)
+    pts = []
+    for i in range(25):
+        x = 4 + i * 3.8
+        pts.append((x, 80 + 3.5 * math.sin(i * 1.1)))
+    for i in range(len(pts) - 1):
+        seg(c, pts[i], pts[i + 1], 4)
 
 
 def i_w_laam(c):
@@ -336,6 +390,44 @@ def i_w_hpaa(c):
 def i_w_hvaa(c):
     missile(c, 60, 50, 0, 62, 6, 14, 8, 12)
     seg(c, (6, 36), (24, 36), 5); seg(c, (2, 50), (24, 50), 5); seg(c, (6, 64), (24, 64), 5)
+
+
+def i_w_flak(c):
+    # 무유도 대공 로켓: 로켓 세 발 → 적기 곁의 근접 폭발(별)
+    for i, y in enumerate((30, 50, 70)):
+        x = 14 + (i % 2) * 8
+        seg(c, (x, y), (x + 26, y), 4)
+        fill_poly(c, [(x + 24, y - 4.5), (x + 36, y), (x + 24, y + 4.5)])
+    jet(c, 80, 34, 0.22, fill=True)
+    pts = []
+    for i in range(16):
+        r = 16 if i % 2 == 0 else 8
+        a = math.radians(i * 22.5)
+        pts.append((68 + r * math.cos(a), 62 + r * math.sin(a)))
+    poly(c, pts, 4)
+
+
+def i_w_ccaa(c):
+    # 대응책 대응 시커(CCAA): 미사일 → 영상 틀(모서리 괄호) 안의 적기, 아래로 떨어지는 플레어는 무시
+    missile(c, 24, 50, 0, 40, 5.5, 12, 7, 10)
+    x0, y0, x1, y1, k = 58, 28, 94, 64, 9
+    for (cx, cy, dx, dy) in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
+        seg(c, (cx, cy), (cx + dx * k, cy), 4.5)
+        seg(c, (cx, cy), (cx, cy + dy * k), 4.5)
+    jet(c, 76, 46, 0.22, fill=True)
+    for (fx, fy) in ((64, 80), (76, 88), (88, 80)):
+        fill_circle(c, fx, fy, 3.2)
+
+
+def i_w_adam(c):
+    # 투하 후 추적, 큰 폭발: 점선으로 떨어지는 궤적 → 미사일 → 큰 점선 원 안의 적기들
+    dashed(c, (8, 14), (16, 30), 5.0, 4.0, 4.0)
+    missile(c, 30, 42, 25, 34, 5, 10, 6, 8, fill=True)
+    for i in range(14):
+        a = i * (360 / 14)
+        arc(c, 68, 58, 28, a, a + 14, 4.5)
+    jet(c, 60, 52, 0.2, fill=True)
+    jet(c, 78, 66, 0.2, fill=True)
 
 
 def i_w_none(c):
@@ -385,6 +477,8 @@ ICONS = [
     ("weapon_4aam", i_w_4aam), ("weapon_ugb", i_w_ugb), ("weapon_rkt", i_w_rkt), ("weapon_none", i_w_none),
     ("weapon_4agm", i_w_4agm), ("weapon_lagm", i_w_lagm), ("weapon_laam", i_w_laam), ("weapon_sasm", i_w_sasm),
     ("weapon_qaam", i_w_qaam), ("weapon_hpaa", i_w_hpaa), ("weapon_hvaa", i_w_hvaa),
+    ("weapon_flak", i_w_flak), ("weapon_ccaa", i_w_ccaa), ("weapon_adam", i_w_adam), ("weapon_lasm", i_w_lasm),
+    ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
 ]
 

@@ -132,6 +132,7 @@ public static class ACO_SkyBuilder
             if (created) { field.FieldRadius = terrain.FieldRadius * 0.9f; }
         }
         EditorUtility.SetDirty(field);
+        EnsureSkyParts(field);
 
         // 비
         Transform rainT = sky.transform.Find("Rain");
@@ -172,6 +173,7 @@ public static class ACO_SkyBuilder
         weather.Terrain = terrain;
         if (weather.Sun == null) { weather.Sun = FindSun(); }
         EditorUtility.SetDirty(weather);
+        EnsureStormParts(weather);
 
         if (!RenderSettings.fog)
         {
@@ -184,6 +186,291 @@ public static class ACO_SkyBuilder
     }
 
     public static bool Exists() { return FindRoot(SkyName) != null; }
+
+    // ───────────── 하늘 안개 돔·구름층·물안개 막 ─────────────
+
+    private const string SkyFogMaterialPath = GeneratedDir + "/ACO_SkyFog.mat";
+    private const string DeckBottomMaterialPath = GeneratedDir + "/ACO_CloudDeckBottom.mat";
+    private const string DeckTopMaterialPath = GeneratedDir + "/ACO_CloudDeckTop.mat";
+    private const string FogTopMaterialPath = GeneratedDir + "/ACO_FogLayerTop.mat";
+    private const string VeilMaterialPath = GeneratedDir + "/ACO_CloudVeil.mat";
+    /// 층 판 크기(Unity 기본 평면 10m × 이 배율) — 80km. 머리를 따라다니고 먼 쪽은 안개가 덮는다.
+    private const float LayerPlaneScale = 8000f;
+
+    /// 구름 필드에 빠진 하늘 안개 돔(SkyFog)·비구름층 판(DeckBottom/DeckTop)·안개층 판(FogLayerTop)·물안개 막(CloudVeil)을 만든다(Bake도 부른다).
+    /// 이미 있는 것과 머티리얼 값은 그대로 둔다. 하나라도 만들었으면 true.
+    public static bool EnsureSkyParts(ACO_CloudField field)
+    {
+        bool made = false;
+        Transform parent = field.transform;
+        Undo.RecordObject(field, "ACO sky parts");
+        if (field.SkyFog == null)
+        {
+            Material m = LoadOrCreate(SkyFogMaterialPath, "ACO/SkyFog", null);
+            if (m != null) { m.SetFloat("_BaseDensity", RenderSettings.fogDensity); EditorUtility.SetDirty(m); }
+            field.SkyFog = CreatePart(parent, "SkyFog", PrimitiveType.Sphere, 100f, m, true);
+            made = true;
+        }
+        if (field.DeckBottomRenderer == null)
+        {
+            // 아래에서 본 비구름 천장: 짙은 회색 얼룩
+            Material m = LoadOrCreate(DeckBottomMaterialPath, "ACO/CloudLayer", mat =>
+            {
+                mat.SetColor("_Color", new Color(0.44f, 0.47f, 0.52f, 1f));
+                mat.SetColor("_ShadeColor", new Color(0.3f, 0.32f, 0.37f, 1f));
+                mat.SetFloat("_NoiseScale", 1400f);
+                mat.SetFloat("_Cull", (float)CullMode.Front);
+            });
+            field.DeckBottomRenderer = CreatePart(parent, "CloudDeckBottom", PrimitiveType.Plane, LayerPlaneScale, m, false);
+            made = true;
+        }
+        if (field.DeckTopRenderer == null)
+        {
+            // 위에서 본 구름바다: 햇빛 받은 흰색
+            Material m = LoadOrCreate(DeckTopMaterialPath, "ACO/CloudLayer", mat =>
+            {
+                mat.SetColor("_Color", new Color(0.96f, 0.97f, 0.99f, 1f));
+                mat.SetColor("_ShadeColor", new Color(0.74f, 0.78f, 0.85f, 1f));
+                mat.SetFloat("_NoiseScale", 1800f);
+                mat.SetFloat("_Cull", (float)CullMode.Back);
+            });
+            field.DeckTopRenderer = CreatePart(parent, "CloudDeckTop", PrimitiveType.Plane, LayerPlaneScale, m, false);
+            made = true;
+        }
+        if (field.FogTopRenderer == null)
+        {
+            // 위에서 본 낮은 안개 바다: 옅은 회백색, 얼룩 작게
+            Material m = LoadOrCreate(FogTopMaterialPath, "ACO/CloudLayer", mat =>
+            {
+                mat.SetColor("_Color", new Color(0.88f, 0.9f, 0.92f, 1f));
+                mat.SetColor("_ShadeColor", new Color(0.74f, 0.77f, 0.8f, 1f));
+                mat.SetFloat("_NoiseScale", 900f);
+                mat.SetFloat("_Contrast", 0.55f);
+                mat.SetFloat("_WindSpeed", 3f);
+                mat.SetFloat("_Cull", (float)CullMode.Back);
+            });
+            field.FogTopRenderer = CreatePart(parent, "FogLayerTop", PrimitiveType.Plane, LayerPlaneScale, m, false);
+            made = true;
+        }
+        if (field.CloudVeil == null)
+        {
+            Material m = LoadOrCreate(VeilMaterialPath, "ACO/CloudVeil", null);
+            field.CloudVeil = CreatePart(parent, "CloudVeil", PrimitiveType.Sphere, 3f, m, false);
+            made = true;
+        }
+        if (made) { PrefabUtility.RecordPrefabInstancePropertyModifications(field); EditorUtility.SetDirty(field); }
+        return made;
+    }
+
+    private static Material LoadOrCreate(string path, string shaderName, System.Action<Material> init)
+    {
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (m != null) { return m; }
+        Shader shader = Shader.Find(shaderName);
+        if (shader == null) { Debug.LogError($"[ACO] 셰이더 {shaderName}를 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); return null; }
+        EnsureFolder(GeneratedDir);
+        m = new Material(shader) { name = System.IO.Path.GetFileNameWithoutExtension(path) };
+        init?.Invoke(m);
+        AssetDatabase.CreateAsset(m, path);
+        return m;
+    }
+
+    private static MeshRenderer CreatePart(Transform parent, string name, PrimitiveType type, float scale, Material mat, bool active)
+    {
+        GameObject go = GameObject.CreatePrimitive(type);
+        go.name = name;
+        Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localScale = Vector3.one * scale;
+        MeshRenderer mr = go.GetComponent<MeshRenderer>();
+        if (mat != null) { mr.sharedMaterial = mat; }
+        mr.shadowCastingMode = ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        mr.lightProbeUsage = LightProbeUsage.Off;
+        mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        mr.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        go.SetActive(active);
+        Undo.RegisterCreatedObjectUndo(go, "ACO sky " + name);
+        return mr;
+    }
+
+    // ───────────── 캐노피 빗방울 · 번개(폭풍) ─────────────
+
+    private const string CanopyRainMaterialPath = GeneratedDir + "/ACO_CanopyRain.mat";
+    private const string LightningMaterialPath = GeneratedDir + "/ACO_Lightning.mat";
+    private const string BoltMeshPath = GeneratedDir + "/ACO_LightningBolt.asset";
+    private const string ThunderDir = "Assets/ACO_Addon/Audio/Generated";
+
+    /// 날씨에 빠진 캐노피 빗방울 구(비 아래 "CanopyRain")·번개(ACO_Sky 아래 "Lightning" — 낙뢰 줄기 + 천둥 소스 2개)를 만든다(Bake도 부른다).
+    /// 천둥 소리는 Audio/Generated/ACO_Thunder_Near_*·Far_*(Tools/aco_make_thunder.py) — 갖고 있는 파일로 바꿔 끼워도 된다. 하나라도 만들었으면 true.
+    public static bool EnsureStormParts(ACO_Weather weather)
+    {
+        bool made = false;
+        ACO_Rain rain = weather.Rain;
+        if (rain != null && rain.CanopyRenderer == null)
+        {
+            Undo.RecordObject(rain, "ACO canopy rain");
+            Material m = LoadOrCreate(CanopyRainMaterialPath, "ACO/CanopyRain", null);
+            rain.CanopyRenderer = CreatePart(rain.transform, "CanopyRain", PrimitiveType.Sphere, 1.8f, m, false);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(rain);
+            EditorUtility.SetDirty(rain);
+            made = true;
+        }
+        if (weather.Lightning == null)
+        {
+            var go = new GameObject("Lightning");
+            Undo.RegisterCreatedObjectUndo(go, "ACO lightning");
+            go.transform.SetParent(weather.transform, false);
+            ACO_Lightning l = go.AddUdonSharpComponent<ACO_Lightning>();
+
+            // 낙뢰 줄기: 높이 0~1(땅~구름)의 지그재그 메시 — 스크립트가 높이를 늘린다
+            Mesh bolt = AssetDatabase.LoadAssetAtPath<Mesh>(BoltMeshPath);
+            if (bolt == null)
+            {
+                bolt = BuildBoltMesh(4242);
+                AssetDatabase.CreateAsset(bolt, BoltMeshPath);
+            }
+            var boltGo = new GameObject("Bolt");
+            boltGo.transform.SetParent(go.transform, false);
+            boltGo.AddComponent<MeshFilter>().sharedMesh = bolt;
+            MeshRenderer br = boltGo.AddComponent<MeshRenderer>();
+            Material bm = LoadOrCreate(LightningMaterialPath, "ACO/Lightning", null);
+            if (bm != null) { br.sharedMaterial = bm; }
+            br.shadowCastingMode = ShadowCastingMode.Off;
+            br.receiveShadows = false;
+            br.lightProbeUsage = LightProbeUsage.Off;
+            br.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            boltGo.SetActive(false);
+            l.Bolt = br;
+
+            // 천둥: 2D 소스 2개(겹쳐 들리게)
+            var sources = new AudioSource[2];
+            for (int i = 0; i < sources.Length; i++)
+            {
+                var sgo = new GameObject("Thunder_" + i);
+                sgo.transform.SetParent(go.transform, false);
+                AudioSource a = sgo.AddComponent<AudioSource>();
+                a.playOnAwake = false;
+                a.spatialBlend = 0f;
+                a.volume = 1f;
+                a.priority = 64;
+                sources[i] = a;
+            }
+            l.ThunderSources = sources;
+            l.NearThunder = LoadClips("ACO_Thunder_Near_");
+            l.FarThunder = LoadClips("ACO_Thunder_Far_");
+            if (l.NearThunder.Length == 0 || l.FarThunder.Length == 0)
+            {
+                Debug.LogWarning("[ACO] 천둥 소리(Audio/Generated/ACO_Thunder_Near_*·Far_*)를 찾지 못했습니다 — Tools/aco_make_thunder.py로 만들거나 Lightning에 직접 넣으세요.", l);
+            }
+            Undo.RecordObject(weather, "ACO lightning");
+            weather.Lightning = l;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(weather);
+            EditorUtility.SetDirty(weather);
+            made = true;
+        }
+        return made;
+    }
+
+    private static AudioClip[] LoadClips(string prefix)
+    {
+        var list = new List<AudioClip>();
+        for (int i = 1; i <= 4; i++)
+        {
+            AudioClip c = AssetDatabase.LoadAssetAtPath<AudioClip>($"{ThunderDir}/{prefix}{i}.wav");
+            if (c != null) { list.Add(c); }
+        }
+        return list.ToArray();
+    }
+
+    /// 낙뢰 줄기 메시: 위(구름, y = 1)에서 아래(땅, y = 0)로 지그재그 본 줄기 + 곁가지 3개. 리본 두 장(X축·Z축으로 펼침)을 엇갈려 어느 방향에서도 보인다.
+    /// 좌우 흔들림·폭은 m(스크립트는 높이만 늘린다), UV.x = 리본 폭 0~1, UV.y = 높이, 정점 색 a = 1(본 줄기)/0.5(곁가지).
+    private static Mesh BuildBoltMesh(int seed)
+    {
+        var rnd = new System.Random(seed);
+        var v = new List<Vector3>();
+        var uv = new List<Vector2>();
+        var col = new List<Color>();
+        var tri = new List<int>();
+
+        // 본 줄기: 18마디, 마디마다 옆으로 ±45m 흔들림(구름 쪽 끝은 가운데)
+        int segs = 18;
+        var main = new Vector3[segs + 1];
+        Vector3 p = Vector3.zero;
+        for (int i = 0; i <= segs; i++)
+        {
+            float y = 1f - i / (float)segs;
+            if (i > 0) { p += new Vector3((float)(rnd.NextDouble() * 2 - 1) * 45f, 0f, (float)(rnd.NextDouble() * 2 - 1) * 45f); }
+            main[i] = new Vector3(p.x, y, p.z);
+        }
+        AddRibbons(main, 7f, 1f, v, uv, col, tri);
+
+        // 곁가지: 본 줄기 위쪽 절반에서 갈라져 비스듬히 아래로(높이의 15~30%)
+        for (int b = 0; b < 3; b++)
+        {
+            int at = 2 + rnd.Next(segs / 2);
+            int n = 5 + rnd.Next(4);
+            var br = new Vector3[n + 1];
+            Vector3 dir = new Vector3((float)(rnd.NextDouble() * 2 - 1), 0f, (float)(rnd.NextDouble() * 2 - 1)).normalized * 70f;
+            float drop = 0.15f + 0.15f * (float)rnd.NextDouble();
+            Vector3 q = main[at];
+            for (int i = 0; i <= n; i++)
+            {
+                if (i > 0)
+                {
+                    q += dir / n * 3f + new Vector3((float)(rnd.NextDouble() * 2 - 1) * 25f, 0f, (float)(rnd.NextDouble() * 2 - 1) * 25f);
+                    q.y -= drop / n;
+                }
+                br[i] = q;
+            }
+            AddRibbons(br, 3.5f, 0.5f, v, uv, col, tri);
+        }
+
+        var mesh = new Mesh { name = "ACO_LightningBolt" };
+        mesh.SetVertices(v);
+        mesh.SetUVs(0, uv);
+        mesh.SetColors(col);
+        mesh.SetTriangles(tri, 0);
+        // 높이를 1300배쯤 늘리므로 경계를 넉넉히(잘리지 않게)
+        mesh.bounds = new Bounds(new Vector3(0f, 0.5f, 0f), new Vector3(1000f, 1.5f, 1000f));
+        return mesh;
+    }
+
+    /// 꺾은선 pts를 따라 X축·Z축으로 폭 width(m) 리본 두 장.
+    private static void AddRibbons(Vector3[] pts, float width, float alpha, List<Vector3> v, List<Vector2> uv, List<Color> col, List<int> tri)
+    {
+        for (int axis = 0; axis < 2; axis++)
+        {
+            Vector3 side = (axis == 0 ? Vector3.right : Vector3.forward) * (width * 0.5f);
+            int start = v.Count;
+            for (int i = 0; i < pts.Length; i++)
+            {
+                v.Add(pts[i] - side);
+                v.Add(pts[i] + side);
+                uv.Add(new Vector2(0f, pts[i].y));
+                uv.Add(new Vector2(1f, pts[i].y));
+                col.Add(new Color(1f, 1f, 1f, alpha));
+                col.Add(new Color(1f, 1f, 1f, alpha));
+            }
+            for (int i = 0; i < pts.Length - 1; i++)
+            {
+                int a = start + i * 2;
+                tri.Add(a); tri.Add(a + 2); tri.Add(a + 1);
+                tri.Add(a + 1); tri.Add(a + 2); tri.Add(a + 3);
+            }
+        }
+    }
+
+    /// 하늘 안개 돔의 '맑은 날 밀도'를 씬 안개에 맞춘다(Bake). 바꿨으면 true.
+    public static bool SyncSkyFogBase(ACO_CloudField field)
+    {
+        if (field.SkyFog == null || field.SkyFog.sharedMaterial == null) { return false; }
+        Material m = field.SkyFog.sharedMaterial;
+        if (!m.HasProperty("_BaseDensity") || Mathf.Approximately(m.GetFloat("_BaseDensity"), RenderSettings.fogDensity)) { return false; }
+        m.SetFloat("_BaseDensity", RenderSettings.fogDensity);
+        EditorUtility.SetDirty(m);
+        return true;
+    }
 
     /// 씬의 태양: Lighting 설정의 Sun, 없으면 가장 밝은 디렉셔널 라이트.
     public static Light FindSun()
