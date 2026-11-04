@@ -85,7 +85,8 @@ namespace ACO
             if (targetIndex != _targetIdx) { BindTarget(targetIndex); }
             _targetVel = targetVelocity;
 
-            bool valid = targetIndex >= 0 && TargetIsValid();
+            // 연막 속 표적은 조준할 수 없다
+            bool valid = targetIndex >= 0 && TargetIsValid() && !(_targetSmoke != null && _targetSmoke.IsObscured());
             float dist = 0f;
             float angle = 180f;
             if (valid)
@@ -102,6 +103,8 @@ namespace ACO
             if (!inRange || !IOwnTarget()) { ResetDwell(); return; }
 
             if (angle > EffectiveAngle) { ResetDwell(); return; }
+            // 조준당한 순간(체류 시작 — 조준 한 번에 한 번): 연막 유닛이 연막을 굴린다. 여기는 표적 오너 = 연막을 정하는 쪽이라 네트워크가 필요 없다
+            if (_dwell <= 0f && _targetSmoke != null) { _targetSmoke.ReportGunThreat(); }
             _dwell += dt;
 
             // 연사를 쉬는 동안엔 트레이서가 안 나가므로 데미지도 멈춘다(체류 시간은 유지).
@@ -157,6 +160,15 @@ namespace ACO
             return targetPos + relVel * t;
         }
 
+        /// CIWS 미사일 요격 연출(ACO_AAGunSite가 매 프레임 부른다): 포신이 조준점(리드)을 대략 향하면 예광탄·소리를 켠다. 피해는 없다 — 요격 판정은 미사일이 한다.
+        public void InterceptFire(Vector3 aimPoint)
+        {
+            _inBurst = false;
+            _burstTimer = 0f;
+            ResetDwell();
+            SetFiring(Vector3.Angle(MuzzleForward(), aimPoint - MuzzlePosition()) <= FireStartAngle * 2f);
+        }
+
         /// 격추 등으로 즉시 멈출 때.
         public void ForceStop()
         {
@@ -197,7 +209,10 @@ namespace ACO
             // 미사일과 같은 규칙: NPC는 SaccTarget이 체력을 소유하므로 우선한다(설계 2.4).
             _targetStatic = marker.GetComponentInParent<SaccTarget>();
             _targetEntity = marker.GetComponentInParent<SaccEntity>();
+            _targetSmoke = marker.GetComponentInParent<ACO_FlareDispenser>();
         }
+
+        private ACO_FlareDispenser _targetSmoke;   // 표적의 연막 장치(켜져 있으면 쏘지 않는다)
 
         private bool TargetIsValid()
         {
@@ -246,7 +261,8 @@ namespace ACO
         {
             if (_targetStatic)
             {
-                _targetStatic.WeaponDamageTarget(damage, gameObject, WeaponType);
+                // NPC 무기 표시(작전판이 아군 유닛 격추로 가른다)
+                _targetStatic.WeaponDamageTarget(damage, gameObject, (byte)(WeaponType + ACO_Missile.NPC_WEAPON_OFFSET));
             }
             else if (_targetEntity)
             {

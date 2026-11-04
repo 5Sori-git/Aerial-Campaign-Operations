@@ -11,6 +11,10 @@ namespace ACO
     /// (오너 판단 → 모두에게 NetFlare), 켜져 있는 FlareActiveTime 동안 나를 쫓는 미사일은 100% 속아 떨어지는 플레어 쪽으로 끌려간다(에이스컴뱃 규칙, 판정은 ACO_Missile).
     /// 미사일이 표적 마커에서 GetComponentInParent로 찾으므로 표적 유닛의 루트(마커의 부모 쪽)에 둔다.
     /// 등급이 있는 유닛(NPC 전투기)은 AI가 FlareChance·ReactDistanceMultiplier를 등급에 맞게 넣는다. 출격할 때 유닛이 ResetSalvos로 횟수를 채운다.
+    /// 연막(SmokeMode, 지상·해상 호위 유닛): 같은 규칙으로 뿌리되 미사일이 끌려가는 지점이 뿌린 자리에 머물고(연막 구름), 켜져 있는 동안(FlareActiveTime —
+    /// 연막은 6~8초 권장) 적 NPC 기총·미사일 런처가 이 유닛을 조준하지 못한다(IsObscured — 사격·락온을 멈춘다). FlareParticles에 연막 파티클을 넣는다.
+    /// 연막은 적 NPC 기총이 조준하기 시작할 때도(ReportGunThreat — 기총이 표적 오너 화면에서 부른다) GunSmokeChance로 굴린다.
+    /// Friendly: 아군 유닛(호위 대상)이면 켠다(EscortUnit이 출발할 때 넣는다) — 무전 대사가 적 플레어가 아니라 아군 플레어/연막이 된다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_FlareDispenser : UdonSharpBehaviour
     {
@@ -38,6 +42,13 @@ namespace ACO
         [Tooltip("플레어가 떨어지는 중력 배수(미사일이 끌려가는 지점 = 뿌린 자리에서 기체 속도 일부를 이어받아 떨어지는 점). 연출 파티클과 맞춘다")]
         public float FlareGravity = 0.35f;
 
+        [Tooltip("연막: 미사일이 끌려가는 지점이 뿌린 자리에 머물고, 켜져 있는 동안 적 NPC가 조준하지 못한다(지상·해상 호위 유닛)")]
+        public bool SmokeMode = false;
+        [Tooltip("연막: 적 NPC 기총이 나를 조준하기 시작할 때(조준 한 번에 한 번) 연막을 뿌릴 확률. 횟수·간격은 미사일과 같이 쓴다")]
+        [Range(0f, 1f)] public float GunSmokeChance = 0.5f;
+        [Tooltip("아군 유닛(호위 대상). 호위 유닛이 출발할 때 넣는다 — 무전 대사 구분용")]
+        public bool Friendly = false;
+
         [Header("연출")]
         public ParticleSystem FlareParticles;
         [Tooltip("끄면 뿌릴 때 FlareParticleCount개를 한 번에 방출한다. 켜면 파티클 시스템의 Emission을 FlareEmitDuration 동안 켰다 끈다 — "
@@ -63,6 +74,7 @@ namespace ACO
         private float _checkTimer;
         private float _emitStopAt;
         private bool _started;
+        private bool _gunThreat;   // 적 기총이 조준하기 시작했다(오너 — 다음 확인 때 굴린다)
 
         void Start()
         {
@@ -138,8 +150,19 @@ namespace ACO
         /// 속은 미사일이 쫓는 지점: 뿌린 자리에서 기체 속도 일부로 날며 FlareGravity로 떨어지는 점.
         public Vector3 GetFlarePosition()
         {
+            if (SmokeMode) { return _flarePos; }   // 연막 구름은 제자리
             float t = Mathf.Max(Time.time - _flareStart, 0f);
             return _flarePos + _flareVel * t + Physics.gravity * (0.5f * FlareGravity * t * t);
+        }
+
+        /// 연막이 켜져 있다 — 적 NPC 기총·미사일 런처가 이 유닛을 조준하지 않는다.
+        public bool IsObscured() { return SmokeMode && IsFlareActive(); }
+
+        /// 적 NPC 기총이 나를 조준하기 시작했다(ACO_NPCGun — 표적 오너 화면에서만, 조준 한 번에 한 번). 연막 유닛만, 뿌릴 수 있을 때만 받아 둔다.
+        public void ReportGunThreat()
+        {
+            if (!SmokeMode || _salvosLeft <= 0 || Time.time < _nextFlare || IsFlareActive()) { return; }
+            _gunThreat = true;
         }
 
         /// 오너: 나를 쫓는 미사일이 반응 거리 안으로 들어오면 미사일마다 한 번 확률을 굴려 뿌린다.
@@ -149,9 +172,21 @@ namespace ACO
             if (_checkTimer > 0f) { return; }
             _checkTimer = 0.2f;
             if (!_started) { Start(); }
-            if (!Networking.IsOwner(gameObject)) { return; }
-            if (_salvosLeft <= 0 || Time.time < _nextFlare) { return; }
-            if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
+            if (!Networking.IsOwner(gameObject)) { _gunThreat = false; return; }
+            if (_salvosLeft <= 0 || Time.time < _nextFlare) { _gunThreat = false; return; }
+            if (TargetHealth != null && TargetHealth.Health <= 0f) { _gunThreat = false; return; }
+
+            // 연막: 적 기총이 조준하기 시작했으면 한 번 굴린다
+            if (_gunThreat)
+            {
+                _gunThreat = false;
+                if (Random.value <= GunSmokeChance)
+                {
+                    SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetFlare));
+                    _nextFlare = Time.time + FlareCooldown;
+                    return;
+                }
+            }
 
             float react = FlareReactDistance * ReactDistanceMultiplier;
             float reactSq = react * react;
@@ -184,7 +219,11 @@ namespace ACO
             _flareVel = transform.forward * Mathf.Max(speed * 0.8f - 25f, 0f);
             StartVisual();
             if (FlareSound && FlareSound.clip) { FlareSound.PlayOneShot(FlareSound.clip); }
-            if (Chatter) { Chatter.ReportNear(ACO_Chatter.EV_ENEMY_FLARE, transform.position, ""); }
+            if (Chatter)
+            {
+                int ev = Friendly ? (SmokeMode ? ACO_Chatter.EV_ALLY_SMOKE : ACO_Chatter.EV_ALLY_FLARE) : ACO_Chatter.EV_ENEMY_FLARE;
+                Chatter.ReportNear(ev, transform.position, "");
+            }
         }
 
         private void StartVisual()

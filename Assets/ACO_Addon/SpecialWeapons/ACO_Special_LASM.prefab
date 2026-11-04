@@ -1,0 +1,215 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3640726360215584127
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5378679162486792931}
+  - component: {fileID: 7638068073709056308}
+  m_Layer: 0
+  m_Name: ACO_Special_LASM
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5378679162486792931
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3640726360215584127}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 6629586018935289982}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7638068073709056308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3640726360215584127}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fe02e64e9621de4f8a7ad31e1b5f98a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Id: LASM
+  DisplayName: LASM
+  Description: 'LONG-RANGE ANTI-SHIP MISSILE
+
+    SEA-SKIMS TO SHIPS - CANNOT BE
+    INTERCEPTED BY CIWS'
+  Price: 12000
+  Icon: {fileID: 21300000, guid: 55c3be3e5f8b25a46b6222d84af8a5df, type: 3}
+  SortOrder: 55
+  Category: 0
+  Module: {fileID: 8490783944498141577}
+--- !u!1 &3649815116512904719
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6629586018935289982}
+  - component: {fileID: 8490783944498141577}
+  - component: {fileID: 4042317679030511286}
+  m_Layer: 0
+  m_Name: Module
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6629586018935289982
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3649815116512904719}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5378679162486792931}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8490783944498141577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3649815116512904719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83c7bf05a7a84386b8f496cdba4f9bfc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  serializationData:
+    SerializedFormat: 2
+    SerializedBytes: 
+    ReferencedUnityObjects: []
+    SerializedBytesString: 
+    Prefab: {fileID: 0}
+    PrefabModificationsReferencedUnityObjects: []
+    PrefabModifications: []
+    SerializationNodes: []
+  _udonSharpBackingUdonBehaviour: {fileID: 4042317679030511286}
+  SAVControl: {fileID: 0}
+  HUDControl: {fileID: 0}
+  TargetingTransform: {fileID: 0}
+  FireKey: 32
+  TargetLayers:
+    serializedVersion: 2
+    m_Bits: 1073741824
+  Targets: []
+  ObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 2049
+  AllowFiringWhenGrounded: 0
+  LockRange: 6500
+  LockAngle: 30
+  LockTime: 2
+  MaxLockTargets: 1
+  CenterSwitchMargin: 1.5
+  OneMissilePerTarget: 1
+  SlotCount: 2
+  MaxAmmo: 12
+  SlotReloadTime: 10
+  LaunchPoints: []
+  Damage: 400
+  MaxSpeed: 900
+  Acceleration: 300
+  TurnRate: 90
+  GuidanceMode: 0
+  NavigationConstant: 3
+  ProximityRadius: 6
+  SplashRadius: 10
+  MinSplashFraction: 0.3
+  MissileSplash: 1
+  Chatter: {fileID: 0}
+  Rwr: {fileID: 0}
+  InterceptSites: []
+  CrossLockIndicator: 1
+  IgnoreCountermeasures: 0
+  ProximityAnyEnemy: 0
+  AutoTargetNearest: 0
+  DropTime: 0
+  SeekerAngle: 0
+  MissileLifetime: 0
+  SeaSkim: 1
+  SkimAltitude: 8
+  SkimTerminalDistance: 500
+  UpgradeFamily: 2
+  HoldToFire: 0
+  FireInterval: 0.12
+  Missile: {fileID: 3697451406933362917, guid: e1236c050a9bb674a8ebe1b092b012a6, type: 3}
+  NumPreInstantiated: 2
+  MissileType: 2
+  AllowUnguidedFire: 0
+  InheritVelocity: 1
+  WorldParent: {fileID: 0}
+  LaunchSound: {fileID: 0}
+  IdleSound: {fileID: 0}
+  LockingSound: {fileID: 0}
+  LockedSound: {fileID: 0}
+  CcipReticle: {fileID: 0}
+  CcipAngle: 3
+  CcipDisplayDistance: 30
+  CcipInterval: 0.05
+  CcipMaxTime: 40
+  TargetIndicator: {fileID: 0}
+  SelectedObjects: []
+  SlotBarsOnlyWhenSelected: 1
+  SlotBarTemplate: {fileID: 0}
+  SlotBarSpacing: {x: 0.02, y: 0, z: 0}
+  SlotBarVertical: 1
+  SlotReadyIndicators: []
+  AmmoText: {fileID: 0}
+  AmmoTextTMP: {fileID: 0}
+  AmmoTextTMPUGUI: {fileID: 0}
+  WeaponAnimator: {fileID: 0}
+  AnimFloatName: AAMs
+  AnimFiredTriggerName: aamlaunched
+--- !u!114 &4042317679030511286
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3649815116512904719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45115577ef41a5b4ca741ed302693907, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  interactTextPlacement: {fileID: 0}
+  interactText: Use
+  interactTextGO: {fileID: 0}
+  proximity: 2
+  SynchronizePosition: 0
+  AllowCollisionOwnershipTransfer: 0
+  Reliable: 0
+  _syncMethod: 0
+  serializedProgramAsset: {fileID: 11400000, guid: 5b161ca056b8f7145b02bc71095e2bf0,
+    type: 2}
+  programSource: {fileID: 11400000, guid: 905e1b53e1ed49a890a6d234d135b799, type: 2}
+  serializedPublicVariablesBytesString: Ai8AAAAAATIAAABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlAFQAYQBiAGwAZQAsACAAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4AAAAAAAYBAAAAAAAAACcBBAAAAHQAeQBwAGUAAWgAAABTAHkAcwB0AGUAbQAuAEMAbwBsAGwAZQBjAHQAaQBvAG4AcwAuAEcAZQBuAGUAcgBpAGMALgBMAGkAcwB0AGAAMQBbAFsAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4ALgBJAG4AdABlAHIAZgBhAGMAZQBzAC4ASQBVAGQAbwBuAFYAYQByAGkAYQBiAGwAZQAsACAAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4AXQBdACwAIABtAHMAYwBvAHIAbABpAGIAAQEJAAAAVgBhAHIAaQBhAGIAbABlAHMALwEAAAABaAAAAFMAeQBzAHQAZQBtAC4AQwBvAGwAbABlAGMAdABpAG8AbgBzAC4ARwBlAG4AZQByAGkAYwAuAEwAaQBzAHQAYAAxAFsAWwBWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAEkAbgB0AGUAcgBmAGEAYwBlAHMALgBJAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlACwAIABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgBdAF0ALAAgAG0AcwBjAG8AcgBsAGkAYgABAAAABgEAAAAAAAAAAi8CAAAAAUkAAABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlAGAAMQBbAFsAUwB5AHMAdABlAG0ALgBJAG4AdAAzADIALAAgAG0AcwBjAG8AcgBsAGkAYgBdAF0ALAAgAFYAUgBDAC4AVQBkAG8AbgAuAEMAbwBtAG0AbwBuAAIAAAAGAgAAAAAAAAAnAQQAAAB0AHkAcABlAAEXAAAAUwB5AHMAdABlAG0ALgBTAHQAcgBpAG4AZwAsACAAbQBzAGMAbwByAGwAaQBiACcBCgAAAFMAeQBtAGIAbwBsAE4AYQBtAGUAAR8AAABfAF8AXwBVAGQAbwBuAFMAaABhAHIAcABCAGUAaABhAHYAaQBvAHUAcgBWAGUAcgBzAGkAbwBuAF8AXwBfACcBBAAAAHQAeQBwAGUAARYAAABTAHkAcwB0AGUAbQAuAEkAbgB0ADMAMgAsACAAbQBzAGMAbwByAGwAaQBiABcBBQAAAFYAYQBsAHUAZQACAAAABwUHBQcF
+  publicVariablesUnityEngineObjects: []
+  publicVariablesSerializationDataFormat: 0

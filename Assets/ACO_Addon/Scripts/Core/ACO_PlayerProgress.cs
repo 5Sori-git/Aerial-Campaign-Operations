@@ -11,7 +11,7 @@ namespace ACO
     {
         Missile = 0,        // 일반 미사일 탭(피해/탄수/선회/락온 속도·거리·범위)
         SpecialAAM = 1,     // 특수 대공 탭(위와 같은 6개)
-        SpecialAGM = 2,     // 특수 대지 탭(피해/탄수/폭발 반경)
+        SpecialAGM = 2,     // 특수 대지 탭(피해/탄수/폭발 반경/락온 속도·거리/재장전)
         SpecialBomb = 3,    // 특수 폭탄 탭(피해/탄수/폭발 반경)
         None = 4
     }
@@ -27,10 +27,13 @@ namespace ACO
     ///  - 이번 미션에 한 번도 출격(조종석 탑승)하지 않았으면 보상 없음(RequireSortie).
     /// 출격·격추는 기체의 ACO_VehicleUpgrades가 알린다. 늦게 들어와도 끝나기 전에 출격했으면 보상을 받는다(팀 점수는 전체, 개인 점수는 들어온 뒤 것).
     ///
-    /// 강화: 항목마다 0 ~ MaxLevel 단계. 효과 배수 = 1 + UpgradeSteps × 단계. 다음 탑승부터 적용된다(ACO_VehicleUpgrades가 탑승할 때 읽는다).
+    /// 강화: 항목마다 0 ~ MaxLevel(10) 단계. 효과 배수 = 1 + UpgradeSteps × 단계. 다음 탑승부터 적용된다(ACO_VehicleUpgrades가 탑승할 때 읽는다).
+    /// 최대(10단계) 배수: 피해·락온 거리·폭발 반경·기총·연료 효율 ×2.5, 탄수·재장전 ×2, 성능에 민감한 선회·락온 속도·시커 범위 ×1.5,
+    /// 체력 ×4, 추력 ×2, 기동성 ×1.3, 안정성 ×1.5. 가격은 단계마다 LevelCostScale배로 오르고(10단계 = 1단계의 13배), 민감한 항목은 1단계 가격부터 비싸다.
     /// 항목 번호 = 분류(CAT_*) 순서로 이어 붙인 것: 기체 5개(체력/기동/추력/연료 효율/안정성) → 계열(FAMILY_*)별 무장 강화.
-    ///  - 대공 계열(일반 미사일, 특수 대공): 피해/탄수/선회/락온 속도/락온 거리/락온 범위 6개.
-    ///  - 대지 계열(특수 대지 미사일, 특수 폭탄·로켓): 피해/탄수/폭발 반경 3개(유도 성능은 강화하지 않는다).
+    ///  - 대공 계열(일반 미사일, 특수 대공): 피해/탄수/선회/락온 속도/락온 거리/시커 범위/재장전 7개. 락온 각도(무장 LockAngle)는 강화하지 않는다.
+    ///  - 특수 대지 미사일: 피해/탄수/폭발 반경/락온 속도/락온 거리/재장전 6개(선회·시커 범위는 강화하지 않는다).
+    ///  - 특수 폭탄·로켓: 피해/탄수/폭발 반경/재장전 4개(유도 성능은 강화하지 않는다).
     /// 무장이 어느 계열인지는 무장 모듈 인스펙터의 ACO_DFUNC_Missile.UpgradeFamily(드롭다운). GetFamilyUpgradeId(계열, STAT_*)로 항목 번호를 얻는다.
     /// 특수무장 해금: 무장 ID별(aco_unlock_ + ID). 가격이 0인 무장은 처음부터 해금.
     /// 저장은 항목 번호가 아니라 고정 ID로 한다(강화: aco_up_ + _upgradeKeys) — 항목을 더하거나 순서를 바꿔도 기존 기록이 틀어지지 않는다.
@@ -45,6 +48,7 @@ namespace ACO
         public const int UP_ENGINE = 2;        // 추력
         public const int UP_FUEL = 3;          // 연료 효율(소모량 ÷ 배수 — 오래 난다)
         public const int UP_STABILITY = 4;     // 안정성(양력 — 저속에서도 버틴다)
+        public const int UP_GUN = 5;           // 기총 피해(SAV 기총 탄에 덤 피해 — ACO_GunDamageBonus)
 
         // 무장 계열(ACO_UpgradeFamily와 같은 값). 이 밖의 값(None 등)은 강화 없음.
         public const int FAMILY_MISSILE = 0;   // 일반 미사일
@@ -56,20 +60,20 @@ namespace ACO
         public const int STAT_DAMAGE = 0;      // 피해
         public const int STAT_AMMO = 1;        // 총 탄수
         public const int STAT_TURN = 2;        // 선회 속도(대공 계열)
-        public const int STAT_LOCK_SPEED = 3;  // 락온 속도(락온 시간 ÷ 배수, 대공 계열)
-        public const int STAT_LOCK_RANGE = 4;  // 락온 거리(대공 계열)
-        public const int STAT_LOCK_ANGLE = 5;  // 시커 범위 — 미사일 추적 각도(대공 계열). 이름은 저장 ID(msl_lock_angle 등)와 맞춰 그대로 둔다
+        public const int STAT_LOCK_SPEED = 3;  // 락온 속도(락온 시간 ÷ 배수, 대공 계열 + 특수 대지)
+        public const int STAT_LOCK_RANGE = 4;  // 락온 거리(대공 계열 + 특수 대지)
+        public const int STAT_SEEKER = 5;      // 시커 범위 — 미사일 추적 각도(ACO_Missile.MaxTrackingAngle, 대공 계열). 락온 각도(LockAngle)가 아니다.
         public const int STAT_BLAST = 6;       // 폭발 반경(대지 계열)
         public const int STAT_RELOAD = 7;      // 재장전 속도(슬롯 장전 시간 ÷ 배수, 모든 계열)
 
         // 분류(상점 탭) — 항목 번호는 이 순서로 이어진다
-        public const int CAT_AIRFRAME = 0;     // 0~4
-        public const int CAT_MISSILE = 1;      // 5~11
-        public const int CAT_SP_AAM = 2;       // 12~18
-        public const int CAT_SP_AGM = 3;       // 19~22
-        public const int CAT_SP_BOMB = 4;      // 23~26
+        public const int CAT_AIRFRAME = 0;     // 0~5
+        public const int CAT_MISSILE = 1;      // 6~12
+        public const int CAT_SP_AAM = 2;       // 13~19
+        public const int CAT_SP_AGM = 3;       // 20~25
+        public const int CAT_SP_BOMB = 4;      // 26~29
         public const int CATEGORY_COUNT = 5;
-        public const int UPGRADE_COUNT = 27;
+        public const int UPGRADE_COUNT = 30;
         public const int MAX_CATEGORY_LENGTH = 7;   // 상점 줄 수(가장 긴 탭)
 
         // 저장 키(PlayerData). 강화·해금은 항목 번호가 아니라 고정 ID로 저장한다 — 항목을 더하거나 순서·탭을 바꿔도 기존 기록이 틀어지지 않는다.
@@ -93,10 +97,10 @@ namespace ACO
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 다른 항목에 재사용하지 않는다. 새 항목은 아무 자리에나 넣고 새 ID를 준다.
         // 항목을 빼면 ID도 빼면 된다(저장된 값은 쓰이지 않고 남을 뿐). 효과 수치·가격·표시 이름은 언제든 바꿔도 된다.
         private string[] _upgradeKeys = new string[] {
-            "hull", "mobility", "engine", "fuel", "stability",
-            "msl_damage", "msl_ammo", "msl_turn", "msl_lock_speed", "msl_lock_range", "msl_lock_angle", "msl_reload",
-            "aam_damage", "aam_ammo", "aam_turn", "aam_lock_speed", "aam_lock_range", "aam_lock_angle", "aam_reload",
-            "agm_damage", "agm_ammo", "agm_blast", "agm_reload",
+            "hull", "mobility", "engine", "fuel", "stability", "gun_damage",
+            "msl_damage", "msl_ammo", "msl_turn", "msl_lock_speed", "msl_lock_range", "msl_seeker", "msl_reload",
+            "aam_damage", "aam_ammo", "aam_turn", "aam_lock_speed", "aam_lock_range", "aam_seeker", "aam_reload",
+            "agm_damage", "agm_ammo", "agm_blast", "agm_lock_speed", "agm_lock_range", "agm_reload",
             "bomb_damage", "bomb_ammo", "bomb_blast", "bomb_reload" };
 
         [Header("참조")]
@@ -128,31 +132,36 @@ namespace ACO
             + "밖에서 미션 중에 내리면 격추로 센다. 비우면 어디서 내려도 페널티 없음")]
         public Collider[] SafeZones;
 
-        [Header("강화 (항목 번호 순: 기체 5 / 일반 미사일 7 / 특수 대공 7 / 특수 대지 4 / 특수 폭탄 4)")]
+        [Header("강화 (항목 번호 순: 기체 6 / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
         [Tooltip("상점 탭 이름(CAT_* 순서)")]
         public string[] CategoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB" };
         public string[] UpgradeNames = new string[] {
-            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "STABILITY",
+            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "STABILITY", "GUN DAMAGE",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
-            "DAMAGE", "CAPACITY", "BLAST RADIUS", "RELOAD SPEED",
+            "DAMAGE", "CAPACITY", "BLAST RADIUS", "LOCK SPEED", "LOCK RANGE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "BLAST RADIUS", "RELOAD SPEED" };
-        [Tooltip("단계마다 늘어나는 배수(0.1 = 단계당 +10%). 락온 속도·재장전 속도는 시간이 그만큼 짧아진다(1 + 배수로 나눔)")]
+        [Tooltip("단계마다 늘어나는 배수(0.1 = 단계당 +10%, 10단계 ×2). 락온 속도·재장전 속도는 시간이 그만큼 짧아진다(1 + 배수로 나눔). "
+            + "SEEKER CONE = 미사일 시커 범위(추적 각도) — 락온 각도가 아니다")]
         public float[] UpgradeSteps = new float[] {
-            0.10f, 0.05f, 0.04f, 0.08f, 0.06f,
-            0.08f, 0.15f, 0.06f, 0.10f, 0.06f, 0.06f, 0.08f,
-            0.08f, 0.15f, 0.06f, 0.10f, 0.06f, 0.06f, 0.08f,
-            0.08f, 0.15f, 0.06f, 0.08f,
-            0.08f, 0.15f, 0.06f, 0.08f };
-        [Tooltip("1단계 가격. n단계 가격 = 이 값 × LevelCostScale[n-1]")]
+            // 체력 ×4, 기동 ×1.3, 추력 ×2, 연료 효율 ×2.5, 안정성 ×1.5, 기총 ×2.5
+            0.30f, 0.03f, 0.10f, 0.15f, 0.05f, 0.15f,
+            // 피해 ×2.5, 탄수 ×2, 선회 ×1.5, 락온 속도 ×1.5, 락온 거리 ×2.5, 시커 범위 ×1.5, 재장전 ×2
+            0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
+            0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
+            // 특수 대지: 피해 ×2.5, 탄수 ×2, 폭발 반경 ×2.5, 락온 속도 ×1.5, 락온 거리 ×2.5, 재장전 ×2
+            0.15f, 0.10f, 0.15f, 0.05f, 0.15f, 0.10f,
+            // 특수 폭탄: 피해 ×2.5, 탄수 ×2, 폭발 반경 ×2.5, 재장전 ×2
+            0.15f, 0.10f, 0.15f, 0.10f };
+        [Tooltip("1단계 가격. n단계 가격 = 이 값 × LevelCostScale[n-1]. 성능에 민감한 항목(기동·선회·락온 속도·시커 범위)은 1단계부터 비싸다")]
         public int[] UpgradeBaseCosts = new int[] {
-            2000, 2000, 2000, 1500, 1500,
-            2000, 1500, 1500, 1500, 1500, 1500, 3000,
-            2500, 2000, 2000, 2000, 2000, 2000, 3500,
-            2500, 2000, 2000, 3500,
-            2500, 2000, 2000, 3500 };
-        [Tooltip("단계별 가격 배수. 길이 = 최대 단계")]
-        public float[] LevelCostScale = new float[] { 1f, 2f, 3.5f, 5.5f, 8f };
+            1500, 2500, 2000, 1000, 2000, 1500,
+            1500, 1500, 2500, 2000, 1200, 2500, 2000,
+            2000, 2000, 3000, 2500, 1500, 3000, 2500,
+            2000, 2000, 2000, 2500, 1500, 2500,
+            2000, 2000, 2000, 2500 };
+        [Tooltip("단계별 가격 배수. 길이 = 최대 단계(10). 뒤로 갈수록 가파르게 오른다")]
+        public float[] LevelCostScale = new float[] { 1f, 1.4f, 1.9f, 2.6f, 3.5f, 4.6f, 6f, 7.8f, 10f, 13f };
 
         [Header("소모품 (상점 SUPPLY 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
         public string[] ConsumableNames = new string[] { "ARMOR PLATE", "CM POD", "EXTRA AMMO", "FUEL TANK" };
@@ -255,12 +264,23 @@ namespace ACO
         public float GetUpgradeFactor(int id) { return id < 0 ? 1f : 1f + GetUpgradeStep(id) * GetLevel(id); }
 
         /// 계열(FAMILY_*)의 능력치(STAT_*) 강화 항목 번호. 그 계열에 없는 능력치면 -1(대공 계열엔 폭발 반경, 대지 계열엔 선회·락온이 없다).
-        /// 탭 안 순서: 대공 계열 = 피해·탄수·선회·락온 속도·거리·범위·재장전, 대지 계열 = 피해·탄수·폭발 반경·재장전.
+        /// 탭 안 순서: 대공 계열 = 피해·탄수·선회·락온 속도·거리·범위·재장전, 특수 대지 = 피해·탄수·폭발 반경·락온 속도·거리·재장전, 특수 폭탄 = 피해·탄수·폭발 반경·재장전.
         public int GetFamilyUpgradeId(int family, int stat)
         {
-            if (family == FAMILY_SP_AGM || family == FAMILY_SP_BOMB)
+            if (family == FAMILY_SP_AGM)
             {
-                int start = GetCategoryStart(CAT_MISSILE + family);
+                int start = GetCategoryStart(CAT_SP_AGM);
+                if (stat == STAT_DAMAGE) { return start; }
+                if (stat == STAT_AMMO) { return start + 1; }
+                if (stat == STAT_BLAST) { return start + 2; }
+                if (stat == STAT_LOCK_SPEED) { return start + 3; }
+                if (stat == STAT_LOCK_RANGE) { return start + 4; }
+                if (stat == STAT_RELOAD) { return start + 5; }
+                return -1;
+            }
+            if (family == FAMILY_SP_BOMB)
+            {
+                int start = GetCategoryStart(CAT_SP_BOMB);
                 if (stat == STAT_DAMAGE) { return start; }
                 if (stat == STAT_AMMO) { return start + 1; }
                 if (stat == STAT_BLAST) { return start + 2; }
@@ -269,7 +289,7 @@ namespace ACO
             }
             if (family < FAMILY_MISSILE || family > FAMILY_SP_AAM) { return -1; }
             int s = GetCategoryStart(CAT_MISSILE + family);
-            if (stat >= STAT_DAMAGE && stat <= STAT_LOCK_ANGLE) { return s + stat; }
+            if (stat >= STAT_DAMAGE && stat <= STAT_SEEKER) { return s + stat; }
             if (stat == STAT_RELOAD) { return s + 6; }
             return -1;
         }
@@ -287,7 +307,7 @@ namespace ACO
         public int GetCategoryLength(int cat)
         {
             if (cat == CAT_MISSILE || cat == CAT_SP_AAM) { return 7; }
-            if (cat == CAT_AIRFRAME) { return 5; }
+            if (cat == CAT_AIRFRAME || cat == CAT_SP_AGM) { return 6; }
             return cat >= 0 && cat < CATEGORY_COUNT ? 4 : 0;
         }
         public int GetUpgradeCategory(int id)

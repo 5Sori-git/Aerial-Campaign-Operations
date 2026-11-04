@@ -24,6 +24,8 @@ namespace ACO
     /// - 다중 락온(MaxLockTargets ≥ 2, 4AAM 류): 각도 안의 표적을 칸 수만큼 동시에 잡아 각각 따로 락온하고, 트리거 한 번에
     ///   장전된 슬롯을 모두 일제 발사해 락온한 표적들에 차례로 나눠 쏜다. 특수무장 슬롯(ACO_DFUNC_Special)의 모듈로 쓰면
     ///   격납고에서 고른 무장으로 바뀐다(SetEquipped).
+    /// - 특수 동작(특수무장): 대기만 시커(IgnoreCountermeasures), 아무 적 항공기에 반응하는 근접 신관(ProximityAnyEnemy — 로켓도),
+    ///   가장 가까운 적 자동 표적(AutoTargetNearest), 투하 후 점화(DropTime), 시커 범위·수명 덮어쓰기. 강화와 무관해 이벤트로 보내지 않고 받는 화면마다 자기 무장 값을 쓴다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_DFUNC_Missile : UdonSharpBehaviour
     {
@@ -47,12 +49,16 @@ namespace ACO
         [Tooltip("지상 활주 중에도 락온/발사를 허용한다")]
         public bool AllowFiringWhenGrounded = false;
 
-        [Header("락온 (강화 가능)")]
-        [Tooltip("락온 최대 거리(m)")]
+        [Header("락온 (거리·시간은 강화된다, 각도는 강화 안 됨)")]
+        [Tooltip("락온 최대 거리(m). 강화 LOCK RANGE가 키운다")]
         public float LockRange = 6000f;
-        [Tooltip("기준 방향에서 이 각도(도) 안에 있어야 락온된다")]
+        [Tooltip("락온 각도(도): 기준 방향에서 이 각도 안에 있어야 락온된다(HUD 탐색 원). 강화하지 않는다 — "
+            + "강화 SEEKER CONE은 발사된 미사일의 시커 범위(미사일 프리팹 ACO_Missile.MaxTrackingAngle)를 키운다")]
         public float LockAngle = 15f;
-        [Tooltip("표적을 이 시간(초) 동안 각도 안에 두면 락온 완료")]
+        [Tooltip("켜면 CCIP(폭탄이 떨어질 지점)가 보이는 동안 락온 탐색 원의 가운데를 기수가 아니라 CCIP를 보는 방향으로 — 유도 폭탄(LGB)이 떨어질 자리 둘레 표적을 잡는다. "
+            + "CCIP가 없는 무장(미사일·로켓)이나 CCIP가 안 보일 때(지상·너무 높음)는 기수 방향")]
+        public bool LockFromCcip = true;
+        [Tooltip("표적을 이 시간(초) 동안 각도 안에 두면 락온 완료. 강화 LOCK SPEED가 줄인다")]
         public float LockTime = 1f;
         [Tooltip("동시에 락온할 수 있는 표적 수(1 = 일반 미사일). 2 이상이면 트리거 한 번에 장전된 슬롯을 모두 일제 발사해 락온한 표적들에 차례로 나눠 쏜다(다중 유도 미사일)")]
         public int MaxLockTargets = 1;
@@ -96,8 +102,35 @@ namespace ACO
         public ACO_Chatter Chatter;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(다른 플레이어를 노린 미사일의 방향/거리 표시)")]
         public ACO_RWR Rwr;
+        [Tooltip("빌드 시 ACO_SceneBaker가 씬의 관전 패널을 넣는다(쏜 미사일을 미사일·표적 캠으로)")]
+        public ACO_SpectatorCam Spectator;
+        [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미사일 요격 CIWS(ACO_AAGunSite, InterceptProtectLayers가 있는 것)를 넣는다 — 발사한 미사일이 이 중 자기를 덮는 CIWS에 요격될 수 있다")]
+        public ACO_AAGunSite[] InterceptSites;
         [Tooltip("락온 진행 표시를 마름모 대신 십자로 그린다(특수무장 — 특수무장 슬롯 안의 모듈이면 Bake가 켠다)")]
         public bool CrossLockIndicator = false;
+
+        [Header("특수 동작 (특수무장 — 강화와 무관)")]
+        [Tooltip("대기만 시커(CCAA): 표적의 플레어·채프에 속지 않고 노칭에도 표적을 놓치지 않는다")]
+        public bool IgnoreCountermeasures = false;
+        [Tooltip("근접 신관이 락온 표적이 아니어도 ProximityRadius 안을 지나는 적 항공기(레이어 29 락온 마커 중심)에 터진다 — 범위 피해로 맞힌다"
+            + "(유도 미사일은 MissileSplash를 켠다, 폭탄/로켓은 늘 범위 피해). 무유도 로켓(FLAK)은 이걸 켜야 근접 신관이 생긴다. 미사일은 표적을 놓친 뒤에도 동작한다")]
+        public bool ProximityAnyEnemy = false;
+        [Tooltip("락온 없이 쏘면 LockRange 안에서 가장 가까운 적(방향 무관)을 표적으로 쏜다(락온했으면 락온 표적). 날아가는 중 표적이 격추되면 "
+            + "그 자리에서 LockRange 안의 가장 가까운 적으로 옮긴다(ADAM). 뒤쪽 표적까지 쫓으려면 SeekerAngle을 180으로")]
+        public bool AutoTargetNearest = false;
+        [Tooltip("투하(초): 발사 후 이 시간 동안 엔진 없이 모기체 속도 + 중력으로 떨어진 뒤 점화한다. 0 = 바로 점화(일반 발사). 투하 중과 점화 뒤 2초까지는 시커 각도 제한이 없다")]
+        public float DropTime = 0f;
+        [Tooltip("시커 범위 기본값(도). 0 = 미사일 프리팹 값(ACO_Missile.MaxTrackingAngle). 강화 SEEKER CONE이 이 값을 키운다(최대 180 = 전방위)")]
+        public float SeekerAngle = 0f;
+        [Tooltip("미사일 수명(초). 0 = 미사일 프리팹 값. 느린 미사일은 늘린다")]
+        public float MissileLifetime = 0f;
+        [Tooltip("시스키밍(LASM): 표적이 함선이면 해수면 위 SkimAltitude로 낮게 깔려 날아가고(완만하게 내려간다, 앞쪽 지형이 높으면 넘는다) "
+            + "수평 거리 SkimTerminalDistance 안에서 꽂힌다. 함선을 노리는 동안 CIWS 요격을 받지 않는다. 함선이 아니면 보통 미사일")]
+        public bool SeaSkim = false;
+        [Tooltip("시스키밍 고도(m, 해수면 위)")]
+        public float SkimAltitude = 8f;
+        [Tooltip("시스키밍을 끝내고 표적으로 꽂히는 수평 거리(m)")]
+        public float SkimTerminalDistance = 500f;
 
         [Header("강화 계열")]
         [Tooltip("격납고 강화 중 어느 탭의 효과를 받는가. Missile = 일반 미사일, SpecialAAM = 특수 대공, SpecialAGM = 특수 대지, "
@@ -208,8 +241,7 @@ namespace ACO
         private float _baseTurnRate;
         private float _baseLockTime;
         private float _baseLockRange;
-        private float _baseLockAngle;
-        // 시커 각도(미사일 프리팹의 MaxTrackingAngle) — 강화(STAT_LOCK_ANGLE = 시커 범위)는 이 값을 키운다. 발사할 때 락온 범위보다 좁지 않게 보낸다.
+        // 시커 범위(미사일 프리팹의 MaxTrackingAngle) — 강화 STAT_SEEKER(SEEKER CONE)는 이 값을 키운다. 발사할 때 락온 각도보다 좁지 않게 보낸다.
         private float _baseSeeker = 90f;
         private float _seekerFactor = 1f;
         private float _baseSplashRadius;
@@ -285,6 +317,7 @@ namespace ACO
                 ACO_Missile seekerTemplate = _pool[0].GetComponent<ACO_Missile>();
                 if (seekerTemplate) { _baseSeeker = seekerTemplate.MaxTrackingAngle; }
             }
+            if (SeekerAngle > 0f) { _baseSeeker = SeekerAngle; }
             if (CcipReticle) { CcipReticle.gameObject.SetActive(false); }
 
             ResetAmmo();
@@ -409,7 +442,7 @@ namespace ACO
         /// 잔탄: 늘어난(줄어든) 총 탄수만큼만 더하고 뺀다 — 다시 가득 채우지 않는다. 뺄 탄이 모자라면 빚으로 남겨 다음에 더할 때 먼저 갚는다
         /// (다 쏘고 내렸다 다시 타서 공짜로 채우는 일이 없게).
         /// lockSpeed는 락온 시간을 그만큼 줄인다(2 = 절반), blast는 폭탄/로켓 범위 반경.
-        /// seeker = 시커 범위 배수(예전 '락온 범위' 강화 — 락온 각도 LockAngle은 그대로 두고 미사일 추적 각도를 키운다).
+        /// seeker = 시커 범위 배수(미사일 추적 각도 MaxTrackingAngle을 키운다 — 락온 각도 LockAngle은 강화하지 않는다).
         public void ApplyUpgrades(float damage, float ammo, float turnRate, float lockSpeed, float lockRange, float seeker, float blast, float reload)
         {
             Init();
@@ -421,7 +454,6 @@ namespace ACO
                 _baseTurnRate = TurnRate;
                 _baseLockTime = LockTime;
                 _baseLockRange = LockRange;
-                _baseLockAngle = LockAngle;
                 _baseSplashRadius = SplashRadius;
                 _baseReloadTime = SlotReloadTime;
             }
@@ -429,7 +461,6 @@ namespace ACO
             TurnRate = _baseTurnRate * turnRate;
             LockTime = _baseLockTime / Mathf.Max(lockSpeed, 0.01f);
             LockRange = _baseLockRange * lockRange;
-            LockAngle = _baseLockAngle;
             _seekerFactor = seeker;
             SplashRadius = _baseSplashRadius * blast;
             SlotReloadTime = _baseReloadTime / Mathf.Max(reload, 0.01f);   // 이미 장전 중인 슬롯은 다음 장전부터
@@ -633,7 +664,7 @@ namespace ACO
         {
             EnsureLockSlots();
             Vector3 origin = GetEyePosition();
-            Vector3 fwd = TargetingTransform.forward;
+            Vector3 fwd = LockForward(origin);
             float rangeSq = LockRange * LockRange;
 
             for (int k = 0; k < _lockIdx.Length; k++)
@@ -689,6 +720,17 @@ namespace ACO
             }
         }
 
+        /// 락온 탐색 원의 가운데 방향: CCIP가 보이는 폭탄(LockFromCcip)이면 눈 → CCIP 지점, 아니면 기수(TargetingTransform) 방향.
+        private Vector3 LockForward(Vector3 origin)
+        {
+            if (LockFromCcip && CcipReticle && _ccipValid)
+            {
+                Vector3 d = _ccipPoint - origin;
+                if (d.sqrMagnitude > 1f) { return d.normalized; }
+            }
+            return TargetingTransform.forward;
+        }
+
         private bool IsHeld(int i)
         {
             for (int k = 0; k < _lockIdx.Length; k++) { if (_lockIdx[k] == i) { return true; } }
@@ -711,7 +753,7 @@ namespace ACO
             if (grounded) { ClearLock(); return; }
 
             Vector3 origin = GetEyePosition();
-            Vector3 fwd = TargetingTransform.forward;
+            Vector3 fwd = LockForward(origin);
             float rangeSq = LockRange * LockRange;
             int primary = PrimarySlot();
             for (int k = 0; k < _lockIdx.Length; k++)
@@ -790,15 +832,17 @@ namespace ACO
         {
             EnsureLockSlots();
             int lockedCount = CountLocked();
-            if (lockedCount == 0 && !AllowUnguidedFire) { return; }
+            if (lockedCount == 0 && !AllowUnguidedFire && !AutoTargetNearest) { return; }
 
             if (MaxLockTargets <= 1)
             {
                 int slot = FindReadySlot();
                 if (slot < 0) { return; }
                 int primary = PrimarySlot();
-                bool locked = primary >= 0 && _lockDone[primary];
-                SendLaunch(locked ? (ushort)_lockIdx[primary] : NO_TARGET, slot);
+                int target = primary >= 0 && _lockDone[primary] ? _lockIdx[primary] : -1;
+                if (target < 0 && AutoTargetNearest) { target = NearestTarget(); }
+                if (target < 0 && !AllowUnguidedFire) { return; }
+                SendLaunch(target >= 0 ? (ushort)target : NO_TARGET, slot);
             }
             else
             {
@@ -819,6 +863,24 @@ namespace ACO
             if (EntityControl) { EntityControl.SendEventToExtensions("SFEXT_O_AAMLaunch"); }
         }
 
+        /// AutoTargetNearest: LockRange 안에서 가장 가까운 표적(방향·시야 무관). 없으면 -1.
+        private int NearestTarget()
+        {
+            Vector3 origin = GetEyePosition();
+            float rangeSq = LockRange * LockRange;
+            int best = -1;
+            float bestSq = rangeSq;
+            for (int i = 0; i < Targets.Length; i++)
+            {
+                if (!IsCandidate(i, origin, rangeSq)) { continue; }
+                float d = (Targets[i].transform.position - origin).sqrMagnitude;
+                if (d >= bestSq) { continue; }
+                bestSq = d;
+                best = i;
+            }
+            return best;
+        }
+
         /// 비행 성능과 폭발 반경은 이벤트에 실어 보낸다 — 강화 값이 다른 클라이언트에 없어도 같은 궤적·같은 폭발 범위 표시로 보인다.
         /// 유도 방식·비례항법 상수는 강화로 바뀌지 않으므로 보내지 않고 받는 쪽이 자기 무장 값을 쓴다.
         private void SendLaunch(ushort target, int slot)
@@ -827,14 +889,16 @@ namespace ACO
             {
                 // 폭탄/로켓: SAV처럼 슬롯과 비행 성능만 보낸다. 받은 쪽은 자기 화면의 기체 발사 지점과 동기화 속도(CurrentVel)에서
                 // 쏜다 — 이벤트가 오는 동안 기체가 앞으로 간 만큼 궤적이 조금 어긋나지만(연출만), 피해는 쏜 사람 화면 기준이라 판정엔 영향이 없다.
-                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunchOrdnance), (byte)slot, MaxSpeed, Acceleration, SplashRadius);
+                // 유도 로켓·폭탄(TargetLayers가 있는 무장)은 락온한 표적 번호와 선회율·시커 범위도 보낸다. 무유도면 표적 없음.
+                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunchOrdnance), (byte)slot, MaxSpeed, Acceleration, SplashRadius,
+                    target, TurnRate, GetSeekerAngle());
                 return;
             }
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLaunch),
                 target, (byte)slot, MaxSpeed, Acceleration, TurnRate, ProximityRadius, MissileSplash ? SplashRadius : 0f, GetSeekerAngle());
         }
 
-        /// 이번 발사의 시커 각도(도): 미사일 기본 × 시커 범위 강화, 단 락온 범위보다 좁지 않게(락온한 표적을 쏘자마자 놓치지 않게), 최대 180.
+        /// 이번 발사의 시커 범위(도): 미사일 기본 MaxTrackingAngle × 시커 범위 강화, 단 락온 각도(LockAngle)보다 좁지 않게(락온한 표적을 쏘자마자 놓치지 않게), 최대 180.
         public float GetSeekerAngle()
         {
             return Mathf.Min(Mathf.Max(_baseSeeker * _seekerFactor, LockAngle), 180f);
@@ -842,7 +906,7 @@ namespace ACO
 
         // 로켓 연사는 초당 10발 이상이므로 한도를 넉넉히 둔다(최대 100).
         [NetworkCallable(60)]
-        public void NetLaunchOrdnance(byte slot, float maxSpeed, float acceleration, float splash)
+        public void NetLaunchOrdnance(byte slot, float maxSpeed, float acceleration, float splash, ushort target, float turnRate, float seeker)
         {
             Init();
             ConsumeSlot(slot);
@@ -868,6 +932,12 @@ namespace ACO
             ordnance.IsShooter = isShooter;
             ordnance.MaxSpeed = maxSpeed;
             ordnance.Acceleration = acceleration;
+            ordnance.ProximityRadius = ProximityAnyEnemy ? ProximityRadius : 0f;   // 강화되지 않아 받는 쪽 무장 값
+            // 유도(LGR·LGB): 락온한 표적을 쫓는다. 표적 근접 폭발 반경은 무장 ProximityRadius(강화되지 않아 받는 쪽 값)
+            ordnance.GuideTarget = target != NO_TARGET && target < Targets.Length && Targets[target] ? Targets[target].transform : null;
+            ordnance.GuideTurnRate = turnRate;
+            ordnance.GuideSeekerAngle = seeker;
+            ordnance.GuideProximity = ProximityAnyEnemy ? 0f : ProximityRadius;
             // 반경은 쏜 사람 값(강화 반영)을 모든 화면에 — 폭발 범위 표시용. 범위 피해 자체는 쏜 사람 화면에서만 준다(IsShooter).
             ordnance.SplashRadius = splash;
             // 피해는 쏜 사람의 값만 쓰인다.
@@ -889,7 +959,9 @@ namespace ACO
             Transform lp = GetLaunchPoint(slot >= 0 ? slot : 0);
             Vector3 pos = lp.position;
             Vector3 vel = (InheritVelocity ? GetVehicleVelocity() : Vector3.zero) + lp.forward * _ordTemplate.LaunchSpeed;
-            int mask = _ordTemplate.HitLayers.value & ~(1 << 17);
+            // 물(바다)은 트리거 상자라 트리거까지 따로 본다(폭탄 ACO_Ordnance와 같은 규칙) — 바다 위에선 해저가 아니라 수면이 낙하 지점
+            int water = _ordTemplate.WaterLayers.value;
+            int mask = _ordTemplate.HitLayers.value & ~(1 << 17) & ~water;
             // 폭탄(ACO_Ordnance)과 같은 고정 간격 h의 궤적: v(n+1) = a·(v(n) + G), x(n+1) = x(n) + h·v(n+1)  (G = 중력·h, a = 1 − 공기저항·h).
             // n번째 위치를 수식으로 바로 구해 표본점 사이를 선으로 검사한다 — 실제 폭탄과 같은 궤적이고 반복 수는 적다.
             float h = ACO_Ordnance.FLIGHT_STEP;
@@ -904,7 +976,15 @@ namespace ACO
                 n += n * h < 3f ? 5 : 12;
                 Vector3 next = TrajectoryPoint(pos, vel, gStep, a, h, n);
                 RaycastHit hit;
-                if (Physics.Linecast(prev, next, out hit, mask, QueryTriggerInteraction.Ignore))
+                RaycastHit sea;
+                bool hitGround = Physics.Linecast(prev, next, out hit, mask, QueryTriggerInteraction.Ignore);
+                bool hitSea = Physics.Linecast(prev, next, out sea, water, QueryTriggerInteraction.Collide);
+                if (hitSea && (!hitGround || sea.distance <= hit.distance))
+                {
+                    _ccipPoint = sea.point;
+                    return true;
+                }
+                if (hitGround)
                 {
                     _ccipPoint = hit.point;
                     return true;
@@ -977,6 +1057,7 @@ namespace ACO
                 missile.LaunchInheritSpeed = InheritVelocity ? GetVehicleSpeed() : 0f;
                 missile.PoolParent = null;
                 missile.PoolOwner = this;
+                missile.FromNpc = false;
                 missile.ShooterJudgesHit = true;
                 missile.IsShooter = isShooter;
 
@@ -987,6 +1068,24 @@ namespace ACO
                 missile.NavigationConstant = NavigationConstant;
                 missile.ProximityRadius = proximity;
                 missile.MaxTrackingAngle = seeker;               // 시커 범위(쏜 사람의 강화 반영 — 풀에서 돌려쓰므로 발사마다 넣는다)
+                // 특수 동작: 강화로 바뀌지 않아 받는 쪽 무장 값. 풀은 이 무장 것이라 0이면 프리팹 값이 그대로 남는다.
+                missile.IgnoreCountermeasures = IgnoreCountermeasures;
+                missile.ProximityAnyEnemy = ProximityAnyEnemy;
+                missile.RetargetPool = AutoTargetNearest ? Targets : null;
+                missile.RetargetRange = LockRange;
+                missile.InterceptSites = InterceptSites;
+                missile.SeaSkim = SeaSkim;
+                missile.SkimAltitude = SkimAltitude;
+                missile.SkimTerminalDistance = SkimTerminalDistance;
+                if (DropTime > 0f)
+                {
+                    // 콜드 런치로 투하한다: 사출 속도 0(모기체 속도를 이어받는다), 기수는 그대로, 중력 그대로.
+                    missile.ColdLaunchTime = DropTime;
+                    missile.ColdLaunchSpeed = 0f;
+                    missile.ColdLaunchTurnRate = 0f;
+                    missile.ColdLaunchGravity = 1f;
+                }
+                if (MissileLifetime > 0f) { missile.MaxLifetime = MissileLifetime; }
                 // 피해는 명중을 판정하는 쏜 사람의 값만 쓰인다(범위 피해도 쏜 사람만 준다).
                 if (isShooter) { missile.Damage = Damage; }
                 missile.SplashRadius = isShooter ? splash : 0f;
@@ -995,7 +1094,11 @@ namespace ACO
             }
 
             m.SetActive(true);
-            if (missile) { missile.EnableWeapon(); }
+            if (missile)
+            {
+                missile.EnableWeapon();
+                if (Spectator) { Spectator.NotifyMissile(missile); }   // 관전 패널(꺼져 있으면 바로 돌아온다)
+            }
         }
 
         private Transform GetLaunchPoint(int slot)
@@ -1164,6 +1267,17 @@ namespace ACO
             if (_lockDone[k]) { return 1f; }
             return LockTime > 0f ? Mathf.Clamp01(_lockTimer[k] / LockTime) : 0f;
         }
+        /// 슬롯 수(장전 막대 수) — 비행 HUD가 막대를 그린다.
+        public int GetSlotCount() { return _slotLoaded != null ? _slotLoaded.Length : Mathf.Max(SlotCount, 1); }
+
+        /// 비행 HUD 조준 표시: 0 = W(미사일·폭탄·유도 로켓), 1 = 십자(무유도 로켓 — 추진하는 탄체이고 락온 표시가 없다).
+        /// 풀의 사본만 본다 — 프리팹 원본(Missile)의 Udon은 초기화 전이라 GetComponent하면 예외로 이 무장이 멈춘다.
+        public int GetSightKind()
+        {
+            if (_ordTemplate == null) { return 0; }
+            return _ordTemplate.LaunchSpeed > 0f && !CrossLockIndicator ? 1 : 0;
+        }
+
         /// 슬롯 i의 장전 진행도(0~1). 비어 있으면 0.
         public float GetSlotProgress(int i)
         {

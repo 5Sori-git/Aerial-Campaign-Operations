@@ -5055,6 +5055,7 @@ MonoBehaviour:
   TargetHealth: {fileID: 9027203526096786178}
   Hostile: 0
   TargetName: Transport
+  Role: 0
   MarkerLabel: VIP
   MoveMode: 0
   Speed: 120
@@ -5064,6 +5065,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 2049
   BobAngle: 0.5
+  HoverSeaLevel: 0
   DropEffects:
   - {fileID: 4541549385386450297}
   - {fileID: 7392711042863226787}
@@ -5140,6 +5142,8 @@ MonoBehaviour:
   ReactDistanceMultiplier: 1
   FlareCooldown: 4
   FlareGravity: 0.35
+  SmokeMode: 0
+  Friendly: 0
   FlareParticles: {fileID: 3075698513556145766}
   FlareUseEmitter: 1
   FlareParticleCount: 20
@@ -10073,7 +10077,7 @@ ParticleSystemRenderer:
   m_VertexStreams: 00010304
   m_UseCustomTrailVertexStreams: 0
   m_TrailVertexStreams: 00010304
-  m_Mesh: {fileID: 4300000, guid: 8f84fd5a3aba9c4498b40840df6c87f5, type: 2}
+  m_Mesh: {fileID: 0}
   m_Mesh1: {fileID: 0}
   m_Mesh2: {fileID: 0}
   m_Mesh3: {fileID: 0}

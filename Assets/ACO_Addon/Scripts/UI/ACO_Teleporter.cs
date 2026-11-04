@@ -23,7 +23,19 @@ namespace ACO
             if (!Target || !Utilities.IsValid(me)) { return; }
             if (Sound) { Sound.PlayAt(ACO_UiSound.KIND_CLICK, transform.position); }
             if (Fader) { Fader.FadeTeleport(Target.position, Target.rotation); }
-            else { me.TeleportTo(Target.position, Target.rotation); }
+            else
+            {
+                me.TeleportTo(Target.position, Target.rotation);
+                me.SetVelocity(Vector3.zero);
+                SendCustomEventDelayedFrames(nameof(_ZeroVelocity), 1);
+            }
+        }
+
+        /// 텔레포트 직후 몸에 남은 속도(방금 내린 항공기의 속도)를 없앤다 — 다음 프레임에 한 번 더(VRChat이 속도를 늦게 적용하는 경우).
+        public void _ZeroVelocity()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (Utilities.IsValid(me)) { me.SetVelocity(Vector3.zero); }
         }
 
         public override void Interact() { Click(); }

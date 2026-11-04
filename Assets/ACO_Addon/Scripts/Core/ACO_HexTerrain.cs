@@ -348,6 +348,9 @@ namespace ACO
         /// 다 세워진 지형의 프리셋(PRESET_*). 세우는 중이면 -1(브리핑 표시용).
         public int GetBuiltPreset() { return _building ? -1 : _preset; }
 
+        /// 이 씨앗으로 만들면 나올 프리셋(디버그 패널이 원하는 지형이 나오는 씨앗을 찾을 때 — 씨앗만 동기화되므로 늦게 들어와도 같은 지형).
+        public int PresetForSeed(int seed) { return PickPreset(seed); }
+
         public string PresetName(int preset)
         {
             if (preset == PRESET_ARCHIPELAGO) { return "군도"; }

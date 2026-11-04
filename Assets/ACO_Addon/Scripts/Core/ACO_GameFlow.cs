@@ -497,6 +497,32 @@ namespace ACO
             NewTerrainAndPreview();
         }
 
+        /// 디버그 패널: 정한 씨앗으로 새 지형 + 미리 배치(리롤과 같은 흐름 — 명단·리롤 대기 시간은 보지 않는다). 막히면 이유, 보냈으면 "".
+        public string DebugRequestTerrain(int seed)
+        {
+            if (!_terrain) { return "NO TERRAIN"; }
+            if (IsBusy()) { return "MISSION IN PROGRESS"; }
+            if (IsLaunchCountdown()) { return "ALL READY - TERRAIN LOCKED"; }
+            if (AnyAircraftOccupied()) { return "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"; }
+            if (!IsBriefingReady()) { return "TERRAIN GENERATING - PLEASE WAIT"; }
+            SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetDebugTerrain), seed);
+            return "";
+        }
+
+        [NetworkCallable]
+        public void NetDebugTerrain(int seed)
+        {
+            if (!_terrain || IsBusy() || IsLaunchCountdown() || AnyAircraftOccupied() || !IsBriefingReady()) { return; }
+            VRCPlayerApi p = NetworkCalling.CallingPlayer;
+            _lastRerollMs = Now();
+            _terrainPending = false;
+            _readyMask = 0;
+            _countdownEndMs = 0;
+            _terrainBy = Utilities.IsValid(p) ? p.playerId : -1;
+            Publish();
+            NewTerrainAndPreview(seed);
+        }
+
         [NetworkCallable]
         public void NetSetPhases(int phases)
         {
@@ -797,35 +823,96 @@ namespace ACO
             }
         }
 
-        /// 참가자 기체에 타고 있으면 내리고(순간이동은 좌석 밖에서만 된다) 브리핑실로 옮긴다.
+        /// 미션이 끝났다: 브리핑실로 — 단 걸어서 안전지대(항모·기지) 안에 있으면 그대로 둔다. 참가자 기체에 탄 사람은 안전지대 안이어도 옮긴다
+        /// (내리기·옮기기는 TeleportLocal — 화면이 다 어두워진 뒤에 내린다).
         private void ReturnToBriefing()
         {
             if (!BriefingPoint) { return; }
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (!Utilities.IsValid(me)) { return; }
+            bool hasZones = Progress != null && Progress.SafeZones != null && Progress.SafeZones.Length > 0;
+            if (hasZones && PilotedSlot() < 0 && Progress.IsInSafeZone(me.GetPosition())) { return; }
+            TeleportLocal(BriefingPoint);
+        }
+
+        private int PilotedSlot()
+        {
+            for (int i = 0; i < SlotCount(); i++) { if (Aircraft[i] && Aircraft[i].Piloting) { return i; } }
+            return -1;
+        }
+
+        // 기체에 탄 채 옮길 때: 화면이 다 어두워진 뒤(암전 FadeOutTime + ExitMargin) 내리고, 내리는 처리가 끝나면(2프레임) 옮긴다.
+        // 그때 암전은 아직 어두운 채(HoldTime)라 FadeTeleport가 바로 옮기고 어두운 시간을 다시 센다 — 내리는 모습·순간이동이 보이지 않는다.
+        [Tooltip("기체에 탄 채 순간이동할 때: 화면이 다 어두워진 뒤 이만큼(초) 더 기다렸다 내린다")]
+        public float ExitMargin = 0.05f;
+        private Transform _pendingTarget;
+
+        public void _ExitInDark()
+        {
             for (int i = 0; i < SlotCount(); i++)
             {
                 if (Aircraft[i] && Aircraft[i].Piloting) { Aircraft[i].ExitStation(); }
             }
-            // 내리는 처리가 끝난 뒤 옮긴다(암전이 있으면 어두워지는 동안 끝난다).
-            SendCustomEventDelayedFrames(nameof(_ReturnTeleport), 2);
+            SendCustomEventDelayedFrames(nameof(_TeleportPending), 2);
         }
 
-        public void _ReturnTeleport()
+        public void _TeleportPending()
         {
-            if (BriefingPoint) { TeleportLocal(BriefingPoint); }
+            Transform t = _pendingTarget;
+            _pendingTarget = null;
+            if (t) { TeleportNow(t); }   // 내리기를 다시 하지 않는다(못 내렸어도 되풀이하지 않게)
         }
 
+        /// 내 화면에서 나만 옮긴다(암전). 참가자 기체에 타고 있으면 먼저 어둡게 하고, 다 어두워진 뒤 내린 다음 옮긴다(좌석에선 순간이동이 안 된다).
         private void TeleportLocal(Transform target)
         {
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!target || !Utilities.IsValid(me)) { return; }
+            if (PilotedSlot() >= 0)
+            {
+                _pendingTarget = target;
+                if (Fader)
+                {
+                    Fader.Fade();
+                    SendCustomEventDelayedSeconds(nameof(_ExitInDark), Fader.FadeOutTime + ExitMargin);
+                }
+                else { _ExitInDark(); }
+                return;
+            }
+            TeleportNow(target);
+        }
+
+        /// 암전 순간이동(이미 어두우면 바로 옮기고 어두운 시간을 다시 센다). 암전이 없으면 바로.
+        private void TeleportNow(Transform target)
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (!target || !Utilities.IsValid(me)) { return; }
             if (Fader) { Fader.FadeTeleport(target.position, target.rotation); }
-            else { me.TeleportTo(target.position, target.rotation); }
+            else
+            {
+                me.TeleportTo(target.position, target.rotation);
+                me.SetVelocity(Vector3.zero);
+                SendCustomEventDelayedFrames(nameof(_ZeroVelocity), 1);
+            }
+        }
+
+        /// 텔레포트 직후 몸에 남은 속도(방금 내린 항공기의 속도)를 없앤다 — 다음 프레임에 한 번 더(VRChat이 속도를 늦게 적용하는 경우).
+        public void _ZeroVelocity()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (Utilities.IsValid(me)) { me.SetVelocity(Vector3.zero); }
         }
 
         /// 새 지형을 만들고 그 위에 병력을 미리 배치한다(브리핑 작전 테이블용). 씨앗을 직접 넘겨 생성기가 새 지형을 기다리게 한다.
         private void NewTerrainAndPreview()
         {
-            int seed = Random.Range(1, int.MaxValue);
+            NewTerrainAndPreview(Random.Range(1, int.MaxValue));
+        }
+
+        /// seed로 새 지형(0이면 무작위) + 미리 배치.
+        private void NewTerrainAndPreview(int seed)
+        {
+            if (seed == 0) { seed = Random.Range(1, int.MaxValue); }
             _expectedSeed = _terrain != null ? seed : 0;
             _previewRequestAt = Time.time;
             RequestSerialization();

@@ -14,6 +14,7 @@ namespace ACO
     /// 조종사/무기는 SAV SaccTarget의 LastHitByPlayer/LastHitWeaponType(모든 클라이언트에서 맞은 순간 갱신)을 읽는다.
     /// 로컬 기록이라 중간에 들어온 사람은 들어온 뒤의 격추만 보이고, 관리자 점수와 몇 점 어긋날 수 있다(표시용).
     /// 위치는 격자 좌표(열 A~, 행 1~ 북쪽부터)와 키패드 세분(1~9, 7 = 북서, 9 = 북동, 1 = 남서)으로 표기한다.
+    /// 스크롤(ACO_LogScrollButton → Scroll): 기록은 최근 것이 위 — OLDER/NEWER가 반 쪽(MaxRows/2)씩 옮기고 LATEST가 맨 위로. 지난 기록을 보는 동안 새 기록이 와도 보던 줄이 밀리지 않는다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_MissionLog : UdonSharpBehaviour
     {
@@ -71,6 +72,7 @@ namespace ACO
         private string[] _rows;
         private int _rowStart;
         private int _rowCount;
+        private int _scroll;   // 맨 위에서 건너뛴 최근 줄 수(0 = 최신)
         private int _totalLogged;
 
         // 조종사 집계
@@ -122,7 +124,7 @@ namespace ACO
             {
                 ACO_NPCFighterAI f = Generator.Fighters[i];
                 if (f == null) { continue; }
-                AddUnit(ACO_MissionGenerator.CAT_FIGHTER, i, f.transform, f.TargetHealth, "FTR");
+                AddUnit(ACO_MissionGenerator.CAT_FIGHTER, i, f.transform, f.TargetHealth, string.IsNullOrEmpty(f.MarkerLabel) ? "FTR" : f.MarkerLabel);
             }
             for (int i = 0; i < ground; i++)
             {
@@ -176,6 +178,7 @@ namespace ACO
         {
             _rowStart = 0;
             _rowCount = 0;
+            _scroll = 0;
             _totalLogged = 0;
             _pilotCount = 0;
             _finalScanned = false;
@@ -198,8 +201,7 @@ namespace ACO
                 bool failed = _logCleared == cleared && Manager.GetLastPhaseFailed();
                 string row = FormatTime(Manager.GetElapsedSeconds()) + (failed
                     ? "<pos=13%><color=#FF5544>PHASE " + _logCleared + " FAILED - "
-                        + (Manager.GetCurrentPhaseType() == ACO_MissionManager.PHASE_CONVOY ? "CONVOY LOST"
-                            : (Manager.GetCurrentPhaseType() == ACO_MissionManager.PHASE_TST ? "TARGET ESCAPED" : "VIP LOST")) + "</color>"
+                        + Manager.GetPhaseFailText(Manager.GetCurrentPhaseType()) + "</color>"
                     : "<pos=13%><color=#7FBF8A>PHASE " + _logCleared + " COMPLETE</color>");
                 // 보너스는 마지막 페이즈 것만 알 수 있다.
                 if (_logCleared == cleared && Manager.GetLastPhaseBonus() > 0) { row += "<pos=90%>+" + Manager.GetLastPhaseBonus(); }
@@ -282,12 +284,19 @@ namespace ACO
             int points = Manager.GetKillScore(category, i);
 
             VRCPlayerApi killer = health.LastHitByPlayer;
-            bool valid = Utilities.IsValid(killer);
-            string pilot = valid ? Shorten(killer.displayName) : "UNKNOWN";
+            // 아군 NPC(호위·대공 등)의 무기 — 팀 점수에는 들어가지만(관리자가 센다) 개인 점수·조종사 집계에는 넣지 않는다.
+            bool npcKill = health.LastHitWeaponType >= ACO_Missile.NPC_WEAPON_OFFSET;
+            bool valid = !npcKill && Utilities.IsValid(killer);
+            string pilot = npcKill ? "<color=#66BBFF>ALLY UNIT</color>" : (valid ? Shorten(killer.displayName) : "UNKNOWN");
             bool mine = valid && killer.isLocal;
 
             string target;
-            if (category == ACO_MissionGenerator.CAT_FIGHTER) { target = "FTR " + TierLabel(Generator.GetFighterTier(i)); }
+            if (category == ACO_MissionGenerator.CAT_FIGHTER)
+            {
+                ACO_NPCFighterAI f = Generator.Fighters != null && i < Generator.Fighters.Length ? Generator.Fighters[i] : null;
+                int tier = Generator.GetFighterTier(i);
+                target = f != null ? f.GetDisplayLabel(tier) : "FTR";
+            }
             else { target = _unitLabel[u]; }
             // 페이즈 목표로 배치된 유닛(태그 있음)은 빨간 TGT
             if (Generator.GetUnitTag(category, i) != 0) { target = "<color=#FF5544>TGT " + target + "</color>"; }
@@ -304,13 +313,15 @@ namespace ACO
             if (mine) { row = "<color=#FFD24D>" + row + "</color>"; }
 
             PushRow(row);
-            AddPilotScore(pilot, points);
+            if (!npcKill) { AddPilotScore(pilot, points); }
             if (mine && Progress) { Progress.AddPersonalScore(points); }
             if (Chatter && valid) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
         }
 
         private void PushRow(string row)
         {
+            // 지난 기록을 보는 중이면 새 줄만큼 함께 내려 보던 줄을 그대로 둔다
+            if (_scroll > 0) { _scroll++; }
             int cap = _rows.Length;
             if (_rowCount < cap)
             {
@@ -323,7 +334,28 @@ namespace ACO
                 _rowStart = (_rowStart + 1) % cap;
             }
             _totalLogged++;
+            _scroll = Mathf.Min(_scroll, MaxScroll());
             _bodyDirty = true;
+        }
+
+        /// 스크롤(버튼): step > 0 = 더 오래된 쪽, < 0 = 최근 쪽(반 쪽씩), 0 = 맨 위(최신). 바뀌었으면 true.
+        public bool Scroll(int step)
+        {
+            int before = _scroll;
+            if (step == 0) { _scroll = 0; }
+            else
+            {
+                int page = Mathf.Max(Mathf.Max(MaxRows, 1) / 2, 1);
+                _scroll = Mathf.Clamp(_scroll + step * page, 0, MaxScroll());
+            }
+            if (_scroll == before) { return false; }
+            RefreshBody();
+            return true;
+        }
+
+        private int MaxScroll()
+        {
+            return Mathf.Max(_rowCount - Mathf.Max(MaxRows, 1), 0);
         }
 
         private void AddPilotScore(string pilot, int points)
@@ -401,14 +433,18 @@ namespace ACO
             if (LogText != null)
             {
                 string s = "<color=#7FBF8A>TIME<pos=13%>GRID<pos=27%>PILOT<pos=60%>WPN<pos=71%>TARGET<pos=90%>PTS</color>";
-                int shown = Mathf.Min(_rowCount, Mathf.Max(MaxRows, 1));
+                int scroll = Mathf.Clamp(_scroll, 0, MaxScroll());
+                int shown = Mathf.Min(_rowCount - scroll, Mathf.Max(MaxRows, 1));
                 int cap = _rows.Length;
-                // 최근 것이 위로
+                // 위에 숨은 최근 기록(스크롤 중)
+                if (scroll > 0) { s += "\n<color=#FFD24D>^ " + scroll + " NEWER  (LATEST)</color>"; }
+                // 최근 것이 위로(스크롤만큼 건너뛰고)
                 for (int k = 0; k < shown; k++)
                 {
-                    s += "\n" + _rows[(_rowStart + _rowCount - 1 - k) % cap];
+                    s += "\n" + _rows[(_rowStart + _rowCount - 1 - scroll - k) % cap];
                 }
-                if (_totalLogged > shown) { s += "\n<color=#7FBF8A>... " + (_totalLogged - shown) + " EARLIER</color>"; }
+                int earlier = _totalLogged - scroll - shown;
+                if (earlier > 0) { s += "\n<color=#7FBF8A>v " + earlier + " EARLIER" + (_totalLogged > _rowCount ? "  (" + (_totalLogged - _rowCount) + " NOT KEPT)" : "") + "</color>"; }
                 if (_rowCount == 0) { s += "\n<color=#7FBF8A>NO KILLS YET</color>"; }
                 LogText.text = s;
             }
@@ -463,18 +499,12 @@ namespace ACO
 
         private string WeaponLabel(byte type)
         {
+            if (type >= ACO_Missile.NPC_WEAPON_OFFSET) { type = (byte)(type - ACO_Missile.NPC_WEAPON_OFFSET); }
             if (type == 1 || type == 8) { return "GUN"; }
             if (type == 2) { return "AAM"; }
             if (type == 3) { return "AGM"; }
             if (type == 4) { return "BOMB"; }
             return "-";
-        }
-
-        private string TierLabel(int tier)
-        {
-            if (tier == ACO_NPCFighterAI.SKILL_ACE) { return "ACE"; }
-            if (tier == ACO_NPCFighterAI.SKILL_VETERAN) { return "VET"; }
-            return "NOV";
         }
 
         private string Shorten(string name)

@@ -55,6 +55,7 @@ namespace ACO
         private int _lastState = -1;
         private float _resultTimer;
         private int _lastPhaseIndex = -2;   // -2 = 아직 기준 없음
+        private int _lastExtensionMs = -1;  // -1 = 아직 기준 없음
         private int _lastCleared;
         private int _lastPhaseType;
 
@@ -216,7 +217,15 @@ namespace ACO
         /// 페이즈가 시작되거나 끝나면 가운데에 안내를 띄운다. 처음 본 값(늦게 들어옴 포함)은 띄우지 않고 기준만 잡는다.
         private void UpdatePhaseBanners()
         {
-            if (Manager.GetState() != ACO_MissionManager.STATE_RUNNING) { _lastPhaseIndex = -2; return; }
+            if (Manager.GetState() != ACO_MissionManager.STATE_RUNNING) { _lastPhaseIndex = -2; _lastExtensionMs = -1; return; }
+            // 호위 이동 시간으로 제한 시간이 늘었으면 알린다(처음 본 값은 기준만)
+            int ext = Manager.GetTimeExtensionMs();
+            if (_lastExtensionMs >= 0 && ext > _lastExtensionMs)
+            {
+                int add = Mathf.RoundToInt((ext - _lastExtensionMs) * 0.001f);
+                ShowNotice("TIME EXTENDED +" + (add / 60) + ":" + (add % 60).ToString("00"), 5f);
+            }
+            _lastExtensionMs = ext;
             int phase = Manager.GetPhaseIndex();
             int cleared = Manager.GetPhasesCleared();
             // 처음 보거나 새 미션(값이 줄어듦)이면 기준만 잡는다.
@@ -234,8 +243,7 @@ namespace ACO
                 {
                     int endedType = Manager.GetCurrentPhaseType();
                     // 실패한 채 넘어가는 페이즈는 이제 보너스 페이즈(슈퍼에이스가 물러남)뿐이다 — 나머지 실패는 미션 실패 배너.
-                    string lost = endedType == ACO_MissionManager.PHASE_BONUS ? "TARGET RETREATED"
-                        : (endedType == ACO_MissionManager.PHASE_CONVOY ? "CONVOY LOST" : (endedType == ACO_MissionManager.PHASE_TST ? "TARGET ESCAPED" : "VIP LOST"));
+                    string lost = Manager.GetPhaseFailText(endedType);
                     int failBonus = Manager.GetLastPhaseBonus();
                     if (failBonus > 0) { lost += "  +" + failBonus.ToString("N0"); }
                     ShowBanner("PHASE " + cleared + " FAILED\n<size=80%>" + lost + "</size>", new Color(1f, 0.3f, 0.25f, TextAlpha), PhaseBannerTime);
@@ -287,46 +295,12 @@ namespace ACO
 
             int type = Manager.GetCurrentPhaseType();
             string head = "PHASE " + (phase + 1) + "/" + count + "  " + Manager.GetPhaseName(type) + "  ";
-            if (type == ACO_MissionManager.PHASE_QUOTA)
+            // 진행 글자는 페이즈 모듈이 정한다(호위 VIP %·km, 지상 호위 CVY, 시한 표적 남은 시간 등). 비면 완료/전체.
+            ACO_PhaseModule module = Manager.GetModule(type);
+            if (module != null)
             {
-                return head + Manager.GetObjectivesDone().ToString("N0") + "/" + Manager.GetObjectiveTotal().ToString("N0");
-            }
-            if (type == ACO_MissionManager.PHASE_TST)
-            {
-                string s = head + Manager.GetTstHits() + "/" + Manager.GetTstCount();
-                float left = Manager.GetTstRemainingSeconds();
-                if (left >= 0f) { s += "  <color=#FF5544>" + FormatTime(left) + "</color>"; }
-                return s;
-            }
-            if (type == ACO_MissionManager.PHASE_ESCORT)
-            {
-                // 호위: 대상 체력과 도착까지 남은 거리. 체력이 낮으면 빨갛게.
-                ACO_EscortUnit escort = Manager.GetActiveEscort();
-                if (escort == null) { return head + "-"; }
-                int hp = Mathf.RoundToInt(escort.GetHealthFraction() * 100f);
-                string hpText = hp <= 30 ? "<color=#FF5544>" + escort.MarkerLabel + " " + hp + "%</color>" : escort.MarkerLabel + " " + hp + "%";
-                return head + hpText + "  " + (escort.GetRemainingDistance() * 0.001f).ToString("0.0") + "km";
-            }
-            if (type == ACO_MissionManager.PHASE_INTERCEPT)
-            {
-                // 요격: 남은 폭격기 / 전체, 도시에 가장 가까운 폭격기의 남은 거리(5km 아래면 빨갛게).
-                int total = Manager.GetBombersTotal();
-                if (total == 0) { return head + "-"; }
-                float near = Manager.GetBomberNearestDistance();
-                string dist = near >= 0f ? (near * 0.001f).ToString("0.0") + "km" : "";
-                if (near >= 0f && near < 5000f) { dist = "<color=#FF5544>" + dist + "</color>"; }
-                return head + "BMR " + Manager.GetBombersAlive() + "/" + total + (dist.Length > 0 ? "  CITY " + dist : "");
-            }
-            if (type == ACO_MissionManager.PHASE_CONVOY)
-            {
-                // 지상 호위: 살아 있는 차량 / 전체, 가장 뒤처진 차량의 남은 거리. 절반 이하면 빨갛게.
-                int alive = Manager.GetConvoyAlive();
-                int total = Manager.GetConvoyTotal();
-                float remain = Manager.GetConvoyRemainingDistance();
-                if (total == 0) { return head + "-"; }
-                string cvy = "CVY " + alive + "/" + total;
-                if (alive * 2 <= total) { cvy = "<color=#FF5544>" + cvy + "</color>"; }
-                return head + cvy + (remain >= 0f ? "  " + (remain * 0.001f).ToString("0.0") + "km" : "");
+                string progress = module.GetProgressText();
+                if (progress.Length > 0) { return head + progress; }
             }
             if (Manager.GetObjectiveTotal() == 0) { return head + "-"; }
             return head + Manager.GetObjectivesDone() + "/" + Manager.GetObjectiveTotal();

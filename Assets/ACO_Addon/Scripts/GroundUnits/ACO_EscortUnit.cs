@@ -24,10 +24,14 @@ namespace ACO
         public const int MOVE_AIR = 0;
         public const int MOVE_SEA = 1;
         public const int MOVE_GROUND = 2;
+        public const int MOVE_HOVER = 3;   // 공기부양정(LCAC): 바다 위는 해수면(HoverSeaLevel), 해변에 올라서면 지면을 따라간다
         public const int ARRIVE_CONTINUE = 0;
         public const int ARRIVE_DROP = 1;
         public const int ARRIVE_LAND = 2;
         public const int ARRIVE_STOP = 3;
+        public const int ROLE_VIP = 0;         // 지켜야 하는 대상(잃으면 실패)
+        public const int ROLE_GUARD = 1;       // 같이 가며 싸우는 아군(호위함·공격헬기 — 잃어도 실패 아님). 상륙전에서만 쓴다
+        public const int ROLE_MOTHERSHIP = 2;  // 후방에서 대기하는 모선(강습상륙함 — LCAC·헬기가 여기서 나온다). 상륙전에서만 쓴다
 
         [Header("참조")]
         [Tooltip("체력. ExplodeOther에 이 스크립트를 등록해야 격추 통지를 받는다")]
@@ -37,11 +41,14 @@ namespace ACO
         [Tooltip("켜면 적 폭격기(요격 페이즈 — 플레이어가 막아야 하는 적). 끄면 아군 호위 대상(호위·지상 호위 페이즈)")]
         public bool Hostile = false;
         public string TargetName = "Transport";
+        [Tooltip("0 = 지켜야 하는 대상(호위 수송기·콘보이·상륙전 LCAC), 1 = 같이 싸우는 아군(상륙전 호위함·공격헬기 — 잃어도 실패가 아니다), "
+            + "2 = 모선(상륙전 강습상륙함 — 후방에서 대기)")]
+        public int Role = ROLE_VIP;
         [Tooltip("마커에 표시할 약어(3~4글자)")]
         public string MarkerLabel = "VIP";
 
         [Header("이동")]
-        [Tooltip("0 = 공중, 1 = 해상, 2 = 지상. 생성기가 이 값에 맞는 항로를 만든다")]
+        [Tooltip("0 = 공중, 1 = 해상, 2 = 지상, 3 = 공기부양(바다 + 해변). 생성기가 이 값에 맞는 항로를 만든다")]
         public int MoveMode = MOVE_AIR;
         [Tooltip("이동 속도(m/s)")]
         public float Speed = 120f;
@@ -53,6 +60,8 @@ namespace ACO
         public LayerMask GroundLayers = 2049;
         [Tooltip("해상/지상: 흔들림 각도(도)")]
         public float BobAngle = 0.5f;
+        [Tooltip("공기부양: 해수면 높이(m, 월드) — 지면이 이보다 낮거나 없으면(바다) 이 높이를 미끄러진다")]
+        public float HoverSeaLevel = 0f;
 
         [Header("도착")]
         [Tooltip("투하: 목적지 상공에서 재생할 파티클(보급 상자/공수부대 낙하산, 월드 공간). 비우면 투하 연출 없음")]
@@ -202,7 +211,11 @@ namespace ACO
             _groundY = _route[0].y;
             ApplyPose(GetDistanceTravelled());
 
-            if (Flares) { Flares.ResetSalvos(); }
+            if (Flares)
+            {
+                Flares.Friendly = !Hostile;   // 무전 대사: 아군 플레어/연막 ↔ 적 플레어
+                Flares.ResetSalvos();
+            }
             SpawnGuns(revive);
             if (revive)
             {
@@ -313,6 +326,23 @@ namespace ACO
         }
         public float GetProgress() { return _totalLength > 0f ? Mathf.Clamp01(GetDistanceTravelled() / _totalLength) : 0f; }
         public float GetRemainingDistance() { return Mathf.Max(_totalLength - GetDistanceTravelled(), 0f); }
+
+        /// 도착(IsArrived)까지 남은 시간(초) — 같은 시간 함수로 계산한다(정차·착륙은 감속까지). 출발 서버 시각은 GetStartMs.
+        public float GetArrivalSeconds()
+        {
+            if (!_active || _routeCount < 2) { return 0f; }
+            float speed = Mathf.Max(Speed, 0.01f);
+            float arrive;
+            if (_arrival == ARRIVE_LAND || _arrival == ARRIVE_STOP)
+            {
+                arrive = Mathf.Max(_brakeStart - _distanceOffset, 0f) / speed + speed / Mathf.Max(_brakeDecel, 0.0001f);
+            }
+            else { arrive = Mathf.Max(_endDistance - _distanceOffset, 0f) / speed; }
+            float elapsed = (Networking.GetServerTimeInMilliseconds() - _startMs) * 0.001f;
+            return Mathf.Max(arrive - Mathf.Max(elapsed, 0f), 0f);
+        }
+
+        public int GetStartMs() { return _startMs; }
         /// 도착: 투하/계속 진행은 항로 끝, 착륙/정차는 멈춘 순간. 시간 함수라 모든 클라이언트가 같은 순간에 도착한다.
         public bool IsArrived() { return _active && _routeCount >= 2 && GetDistanceTravelled() >= _endDistance - 0.5f; }
         public bool IsDestroyed() { return TargetHealth != null && TargetHealth.Health <= 0f; }
@@ -368,7 +398,7 @@ namespace ACO
                 float t = Time.time;
                 rot = Quaternion.LookRotation(flat.normalized, Vector3.up)
                     * Quaternion.Euler(Mathf.Sin(t * 0.7f) * BobAngle * 0.4f, 0f, Mathf.Sin(t * 0.9f) * BobAngle);
-                if (MoveMode == MOVE_GROUND) { pos.y = SampleGroundY(pos); }
+                if (MoveMode == MOVE_GROUND || MoveMode == MOVE_HOVER) { pos.y = SampleGroundY(pos); }
             }
             transform.SetPositionAndRotation(pos, rot);
         }
@@ -392,6 +422,8 @@ namespace ACO
                 {
                     _groundY = hit.point.y;
                 }
+                else if (MoveMode == MOVE_HOVER) { _groundY = HoverSeaLevel; }
+                if (MoveMode == MOVE_HOVER) { _groundY = Mathf.Max(_groundY, HoverSeaLevel); }
             }
             return Mathf.Lerp(transform.position.y, _groundY, 1f - Mathf.Exp(-8f * Time.deltaTime));
         }

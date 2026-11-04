@@ -7,6 +7,10 @@ namespace ACO
     /// 무유도 폭탄/로켓(로컬 재현, 동기화 없음). 발사는 ACO_DFUNC_Missile이 한다(장전 슬롯·강화·장전 막대를 그대로 쓴다).
     ///  - 폭탄: 모기체 속도 벡터를 이어받아 중력으로 떨어진다(Thrust 0).
     ///  - 로켓: Acceleration으로 MaxSpeed까지 가속하며 곧게 난다(GravityScale로 살짝 처지게 할 수 있다).
+    ///  - 근접 신관(대공 로켓 FLAK): 쏘는 무장이 ProximityRadius를 넣으면 적 항공기 락온 마커(레이어 29) 중심이 이동 구간에서 그 반경 안에 들어올 때
+    ///    가장 가까이 지나는 점에서 터진다(범위 피해로 맞힌다). 모든 화면이 각자 재현해 같이 터지고, 피해는 쏜 사람 화면만.
+    ///  - 유도(유도 로켓 LGR·유도 폭탄 LGB): 쏘는 무장이 락온한 표적(GuideTarget)을 넣으면 속도 방향을 표적 쪽으로 돌려 날아간다(GuideTurnRate).
+    ///    표적 번호는 발사 이벤트에 실려 모든 화면이 같은 표적을 쫓는다. 폭탄·로켓이라 CIWS 요격은 받지 않는다.
     /// 매 프레임 이동 구간을 선으로 검사해 지형/유닛 콜라이더에 닿으면 터지고, SplashRadius 안의 SaccTarget에 범위 피해를 준다
     /// (중심 Damage → 가장자리 Damage × MinSplashFraction, 거리는 콜라이더 표면까지). 호위 대상(아군, ACO_EscortUnit)은 피해를 받지 않는다.
     /// SAV 폭탄은 범위 피해를 리지드바디가 있는 대상에만 주는데 NPC 지상 유닛엔 리지드바디가 없어서 직격만 들어간다 — 그래서 따로 만든다.
@@ -63,12 +67,41 @@ namespace ACO
         [Tooltip("후연 파티클(로켓). 발사 시 방출을 켜고 폭발 시 방출만 끈다. Simulation Space는 World, DisableOnExplode에 넣지 않는다")]
         public ParticleSystem[] TrailParticles;
 
+        [Header("지면·수면 폭발 (선택 — 비우면 위 ExplosionObject·ExplosionSounds)")]
+        [Tooltip("땅·건물(지형)에 부딪혀 터질 때 ExplosionObject 대신 켤 오브젝트(흙먼지 등). 이 탄의 자식으로 두면 위(+Y)가 닿은 면의 법선을 향하게 돌린다. 유닛에 맞거나 공중에서 터지면 ExplosionObject")]
+        public GameObject GroundExplosionObject;
+        [Tooltip("땅에 부딪힐 때 폭발음(비우면 ExplosionSounds)")]
+        public AudioSource[] GroundExplosionSounds;
+        [Tooltip("물(WaterLayers)에 부딪혀 터질 때 켤 오브젝트(물기둥 등). 위(+Y)가 수면 위를 향하게 돌린다")]
+        public GameObject WaterExplosionObject;
+        [Tooltip("물에 부딪힐 때 폭발음(비우면 ExplosionSounds)")]
+        public AudioSource[] WaterExplosionSounds;
+        [Tooltip("수면으로 볼 레이어(바다 콜라이더). 기본 Water(4)")]
+        public LayerMask WaterLayers = 1 << 4;
+
         /// 발사하는 쪽이 넣는다. SaccTarget이 공격자를 찾을 때 이 변수 이름(EntityControl)을 읽으므로 바꾸면 안 된다.
         [System.NonSerialized] public SaccEntity EntityControl;
         [System.NonSerialized] public Vector3 LaunchVelocity;   // 모기체 속도 벡터(월드)
         [System.NonSerialized] public Transform PoolParent;
         [System.NonSerialized] public ACO_DFUNC_Missile PoolOwner;   // 회수 시 돌아갈 플레이어 무장 풀(부모는 그대로)
         [System.NonSerialized] public bool IsShooter;
+        /// 적 곡사포(ACO_ArtilleryGun)가 쏜 포탄: 아군(호위 대상)만 범위 피해를 받고 나머지는 받지 않는다.
+        [System.NonSerialized] public bool HitFriendlies;
+        /// 근접 신관 반경(m, 적 항공기 마커 중심까지). 0이면 없음(닿아야 터진다). 쏘는 무장이 발사마다 넣는다.
+        [System.NonSerialized] public float ProximityRadius;
+        /// 유도(유도 로켓 LGR·유도 폭탄 LGB — 쏘는 무장이 락온한 표적을 넣는다, null이면 무유도): 계산 간격마다 속도 방향을 표적 쪽으로
+        /// GuideTurnRate(도/초)만큼 돌린다(속력은 그대로 — 로켓은 추진, 폭탄은 중력이 계속 더한다). 속도 방향과 표적 방향이 GuideSeekerAngle보다
+        /// 벌어지거나 표적이 사라지면 유도를 영영 끊고 그대로 날아간다. 표적 마커 중심이 이동 구간에서 GuideProximity 안이면 거기서 터진다.
+        [System.NonSerialized] public Transform GuideTarget;
+        [System.NonSerialized] public float GuideTurnRate;
+        [System.NonSerialized] public float GuideSeekerAngle = 90f;
+        [System.NonSerialized] public float GuideProximity;
+        private bool _guided;
+        private SaccEntity _guideEntity;
+
+        // 근접 신관이 보는 레이어: 적 항공기 락온 마커(트리거 구). 마커 부모의 SaccTarget이 살아 있는 적만 센다(슈퍼에이스 기만체처럼 떼어 낸 마커는 빠진다).
+        private const int PROXIMITY_LAYERS = 1 << 29;
+        private Collider[] _proxHits = new Collider[16];
 
         private const int MAX_SPLASH_HITS = 32;
         private const int MAX_SPLASH_COLLIDERS = 256;   // 큰 반경이면 함선·지상 그룹 콜라이더가 많다 — 모자라면 일부 유닛이 빠진다
@@ -98,7 +131,9 @@ namespace ACO
             _age = 0f;
             _flying = true;
             _exploded = false;
-            if (ExplosionObject) { ExplosionObject.SetActive(false); }
+            _guided = GuideTarget != null && GuideTurnRate > 0f;
+            _guideEntity = _guided ? GuideTarget.GetComponentInParent<SaccEntity>() : null;
+            HideExplosions();
             SetFlightVisuals(true);
             SetTrailEmission(true, true);
         }
@@ -118,7 +153,7 @@ namespace ACO
             if (_life <= 0f)
             {
                 if (DebugHitLog && IsShooter) { Debug.Log("[ACO] " + gameObject.name + ": 수명(" + MaxLifetime + "초)이 다해 공중에서 터졌습니다. 고도 " + transform.position.y.ToString("0") + "m"); }
-                Explode(transform.position);
+                Explode(transform.position, SURFACE_AIR, Vector3.up);
                 return;
             }
             Vector3 from = _simPos;
@@ -130,6 +165,7 @@ namespace ACO
             {
                 _accum -= FLIGHT_STEP;
                 guard++;
+                if (_guided) { Steer(to, FLIGHT_STEP); }
                 if (Acceleration > 0f && _velocity.magnitude < MaxSpeed) { _velocity += fwd * (Acceleration * FLIGHT_STEP); }
                 _velocity += Physics.gravity * (GravityScale * FLIGHT_STEP);
                 if (Drag > 0f) { _velocity *= Mathf.Max(1f - Drag * FLIGHT_STEP, 0f); }
@@ -137,11 +173,34 @@ namespace ACO
             }
             if (guard > 0 && _age >= ArmTime)
             {
+                // 땅·유닛은 트리거를 빼고, 물(WaterLayers)은 일반 콜라이더와 트리거를 모두 따로 본다(SAV 바다는 트리거 상자다 — 물 레이어엔 바다만 있다).
+                // 둘 다 맞으면 가까운 쪽.
                 RaycastHit hit;
-                if (Physics.Linecast(from, to, out hit, HitLayers, QueryTriggerInteraction.Ignore) && !IsOwnVehicle(hit.collider))
+                RaycastHit water;
+                bool hitSolid = Physics.Linecast(from, to, out hit, HitLayers.value & ~WaterLayers.value, QueryTriggerInteraction.Ignore) && !IsOwnVehicle(hit.collider);
+                bool hitWater = Physics.Linecast(from, to, out water, WaterLayers.value, QueryTriggerInteraction.Collide);
+                if (hitWater && (!hitSolid || water.distance <= hit.distance))
+                {
+                    if (DebugHitLog && IsShooter) { LogHit(water); }
+                    Explode(water.point, SURFACE_WATER, Vector3.up);
+                    return;
+                }
+                if (hitSolid)
                 {
                     if (DebugHitLog && IsShooter) { LogHit(hit); }
-                    Explode(hit.point);
+                    Explode(hit.point, SurfaceOf(hit.collider), hit.normal);
+                    return;
+                }
+                Vector3 burst;
+                if (_guided && GuideProximity > 0f && NearTarget(from, to, out burst))
+                {
+                    Explode(burst, SURFACE_AIR, Vector3.up);
+                    return;
+                }
+                if (ProximityRadius > 0f && FindEnemyNear(from, to, out burst))
+                {
+                    if (DebugHitLog && IsShooter) { Debug.Log("[ACO] " + gameObject.name + ": 근접 신관 작동(반경 " + ProximityRadius.ToString("0") + "m)"); }
+                    Explode(burst, SURFACE_AIR, Vector3.up);
                     return;
                 }
             }
@@ -164,12 +223,80 @@ namespace ACO
                 + ", 지점 " + "(" + hit.point.x.ToString("0") + ", " + hit.point.y.ToString("0") + ", " + hit.point.z.ToString("0") + ")" + ", 아래 지면까지 " + (above < 0f ? "없음" : above.ToString("0") + "m"), c);
         }
 
+        /// 유도 한 계산 간격: 속도 방향을 표적 쪽으로 돌린다(속력 유지). 표적이 사라졌거나 시커 각도 밖이면 유도를 끊는다.
+        private void Steer(Vector3 pos, float h)
+        {
+            if (!GuideTarget || !GuideTarget.gameObject.activeInHierarchy || (_guideEntity && _guideEntity.dead)) { _guided = false; return; }
+            float speed = _velocity.magnitude;
+            Vector3 to = GuideTarget.position - pos;
+            if (speed < 1f || to.sqrMagnitude < 0.01f) { return; }
+            Vector3 dir = _velocity / speed;
+            if (Vector3.Angle(dir, to) > GuideSeekerAngle) { _guided = false; return; }
+            _velocity = Vector3.RotateTowards(dir, to.normalized, GuideTurnRate * Mathf.Deg2Rad * h, 0f) * speed;
+        }
+
+        /// 유도 표적 마커 중심이 이동 구간에서 GuideProximity 안에 드는 가장 가까운 점.
+        private bool NearTarget(Vector3 from, Vector3 to, out Vector3 point)
+        {
+            point = to;
+            if (!GuideTarget) { return false; }
+            Vector3 p = GuideTarget.position;
+            Vector3 step = to - from;
+            float lenSq = step.sqrMagnitude;
+            float t = lenSq > 0.000001f ? Mathf.Clamp01(Vector3.Dot(p - from, step) / lenSq) : 0f;
+            point = from + step * t;
+            return (p - point).sqrMagnitude <= GuideProximity * GuideProximity;
+        }
+
+        /// 이동 구간(from→to)에서 적 항공기 마커 중심이 ProximityRadius 안에 드는 가장 이른 점. 구간 가운데의 구 하나로 후보를 모은 뒤(구간 전체를 덮는다)
+        /// 마커 중심까지 선분 최단 거리로 고른다 — 빠른 탄이 한 프레임에 마커를 지나쳐도 놓치지 않는다.
+        private bool FindEnemyNear(Vector3 from, Vector3 to, out Vector3 point)
+        {
+            point = to;
+            Vector3 step = to - from;
+            float lenSq = step.sqrMagnitude;
+            float r = ProximityRadius;
+            int n = Physics.OverlapSphereNonAlloc(from + step * 0.5f, r + Mathf.Sqrt(lenSq) * 0.5f, _proxHits, PROXIMITY_LAYERS, QueryTriggerInteraction.Collide);
+            float bestT = 2f;
+            for (int i = 0; i < n; i++)
+            {
+                Collider c = _proxHits[i];
+                if (!c || IsOwnVehicle(c)) { continue; }
+                SaccTarget target = c.GetComponentInParent<SaccTarget>();
+                if (!target || target.Health <= 0f) { continue; }
+                ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
+                if (escort != null && !escort.Hostile) { continue; }
+                Vector3 p = c.transform.position;
+                float t = lenSq > 0.000001f ? Mathf.Clamp01(Vector3.Dot(p - from, step) / lenSq) : 0f;
+                Vector3 q = from + step * t;
+                if ((p - q).sqrMagnitude > r * r || t >= bestT) { continue; }
+                bestT = t;
+                point = q;
+            }
+            return bestT <= 1f;
+        }
+
         private bool IsOwnVehicle(Collider c)
         {
             return EntityControl != null && c != null && c.transform.IsChildOf(EntityControl.transform);
         }
 
-        private void Explode(Vector3 point)
+        // 터진 자리: 공중·유닛 = ExplosionObject, 땅 = GroundExplosionObject, 물 = WaterExplosionObject(비었으면 ExplosionObject)
+        private const int SURFACE_AIR = 0;
+        private const int SURFACE_GROUND = 1;
+        private const int SURFACE_WATER = 2;
+        private const int UNIT_HITBOX_LAYER = 17;
+
+        /// 닿은 콜라이더의 면: 물(WaterLayers), 유닛 히트박스(17 — 공중 폭발과 같은 연출), 그 밖은 땅.
+        private int SurfaceOf(Collider c)
+        {
+            if (!c) { return SURFACE_AIR; }
+            int layer = c.gameObject.layer;
+            if (((1 << layer) & WaterLayers.value) != 0) { return SURFACE_WATER; }
+            return layer == UNIT_HITBOX_LAYER ? SURFACE_AIR : SURFACE_GROUND;
+        }
+
+        private void Explode(Vector3 point, int surface, Vector3 normal)
         {
             if (_exploded) { return; }
             _exploded = true;
@@ -179,9 +306,9 @@ namespace ACO
             if (IsShooter) { ApplySplash(point); }
 
             SetFlightVisuals(false);
-            if (ExplosionObject) { ExplosionObject.SetActive(true); }
+            ShowExplosion(surface, normal);
             ShowSplashVisual();
-            PlayExplosionSound();
+            PlayExplosionSound(surface);
             SetTrailEmission(false, false);
             SendCustomEventDelayedSeconds(nameof(MoveBackToPool), ExplosionDuration);
         }
@@ -228,9 +355,10 @@ namespace ACO
                 SaccTarget target = c.GetComponentInParent<SaccTarget>();
                 if (!target || target.Health <= 0f) { continue; }
                 if (IsOwnVehicle(c)) { continue; }
-                // 아군(호위 대상)은 피해를 받지 않는다.
+                // 아군(호위 대상)은 피해를 받지 않는다. 적 포탄(HitFriendlies)은 반대로 아군만 맞는다.
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
-                if (escort != null && !escort.Hostile) { continue; }
+                bool friendly = escort != null && !escort.Hostile;
+                if (friendly == !HitFriendlies) { continue; }
 
                 // 같은 유닛은 가장 가까운 콜라이더로 한 번만 — 이미 준 대상이면 건너뛴다(가까운 것부터 오지 않으므로 최소 거리를 먼저 구한다).
                 bool done = false;
@@ -274,10 +402,32 @@ namespace ACO
             }
         }
 
-        private void PlayExplosionSound()
+        /// 면에 맞는 폭발 오브젝트를 켠다(비었으면 ExplosionObject). 땅·물 연출은 위(+Y)를 닿은 면의 법선으로 돌린다(물기둥·흙먼지가 똑바로 서게).
+        private void ShowExplosion(int surface, Vector3 normal)
         {
-            if (ExplosionSounds == null || ExplosionSounds.Length == 0) { return; }
-            AudioSource sound = ExplosionSounds[Random.Range(0, ExplosionSounds.Length)];
+            GameObject fx = ExplosionObject;
+            if (surface == SURFACE_GROUND && GroundExplosionObject) { fx = GroundExplosionObject; }
+            else if (surface == SURFACE_WATER && WaterExplosionObject) { fx = WaterExplosionObject; }
+            if (!fx) { return; }
+            if (fx != ExplosionObject) { fx.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal.sqrMagnitude > 0.0001f ? normal : Vector3.up); }
+            fx.SetActive(true);
+        }
+
+        private void HideExplosions()
+        {
+            if (ExplosionObject) { ExplosionObject.SetActive(false); }
+            if (GroundExplosionObject) { GroundExplosionObject.SetActive(false); }
+            if (WaterExplosionObject) { WaterExplosionObject.SetActive(false); }
+        }
+
+        /// 폭발음: 면에 맞는 소리 묶음(비었으면 ExplosionSounds)에서 하나를 골라 음높이를 조금씩 바꿔 재생한다.
+        private void PlayExplosionSound(int surface)
+        {
+            AudioSource[] sounds = ExplosionSounds;
+            if (surface == SURFACE_GROUND && GroundExplosionSounds != null && GroundExplosionSounds.Length > 0) { sounds = GroundExplosionSounds; }
+            else if (surface == SURFACE_WATER && WaterExplosionSounds != null && WaterExplosionSounds.Length > 0) { sounds = WaterExplosionSounds; }
+            if (sounds == null || sounds.Length == 0) { return; }
+            AudioSource sound = sounds[Random.Range(0, sounds.Length)];
             if (!sound) { return; }
             sound.pitch = Random.Range(0.94f, 1.2f);
             sound.Play();
@@ -285,7 +435,7 @@ namespace ACO
 
         public void MoveBackToPool()
         {
-            if (ExplosionObject) { ExplosionObject.SetActive(false); }
+            HideExplosions();
             SetFlightVisuals(true);
             SetTrailEmission(false, false);
             _flying = false;

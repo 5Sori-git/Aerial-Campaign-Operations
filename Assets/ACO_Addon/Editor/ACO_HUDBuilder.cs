@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -13,6 +14,7 @@ public static class ACO_HUDBuilder
     private const string GeneratedDir = "Assets/ACO_Addon/Generated";
     private const string PrefabDir = "Assets/ACO_Addon/Prefabs";
     private const string FontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
+    private const string FlightFontPath = "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Electronic Highway Sign SDF.asset";
     private const int MarkerCount = 64;
     // 테두리 두께(마커 한 변 1 기준)
     private const float FrameThickness = 0.08f;
@@ -245,6 +247,7 @@ public static class ACO_HUDBuilder
         log.HeaderText = header;
         log.LogText = logText;
         log.PilotText = pilotText;
+        EnsureLogScrollButtons(log);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_MissionBoard.prefab");
         Object.DestroyImmediate(root);
@@ -253,6 +256,53 @@ public static class ACO_HUDBuilder
 
         Debug.Log($"[ACO] 작전판 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 씬(브리핑 룸 등)에 두고 ACO → Bake NPC References로 관리자/생성기를 연결하세요.");
         Selection.activeObject = prefab;
+    }
+
+    public const string LogScrollName = "ScrollButtons";
+
+    /// 작전판 스크롤 버튼(판 아래 띠: NEWER · OLDER · LATEST — 콜라이더 Interact). 이미 있으면 그대로. 만들었으면 true(Bake도 부른다 — 예전 작전판).
+    public static bool EnsureLogScrollButtons(ACO_MissionLog log)
+    {
+        Transform face = log.transform.Find("Face");
+        if (face == null) { Debug.LogWarning($"[ACO] 작전판 '{log.name}'에 Face가 없어 스크롤 버튼을 달지 못했습니다 — 작전판 프리팹을 다시 만드세요.", log); return false; }
+        if (face.Find(LogScrollName) != null) { return false; }
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        Shader bgShader = Shader.Find("Unlit/Color");
+        if (font == null || bgShader == null) { return false; }
+        Material btnMat = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_BoardButton.mat");
+        if (btnMat == null)
+        {
+            btnMat = new Material(bgShader) { name = "ACO_BoardButton" };
+            btnMat.SetColor("_Color", ButtonGreen);
+            btnMat = SaveAsset(btnMat, $"{GeneratedDir}/ACO_BoardButton.mat");
+        }
+        // 판(4 x 2.5m) 바로 아래 띠 — Face는 180° 돈 앞면이라 글자가 -Z 쪽(보는 쪽)에서 읽힌다
+        Transform group = NewChild(face, LogScrollName, new Vector3(0f, -1.42f, -0.02f));
+        Undo.RegisterCreatedObjectUndo(group.gameObject, "ACO log scroll");
+        string[] labels = { "NEWER", "OLDER", "LATEST" };
+        int[] steps = { -1, 1, 0 };
+        for (int i = 0; i < labels.Length; i++)
+        {
+            Transform b = NewChild(group, "Btn_" + labels[i], new Vector3(-0.7f + i * 0.7f, 0f, 0f));
+            BoxCollider c = b.gameObject.AddComponent<BoxCollider>();
+            c.size = new Vector3(0.6f, 0.22f, 0.04f);
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            Object.DestroyImmediate(quad.GetComponent<Collider>());
+            quad.name = "Background";
+            quad.transform.SetParent(b, false);
+            quad.transform.localPosition = new Vector3(0f, 0f, 0.005f);
+            quad.transform.localScale = new Vector3(0.6f, 0.22f, 1f);
+            MeshRenderer qr = quad.GetComponent<MeshRenderer>();
+            qr.sharedMaterial = btnMat;
+            qr.shadowCastingMode = ShadowCastingMode.Off;
+            qr.receiveShadows = false;
+            MakeText(b, "Label", Vector3.zero, 1.1f, TextGreen, TextAlignmentOptions.Center, new Vector2(0.6f, 0.22f), new Vector2(0.5f, 0.5f), font, font.material, labels[i]);
+            ACO_LogScrollButton btn = b.gameObject.AddUdonSharpComponent<ACO_LogScrollButton>();
+            btn.Log = log;
+            btn.Step = steps[i];
+            btn.InteractionText = labels[i];
+        }
+        return true;
     }
 
     /// 작전 콘솔 글자 이름 — Bake가 이 이름으로 찾아 ACO_GameFlow의 BannerTexts/PhaseTexts/PhaseInfoTexts/TerrainTexts에 넣는다.
@@ -486,8 +536,18 @@ public static class ACO_HUDBuilder
             rowTexts[row] = t;
             rowImages[row] = img;
         }
-        TextMeshProUGUI message = MakeUiText(canvas, "UpgradeMessage", new Vector2(right, -600f), new Vector2(1300f, 80f), 38f, font,
-            "UPGRADES APPLY ON YOUR NEXT SORTIE");
+        // 구매 버튼: 줄을 눌러 고르고 이 버튼으로 산다(클릭 실수 방지). 글자·색은 게임 중 상점이 고른 줄에 맞게 쓴다.
+        Image shopBuy = MakeUiButton(canvas, "BuyUpgrade", new Vector2(right, -565f), new Vector2(1000f, 84f), font, "SELECT AN ITEM", 40f);
+        shopBuy.color = new Color(0.16f, 0.17f, 0.17f, 1f);
+        ACO_HangarButton shopBuyButton = shopBuy.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
+        shopBuyButton.Shop = shop;
+        shopBuyButton.Action = ACO_HangarButton.ACTION_SHOP_BUY;
+        WireClick(shopBuy.GetComponent<Button>(), shopBuyButton);
+        shop.BuyButton = shopBuy.gameObject;
+        shop.BuyText = shopBuy.GetComponentInChildren<TextMeshProUGUI>();
+
+        TextMeshProUGUI message = MakeUiText(canvas, "UpgradeMessage", new Vector2(right, -645f), new Vector2(1300f, 60f), 34f, font,
+            "SELECT AN UPGRADE, THEN PRESS BUY");
 
         shop.CreditsText = credits;
         shop.TabImages = tabImages;
@@ -571,6 +631,839 @@ public static class ACO_HUDBuilder
         fb.Label = img.GetComponentInChildren<TextMeshProUGUI>();
         fb.Background = img;
         WireClick(img.GetComponent<Button>(), fb);
+    }
+
+    /// 디버그 패널 프리팹(ACO_DebugPanel): 미션 가중치(페이즈 모듈마다 −/+), 에이스·베테랑·보너스 페이즈 확률(−/+), 내 크레딧(−100K/−10K/+10K/+100K).
+    /// 판 1.8m x 2.0m(월드 공간 Canvas), 앞면은 루트 +Z 쪽. 모듈 줄은 ModuleRowCount개(남는 줄은 게임 중 숨긴다). 관리자·생성기·진행도는 Bake가 연결한다.
+    public const int DebugModuleRows = 14;
+    public static void CreateDebugPanelPrefab()
+    {
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        if (font == null)
+        {
+            Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath} — Window → TextMeshPro → Import TMP Essential Resources를 먼저 실행하세요.");
+            return;
+        }
+
+        GameObject root = new GameObject("ACO_DebugPanel");
+        ACO_DebugPanel panel = root.AddUdonSharpComponent<ACO_DebugPanel>();
+        RectTransform canvas = MakeUiPanel(root.transform, 1800f, 2400f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 1120f), new Vector2(1700f, 100f), 70f, font, "DEBUG PANEL");
+
+        // 미션 가중치
+        MakeUiLabel(canvas, "WeightHeader", new Vector2(0f, 1040f), new Vector2(1700f, 60f), 40f, font, "MISSION WEIGHTS  (W = weight, % = share)");
+        var rows = new GameObject[DebugModuleRows];
+        var texts = new TextMeshProUGUI[DebugModuleRows];
+        for (int k = 0; k < DebugModuleRows; k++)
+        {
+            float y = 970f - k * 72f;
+            var row = new GameObject($"Module_{k}", typeof(RectTransform));
+            row.layer = 0;
+            RectTransform rr = row.GetComponent<RectTransform>();
+            rr.SetParent(canvas, false);
+            rr.anchoredPosition = new Vector2(0f, y);
+            rr.sizeDelta = new Vector2(1700f, 68f);
+            TextMeshProUGUI t = MakeUiText(rr, "Text", new Vector2(-180f, 0f), new Vector2(1250f, 64f), 34f, font, $"MODULE {k}");
+            t.alignment = TextAlignmentOptions.Left;
+            DebugButton(rr, panel, font, "-", new Vector2(560f, 0f), new Vector2(110f, 60f), ACO_DebugPanel.ACT_WEIGHT, k, -0.5f);
+            DebugButton(rr, panel, font, "+", new Vector2(690f, 0f), new Vector2(110f, 60f), ACO_DebugPanel.ACT_WEIGHT, k, 0.5f);
+            rows[k] = row;
+            texts[k] = t;
+        }
+
+        // 출현 확률
+        float y0 = 970f - DebugModuleRows * 72f - 30f;
+        MakeUiLabel(canvas, "ChanceHeader", new Vector2(0f, y0), new Vector2(1700f, 60f), 40f, font, "SPAWN CHANCES");
+        panel.AceText = DebugValueRow(canvas, panel, font, "Ace", y0 - 70f, ACO_DebugPanel.ACT_ACE, 0.05f);
+        panel.VeteranText = DebugValueRow(canvas, panel, font, "Veteran", y0 - 140f, ACO_DebugPanel.ACT_VETERAN, 0.05f);
+        panel.BonusText = DebugValueRow(canvas, panel, font, "Bonus", y0 - 210f, ACO_DebugPanel.ACT_BONUS, 0.1f);
+
+        // 날씨·지형(< > = 고르기, 지형은 GENERATE로 만든다)
+        float yw = y0 - 290f;
+        MakeUiLabel(canvas, "WorldHeader", new Vector2(0f, yw), new Vector2(1700f, 60f), 40f, font, "WORLD  (WEATHER APPLIES NOW, TERRAIN ON GENERATE)");
+        panel.WeatherText = DebugValueRow(canvas, panel, font, "Weather", yw - 70f, ACO_DebugPanel.ACT_WEATHER, 1f, "<", ">");
+        panel.TerrainText = DebugValueRow(canvas, panel, font, "Terrain", yw - 140f, ACO_DebugPanel.ACT_TERRAIN_PICK, 1f, "<", ">");
+        DebugButton(canvas, panel, font, "GENERATE TERRAIN", new Vector2(0f, yw - 225f), new Vector2(640f, 72f), ACO_DebugPanel.ACT_TERRAIN_GENERATE, 0, 0f);
+
+        // 내 크레딧
+        float y1 = yw - 320f;
+        MakeUiLabel(canvas, "CreditsHeader", new Vector2(0f, y1), new Vector2(1700f, 60f), 40f, font, "MY CREDITS (LOCAL, SAVED)");
+        TextMeshProUGUI credits = MakeUiText(canvas, "CreditsText", new Vector2(-180f, y1 - 70f), new Vector2(1250f, 64f), 36f, font, "MY CREDITS");
+        credits.alignment = TextAlignmentOptions.Left;
+        panel.CreditsText = credits;
+        float[] amounts = { -100000f, -10000f, 10000f, 100000f };
+        string[] labels = { "-100K", "-10K", "+10K", "+100K" };
+        for (int i = 0; i < amounts.Length; i++)
+        {
+            DebugButton(canvas, panel, font, labels[i], new Vector2(-480f + i * 320f, y1 - 150f), new Vector2(280f, 70f), ACO_DebugPanel.ACT_CREDITS, 0, amounts[i]);
+        }
+
+        panel.MessageText = MakeUiText(canvas, "Message", new Vector2(0f, y1 - 240f), new Vector2(1700f, 60f), 34f, font, "CHANGES APPLY TO EVERYONE (WEIGHTS / CHANCES) OR ONLY YOU (CREDITS)");
+        panel.ModuleRows = rows;
+        panel.ModuleTexts = texts;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_DebugPanel.prefab");
+        Object.DestroyImmediate(root);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[ACO] 디버그 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 씬에 두고 Bake하면 관리자·생성기·진행도에 연결됩니다. 공개 월드에선 AllowedPlayers에 이름을 넣거나 끄세요.");
+        Selection.activeObject = prefab;
+    }
+
+    // ───────────── 데칼 스튜디오 ─────────────
+
+    public const string DecalMaterialDir = "Assets/ACO_Addon/Generated/Decals";
+    /// 데칼 프로젝터 틀(m) = orthographicSize × 2 — 데칼 최대 크기. 깊이(m).
+    public const float DecalFrame = 6f;
+    public const float DecalDepth = 0.6f;
+
+    /// 데칼 프로젝터가 비추지 않는 레이어: 물(4)·UI(5)·PlayerLocal(10)·UiMenu(12)·MirrorReflection(18)·InternalUI(19)·FX(ACO_SceneBaker.FxLayer).
+    public static int DecalIgnoreLayers()
+    {
+        return (1 << 4) | (1 << 5) | (1 << 10) | (1 << 12) | (1 << 18) | (1 << 19) | (1 << ACO_SceneBaker.FxLayer);
+    }
+
+    /// 데칼 프로젝터 하나(직교 정사각, 머티리얼은 프로젝터마다 따로 — 경로가 같으면 다시 쓴다).
+    public static Transform CreateDecalProjector(Transform parent, string name, string materialName, out Material mat)
+    {
+        EnsureFolder("Assets/ACO_Addon/Generated", "Decals");
+        string path = $"{DecalMaterialDir}/{materialName}.mat";
+        mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat == null)
+        {
+            Shader sh = Shader.Find("ACO/Decal");
+            if (sh == null) { Debug.LogError("[ACO] 셰이더 ACO/Decal을 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); }
+            else
+            {
+                mat = new Material(sh) { name = materialName };
+                mat.SetFloat("_FrameSize", DecalFrame);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+        }
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        Projector p = go.AddComponent<Projector>();
+        p.orthographic = true;
+        p.orthographicSize = DecalFrame * 0.5f;
+        p.aspectRatio = 1f;
+        p.nearClipPlane = 0.01f;
+        p.farClipPlane = DecalDepth;
+        p.material = mat;
+        p.ignoreLayers = DecalIgnoreLayers();
+        return go.transform;
+    }
+
+    /// 데칼 스튜디오(격납고): 패널(URL 입력 · LOAD, 데칼 1/2, SIZE ±, ROTATE ±, FLIP, MIRROR, CLEAR, HIDE OTHERS, 상태) + 데칼 건(VRC Pickup) + 미리보기 프로젝터 2개.
+    /// 씬에 두고 SampleRoot(격납고 샘플 기체 기준점)와 DecalKey를 넣은 뒤 Bake — 프로젝터를 샘플 아래로 옮기고 샘플에 콜라이더를 붙인다.
+    public static void CreateDecalStudioPrefab()
+    {
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        if (font == null) { Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath}"); return; }
+        Font legacy = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (legacy == null) { legacy = Resources.GetBuiltinResource<Font>("Arial.ttf"); }
+
+        GameObject root = new GameObject("ACO_DecalStudio");
+        ACO_DecalStudio studio = root.AddUdonSharpComponent<ACO_DecalStudio>();
+        RectTransform canvas = MakeUiPanel(root.transform, 1600f, 980f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 430f), new Vector2(1500f, 80f), 56f, font, "DECAL STUDIO");
+        MakeUiLabel(canvas, "Hint", new Vector2(0f, 370f), new Vector2(1500f, 50f), 28f, font, "IMAGE URL (PNG/JPG, MAX 2048) - PASTE EVERY VISIT  /  GRAB THE DECAL GUN, AIM AT THE SAMPLE AIRCRAFT, PULL TRIGGER");
+
+        // URL 입력 칸(VRCUrlInputField — VRChat 키보드)
+        GameObject field = new GameObject("UrlInput", typeof(RectTransform));
+        RectTransform fr = field.GetComponent<RectTransform>();
+        fr.SetParent(canvas, false);
+        fr.anchoredPosition = new Vector2(-170f, 280f);
+        fr.sizeDelta = new Vector2(1160f, 100f);
+        Image fbg = field.AddComponent<Image>();
+        fbg.color = new Color(0.05f, 0.14f, 0.08f, 1f);
+        var input = field.AddComponent<VRC.SDK3.Components.VRCUrlInputField>();
+        input.lineType = VRC.SDK3.Components.VRCUrlInputField.LineType.SingleLine;
+        Text txt = NewLegacyText(fr, "Text", legacy, "", new Color(0.35f, 1f, 0.45f, 1f));
+        txt.fontSize = 36;
+        Text ph = NewLegacyText(fr, "Placeholder", legacy, "https://i.imgur.com/....png", new Color(0.35f, 0.55f, 0.4f, 1f));
+        ph.fontSize = 36;
+        ph.fontStyle = FontStyle.Italic;
+        input.textComponent = txt;
+        input.placeholder = ph;
+        input.targetGraphic = fbg;
+        var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(studio);
+        if (udon != null) { UnityEditor.Events.UnityEventTools.AddStringPersistentListener(input.onEndEdit, udon.SendCustomEvent, "OnUrlEntered"); }
+        studio.UrlInput = input;
+        DecalButton(canvas, studio, font, "LOAD", new Vector2(600f, 280f), new Vector2(260f, 100f), ACO_DecalStudio.ACT_LOAD, 1, 46f);
+
+        // 편집
+        DecalButton(canvas, studio, font, "DECAL 1 / 2", new Vector2(-560f, 140f), new Vector2(380f, 100f), ACO_DecalStudio.ACT_SELECT, 1, 40f);
+        studio.SelectText = MakeUiText(canvas, "SelectText", new Vector2(150f, 140f), new Vector2(980f, 80f), 38f, font, "EDITING: DECAL 1");
+        studio.SelectText.alignment = TextAlignmentOptions.Left;
+        DecalButton(canvas, studio, font, "SIZE -", new Vector2(-620f, 10f), new Vector2(240f, 100f), ACO_DecalStudio.ACT_SIZE, -1, 40f);
+        DecalButton(canvas, studio, font, "SIZE +", new Vector2(-360f, 10f), new Vector2(240f, 100f), ACO_DecalStudio.ACT_SIZE, 1, 40f);
+        DecalButton(canvas, studio, font, "ROT <", new Vector2(-80f, 10f), new Vector2(240f, 100f), ACO_DecalStudio.ACT_ROTATE, -1, 40f);
+        DecalButton(canvas, studio, font, "ROT >", new Vector2(180f, 10f), new Vector2(240f, 100f), ACO_DecalStudio.ACT_ROTATE, 1, 40f);
+        DecalButton(canvas, studio, font, "FLIP", new Vector2(460f, 10f), new Vector2(240f, 100f), ACO_DecalStudio.ACT_FLIP, 1, 40f);
+        studio.SizeText = MakeUiText(canvas, "SizeText", new Vector2(0f, -90f), new Vector2(1500f, 60f), 34f, font, "SIZE -");
+        DecalButton(canvas, studio, font, "MIRROR 1 > 2", new Vector2(-450f, -190f), new Vector2(460f, 100f), ACO_DecalStudio.ACT_MIRROR, 1, 40f);
+        DecalButton(canvas, studio, font, "CLEAR", new Vector2(80f, -190f), new Vector2(300f, 100f), ACO_DecalStudio.ACT_CLEAR, 1, 40f);
+        DecalButton(canvas, studio, font, "HIDE OTHERS", new Vector2(520f, -190f), new Vector2(420f, 100f), ACO_DecalStudio.ACT_HIDE_OTHERS, 1, 40f);
+        studio.HideText = MakeUiText(canvas, "HideText", new Vector2(0f, -300f), new Vector2(1500f, 60f), 32f, font, "OTHERS' DECALS: SHOWN");
+        studio.StatusText = MakeUiText(canvas, "StatusText", new Vector2(0f, -400f), new Vector2(1500f, 80f), 32f, font, "");
+
+        // 미리보기 프로젝터(Bake가 샘플 기체 아래로 옮긴다)
+        var projectors = new Transform[2];
+        var mats = new Material[2];
+        for (int i = 0; i < 2; i++)
+        {
+            Material m;
+            projectors[i] = CreateDecalProjector(root.transform, "PreviewDecal_" + (i + 1), "ACO_Decal_Preview_" + i, out m);
+            mats[i] = m;
+        }
+        studio.PreviewProjectors = projectors;
+        studio.PreviewMaterials = mats;
+
+        // 데칼 건(VRC Pickup — 로컬 도구)
+        GameObject gun = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        gun.name = "DecalGun";
+        gun.transform.SetParent(root.transform, false);
+        gun.transform.localPosition = new Vector3(1.0f, -0.35f, 0.25f);
+        gun.transform.localScale = new Vector3(0.05f, 0.09f, 0.24f);
+        MeshRenderer gr = gun.GetComponent<MeshRenderer>();
+        gr.sharedMaterial = LoadOrSaveMaterial(Shader.Find("Unlit/Color"), new Color(0.12f, 0.35f, 0.18f, 1f), "ACO_DecalGun");
+        Rigidbody rb = gun.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        var pickup = gun.AddComponent<VRC.SDK3.Components.VRCPickup>();
+        pickup.AutoHold = VRC.SDKBase.VRC_Pickup.AutoHoldMode.Yes;
+        pickup.InteractionText = "DECAL GUN";
+        pickup.UseText = "STAMP DECAL";
+        Transform muzzle = NewChild(gun.transform, "Muzzle", new Vector3(0f, 0f, 0.5f));
+        ACO_DecalGun g = gun.AddUdonSharpComponent<ACO_DecalGun>();
+        g.Studio = studio;
+        g.Muzzle = muzzle;
+        GameObject beamGo = new GameObject("Beam");
+        beamGo.transform.SetParent(gun.transform, false);
+        LineRenderer beam = beamGo.AddComponent<LineRenderer>();
+        beam.positionCount = 2;
+        beam.useWorldSpace = true;
+        beam.startWidth = 0.004f;
+        beam.endWidth = 0.004f;
+        beam.sharedMaterial = LoadOrSaveMaterial(Shader.Find("Unlit/Color"), new Color(0.35f, 1f, 0.45f, 1f), "ACO_DecalBeam");
+        beam.shadowCastingMode = ShadowCastingMode.Off;
+        beam.receiveShadows = false;
+        beam.enabled = false;
+        g.Beam = beam;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_DecalStudio.prefab");
+        Object.DestroyImmediate(root);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[ACO] 데칼 스튜디오 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 격납고에 두고 SampleRoot(샘플 기체 기준점)·DecalKey를 넣은 뒤 Bake하세요.");
+        Selection.activeObject = prefab;
+    }
+
+    private static void DecalButton(RectTransform parent, ACO_DecalStudio studio, TMP_FontAsset font, string label, Vector2 pos, Vector2 size, int action, int step, float fontSize)
+    {
+        Image img = MakeUiButton(parent, $"Btn_{action}_{step}_{label}", pos, size, font, label, fontSize);
+        ACO_DecalButton b = img.gameObject.AddUdonSharpComponent<ACO_DecalButton>();
+        b.Studio = studio;
+        b.Action = action;
+        b.Step = step;
+        WireClick(img.GetComponent<Button>(), b);
+    }
+
+    // ───────────── TAC 네임 패널 ─────────────
+
+    /// TAC 네임(콜사인) 패널: 월드 UI 판 1.4 x 0.6m — 제목, 입력 칸(UI InputField — VRChat 키보드, 입력 끝나면 저장), SET · CLEAR, 지금 콜사인·안내 글자.
+    public static void CreateTacNamePanelPrefab()
+    {
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        if (font == null) { Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath}"); return; }
+        Font legacy = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (legacy == null) { legacy = Resources.GetBuiltinResource<Font>("Arial.ttf"); }
+
+        GameObject root = new GameObject("ACO_TacNamePanel");
+        ACO_TacName tac = root.AddUdonSharpComponent<ACO_TacName>();
+        RectTransform canvas = MakeUiPanel(root.transform, 1400f, 600f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 235f), new Vector2(1300f, 80f), 56f, font, "TAC NAME (CALLSIGN)");
+        MakeUiLabel(canvas, "Hint", new Vector2(0f, 170f), new Vector2(1300f, 50f), 30f, font, "SHOWN ABOVE YOUR AIRCRAFT TO OTHER PILOTS  -  A-Z 0-9 SPACE -  (MAX 12)");
+
+        // 입력 칸: 배경 + InputField + 글자 + 자리표시
+        GameObject field = new GameObject("Input", typeof(RectTransform));
+        RectTransform fr = field.GetComponent<RectTransform>();
+        fr.SetParent(canvas, false);
+        fr.anchoredPosition = new Vector2(-150f, 60f);
+        fr.sizeDelta = new Vector2(900f, 110f);
+        Image fbg = field.AddComponent<Image>();
+        fbg.color = new Color(0.05f, 0.14f, 0.08f, 1f);
+        InputField input = field.AddComponent<InputField>();
+        input.characterLimit = 12;
+        input.lineType = InputField.LineType.SingleLine;
+        Text txt = NewLegacyText(fr, "Text", legacy, "", new Color(0.35f, 1f, 0.45f, 1f));
+        Text ph = NewLegacyText(fr, "Placeholder", legacy, "ENTER CALLSIGN", new Color(0.35f, 0.55f, 0.4f, 1f));
+        ph.fontStyle = FontStyle.Italic;
+        input.textComponent = txt;
+        input.placeholder = ph;
+        input.targetGraphic = fbg;
+        var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(tac);
+        if (udon != null) { UnityEditor.Events.UnityEventTools.AddStringPersistentListener(input.onEndEdit, udon.SendCustomEvent, "Submit"); }
+
+        Image set = MakeUiButton(canvas, "Set", new Vector2(460f, 60f), new Vector2(240f, 110f), font, "SET", 50f);
+        WireEvent(set.GetComponent<Button>(), tac, "Submit");
+        Image clear = MakeUiButton(canvas, "Clear", new Vector2(460f, -75f), new Vector2(240f, 90f), font, "CLEAR", 40f);
+        WireEvent(clear.GetComponent<Button>(), tac, "ClearName");
+
+        tac.CurrentText = MakeUiText(canvas, "Current", new Vector2(-150f, -75f), new Vector2(900f, 70f), 34f, font, "YOUR CALLSIGN: -");
+        tac.CurrentText.alignment = TextAlignmentOptions.Left;
+        tac.MessageText = MakeUiText(canvas, "Message", new Vector2(0f, -200f), new Vector2(1300f, 60f), 32f, font, "");
+        tac.Input = input;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_TacNamePanel.prefab");
+        Object.DestroyImmediate(root);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[ACO] TAC 네임 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 격납고 등에 두고 Bake하면 표적 마커(아군기 콜사인)에 연결됩니다.");
+        Selection.activeObject = prefab;
+    }
+
+    private static Text NewLegacyText(RectTransform parent, string name, Font font, string text, Color color)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform));
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(24f, 8f);
+        rt.offsetMax = new Vector2(-24f, -8f);
+        Text t = go.AddComponent<Text>();
+        t.font = font;
+        t.fontSize = 60;
+        t.alignment = TextAnchor.MiddleLeft;
+        t.color = color;
+        t.text = text;
+        t.supportRichText = false;
+        return t;
+    }
+
+    /// 버튼을 누르면 그 U# 스크립트의 eventName이 불리게 한다(UdonBehaviour.SendCustomEvent).
+    private static void WireEvent(Button button, UdonSharp.UdonSharpBehaviour target, string eventName)
+    {
+        var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(target);
+        if (udon == null) { Debug.LogError($"[ACO] '{target.name}'의 UdonBehaviour를 찾지 못해 버튼을 연결하지 못했습니다.", target); return; }
+        UnityEditor.Events.UnityEventTools.AddStringPersistentListener(button.onClick, udon.SendCustomEvent, eventName);
+    }
+
+    // ───────────── 비행 HUD ─────────────
+
+    private static readonly Color FlightGreen = new Color(0.35f, 1f, 0.45f, 0.9f);
+    private const float FlightTextScale = 1.5f;
+
+    /// 비행 HUD 프리팹(ACO_FlightHud + ACO_Units): Root(머리 + 기체 자세로 움직인다) → Canvas(1단위 = 1°). 모두 UI 레이어, 선은 ACO/MarkerOverlay(맨 위), 글자는 TMP 오버레이.
+    /// 씬에 하나 두면 Bake가 플레이어 기체(무장·랜딩기어 등)를 연결하고 SAV HUD를 숨긴다.
+    public static void CreateFlightHudPrefab()
+    {
+        EnsureFolder("Assets/ACO_Addon", "Generated");
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
+        // 글꼴: Electronic Highway Sign(TMP 예제 — 없으면 기본 글꼴). 머티리얼은 그 글꼴 아틀라스로 오버레이 셰이더(맨 위에 그린다 — 글꼴의 기본 머티리얼을
+        // 그대로 쓰면 깊이 검사를 해서 조종석 구조물에 가려 안 보인다)
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FlightFontPath);
+        if (font == null)
+        {
+            Debug.LogWarning($"[ACO] 비행 HUD: 글꼴 {FlightFontPath}이 없어 기본 글꼴을 씁니다(TextMesh Pro 예제를 가져오면 생긴다).");
+            font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        }
+        Shader lineShader = Shader.Find("ACO/MarkerOverlay");
+        Shader textShader = Shader.Find("TextMeshPro/Distance Field Overlay");
+        if (font == null || lineShader == null || textShader == null)
+        {
+            Debug.LogError($"[ACO] 비행 HUD: TMP 폰트({FontPath}) 또는 셰이더(ACO/MarkerOverlay, TextMeshPro/Distance Field Overlay)를 찾지 못했습니다.");
+            return;
+        }
+        // 예제 글꼴은 동적 아틀라스(글자 20개만 들어 있고 빌드 때 비운다) — 출력 가능한 ASCII를 미리 넣고 정적으로 굳힌다(VRChat에서 글자가 빠지지 않게)
+        if (font.atlasPopulationMode == AtlasPopulationMode.Dynamic)
+        {
+            var ascii = new System.Text.StringBuilder();
+            for (int ch = 32; ch < 127; ch++) { ascii.Append((char)ch); }
+            font.TryAddCharacters(ascii.ToString(), out string missing);
+            font.atlasPopulationMode = AtlasPopulationMode.Static;
+            EditorUtility.SetDirty(font);
+            if (font.atlasTextures != null) { foreach (Texture2D t in font.atlasTextures) { if (t != null) { EditorUtility.SetDirty(t); } } }
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[ACO] 비행 HUD 글꼴 '{font.name}': ASCII 글자를 아틀라스에 넣고 정적으로 바꿨습니다" + (string.IsNullOrEmpty(missing) ? "." : $"(글꼴에 없는 글자: {missing})."), font);
+        }
+        Material lineMat = LoadOrSaveMaterial(lineShader, FlightGreen, "ACO_FlightHudLine");
+        string textMatPath = $"{GeneratedDir}/ACO_FlightHudTextOverlay.mat";
+        Material textMat = AssetDatabase.LoadAssetAtPath<Material>(textMatPath);
+        if (textMat != null && textMat.mainTexture != font.material.mainTexture)
+        {
+            // 글꼴이 바뀌었다 — 그 글꼴 머티리얼 값(아틀라스 포함)을 다시 복사한다
+            textMat.CopyPropertiesFromMaterial(font.material);
+            textMat.shader = textShader;
+            EditorUtility.SetDirty(textMat);
+        }
+        if (textMat == null) { textMat = SaveAsset(new Material(font.material) { shader = textShader, name = "ACO_FlightHudTextOverlay" }, textMatPath); }
+
+        // 메시(1단위 = 1°)
+        float th = 0.06f;
+        Mesh tickDown = SaveMesh(LineMesh("ACO_FHud_TickDown", th, new Vector2(0f, 0f), new Vector2(0f, -0.9f)), "ACO_FHud_TickDown");
+        Mesh tickRight = SaveMesh(LineMesh("ACO_FHud_TickRight", th, new Vector2(0f, 0f), new Vector2(0.8f, 0f)), "ACO_FHud_TickRight");
+        Mesh tickLeft = SaveMesh(LineMesh("ACO_FHud_TickLeft", th, new Vector2(0f, 0f), new Vector2(-0.8f, 0f)), "ACO_FHud_TickLeft");
+        Mesh rungUp = SaveMesh(LineMesh("ACO_FHud_RungUp", th,
+            new Vector2(-6.5f, 0f), new Vector2(-1.8f, 0f), new Vector2(-6.5f, 0f), new Vector2(-6.5f, -0.6f),
+            new Vector2(1.8f, 0f), new Vector2(6.5f, 0f), new Vector2(6.5f, 0f), new Vector2(6.5f, -0.6f)), "ACO_FHud_RungUp");
+        Mesh rungDown = SaveMesh(LineMesh("ACO_FHud_RungDown", th,
+            new Vector2(-6.5f, 0f), new Vector2(-5.4f, 0f), new Vector2(-4.7f, 0f), new Vector2(-3.6f, 0f), new Vector2(-2.9f, 0f), new Vector2(-1.8f, 0f),
+            new Vector2(-6.5f, 0f), new Vector2(-6.5f, 0.6f),
+            new Vector2(1.8f, 0f), new Vector2(2.9f, 0f), new Vector2(3.6f, 0f), new Vector2(4.7f, 0f), new Vector2(5.4f, 0f), new Vector2(6.5f, 0f),
+            new Vector2(6.5f, 0f), new Vector2(6.5f, 0.6f)), "ACO_FHud_RungDown");
+        Mesh horizon = SaveMesh(LineMesh("ACO_FHud_Horizon", th, new Vector2(-10f, 0f), new Vector2(-1.5f, 0f), new Vector2(1.5f, 0f), new Vector2(10f, 0f)), "ACO_FHud_Horizon");
+        // 속도 벡터: SAV HUD와 같은 꼴(원 + 양 날개 + 위 꼬리)
+        Mesh fpm = SaveMesh(Combine("ACO_FHud_Fpm", BuildThinRingMesh(24, 0.7f, 0.16f, "r"),
+            LineMesh("w", th * 1.2f, new Vector2(0.7f, 0f), new Vector2(1.7f, 0f), new Vector2(-1.7f, 0f), new Vector2(-0.7f, 0f), new Vector2(0f, 0.7f), new Vector2(0f, 1.3f))), "ACO_FHud_Fpm");
+        Mesh gunCross = SaveMesh(BuildCrossMesh(0.7f, 0.2f, 0.05f, "ACO_FHud_GunCross"), "ACO_FHud_GunCross");
+        Mesh rocketCross = SaveMesh(BuildCrossMesh(1.6f, 0.45f, 0.06f, "ACO_FHud_RocketCross"), "ACO_FHud_RocketCross");
+        Mesh wSight = SaveMesh(LineMesh("ACO_FHud_W", th * 1.2f,
+            new Vector2(-2.2f, 0f), new Vector2(-1.2f, 0f), new Vector2(-1.2f, 0f), new Vector2(-0.6f, -0.7f), new Vector2(-0.6f, -0.7f), new Vector2(0f, 0f),
+            new Vector2(0f, 0f), new Vector2(0.6f, -0.7f), new Vector2(0.6f, -0.7f), new Vector2(1.2f, 0f), new Vector2(1.2f, 0f), new Vector2(2.2f, 0f)), "ACO_FHud_W");
+        Mesh pipper = SaveMesh(Combine("ACO_FHud_Pipper", BuildThinRingMesh(36, 1.3f, 0.1f, "r"), BuildThinRingMesh(12, 0.13f, 1f, "d")), "ACO_FHud_Pipper");
+        Mesh valueBox = SaveMesh(BoxMesh("ACO_FHud_ValueBox", 5.6f, 2.3f, th), "ACO_FHud_ValueBox");
+        Mesh headingBox = SaveMesh(BoxMesh("ACO_FHud_HeadingBox", 4.4f, 2f, th), "ACO_FHud_HeadingBox");
+        Mesh throttleFrame = SaveMesh(OffsetBox("ACO_FHud_ThrottleFrame", new Vector2(-0.35f, 0f), new Vector2(0.35f, 8f), th), "ACO_FHud_ThrottleFrame");
+        Mesh throttleFill = SaveMesh(FillRect("ACO_FHud_ThrottleFill", new Vector2(-0.25f, 0f), new Vector2(0.25f, 1f)), "ACO_FHud_ThrottleFill");
+        Mesh abLine = SaveMesh(LineMesh("ACO_FHud_AbLine", th, new Vector2(-0.6f, 0f), new Vector2(0.6f, 0f)), "ACO_FHud_AbLine");
+        Mesh hpFrame = SaveMesh(OffsetBox("ACO_FHud_HpFrame", new Vector2(0f, 0f), new Vector2(6f, 0.5f), th), "ACO_FHud_HpFrame");
+        Mesh hpFill = SaveMesh(FillRect("ACO_FHud_HpFill", new Vector2(0.1f, 0.1f), new Vector2(5.9f, 0.4f)), "ACO_FHud_HpFill");
+        // 장전 막대: 세로로 얇은 직사각형(아래 끝 기준 — 채움은 아래 → 위, 스크립트가 y 크기를 바꾼다)
+        Mesh slotFrame = SaveMesh(OffsetBox("ACO_FHud_SlotFrame", new Vector2(-0.17f, 0f), new Vector2(0.17f, 2.6f), th * 0.8f), "ACO_FHud_SlotFrame");
+        Mesh slotFill = SaveMesh(FillRect("ACO_FHud_SlotFill", new Vector2(-0.1f, 0f), new Vector2(0.1f, 2.48f)), "ACO_FHud_SlotFill");
+
+        GameObject prefabRoot = new GameObject("ACO_FlightHud");
+        ACO_FlightHud hud = prefabRoot.AddUdonSharpComponent<ACO_FlightHud>();
+        ACO_Units units = prefabRoot.AddUdonSharpComponent<ACO_Units>();
+        hud.Units = units;
+        var root = new GameObject("Root").transform;
+        root.SetParent(prefabRoot.transform, false);
+        var canvas = new GameObject("Canvas").transform;
+        canvas.SetParent(root, false);
+        canvas.localPosition = new Vector3(0f, 0f, 20f);
+        canvas.localScale = Vector3.one * (20f * 0.017455065f);
+        var lines = new List<MeshRenderer>();
+        var texts = new List<TextMeshPro>();
+        System.Func<Transform, string, Vector3, Mesh, MeshRenderer> line = (p, n, pos, mesh) =>
+        {
+            MeshRenderer r = MakeQuad(p, n, pos, Vector3.one, mesh, lineMat);
+            lines.Add(r);
+            return r;
+        };
+        // 글자 크기는 아래 숫자 × FlightTextScale(1.5 — 처음 크기는 작아서 읽기 힘들었다). 배치는 키운 크기에 맞췄다
+        System.Func<Transform, string, Vector3, float, TextAlignmentOptions, Vector2, string, TextMeshPro> text = (p, n, pos, size, align, pivot, s) =>
+        {
+            TextMeshPro t = MakeText(p, n, pos, size * FlightTextScale, FlightGreen, align, new Vector2(14f, 2.6f), pivot, font, textMat, s);
+            texts.Add(t);
+            return t;
+        };
+
+        // 헤딩 테이프(위): 5° 눈금 13개 — 눈금이 아래로 처지고 숫자는 위
+        Transform heading = NewChild(canvas, "HeadingTape", new Vector3(0f, 12f, 0f));
+        var hTicks = new Transform[13];
+        var hLabels = new TextMeshPro[13];
+        for (int i = 0; i < 13; i++)
+        {
+            hTicks[i] = line(heading, "Tick_" + i, Vector3.zero, tickDown).transform;
+            hLabels[i] = text(hTicks[i], "Label", new Vector3(0f, 1f, 0f), 6f, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), "00");
+        }
+        hud.HeadingTicks = hTicks;
+        hud.HeadingLabels = hLabels;
+        line(canvas, "HeadingBox", new Vector3(0f, 14.9f, 0f), headingBox);
+        hud.HeadingText = text(canvas, "HeadingText", new Vector3(0f, 14.9f, 0f), 10f, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), "000");
+
+        // 속도 테이프(왼쪽): 10kt 눈금 13개 — 눈금이 가운데 쪽으로, 숫자는 바깥(왼쪽)
+        Transform speed = NewChild(canvas, "SpeedTape", new Vector3(-13f, 0f, 0f));
+        var sTicks = new Transform[13];
+        var sLabels = new TextMeshPro[13];
+        for (int i = 0; i < 13; i++)
+        {
+            sTicks[i] = line(speed, "Tick_" + i, Vector3.zero, tickRight).transform;
+            sLabels[i] = text(sTicks[i], "Label", new Vector3(-0.35f, 0f, 0f), 6f, TextAlignmentOptions.Right, new Vector2(1f, 0.5f), "0");
+        }
+        hud.SpeedTicks = sTicks;
+        hud.SpeedLabels = sLabels;
+        line(canvas, "SpeedBox", new Vector3(-16.2f, 0f, 0f), valueBox);
+        hud.SpeedText = text(canvas, "SpeedText", new Vector3(-13.8f, 0f, 0f), 10f, TextAlignmentOptions.Right, new Vector2(1f, 0.5f), "0");
+
+        // 스로틀(속도 테이프 옆): 틀 + 채움(추력) + 애프터버너 선, 아래 글자
+        Transform thr = NewChild(canvas, "Throttle", new Vector3(-20.8f, -4f, 0f));
+        line(thr, "Frame", Vector3.zero, throttleFrame);
+        hud.ThrottleFill = line(thr, "Fill", Vector3.zero, throttleFill).transform;
+        hud.ThrottleAbLine = line(thr, "AbLine", new Vector3(0f, 6.4f, 0f), abLine).transform;
+        hud.ThrottleText = text(canvas, "ThrottleText", new Vector3(-20.8f, -5.3f, 0f), 6f, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), "THR 0");
+
+        // 고도 테이프(오른쪽): 100ft 눈금 13개 — 눈금이 가운데 쪽으로, 숫자는 바깥(오른쪽)
+        Transform alt = NewChild(canvas, "AltTape", new Vector3(13f, 0f, 0f));
+        var aTicks = new Transform[13];
+        var aLabels = new TextMeshPro[13];
+        for (int i = 0; i < 13; i++)
+        {
+            aTicks[i] = line(alt, "Tick_" + i, Vector3.zero, tickLeft).transform;
+            aLabels[i] = text(aTicks[i], "Label", new Vector3(0.35f, 0f, 0f), 6f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "0");
+        }
+        hud.AltTicks = aTicks;
+        hud.AltLabels = aLabels;
+        line(canvas, "AltBox", new Vector3(16.2f, 0f, 0f), valueBox);
+        hud.AltText = text(canvas, "AltText", new Vector3(13.8f, 0f, 0f), 10f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "0");
+        hud.RadarAltText = text(canvas, "RadarAltText", new Vector3(13.8f, -2.5f, 0f), 8f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "R 0");
+
+        // 피치 래더: −90° ~ +90°(10°마다 — ±90 = 천정·천저, 루프로 넘어갈 때 빈 구간을 메운다), 0° = 수평선. 숫자는 양쪽 끝에
+        var rungs = new List<Transform>();
+        var angles = new List<float>();
+        Transform ladder = NewChild(canvas, "Ladder", Vector3.zero);
+        for (int a = -90; a <= 90; a += 10)
+        {
+            Mesh m = a == 0 ? horizon : (a > 0 ? rungUp : rungDown);
+            Transform r = line(ladder, "Rung_" + a, Vector3.zero, m).transform;
+            if (a != 0)
+            {
+                string label = Mathf.Abs(a).ToString();
+                text(r, "LabelL", new Vector3(-7.2f, 0f, 0f), 6f, TextAlignmentOptions.Right, new Vector2(1f, 0.5f), label);
+                text(r, "LabelR", new Vector3(7.2f, 0f, 0f), 6f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), label);
+            }
+            rungs.Add(r);
+            angles.Add(a);
+        }
+        hud.Rungs = rungs.ToArray();
+        hud.RungAngles = angles.ToArray();
+
+        // 속도 벡터·조준 표시(가운데 = 기수 방향)·기총 피퍼
+        hud.VelocityMarker = line(canvas, "VelocityMarker", Vector3.zero, fpm).transform;
+        hud.GunCross = line(canvas, "GunCross", Vector3.zero, gunCross).gameObject;
+        hud.WSight = line(canvas, "WSight", Vector3.zero, wSight).gameObject;
+        hud.RocketCross = line(canvas, "RocketCross", Vector3.zero, rocketCross).gameObject;
+        hud.Pipper = line(canvas, "Pipper", Vector3.zero, pipper).transform;
+        hud.PipperRangeText = text(hud.Pipper, "Range", new Vector3(1.7f, -1.9f, 0f), 6f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "");
+        hud.WSight.SetActive(false);
+        hud.RocketCross.SetActive(false);
+        hud.Pipper.gameObject.SetActive(false);
+
+        // 왼쪽 아래: G, 받음각(랜딩기어를 내렸을 때), 상태(GEAR·FLAP·HOOK·AIRBRAKE)
+        hud.GText = text(canvas, "GText", new Vector3(-21.5f, -6.8f, 0f), 8f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "G 1.0");
+        hud.AoaText = text(canvas, "AoaText", new Vector3(-21.5f, -8.5f, 0f), 7f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "AOA 0.0");
+        hud.StatusText = text(canvas, "StatusText", new Vector3(-21.5f, -9.6f, 0f), 7f, TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), "GEAR UP");
+        hud.StatusText.rectTransform.sizeDelta = new Vector2(14f, 9f);
+        // 오른쪽 아래: 잔탄 — 세 칸(고른 무장 쉐브론 | 이름 | 수 — 오른쪽 맞춤)으로 줄을 맞춘다, HP
+        hud.AmmoMarkText = text(canvas, "AmmoMark", new Vector3(13f, -6.2f, 0f), 10f, TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), ">");
+        hud.AmmoMarkText.rectTransform.sizeDelta = new Vector2(2f, 10f);
+        hud.AmmoText = text(canvas, "AmmoText", new Vector3(14.8f, -6.2f, 0f), 10f, TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), "GUN");
+        hud.AmmoText.rectTransform.sizeDelta = new Vector2(8f, 10f);
+        hud.AmmoCountText = text(canvas, "AmmoCount", new Vector3(28f, -6.2f, 0f), 10f, TextAlignmentOptions.TopRight, new Vector2(1f, 1f), "0");
+        hud.AmmoCountText.rectTransform.sizeDelta = new Vector2(6f, 10f);
+        hud.HpText = text(canvas, "HpText", new Vector3(13f, -14.6f, 0f), 9f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "HP 100%");
+        Transform hp = NewChild(canvas, "HpBar", new Vector3(13f, -16.4f, 0f));
+        line(hp, "Frame", Vector3.zero, hpFrame);
+        hud.HpFill = line(hp, "Fill", Vector3.zero, hpFill).transform;
+
+        // 오른쪽 아래, 잔탄 왼쪽: 고른 ACO 무장의 장전 슬롯 막대(최대 8개 — 세로로 얇은 막대를 오른쪽 끝(12.4)부터 왼쪽으로 늘어놓는다, 스크립트가 슬롯 수에 맞춰 놓는다)
+        Transform slots = NewChild(canvas, "SlotBars", new Vector3(12.4f, -9.1f, 0f));
+        var bars = new Transform[8];
+        var fills = new Transform[8];
+        for (int i = 0; i < 8; i++)
+        {
+            Transform b = NewChild(slots, "Slot_" + i, new Vector3(-i * 0.55f, 0f, 0f));
+            line(b, "Frame", Vector3.zero, slotFrame);
+            fills[i] = line(b, "Fill", new Vector3(0f, 0.06f, 0f), slotFill).transform;
+            bars[i] = b;
+        }
+        hud.SlotGroup = slots.gameObject;
+        hud.SlotBars = bars;
+        hud.SlotFills = fills;
+
+        hud.Root = root;
+        hud.Canvas = canvas;
+        hud.LineRenderers = lines.ToArray();
+        hud.AllTexts = texts.ToArray();
+        foreach (Transform t in prefabRoot.GetComponentsInChildren<Transform>(true)) { t.gameObject.layer = 5; }
+        root.gameObject.SetActive(false);
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(prefabRoot, $"{PrefabDir}/ACO_FlightHud.prefab");
+        Object.DestroyImmediate(prefabRoot);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[ACO] 비행 HUD 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 씬에 하나 두고 Bake하면 플레이어 기체가 연결되고 SAV HUD가 숨겨집니다.");
+        Selection.activeObject = prefab;
+    }
+
+    private static Transform NewChild(Transform parent, string name, Vector3 localPos)
+    {
+        var t = new GameObject(name).transform;
+        t.SetParent(parent, false);
+        t.localPosition = localPos;
+        return t;
+    }
+
+    /// 선분들(두 점씩)을 두께 thick의 사각형으로. XY 평면.
+    private static Mesh LineMesh(string name, float thick, params Vector2[] pts)
+    {
+        var v = new List<Vector3>();
+        var t = new List<int>();
+        for (int i = 0; i + 1 < pts.Length; i += 2)
+        {
+            Vector2 a = pts[i], b = pts[i + 1];
+            Vector2 d = (b - a).normalized;
+            Vector2 n = new Vector2(-d.y, d.x) * (thick * 0.5f);
+            Vector2 e = d * (thick * 0.5f);   // 끝을 조금 늘려 꺾인 곳이 이어지게
+            int s = v.Count;
+            v.Add(a - e - n); v.Add(b + e - n); v.Add(b + e + n); v.Add(a - e + n);
+            t.Add(s); t.Add(s + 2); t.Add(s + 1);
+            t.Add(s); t.Add(s + 3); t.Add(s + 2);
+        }
+        var mesh = new Mesh { name = name };
+        mesh.SetVertices(v);
+        mesh.SetTriangles(t, 0);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    /// 가운데 기준 사각 테두리.
+    private static Mesh BoxMesh(string name, float w, float h, float thick)
+    {
+        return OffsetBox(name, new Vector2(-w * 0.5f, -h * 0.5f), new Vector2(w * 0.5f, h * 0.5f), thick);
+    }
+
+    private static Mesh OffsetBox(string name, Vector2 min, Vector2 max, float thick)
+    {
+        return LineMesh(name, thick, new Vector2(min.x, min.y), new Vector2(max.x, min.y), new Vector2(max.x, min.y), new Vector2(max.x, max.y),
+            new Vector2(max.x, max.y), new Vector2(min.x, max.y), new Vector2(min.x, max.y), new Vector2(min.x, min.y));
+    }
+
+    /// 채운 사각형(피벗 = 원점 — 스크립트가 한 축 스케일로 채운다).
+    private static Mesh FillRect(string name, Vector2 min, Vector2 max)
+    {
+        var mesh = new Mesh { name = name };
+        mesh.vertices = new[] { new Vector3(min.x, min.y, 0f), new Vector3(max.x, min.y, 0f), new Vector3(max.x, max.y, 0f), new Vector3(min.x, max.y, 0f) };
+        mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static Mesh Combine(string name, params Mesh[] parts)
+    {
+        var v = new List<Vector3>();
+        var t = new List<int>();
+        foreach (Mesh m in parts)
+        {
+            int s = v.Count;
+            v.AddRange(m.vertices);
+            foreach (int i in m.triangles) { t.Add(s + i); }
+        }
+        var mesh = new Mesh { name = name };
+        mesh.SetVertices(v);
+        mesh.SetTriangles(t, 0);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // ───────────── 관전 패널 ─────────────
+
+    public const string SpectatorRtPath = "Assets/ACO_Addon/Generated/ACO_SpectatorRT.renderTexture";
+    public const string SpectatorRtFhdPath = "Assets/ACO_Addon/Generated/ACO_SpectatorRT_FHD.renderTexture";
+    private const string SpectatorFullscreenMatPath = "Assets/ACO_Addon/Generated/ACO_SpectatorFullscreen.mat";
+    private const string FullscreenQuadPath = "Assets/ACO_Addon/Generated/ACO_FullscreenQuad.asset";
+    private const string SpectatorScreenMatPath = "Assets/ACO_Addon/Generated/ACO_SpectatorScreen.mat";
+    private const string SpectatorOffMatPath = "Assets/ACO_Addon/Generated/ACO_SpectatorOff.mat";
+    private const string SkyFogMatPath = "Assets/ACO_Addon/Generated/ACO_SkyFog.mat";
+    /// 관전 카메라 전용 레이어: MirrorReflection(18) — VRChat 메인 카메라는 그리지 않는다(관전 카메라 하늘 안개 돔).
+    public const int SpectatorOnlyLayer = 18;
+
+    /// 관전 카메라가 그리는 레이어: 모두에서 UI(5, HUD·마커)·PlayerLocal(10, 내 1인칭 아바타 — 대신 18의 거울용 전신을 그린다)·
+    /// UiMenu(12)·InternalUI(19)·FX(ACO_SceneBaker.FxLayer — 내 머리를 따라다니는 효과)를 뺀다.
+    public static int SpectatorCullingMask()
+    {
+        return ~((1 << 5) | (1 << 10) | (1 << 12) | (1 << 19) | (1 << ACO_SceneBaker.FxLayer));
+    }
+
+    /// 관전 패널: 큰 스크린(3.2 x 1.8m, 렌더 텍스처 HD 1280x720 / FHD 1920x1080) + 아래 조작 줄(POWER, HD/FHD, TARGET < >, SHOT < >, 상태) + 관전 카메라(꺼진 채)
+    /// + 카메라 전용 하늘 안개 돔 + 스트림 카메라용 전체 화면(VRChat 카메라가 스크린 4m 안이면 그 화면 전체가 관전 화면).
+    /// 씬에 두고 Bake하면 플레이어 기체·해수면·미사일 무장이 연결된다.
+    public static void CreateSpectatorPanelPrefab()
+    {
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
+        EnsureFolder("Assets/ACO_Addon", "Generated");
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        if (font == null)
+        {
+            Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath} — Window → TextMeshPro → Import TMP Essential Resources를 먼저 실행하세요.");
+            return;
+        }
+
+        // 렌더 텍스처·스크린 머티리얼(있으면 그대로 — 해상도를 고친 값 유지)
+        RenderTexture rt = AssetDatabase.LoadAssetAtPath<RenderTexture>(SpectatorRtPath);
+        if (rt == null)
+        {
+            rt = new RenderTexture(1280, 720, 24) { name = "ACO_SpectatorRT", antiAliasing = 2 };
+            AssetDatabase.CreateAsset(rt, SpectatorRtPath);
+        }
+        RenderTexture rtFhd = AssetDatabase.LoadAssetAtPath<RenderTexture>(SpectatorRtFhdPath);
+        if (rtFhd == null)
+        {
+            rtFhd = new RenderTexture(1920, 1080, 24) { name = "ACO_SpectatorRT_FHD", antiAliasing = 2 };
+            AssetDatabase.CreateAsset(rtFhd, SpectatorRtFhdPath);
+        }
+        // 스트림 카메라용 전체 화면: 쿼드(-0.5~0.5)를 셰이더가 화면 전체로 펼친다 — 경계를 크게 구워 어느 쪽을 봐도 잘리지 않게
+        Mesh fsQuad = AssetDatabase.LoadAssetAtPath<Mesh>(FullscreenQuadPath);
+        if (fsQuad == null)
+        {
+            fsQuad = new Mesh { name = "ACO_FullscreenQuad" };
+            fsQuad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f) };
+            fsQuad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f) };
+            fsQuad.triangles = new[] { 0, 2, 1, 2, 3, 1 };
+            fsQuad.bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
+            AssetDatabase.CreateAsset(fsQuad, FullscreenQuadPath);
+        }
+        Material fsMat = AssetDatabase.LoadAssetAtPath<Material>(SpectatorFullscreenMatPath);
+        if (fsMat == null)
+        {
+            Shader fsShader = Shader.Find("ACO/SpectatorFullscreen");
+            if (fsShader == null) { Debug.LogError("[ACO] 셰이더 ACO/SpectatorFullscreen을 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); }
+            else
+            {
+                fsMat = new Material(fsShader) { name = "ACO_SpectatorFullscreen", mainTexture = rt };
+                AssetDatabase.CreateAsset(fsMat, SpectatorFullscreenMatPath);
+            }
+        }
+        Material onMat = AssetDatabase.LoadAssetAtPath<Material>(SpectatorScreenMatPath);
+        if (onMat == null)
+        {
+            onMat = new Material(Shader.Find("Unlit/Texture")) { name = "ACO_SpectatorScreen", mainTexture = rt };
+            AssetDatabase.CreateAsset(onMat, SpectatorScreenMatPath);
+        }
+        Material offMat = AssetDatabase.LoadAssetAtPath<Material>(SpectatorOffMatPath);
+        if (offMat == null)
+        {
+            offMat = new Material(Shader.Find("Unlit/Color")) { name = "ACO_SpectatorOff", color = new Color(0.02f, 0.03f, 0.03f, 1f) };
+            AssetDatabase.CreateAsset(offMat, SpectatorOffMatPath);
+        }
+
+        GameObject root = new GameObject("ACO_SpectatorPanel");
+        ACO_SpectatorCam spec = root.AddUdonSharpComponent<ACO_SpectatorCam>();
+
+        // 스크린(쿼드는 -Z가 앞면 — 돌려서 루트 +Z 쪽에서 보이게, 패널 캔버스와 같은 방향)
+        GameObject screen = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        screen.name = "Screen";
+        Object.DestroyImmediate(screen.GetComponent<Collider>());
+        screen.transform.SetParent(root.transform, false);
+        screen.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        screen.transform.localScale = new Vector3(3.2f, 1.8f, 1f);
+        MeshRenderer sr = screen.GetComponent<MeshRenderer>();
+        sr.sharedMaterial = offMat;
+        sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        sr.receiveShadows = false;
+
+        // 스트림 카메라용 전체 화면(스크린 가운데 — 셰이더가 이 자리에서 카메라 거리를 잰다). FX 레이어 = 관전 카메라는 그리지 않는다
+        GameObject fs = new GameObject("StreamCameraFullscreen");
+        fs.transform.SetParent(root.transform, false);
+        fs.layer = ACO_SceneBaker.FxLayer;
+        fs.AddComponent<MeshFilter>().sharedMesh = fsQuad;
+        MeshRenderer fsr = fs.AddComponent<MeshRenderer>();
+        if (fsMat != null) { fsr.sharedMaterial = fsMat; }
+        fsr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        fsr.receiveShadows = false;
+        fsr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        fsr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        fs.SetActive(false);
+
+        // 관전 카메라(꺼진 채 — 켜면 스크립트가 옮긴다)
+        GameObject camGo = new GameObject("SpectatorCamera");
+        camGo.transform.SetParent(root.transform, false);
+        camGo.transform.localPosition = new Vector3(0f, 0f, 2f);
+        Camera cam = camGo.AddComponent<Camera>();
+        cam.targetTexture = rt;
+        cam.fieldOfView = 55f;
+        cam.nearClipPlane = 0.3f;
+        cam.farClipPlane = 40000f;
+        cam.clearFlags = CameraClearFlags.Skybox;
+        cam.cullingMask = SpectatorCullingMask();
+        cam.depth = -5f;
+        cam.allowMSAA = true;
+        cam.useOcclusionCulling = true;
+        cam.enabled = false;
+
+        // 관전 카메라 전용 하늘 안개 돔(메인 카메라는 레이어 18을 그리지 않는다)
+        GameObject dome = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        dome.name = "SkyFogDome";
+        Object.DestroyImmediate(dome.GetComponent<Collider>());
+        dome.transform.SetParent(camGo.transform, false);
+        dome.transform.localScale = Vector3.one * 100f;
+        dome.layer = SpectatorOnlyLayer;
+        MeshRenderer dr = dome.GetComponent<MeshRenderer>();
+        Material skyFog = AssetDatabase.LoadAssetAtPath<Material>(SkyFogMatPath);
+        if (skyFog != null) { dr.sharedMaterial = skyFog; }
+        dr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        dr.receiveShadows = false;
+        dr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        dr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        dome.SetActive(false);
+
+        // 조작 줄(스크린 아래)
+        RectTransform canvas = MakeUiPanel(root.transform, 3200f, 420f);
+        canvas.localPosition = new Vector3(0f, -1.15f, 0f);
+        SpectatorButton(canvas, spec, font, "POWER", new Vector2(-1430f, 50f), new Vector2(260f, 140f), ACO_SpectatorCam.ACT_POWER, 1, 48f);
+        spec.PowerText = MakeUiText(canvas, "PowerText", new Vector2(-1430f, -100f), new Vector2(260f, 70f), 42f, font, "OFF");
+        SpectatorButton(canvas, spec, font, "HD / FHD", new Vector2(-1140f, 50f), new Vector2(270f, 140f), ACO_SpectatorCam.ACT_RESOLUTION, 1, 40f);
+        spec.ResolutionText = MakeUiText(canvas, "ResolutionText", new Vector2(-1140f, -100f), new Vector2(270f, 70f), 36f, font, "HD 720p");
+
+        MakeUiLabel(canvas, "TargetHeader", new Vector2(-300f, 145f), new Vector2(900f, 60f), 38f, font, "TARGET (PILOT)");
+        SpectatorButton(canvas, spec, font, "<", new Vector2(-760f, 30f), new Vector2(130f, 130f), ACO_SpectatorCam.ACT_TARGET, -1, 64f);
+        spec.TargetText = MakeUiText(canvas, "TargetText", new Vector2(-300f, 30f), new Vector2(760f, 120f), 46f, font, "AUTO");
+        SpectatorButton(canvas, spec, font, ">", new Vector2(160f, 30f), new Vector2(130f, 130f), ACO_SpectatorCam.ACT_TARGET, 1, 64f);
+
+        MakeUiLabel(canvas, "ShotHeader", new Vector2(900f, 145f), new Vector2(900f, 60f), 38f, font, "SHOT");
+        SpectatorButton(canvas, spec, font, "<", new Vector2(480f, 30f), new Vector2(130f, 130f), ACO_SpectatorCam.ACT_SHOT, -1, 64f);
+        spec.ShotText = MakeUiText(canvas, "ShotText", new Vector2(900f, 30f), new Vector2(660f, 120f), 46f, font, "AUTO");
+        SpectatorButton(canvas, spec, font, ">", new Vector2(1320f, 30f), new Vector2(130f, 130f), ACO_SpectatorCam.ACT_SHOT, 1, 64f);
+
+        spec.StatusText = MakeUiText(canvas, "StatusText", new Vector2(300f, -140f), new Vector2(2400f, 70f), 36f, font, "SPECTATOR CAMERA OFF");
+
+        spec.Cam = cam;
+        spec.Screen = sr;
+        spec.OnMaterial = onMat;
+        spec.OffMaterial = offMat;
+        spec.SkyFogDome = dr;
+        spec.TextureHD = rt;
+        spec.TextureFHD = rtFhd;
+        spec.FullscreenOverlay = fsr;
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_SpectatorPanel.prefab");
+        Object.DestroyImmediate(root);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[ACO] 관전 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 로비 벽에 두고 Bake하면 플레이어 기체·미사일 무장이 연결됩니다. 스크린 해상도는 {SpectatorRtPath}.");
+        Selection.activeObject = prefab;
+    }
+
+    private static void SpectatorButton(RectTransform parent, ACO_SpectatorCam spec, TMP_FontAsset font, string label, Vector2 pos, Vector2 size, int action, int step, float fontSize)
+    {
+        Image img = MakeUiButton(parent, $"Btn_{action}_{step}_{label}", pos, size, font, label, fontSize);
+        ACO_SpectatorButton b = img.gameObject.AddUdonSharpComponent<ACO_SpectatorButton>();
+        b.Panel = spec;
+        b.Action = action;
+        b.Step = step;
+        WireClick(img.GetComponent<Button>(), b);
+    }
+
+    /// 값 줄(글자 + −/+ 버튼, 또는 < > 고르기). 글자를 돌려준다.
+    private static TextMeshProUGUI DebugValueRow(RectTransform canvas, ACO_DebugPanel panel, TMP_FontAsset font, string name, float y, int action, float step,
+        string minus = "-", string plus = "+")
+    {
+        TextMeshProUGUI t = MakeUiText(canvas, name + "Text", new Vector2(-180f, y), new Vector2(1250f, 64f), 36f, font, name.ToUpperInvariant());
+        t.alignment = TextAlignmentOptions.Left;
+        DebugButton(canvas, panel, font, minus, new Vector2(560f, y), new Vector2(110f, 60f), action, 0, -step);
+        DebugButton(canvas, panel, font, plus, new Vector2(690f, y), new Vector2(110f, 60f), action, 0, step);
+        return t;
+    }
+
+    private static void DebugButton(RectTransform parent, ACO_DebugPanel panel, TMP_FontAsset font, string label, Vector2 pos, Vector2 size, int action, int index, float amount)
+    {
+        Image img = MakeUiButton(parent, $"Btn_{action}_{index}_{label}", pos, size, font, label, 40f);
+        ACO_DebugButton b = img.gameObject.AddUdonSharpComponent<ACO_DebugButton>();
+        b.Panel = panel;
+        b.Action = action;
+        b.Index = index;
+        b.Amount = amount;
+        WireClick(img.GetComponent<Button>(), b);
     }
 
     private static readonly Color PanelBackground = new Color(0.02f, 0.05f, 0.04f, 0.92f);
@@ -1138,13 +2031,14 @@ public static class ACO_HUDBuilder
     }
 
     /// 강화 ID → 아이콘 이름: 기체 5개는 항목별, 미사일/특수무장 계열은 능력치(STAT_*)별.
-    private static Sprite[] BuildUpgradeIcons(ACO_PlayerProgress p)
+    public static Sprite[] BuildUpgradeIcons(ACO_PlayerProgress p)
     {
         var icons = new Sprite[ACO_PlayerProgress.UPGRADE_COUNT];
-        string[] airframe = { "hull", "mobility", "engine", "fuel", "stability" };
-        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_STABILITY };
+        string[] airframe = { "hull", "mobility", "engine", "fuel", "stability", "damage" };
+        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_STABILITY, ACO_PlayerProgress.UP_GUN };
         for (int i = 0; i < airIds.Length; i++) { if (airIds[i] < icons.Length) { icons[airIds[i]] = LoadIcon(airframe[i]); } }
-        string[] stats = { "damage", "ammo", "turn", "lock_speed", "lock_range", "lock_angle", "blast", "reload" };
+        // STAT_* 순서
+        string[] stats = { "damage", "ammo", "turn", "lock_speed", "lock_range", "seeker", "blast", "reload" };
         for (int f = ACO_PlayerProgress.FAMILY_MISSILE; f <= ACO_PlayerProgress.FAMILY_SP_BOMB; f++)
         {
             for (int s = 0; s < stats.Length; s++)
@@ -1179,8 +2073,11 @@ public static class ACO_HUDBuilder
     private static readonly HudCategory[] HudCategories =
     {
         new HudCategory(0, "SCORE PANEL",
-            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE },
-            new[] { "LEFT / RIGHT", "UP / DOWN", "DISTANCE", "SIZE" }),
+            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE, ACO_HudSettings.ITEM_HUD_FOLLOW },
+            new[] { "LEFT / RIGHT", "UP / DOWN", "DISTANCE", "SIZE", "FOLLOW DELAY" }),
+        new HudCategory(0, "FLIGHT HUD",
+            new[] { ACO_HudSettings.ITEM_FLIGHT_HUD, ACO_HudSettings.ITEM_FLIGHT_HUD_SIZE, ACO_HudSettings.ITEM_FLIGHT_HUD_BRIGHT, ACO_HudSettings.ITEM_DISTANCE_UNIT },
+            new[] { "SHOW", "SIZE", "BRIGHTNESS", "DISTANCE UNIT" }),
         new HudCategory(0, "RESULT / NOTICE TEXT",
             new[] { ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y, ACO_HudSettings.ITEM_RESULT_SCALE },
             new[] { "LEFT / RIGHT", "UP / DOWN", "SIZE" }),
@@ -1196,9 +2093,12 @@ public static class ACO_HUDBuilder
         new HudCategory(2, "RWR",
             new[] { ACO_HudSettings.ITEM_RWR, ACO_HudSettings.ITEM_RWR_SIZE, ACO_HudSettings.ITEM_RWR_MISSILE_SIZE, ACO_HudSettings.ITEM_RWR_LOCK_SIZE },
             new[] { "SHOW", "RING SIZE", "MISSILE MARK SIZE", "LOCK ARC SIZE" }),
+        new HudCategory(1, "RADAR",
+            new[] { ACO_HudSettings.ITEM_RADAR, ACO_HudSettings.ITEM_RADAR_SIZE, ACO_HudSettings.ITEM_RADAR_X, ACO_HudSettings.ITEM_RADAR_Y, ACO_HudSettings.ITEM_RADAR_ALPHA, ACO_HudSettings.ITEM_RADAR_RANGE, ACO_HudSettings.ITEM_RADAR_BLIP },
+            new[] { "SHOW", "SIZE", "LEFT / RIGHT", "UP / DOWN", "OPACITY", "RANGE", "BLIP SIZE" }),
     };
 
-    /// HUD 설정 패널 프리팹(판 2.8m x 1.25m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커 /
+    /// HUD 설정 패널 프리팹(판 2.8m x 1.75m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커, 레이더 /
     /// 크로스헤어, RWR) — 카드마다 제목 + 줄(이름 / − / 값 / +), 가운데 열 아래에 RESET. HUD(점수 패널·표적 마커·RWR·자막)는 씬 오브젝트라 Bake가 연결한다.
     public const string CreditsPath = "Assets/ACO_Addon/Credits/ACO_Credits.txt";
 
@@ -1248,11 +2148,11 @@ public static class ACO_HUDBuilder
         GameObject root = new GameObject("ACO_HudSettings");
         ACO_HudSettings settings = root.AddUdonSharpComponent<ACO_HudSettings>();
 
-        const float colWidth = 860f, rowH = 90f, headerH = 76f, cardGap = 30f, top = 470f;
+        const float colWidth = 860f, rowH = 90f, headerH = 76f, cardGap = 30f, top = 820f;
         float[] colX = { -900f, 0f, 900f };
         float[] colY = { top, top, top };
-        RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1250f);
-        MakeUiText(canvas, "Title", new Vector2(0f, 555f), new Vector2(2700f, 100f), 70f, font, "HUD SETTINGS");
+        RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1950f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 905f), new Vector2(2700f, 100f), 70f, font, "HUD SETTINGS");
         var values = new TextMeshProUGUI[ACO_HudSettings.ITEM_COUNT];
         var accent = new Color(1f, 0.85f, 0.35f, 1f);
         foreach (HudCategory cat in HudCategories)
@@ -1402,7 +2302,16 @@ public static class ACO_HUDBuilder
         table.transform.SetParent(root.transform, false);
         table.transform.localPosition = new Vector3(0f, tableHeight * 0.5f, 0f);
         table.transform.localScale = new Vector3(r * 2f + 0.2f, tableHeight * 0.5f, r * 2f + 0.2f);
-        table.GetComponent<MeshRenderer>().sharedMaterial = LoadOrSaveMaterial(unlit, new Color(0.12f, 0.13f, 0.14f), "ACO_MapTable");
+        Material tableMat = LoadOrSaveMaterial(unlit, new Color(0.12f, 0.13f, 0.14f), "ACO_MapTable");
+        // 예전에 이 머티리얼이 바다 너울 머티리얼의 Variant(부모 = ACO_OceanSwell)가 돼 탁자가 바다로 보였다 — 부모를 끊고 셰이더·색을 되돌린다
+        if (tableMat.parent != null || tableMat.shader != unlit)
+        {
+            tableMat.parent = null;
+            tableMat.shader = unlit;
+            tableMat.SetColor("_Color", new Color(0.12f, 0.13f, 0.14f));
+            EditorUtility.SetDirty(tableMat);
+        }
+        table.GetComponent<MeshRenderer>().sharedMaterial = tableMat;
 
         var mapRoot = new GameObject("MapRoot");
         mapRoot.transform.SetParent(root.transform, false);
