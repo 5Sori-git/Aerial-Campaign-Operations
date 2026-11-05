@@ -43,6 +43,9 @@ namespace ACO
         public bool Enabled = true;
         [Tooltip("무작위 선택 가중치(기본 페이즈 가중치와 같은 눈금, 1 = 보통)")]
         public float Weight = 1f;
+        [Tooltip("페이즈별 가중치: 칸 0 = 1페이즈, 칸 1 = 2페이즈 … (비우면 모든 페이즈에 Weight). 칸보다 뒤의 페이즈는 마지막 칸 값. 0이면 그 페이즈엔 안 나온다. "
+            + "보너스 전용 모듈은 본 미션 페이즈 수 기준(5칸 = 5페이즈 미션의 보너스)")]
+        public float[] PhaseWeights;
         [Tooltip("이 페이즈 번호(1부터)부터 나온다")]
         public int MinPhase = 1;
 
@@ -95,6 +98,9 @@ namespace ACO
         /// 페이즈가 끝났다(성공·실패·교체). 모듈 지역 상태를 비운다.
         public virtual void End() { }
 
+        /// 끝난 상황을 연출로 잠시 붙잡고 있다(공중 요새의 충돌 폭발) — 이때는 제한 시간으로 실패하지 않는다.
+        public virtual bool HoldsResult() { return false; }
+
         /// 2페이즈부터 페이즈 시작 증원 웨이브를 보내는가(시한 표적처럼 목표가 차례로 나오는 페이즈는 false).
         public virtual bool WaveOnStart() { return true; }
 
@@ -111,6 +117,13 @@ namespace ACO
         }
 
         // ───────────── 모든 클라이언트 ─────────────
+
+        /// 페이즈 번호 phase(1부터 — 보너스 전용은 본 미션 페이즈 수)의 선택 가중치.
+        public float GetPhaseWeight(int phase)
+        {
+            if (PhaseWeights == null || PhaseWeights.Length == 0) { return Mathf.Max(Weight, 0f); }
+            return Mathf.Max(PhaseWeights[Mathf.Clamp(phase - 1, 0, PhaseWeights.Length - 1)], 0f);
+        }
 
         /// 표적 마커가 지금 목표 태그를 목표로 표시하는가(점수 할당량처럼 아무거나 잡으면 되는 페이즈는 false).
         public virtual bool MarksObjectiveTag() { return true; }

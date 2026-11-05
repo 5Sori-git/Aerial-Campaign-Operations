@@ -15334,6 +15334,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3619808089019452020}
   TargetHealth: {fileID: 1005962223283866159}
   Gun: {fileID: 3211287931824457165}
+  BaseHealth: 0
   ScoreValue: 250
   MarkerLabel: HEL
   TargetLayers:
@@ -15355,6 +15356,7 @@ MonoBehaviour:
   MaxPitch: 30
   ReturnToRestDelay: 2
   TrackingLag: 0.4
+  AimLeadTime: 0
   AimError: 0.6
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -15365,6 +15367,8 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 0
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -15424,6 +15428,7 @@ MonoBehaviour:
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 1233874611118863289}
   TargetHealth: {fileID: 1005962223283866159}
+  BaseHealth: 0
   Turret: {fileID: 4869322360376670668}
   Artillery: {fileID: 0}
   Kind: 1

@@ -23,9 +23,12 @@ public static class ACO_LightingSetup
 
     // 하늘·안개 색(맑은 낮, 바다 위)
     private static readonly Color SunColor = new Color(1f, 0.95f, 0.87f);
-    private static readonly Color AmbientSky = new Color(0.58f, 0.68f, 0.82f);
-    private static readonly Color AmbientEquator = new Color(0.52f, 0.56f, 0.6f);
-    private static readonly Color AmbientGround = new Color(0.28f, 0.27f, 0.25f);
+    // 그늘의 밝기를 정하는 값. 색은 감마 값이라 0.28 = 선형 0.06으로 하늘 쪽의 1/5밖에 안 된다 — 바다 위라 아래쪽도 밝게 둔다
+    private static readonly Color AmbientSky = new Color(0.62f, 0.71f, 0.84f);
+    private static readonly Color AmbientEquator = new Color(0.62f, 0.66f, 0.7f);
+    private static readonly Color AmbientGround = new Color(0.48f, 0.46f, 0.43f);
+    private const float SunShadowStrength = 0.8f;
+    private const float PostContrast = 0f;
     private static readonly Color FogColor = new Color(0.66f, 0.75f, 0.84f);
     private static readonly Color HangarLightColor = new Color(1f, 0.94f, 0.82f);
 
@@ -43,6 +46,41 @@ public static class ACO_LightingSetup
         AssetDatabase.SaveAssets();
         log.Append("\n→ 다음: Tools 창 [라이트 굽기](또는 Window → Rendering → Lighting → Generate Lighting).");
         Debug.Log(log.ToString());
+    }
+
+    /// 그늘만 밝힌다: 환경광 3색, 태양 그림자 세기, 후처리 대비. 태양·프로브·볼륨 구성은 그대로 둔다(Set Up Lighting은 태양까지 다시 맞춘다).
+    [MenuItem("ACO/Lighting/Brighten Shadows")]
+    public static void BrightenShadows()
+    {
+        RenderSettings.ambientMode = AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = AmbientSky;
+        RenderSettings.ambientEquatorColor = AmbientEquator;
+        RenderSettings.ambientGroundColor = AmbientGround;
+        Light sun = RenderSettings.sun;
+        if (sun == null)
+        {
+            foreach (Light l in Object.FindObjectsOfType<Light>(true))
+            {
+                if (l.type == LightType.Directional) { sun = l; break; }
+            }
+        }
+        if (sun != null)
+        {
+            Undo.RecordObject(sun, "ACO shadows");
+            sun.shadowStrength = SunShadowStrength;
+            EditorUtility.SetDirty(sun);
+        }
+#if UNITY_POST_PROCESSING_STACK_V2
+        PostProcessProfile profile = AssetDatabase.LoadAssetAtPath<PostProcessProfile>($"{GenDir}/ACO_PostProcess.asset");
+        if (profile != null && profile.TryGetSettings(out ColorGrading grading))
+        {
+            grading.contrast.Override(PostContrast);
+            EditorUtility.SetDirty(profile);
+        }
+#endif
+        EditorSceneManagerMarkDirty();
+        AssetDatabase.SaveAssets();
+        Debug.Log("[ACO] 그늘을 밝혔습니다 — 씬을 저장하세요. 항모처럼 라이트를 구운 곳은 [라이트 굽기]를 다시 해야 바뀝니다.");
     }
 
     [MenuItem("ACO/Lighting/Bake Lighting")]
@@ -84,7 +122,7 @@ public static class ACO_LightingSetup
         sun.intensity = 1.25f;
         sun.bounceIntensity = 1f;
         sun.shadows = LightShadows.Soft;
-        sun.shadowStrength = 0.8f;
+        sun.shadowStrength = SunShadowStrength;
         sun.shadowBias = 0.05f;
         sun.shadowNormalBias = 0.4f;
         Vector3 e = sun.transform.eulerAngles;
@@ -413,7 +451,7 @@ public static class ACO_LightingSetup
         cg.postExposure.Override(0.45f);   // ACES는 조금 어두워지므로 보정
         cg.temperature.Override(4f);
         cg.saturation.Override(8f);
-        cg.contrast.Override(8f);
+        cg.contrast.Override(PostContrast);
         EditorUtility.SetDirty(profile);
 
         GameObject vol = FindInScene("ACO_PostProcess");

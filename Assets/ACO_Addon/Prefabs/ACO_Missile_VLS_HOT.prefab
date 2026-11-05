@@ -15375,7 +15375,7 @@ GameObject:
   - component: {fileID: 6100171725355467054}
   - component: {fileID: 1609244527183906535}
   m_Layer: 0
-  m_Name: ACO_Missile_VLS
+  m_Name: ACO_Missile_VLS_HOT
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15427,14 +15427,14 @@ MonoBehaviour:
   LaunchSpeed: 80
   MaxSpeed: 900
   Acceleration: 300
-  TurnRate: 45
+  TurnRate: 50
   FlyStraightTime: 0.35
   MaxLifetime: 45
   GuidanceMode: 0
   NavigationConstant: 3
   PNPursuitAngle: 45
   MaxLeadTime: 4
-  ColdLaunchTime: 1
+  ColdLaunchTime: 0
   ColdLaunchSpeed: 25
   ColdLaunchTurnRate: 90
   ColdLaunchGravity: 1
@@ -15443,14 +15443,16 @@ MonoBehaviour:
   TopAttackDiveAngle: 40
   TopAttackMinDistance: 150
   TopAttackClimbTurnRate: 45
-  MaxTrackingAngle: 90
+  MaxTrackingAngle: 45
   UnlockTime: 0.1
+  LockHoldTime: 2.5
   AnyCountermeasure: 1
   NotchAngle: 0
   NotchHorizon: 5
   SendMissileIncoming: 1
   MissileIncomingName: missilesincoming
   ProximityRadius: 9
+  Dispenser: {fileID: 0}
   Damage: 50
   WeaponType: 2
   SplashLayers:

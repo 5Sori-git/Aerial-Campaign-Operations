@@ -1,6 +1,7 @@
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
+using VRC.SDK3.Persistence;
 using TMPro;
 using SaccFlightAndVehicles;
 
@@ -14,6 +15,8 @@ namespace ACO
     /// 조종사/무기는 SAV SaccTarget의 LastHitByPlayer/LastHitWeaponType(모든 클라이언트에서 맞은 순간 갱신)을 읽는다.
     /// 로컬 기록이라 중간에 들어온 사람은 들어온 뒤의 격추만 보이고, 관리자 점수와 몇 점 어긋날 수 있다(표시용).
     /// 위치는 격자 좌표(열 A~, 행 1~ 북쪽부터)와 키패드 세분(1~9, 7 = 북서, 9 = 북동, 1 = 남서)으로 표기한다.
+    /// 최고 획득 순위(BestText): 지금 인스턴스에 있는 사람들의 한 미션 최고 획득 크레딧(PlayerData aco_best_reward)을 높은 순으로.
+    /// 다른 사람의 저장값은 같은 인스턴스에 있을 때만 읽을 수 있어 전 세계 순위가 아니다.
     /// 스크롤(ACO_LogScrollButton → Scroll): 기록은 최근 것이 위 — OLDER/NEWER가 반 쪽(MaxRows/2)씩 옮기고 LATEST가 맨 위로. 지난 기록을 보는 동안 새 기록이 와도 보던 줄이 밀리지 않는다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_MissionLog : UdonSharpBehaviour
@@ -34,6 +37,8 @@ namespace ACO
         public TextMeshPro LogText;
         [Tooltip("조종사별 집계")]
         public TextMeshPro PilotText;
+        [Tooltip("한 미션 최고 획득 크레딧 순위")]
+        public TextMeshPro BestText;
 
         [Header("기록")]
         [Tooltip("격추 확인 주기(초)")]
@@ -46,6 +51,10 @@ namespace ACO
         public int MaxPilots = 12;
         [Tooltip("조종사 이름 최대 글자 수")]
         public int NameLength = 14;
+        [Tooltip("최고 획득 순위에 보일 인원")]
+        public int MaxBestRows = 8;
+        [Tooltip("최고 획득 순위를 다시 읽는 주기(초)")]
+        public float BestRefreshInterval = 3f;
 
         [Header("격자 좌표")]
         [Tooltip("작전 구역을 몇 칸으로 나눌지(가로/세로 같음, 최대 26)")]
@@ -221,8 +230,55 @@ namespace ACO
             }
         }
 
+        private const int MAX_PLAYERS = 100;
+        private VRCPlayerApi[] _bestPlayers = new VRCPlayerApi[MAX_PLAYERS];
+        private int[] _bestValues = new int[MAX_PLAYERS];
+        private float _bestTimer;
+        private string _bestShown = "";
+
+        /// 높은 순으로 MaxBestRows명. 1~3위는 금·은·동, 나는 노란색. 기록이 없는 사람은 뺀다.
+        private void RefreshBest()
+        {
+            if (BestText == null) { return; }
+            int n = Mathf.Min(VRCPlayerApi.GetPlayerCount(), MAX_PLAYERS);
+            VRCPlayerApi.GetPlayers(_bestPlayers);
+            for (int i = 0; i < n; i++)
+            {
+                VRCPlayerApi p = _bestPlayers[i];
+                int v;
+                _bestValues[i] = Utilities.IsValid(p) && PlayerData.TryGetInt(p, ACO_PlayerProgress.KEY_BEST_REWARD, out v) ? v : 0;
+            }
+            string s = "<color=#7FBF8A>PILOT<pos=62%>BEST CR</color>";
+            int rows = 0;
+            for (int k = 0; k < Mathf.Max(MaxBestRows, 1); k++)
+            {
+                int best = -1;
+                for (int i = 0; i < n; i++)
+                {
+                    if (_bestValues[i] > 0 && (best < 0 || _bestValues[i] > _bestValues[best])) { best = i; }
+                }
+                if (best < 0) { break; }
+                VRCPlayerApi p = _bestPlayers[best];
+                string line = (k + 1) + ". " + Shorten(p.displayName) + "<pos=62%>" + _bestValues[best].ToString("N0");
+                string color = p.isLocal ? "#FFD24D" : (k == 0 ? "#FFE9A8" : (k == 1 ? "#D5DDE0" : (k == 2 ? "#E0A878" : "")));
+                s += "\n" + (color != "" ? "<color=" + color + ">" + line + "</color>" : line);
+                _bestValues[best] = 0;
+                rows++;
+            }
+            if (rows == 0) { s += "\n<color=#7FBF8A>NO RECORDS YET</color>"; }
+            if (s == _bestShown) { return; }
+            _bestShown = s;
+            BestText.text = s;
+        }
+
         void Update()
         {
+            _bestTimer -= Time.deltaTime;
+            if (_bestTimer <= 0f)
+            {
+                _bestTimer = BestRefreshInterval;
+                RefreshBest();
+            }
             _pollTimer -= Time.deltaTime;
             if (_pollTimer > 0f) { return; }
             _pollTimer = PollInterval;
@@ -314,7 +370,11 @@ namespace ACO
 
             PushRow(row);
             if (!npcKill) { AddPilotScore(pilot, points); }
-            if (mine && Progress) { Progress.AddPersonalScore(points); }
+            if (mine && Progress)
+            {
+                Progress.AddPersonalScore(points);
+                Progress.AddMissionKill();
+            }
             if (Chatter && valid) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
         }
 

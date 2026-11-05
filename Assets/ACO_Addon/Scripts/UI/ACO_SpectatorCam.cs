@@ -10,14 +10,16 @@ namespace ACO
     ///  - 켜기/끄기(POWER)는 거리와 상관없이 직접 — 조종사가 VRChat 카메라를 스크린 앞에 두고 자기 비행을 녹화할 수 있게. 끄면 카메라도 꺼서 비용이 없다.
     ///    VRChat 카메라(스트림·사진)를 스크린 가까이 두면 그 카메라 화면 전체가 관전 화면이 된다(FullscreenOverlay — 셰이더 ACO/SpectatorFullscreen, 내 눈엔 안 보인다).
     ///  - 해상도(HD/FHD): 렌더 텍스처 두 장(TextureHD 1280x720 / TextureFHD 1920x1080) 중 하나를 카메라·스크린·전체 화면이 같이 쓴다.
-    ///  - 대상(TARGET): AUTO(감독 — 미사일을 쏜 조종사로 옮기고, 조용하면 AutoTargetHold마다 다음 조종사) 또는 조종사 직접 고르기. 플레이어 기체만(Bake가 Vehicles에 넣는다).
+    ///  - 대상(TARGET): AUTO(감독 — 미사일을 쏜 조종사로 옮기고, 조용하면 AutoTargetHold마다 다음 조종사) 또는 슬롯 직접 고르기. 플레이어 기체만(Bake가 슬롯 순서로 Vehicles에 넣는다).
+    ///    슬롯은 비어 있어도 고를 수 있다 — 고른 슬롯에 조종사가 타면 그때부터 찍는다(자기 슬롯을 골라 두고 타러 갈 수 있다).
     ///  - 컷(SHOT): AUTO(감독 — 추적·플라이바이·망원·나란히·조종석을 ShotMin~ShotMax마다 바꾸고, 대상이 미사일을 쏘면 미사일 캠 → 명중 직전 표적 캠) 또는 직접 고르기.
     ///    CHASE 뒤에서 늦게 따라감 / FLYBY 앞길 옆에 카메라를 세워 지나가는 기체를 눈으로 쫓음 / TELE 1km 옆 망원(기체 크기 유지, 손떨림) /
     ///    SIDE 옆에서 앞→뒤로 돌며 나란히 / WINGMAN 편대원 시점 — 컷이 바뀐 순간의 기체 속도·방향을 그대로 이어 직진하며 옆의 기체를 찍는다(기체가 기동하면 화면 안에서 흘러간다) /
     ///    COCKPIT 조종사 어깨 뒤 / PILOT 캐노피 앞 비스듬히에서 조종사 얼굴(아바타 머리)을 봄 — 기체에 붙어 함께 움직인다 /
     ///    MISSILE 대상이 쏜 미사일 뒤에서 표적을 봄 / TARGET 미사일의 표적 옆에서 날아드는 미사일·폭발을 봄.
     ///  - 카메라는 지면·해수면 위 MinGroundClearance를 지킨다. UI 레이어(HUD·마커)와 FX 레이어(내 머리를 따라다니는 하늘 안개 돔·물안개 막·비·물빛 벽 — Bake가 옮긴다)는 그리지 않는다.
-    ///    하늘 안개 돔은 카메라 자식(SkyFogDome, 레이어 18 MirrorReflection — 메인 카메라는 그리지 않는다)을 따로 쓴다.
+    ///    하늘 안개 돔은 카메라 자식(SkyFogDome, 레이어 18 MirrorReflection — 메인 카메라는 그리지 않는다)을 따로 쓴다. 비도 같은 방법으로 따로 쓴다(RainRenderer) —
+    ///    내 머리가 아니라 관전 카메라 자리로 내릴지 정하므로, 내가 격납고에 있어도 밖을 찍는 카메라에는 비가 온다.
     ///  - 미사일: 플레이어 무장(ACO_DFUNC_Missile)이 발사할 때 NotifyMissile을 부른다(모든 클라이언트 — 발사 이벤트가 모두에게 온다).
     ///  - 소리는 없다(오디오 리스너는 플레이어에게 있다). 씬 안개는 전역이라 내가 구름·물속이면 화면도 짙어진다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -59,6 +61,12 @@ namespace ACO
         public Renderer FullscreenOverlay;
         [Tooltip("관전할 플레이어 기체(Bake: ACO_VehicleUpgrades가 있는 SaccEntity 전부)")]
         public SaccEntity[] Vehicles;
+        [Tooltip("슬롯 이름·명단(Bake가 넣는다). 비면 SLOT 번호로 보인다")]
+        public ACO_GameFlow Flow;
+        [Tooltip("날씨 비(Bake가 넣는다) — 세기·구름 위·지붕 아래 판정을 쓴다")]
+        public ACO_Rain Rain;
+        [Tooltip("관전 카메라 전용 빗방울(카메라 자식, 레이어 18 — Bake가 만든다)")]
+        public Renderer RainRenderer;
         [Tooltip("Bake: 미션 생성기 해수면·지면 레이어")]
         public float SeaLevel = 0f;
         public LayerMask GroundLayers = 2049;
@@ -180,6 +188,11 @@ namespace ACO
                 _screenMat = Screen.material;
             }
             if (FullscreenOverlay) { _overlayMat = FullscreenOverlay.material; }
+            if (RainRenderer)
+            {
+                _rainMat = RainRenderer.material;
+                RainRenderer.enabled = false;
+            }
             SetResolution(StartFHD);
             SetPower(false);
         }
@@ -217,17 +230,12 @@ namespace ACO
             if (action == ACT_TARGET)
             {
                 int n = Vehicles != null ? Vehicles.Length : 0;
-                // AUTO → 0 → 1 … → AUTO 순으로 돈다(비행 중인 조종사만)
-                int mode = _targetMode;
-                for (int k = 0; k <= n; k++)
-                {
-                    mode += step >= 0 ? 1 : -1;
-                    if (mode >= n) { mode = AUTO; }
-                    if (mode < AUTO) { mode = n - 1; }
-                    if (mode == AUTO || IsValid(mode)) { break; }
-                }
+                // AUTO → 슬롯 0 → 1 … → AUTO 순으로 돈다(비어 있는 슬롯도 고른다 — 조종사가 타면 찍기 시작한다)
+                int mode = _targetMode + (step >= 0 ? 1 : -1);
+                if (mode >= n) { mode = AUTO; }
+                if (mode < AUTO) { mode = n - 1; }
                 _targetMode = mode;
-                if (mode != AUTO && mode != _subject) { SetSubject(mode); }
+                if (mode != AUTO && mode != _subject && IsValid(mode)) { SetSubject(mode); }
                 UpdateTexts();
                 return ACO_UiSound.KIND_CLICK;
             }
@@ -253,6 +261,7 @@ namespace ACO
                 if (Cam) { Cam.enabled = false; }
                 if (Screen && OffMaterial) { Screen.sharedMaterial = OffMaterial; }
                 SetOverlay(false);
+                if (RainRenderer) { RainRenderer.enabled = false; }
             }
             else
             {
@@ -305,13 +314,46 @@ namespace ACO
             SetOverlay(live);
             _textTimer -= dt;
             if (_textTimer <= 0f) { _textTimer = 0.5f; UpdateTexts(); }
-            if (!live) { return; }
+            if (!live)
+            {
+                if (RainRenderer && RainRenderer.enabled) { RainRenderer.enabled = false; }
+                return;
+            }
 
             TrackSubject(dt);
             TrackMissile(dt);
             _shotTimer += dt;
             Direct();
             Shoot(dt);
+            UpdateRain(dt);
+        }
+
+        // 관전 카메라의 비
+        private Material _rainMat;
+        private float _rainNow;
+        private Vector3 _rainLast;
+        private bool _rainHasLast;
+        private Vector3 _rainVel;
+
+        /// 비: 날씨 세기로 내리되 구름 위·지붕 아래는 카메라 자리로 판단한다. 빗줄기는 카메라 속도(컷이 바뀐 순간이동은 빼고)로 늘어난다.
+        private void UpdateRain(float dt)
+        {
+            if (!Rain || !RainRenderer || !_rainMat) { return; }
+            Vector3 p = Cam.transform.position;
+            float target = p.y > Rain.MaxAltitude || Rain.InShelter(p) ? 0f : Rain.Intensity;
+            _rainNow = Mathf.MoveTowards(_rainNow, target, dt / Mathf.Max(Rain.FadeTime, 0.01f));
+            bool on = _rainNow > 0.001f;
+            if (RainRenderer.enabled != on) { RainRenderer.enabled = on; }
+            if (!on) { _rainHasLast = false; return; }
+            if (_rainHasLast)
+            {
+                Vector3 v = (p - _rainLast) / dt;
+                if (v.sqrMagnitude < 1000000f) { _rainVel = Vector3.Lerp(_rainVel, v, 1f - Mathf.Exp(-dt * 10f)); }
+            }
+            _rainLast = p;
+            _rainHasLast = true;
+            _rainMat.SetVector("_CamVel", new Vector4(_rainVel.x, _rainVel.y, _rainVel.z, 0f));
+            _rainMat.SetFloat("_Intensity", _rainNow);
         }
 
         private bool IsValid(int i)
@@ -321,7 +363,7 @@ namespace ACO
             return e != null && e.gameObject.activeInHierarchy && e.Occupied && !e.dead;
         }
 
-        /// 대상 고르기: 직접 고른 조종사(내려오면 화면 꺼짐), AUTO면 유지하다가 AutoTargetHold마다 다음 조종사.
+        /// 대상 고르기: 직접 고른 슬롯(조종사가 없으면 화면 꺼짐, 타면 찍는다), AUTO면 유지하다가 AutoTargetHold마다 다음 조종사.
         private void UpdateSubject()
         {
             if (_targetMode != AUTO)
@@ -756,24 +798,31 @@ namespace ACO
         {
             if (PowerText) { PowerText.text = _on ? "<color=#66FF77>ON</color>" : "<color=#FF5544>OFF</color>"; }
             if (ResolutionText) { ResolutionText.text = _fhd ? "FHD 1080p" : "HD 720p"; }
-            string who = _subject >= 0 ? PilotName(_subject) : "-";
-            if (TargetText) { TargetText.text = _targetMode == AUTO ? "AUTO  " + who : who; }
+            if (TargetText)
+            {
+                if (_targetMode == AUTO) { TargetText.text = "AUTO  " + (_subject >= 0 ? SlotLabel(_subject) : "-"); }
+                else { TargetText.text = SlotLabel(_targetMode); }
+            }
             string shot = _shot >= 0 && _shot < ShotNames.Length ? ShotNames[_shot] : "";
             if (ShotText) { ShotText.text = _shotMode == AUTO ? "AUTO  " + shot : shot; }
             if (StatusText)
             {
                 if (!_on) { StatusText.text = "SPECTATOR CAMERA OFF"; }
-                else if (_subject < 0) { StatusText.text = _targetMode == AUTO ? "NO PILOTS IN THE AIR" : "PILOT NOT FLYING"; }
+                else if (_subject < 0) { StatusText.text = _targetMode == AUTO ? "NO PILOTS IN THE AIR" : "WAITING FOR PILOT"; }
                 else if ((_shot == SHOT_MISSILE || _shot == SHOT_TARGET) && _mis == null) { StatusText.text = "WAITING FOR A MISSILE (CHASE)"; }
                 else { StatusText.text = "LIVE"; }
             }
         }
 
-        private string PilotName(int i)
+        /// 슬롯 표시: 슬롯 이름 + 명단의 참가자. 명단에 없으면 "SLOT 번호"와 지금 조종사.
+        private string SlotLabel(int i)
         {
-            if (!IsValid(i)) { return "-"; }
+            int slot = Flow != null ? Flow.GetSlotOfAircraft(Vehicles[i]) : -1;
+            if (slot >= 0) { return Flow.GetSlotLabel(slot); }
+            string label = "SLOT " + (i + 1);
+            if (!IsValid(i)) { return label; }
             VRCPlayerApi p = Networking.GetOwner(Vehicles[i].gameObject);
-            return Utilities.IsValid(p) ? p.displayName : "-";
+            return Utilities.IsValid(p) ? label + "  " + p.displayName : label;
         }
     }
 }

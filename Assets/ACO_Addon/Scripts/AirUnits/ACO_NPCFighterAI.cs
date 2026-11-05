@@ -38,6 +38,8 @@ namespace ACO
         public GameObject[] VeteranVisuals;
         [Tooltip("에이스일 때 켤 오브젝트(에이스 모델 통째로, 전용 도색, 트레일 등). 다른 단계에선 꺼진다")]
         public GameObject[] AceVisuals;
+        [Tooltip("적 항모에서 발진할 때 켤 오브젝트(함재기 모델 통째로). 켜지면 숙련도 칸은 모두 꺼진다. 비우면 숙련도 외형 그대로 나온다")]
+        public GameObject[] CarrierVisuals;
 
         [Header("체력 (숙련도 배율 기준)")]
         [Tooltip("베테랑(배율 1) 최대 체력. 0이면 Bake가 채운다(SaccTarget 체력, 일반 전투기 기본 100은 150으로). 미션 생성기가 숙련도 배율(TierHealthMultiplier)을 곱해 "
@@ -446,10 +448,17 @@ namespace ACO
         /// 숙련도 단계의 외형만 켠다(단계별 모델 교체). 부활할 때 HideOnDeath가 모델을 다시 켜므로 그 뒤에도 다시 부른다.
         private void ApplyTierVisuals()
         {
-            SetVisuals(RookieVisuals, _skillTier == SKILL_ROOKIE);
-            SetVisuals(VeteranVisuals, _skillTier == SKILL_VETERAN);
-            SetVisuals(AceVisuals, _skillTier == SKILL_ACE);
+            bool carrier = _carrierBased && CarrierVisuals != null && CarrierVisuals.Length > 0;
+            SetVisuals(RookieVisuals, !carrier && _skillTier == SKILL_ROOKIE);
+            SetVisuals(VeteranVisuals, !carrier && _skillTier == SKILL_VETERAN);
+            SetVisuals(AceVisuals, !carrier && _skillTier == SKILL_ACE);
+            SetVisuals(CarrierVisuals, carrier);
         }
+
+        private bool _carrierBased;
+
+        /// 이번 출격이 항모 발진인가(모든 클라이언트). ApplySkill 전에 부른다 — 외형은 ApplySkill이 고른다.
+        public void SetCarrierBased(bool on) { _carrierBased = on; }
 
         private void SetVisuals(GameObject[] objects, bool on)
         {

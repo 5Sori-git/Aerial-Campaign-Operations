@@ -46,6 +46,11 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "TAC 네임 패널 (콜사인)", Description = "ACO_TacNamePanel — 내 콜사인 입력(VRChat 키보드) · SET · CLEAR. 플레이어 영구 저장에 남고, 다른 사람 화면의 내 기체 테두리 위에 보인다(중복이면 뒤에 숫자). 격납고 등에 둔다", PrefabNames = new[] { "ACO_TacNamePanel" } },
         new Entry { Label = "비행 HUD (SAV HUD 대신)", Description = "ACO_FlightHud — 기체 앞 고정 HUD: 헤딩 테이프·속도(kt)·스로틀·고도(ft)·피치 래더·속도 벡터·G·상태(GEAR/FLAP/HOOK/AIRBRAKE)·잔탄·HP·장전 막대·조준 표시(기총 피퍼·W·십자). 씬에 하나 두고 Bake하면 SAV HUD를 숨긴다", PrefabNames = new[] { "ACO_FlightHud" } },
         new Entry { Label = "관전 패널 (리플레이식 카메라)", Description = "ACO_SpectatorPanel — 큰 스크린 + POWER / 대상(조종사) < > / 컷 < > (AUTO = 감독). 플레이어 기체를 추적·플라이바이·망원·나란히·조종석·미사일·표적 캠으로 실시간 관전. 로컬 전용, 켜고 끄기는 직접", PrefabNames = new[] { "ACO_SpectatorPanel" } },
+        new Entry { Label = "공중 요새 (보스)", Description = "NPC_Fortress — Archangel 모델의 거대 비행 요새(Assets/ARCANGEL 필요): 방공 18곳·엔진 4·코어. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Fortress" } },
+        new Entry { Label = "TEL (시한 표적)", Description = "NPC_TEL — 탄도탄 발사대(임시 큐브 모델). 없으면 Bake가 만들어 유닛 풀에 3대 넣는다", PrefabNames = new[] { "NPC_TEL" } },
+        new Entry { Label = "아군 기함 (함대전)", Description = "NPC_Flagship — Ticonderoga 모델, 주포·VLS 2·CIWS 2. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Flagship" } },
+        new Entry { Label = "적 항모 (함대전)", Description = "NPC_Carrier — Kuznetsov 모델, CIWS 4. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Carrier" } },
+        new Entry { Label = "랜스 포대 (보스)", Description = "NPC_Railgun — 지상 보스, 방공 12·냉각기 4·코어. 모델은 Visual_* 자식을 바꿔 끼운다. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Railgun" } },
     };
 
     private bool[] _selected;
@@ -182,6 +187,11 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[27]) { ACO_HUDBuilder.CreateTacNamePanelPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_TacNamePanel")); }
         if (_selected[28]) { ACO_HUDBuilder.CreateFlightHudPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_FlightHud")); }
         if (_selected[29]) { ACO_HUDBuilder.CreateSpectatorPanelPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_SpectatorPanel")); }
+        if (_selected[30]) { Log(built, ACO_PrefabBuilder.BuildFortress()); }
+        if (_selected[31]) { Log(built, ACO_PrefabBuilder.BuildTel()); }
+        if (_selected[32]) { Log(built, ACO_PrefabBuilder.BuildFlagship()); }
+        if (_selected[33]) { Log(built, ACO_PrefabBuilder.BuildCarrier()); }
+        if (_selected[34]) { Log(built, ACO_PrefabBuilder.BuildRailgun()); }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

@@ -14,7 +14,8 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_HudRadar : UdonSharpBehaviour
     {
-        public const int MAX_BLIPS = 200;
+        public const int MAX_BLIPS = 320;
+        private const int ECM_RING_SEGMENTS = 40;
 
         [Header("참조 (프리팹 빌더/Bake가 만든다)")]
         public ACO_RadarContacts Contacts;
@@ -62,6 +63,10 @@ namespace ACO
         public Color MissileColor = new Color(1f, 1f, 1f, 1f);
         public Color SelfColor = new Color(1f, 1f, 1f, 1f);
         public Color NorthColor = new Color(0.35f, 1f, 0.45f, 1f);
+        [Tooltip("ECM 재밍 구역 원의 색")]
+        public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
+        [Tooltip("ECM 재밍 구역 원의 굵기(스코프 지름 대비)")]
+        public float EcmRingWidth = 0.008f;
 
         private Mesh _mesh;
         private Vector3[] _v;
@@ -227,6 +232,7 @@ namespace ACO
                 Chevron(new Vector3(-0.1f, -0.12f, 0f), 30f, s, FriendlyColor);
                 Bar(new Vector3(0.1f, 0.12f, 0f), 215f, MissileSize * 0.5f * scale, MissileColor);
             }
+            EcmRings(center, k);
             // 나: 가운데, 기수 방향
             Chevron(Vector3.zero, Mathf.Atan2(selfFwd.x, selfFwd.z) * Mathf.Rad2Deg, s * 1.15f, SelfColor);
 
@@ -235,6 +241,45 @@ namespace ACO
             _mesh.vertices = _v;
             _mesh.colors = _c;
             _mesh.RecalculateBounds();
+        }
+
+        /// 켜진 ECM의 재밍 구역: 초록 테두리 원. 스코프 밖의 호는 그리지 않는다.
+        private void EcmRings(Vector3 center, float k)
+        {
+            ACO_RadarContacts c = Contacts;
+            if (c == null || !c.IsEcmOn() || c.EcmPods == null) { return; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            float radius = c.EcmRange * k;
+            for (int i = 0; i < c.EcmPods.Length; i++)
+            {
+                ACO_DFUNC_Missile pod = c.EcmPods[i];
+                if (pod == null || !pod.IsEcmActive(now)) { continue; }
+                Vector3 d = pod.transform.position - center;
+                Vector3 o = new Vector3(d.x * k, d.z * k, 0f);
+                for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                    Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                    if (p0.sqrMagnitude > 0.24f || p1.sqrMagnitude > 0.24f) { continue; }
+                    Line(p0, p1, EcmRingWidth, EcmColor);
+                }
+            }
+        }
+
+        /// 두 점을 잇는 띠.
+        private void Line(Vector3 a, Vector3 b, float width, Color col)
+        {
+            if (_n >= MAX_BLIPS - 1) { return; }
+            Vector3 d = b - a;
+            Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (width * 0.5f);
+            int v = _n * 4;
+            _v[v] = a - r;
+            _v[v + 1] = a + r;
+            _v[v + 2] = b + r;
+            _v[v + 3] = b - r;
+            Fill(v, col);
         }
 
         private Color KindColor(int kind)

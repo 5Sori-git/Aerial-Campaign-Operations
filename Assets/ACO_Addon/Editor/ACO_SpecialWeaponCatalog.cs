@@ -51,6 +51,8 @@ public static class ACO_SpecialWeaponCatalog
                 Projectile = P + "ACO_Missile_LAGM.prefab", Desc = "LONG-RANGE AGM\nSTRIKES GROUND TARGETS FROM STANDOFF RANGE" },
             new Example { Id = "LASM", Name = "LASM", Order = 55, Price = 12000, Icon = "weapon_lasm", Preset = ApplyLASM,
                 Projectile = P + "ACO_Missile_LAGM.prefab", Desc = "LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS TO SHIPS - CANNOT BE INTERCEPTED BY CIWS" },
+            new Example { Id = "ECM", Name = "ECM", Order = 90, Price = 15000, Icon = "weapon_ecm", Preset = ApplyECM,
+                Projectile = null, Desc = "ELECTRONIC WARFARE POD\n5KM JAMMING FOR 10S - BREAKS ENEMY MISSILES AND LOCKS, DISRUPTS AA GUNS" },
             new Example { Id = "SCM", Name = "SCM", Order = 58, Price = 14000, Icon = "weapon_scm", Preset = ApplySCM,
                 Projectile = P + "ACO_Missile_SCM.prefab", Desc = "STAND-OFF CLUSTER MISSILE\nBURSTS ABOVE THE TARGET - SCATTERS BOMBLETS OVER A WIDE AREA" },
             new Example { Id = "FLAK", Name = "FLAK", Order = 65, Price = 9000, Icon = "weapon_flak", Preset = ApplyFLAK,
@@ -123,6 +125,7 @@ public static class ACO_SpecialWeaponCatalog
             def.Price = e.Price;
             def.SortOrder = e.Order;
             def.Icon = ACO_HUDBuilder.LoadIcon(e.Icon);
+            if (e.Id == "ECM") { def.Category = ACO_WeaponCategory.Other; }
 
             var modGo = new GameObject("Module");
             modGo.transform.SetParent(root.transform, false);
@@ -233,6 +236,22 @@ public static class ACO_SpecialWeaponCatalog
         m.SeaSkim = true;
         m.SkimAltitude = 8f;
         m.SkimTerminalDistance = 500f;
+    }
+
+    /// ECM(전자전 포드): 미사일 대신 재밍. 10초 켜고 20초 재충전, 반경 5km(ACO_RadarContacts.EcmRange). 슬롯 하나, 탄 없음.
+    private static void ApplyECM(ACO_DFUNC_Missile m)
+    {
+        m.EcmMode = true;
+        m.EcmDuration = 10f;
+        m.SlotReloadTime = 20f;
+        m.SlotCount = 1;
+        m.MaxAmmo = 1;
+        m.UpgradeFamily = ACO_UpgradeFamily.None;
+        m.TargetLayers = 0;
+        m.MaxLockTargets = 1;
+        m.AllowUnguidedFire = true;
+        m.AllowFiringWhenGrounded = false;
+        m.NumPreInstantiated = 1;
     }
 
     /// SCM(Stand-off Cluster Missile): 멀리서(6km) 락온해 쏘면 느리게(550) 날아가 표적 위로 올라갔다 내리꽂으며, 표적 420m 앞에서 터져 자탄 16발을 뿌린다(ACO_Dispenser — 탄체 프리팹 값).
@@ -549,7 +568,7 @@ public static class ACO_SpecialWeaponCatalog
         if (m == null) { Object.DestroyImmediate(go); return false; }
 
         bool ordnance = m.Missile != null && m.Missile.GetComponent<ACO_Ordnance>() != null;
-        if (m.Missile == null) { m.Missile = primary.Missile; }
+        if (m.Missile == null && !m.EcmMode) { m.Missile = primary.Missile; }   // ECM은 쏠 것이 없다
         m.SAVControl = primary.SAVControl;
         m.HUDControl = primary.HUDControl;
         m.TargetingTransform = primary.TargetingTransform;

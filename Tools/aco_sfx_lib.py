@@ -189,6 +189,20 @@ def softclip(x, drive=1.0):
     return [math.tanh(v * drive) / k for v in x]
 
 
+def level(x, threshold, attack=0.002, release=0.25, ahead=0.006):
+    """느린 음량 조절: 큰 구간의 음량을 부드럽게 눌러 전체를 키운다. softclip과 달리 파형을 깎지 않아 지글거리지 않는다."""
+    down = 1.0 - math.exp(-1.0 / (attack * SR))
+    up = 1.0 - math.exp(-1.0 / (release * SR))
+    env = max(abs(v) for v in x[:int(0.02 * SR)])   # 첫 샘플부터 큰 소리다
+    out = [0.0] * len(x)
+    look = int(ahead * SR)   # 앞을 미리 봐서 충격이 오기 전에 줄인다
+    for i, v in enumerate(x):
+        a = abs(x[i + look]) if i + look < len(x) else 0.0
+        env += (a - env) * (down if a > env else up)
+        out[i] = v * (threshold / env if env > threshold else 1.0)
+    return out
+
+
 def normalize(x, peak=0.89):
     m = max(1e-9, max(abs(v) for v in x))
     return [v * peak / m for v in x]

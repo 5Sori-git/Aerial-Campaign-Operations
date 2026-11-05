@@ -13,7 +13,12 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_CockpitMap : UdonSharpBehaviour
     {
-        public const int MAX_BLIPS = 200;
+        public const int MAX_BLIPS = 320;
+        private const int ECM_RING_SEGMENTS = 40;
+        [Tooltip("ECM 재밍 구역 원의 색")]
+        public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
+        [Tooltip("ECM 재밍 구역 원의 굵기(지도 폭 대비)")]
+        public float EcmRingWidth = 0.008f;
         private const int MAX_VERTICES = 65000;
 
         [Header("참조")]
@@ -170,6 +175,7 @@ namespace ACO
                     else { Square(p, s * 0.75f, col); }
                 }
             }
+            EcmRings(c);
             // 나: 맨 위에 그리도록 마지막
             Transform me = EntityControl.transform;
             Vector3 mf = me.forward;
@@ -179,6 +185,37 @@ namespace ACO
             _blipMesh.vertices = _v;
             _blipMesh.colors = _c;
             _blipMesh.RecalculateBounds();
+        }
+
+        /// 켜진 ECM의 재밍 구역: 초록 테두리 원. 지도 밖의 호는 그리지 않는다.
+        private void EcmRings(ACO_RadarContacts c)
+        {
+            if (!c.IsEcmOn() || c.EcmPods == null) { return; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            float radius = c.EcmRange * _k;
+            for (int i = 0; i < c.EcmPods.Length; i++)
+            {
+                ACO_DFUNC_Missile pod = c.EcmPods[i];
+                if (pod == null || !pod.IsEcmActive(now)) { continue; }
+                Vector3 o = ToMap(pod.transform.position);
+                for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                    Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                    if (Mathf.Abs(p0.x) > 0.5f || Mathf.Abs(p0.y) > 0.5f || Mathf.Abs(p1.x) > 0.5f || Mathf.Abs(p1.y) > 0.5f) { continue; }
+                    if (_n >= MAX_BLIPS - 1) { return; }
+                    Vector3 d = p1 - p0;
+                    Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (EcmRingWidth * 0.5f);
+                    int v = _n * 4;
+                    _v[v] = p0 - r;
+                    _v[v + 1] = p0 + r;
+                    _v[v + 2] = p1 + r;
+                    _v[v + 3] = p1 - r;
+                    Fill(v, EcmColor);
+                }
+            }
         }
 
         private Vector3 ToMap(Vector3 world)

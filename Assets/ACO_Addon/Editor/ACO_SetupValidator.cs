@@ -233,8 +233,8 @@ public class ACO_SetupValidator : EditorWindow
             ACO_NPCFighterAI ace = null;
             if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.SuperAce != null) { ace = f; break; } } }
             ACO_MissionManager mgr = FindOne<ACO_MissionManager>();
-            if (ace != null) { Add(g, OK, $"슈퍼에이스 '{ace.SuperAce.AceName}' — 보너스 페이즈 확률 {(mgr != null ? Mathf.RoundToInt(mgr.BonusPhaseChance * 100f) : 0)}%", ace); }
-            else if (mgr != null && mgr.BonusPhaseChance > 0f)
+            if (ace != null) { Add(g, OK, $"슈퍼에이스 '{ace.SuperAce.AceName}' — 5페이즈 보너스 확률 {(mgr != null ? Mathf.RoundToInt(mgr.GetBonusChance(5) * 100f) : 0)}%", ace); }
+            else if (mgr != null && mgr.GetBonusChance(5) > 0f)
             {
                 ACO_MissionGenerator genRef = gen;
                 Add(g, INFO, "생성기 풀에 슈퍼에이스가 없어 보너스 페이즈가 나오지 않습니다(선택) — [고치기]는 NPC_SuperAce를 풀 아래에 놓는다.", gen, () =>
@@ -458,6 +458,12 @@ public class ACO_SetupValidator : EditorWindow
 
             foreach (ACO_DFUNC_Missile m in e.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
             {
+                // ECM은 슬롯만 빌려 쓰는 재밍 포드 — 탄체·표적 레이어가 없는 것이 정상이다
+                if (m.EcmMode)
+                {
+                    if (m.EcmHub == null) { Add(g, WARN, $"'{n}/{m.name}': ECM이 레이더에 연결되지 않았습니다 — Bake하세요.", m); }
+                    continue;
+                }
                 bool ordnance = m.Missile != null && m.Missile.GetComponent<ACO_Ordnance>() != null;
                 if (m.Missile == null) { Add(g, ERROR, $"'{n}/{m.name}': 탄체 프리팹(Missile)이 비어 있습니다.", m); }
                 if (!ordnance && m.TargetLayers.value == 0) { Add(g, WARN, $"'{n}/{m.name}': 유도 미사일인데 TargetLayers가 비어 락온할 표적이 없습니다.", m); }

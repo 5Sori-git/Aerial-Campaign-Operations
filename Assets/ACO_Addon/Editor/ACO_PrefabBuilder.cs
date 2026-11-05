@@ -6,7 +6,7 @@ using ACO;
 
 /// NPC/표적 프리팹 생성 함수 모음. 메뉴는 ACO → Create Prefabs... 창(ACO_PrefabBuilderWindow) 하나로 묶었다.
 /// U# 스크립트는 AddUdonSharpComponent로 붙여야 UdonBehaviour + 프로그램 에셋 연결이 올바르게 만들어진다.
-public static class ACO_PrefabBuilder
+public static partial class ACO_PrefabBuilder
 {
     private const string PrefabDir = "Assets/ACO_Addon/Prefabs";
     // SaccTarget은 같은 오브젝트의 Animator를 null 체크 없이 사용하므로 반드시 필요하다.
@@ -431,6 +431,7 @@ public static class ACO_PrefabBuilder
         escort.MarkerLabel = "VIP";
         escort.MoveMode = ACO_EscortUnit.MOVE_AIR;
         escort.Speed = 120f;
+        escort.PriorityForSites = true;
         escort.ShowOnDeath = new GameObject[] { deathFx };
         escort.HideOnDeath = new GameObject[0];
         escort.DisableCollidersOnDeath = new Collider[] { fuselageCol, wingCol };
@@ -1655,6 +1656,8 @@ public static class ACO_PrefabBuilder
         public Vector3 FunnelSize;
         public float MastHeight;
         public PartSpec[] Parts;
+        public string ModelPrefabPath;     // 있으면 상자 대신 이 모델(선체 충돌은 상자 그대로)
+        public bool ReservedForFleet;
     }
 
     // 장갑 4: SAV 미사일 직격 = 최대 체력의 25%. 기총(파티클 10/4 = 2.5)은 NoDamageBelow 3에 걸려 선체엔 안 들어간다.
@@ -1662,7 +1665,7 @@ public static class ACO_PrefabBuilder
     {
         return new ShipSpec
         {
-            PrefabName = "NPC_Warship", TargetName = "Battleship", Label = "BB", HighValue = true, Score = 1500,
+            PrefabName = "NPC_Warship", TargetName = "Cruiser", Label = "CG", HighValue = true, Score = 1500,
             Health = 1000f, Armor = 4f, NoDamageBelow = 3f, PartHullDamage = 0.12f,
             CruiseSpeed = 12f, CruiseRadius = 2500f, EscortSpacing = 500f,
             HullSize = new Vector3(16f, 9f, 120f),
@@ -1745,11 +1748,14 @@ public static class ACO_PrefabBuilder
         body.transform.SetParent(root.transform, false);
         GameObject model = new GameObject("Model");
         model.transform.SetParent(body.transform, false);
-        AddBox(model.transform, "Hull", hullCenter, spec.HullSize);
-        AddBox(model.transform, "Bridge", spec.BridgeCenter, spec.BridgeSize);
-        AddBox(model.transform, "Funnel", spec.FunnelCenter, spec.FunnelSize);
-        float bridgeTop = spec.BridgeCenter.y + spec.BridgeSize.y * 0.5f;
-        AddBox(model.transform, "Mast", new Vector3(0f, bridgeTop + spec.MastHeight * 0.5f, spec.BridgeCenter.z + 3f), new Vector3(1f, spec.MastHeight, 1f));
+        if (spec.ModelPrefabPath == null || !AddFleetModel(model.transform, spec.ModelPrefabPath))
+        {
+            AddBox(model.transform, "Hull", hullCenter, spec.HullSize);
+            AddBox(model.transform, "Bridge", spec.BridgeCenter, spec.BridgeSize);
+            AddBox(model.transform, "Funnel", spec.FunnelCenter, spec.FunnelSize);
+            float bridgeTop = spec.BridgeCenter.y + spec.BridgeSize.y * 0.5f;
+            AddBox(model.transform, "Mast", new Vector3(0f, bridgeTop + spec.MastHeight * 0.5f, spec.BridgeCenter.z + 3f), new Vector3(1f, spec.MastHeight, 1f));
+        }
 
         GameObject lockMarker = new GameObject("AAMTarget");
         lockMarker.layer = LayerEnemyGround;
@@ -1799,6 +1805,7 @@ public static class ACO_PrefabBuilder
         ship.MarkerLabel = spec.Label;
         ship.ScoreValue = spec.Score;
         ship.HighValue = spec.HighValue;
+        ship.ReservedForFleet = spec.ReservedForFleet;
         ship.PartHullDamage = spec.PartHullDamage;
         ship.CruiseSpeed = spec.CruiseSpeed;
         ship.CruiseRadius = spec.CruiseRadius;

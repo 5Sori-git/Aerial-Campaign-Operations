@@ -69,6 +69,10 @@ namespace ACO
         public GameObject[] LockIcons;
         [Tooltip("분류 표시(< AIR-TO-AIR > 1/4)")]
         public TextMeshProUGUI PageText;
+        [Tooltip("분류 아이콘(PageText 옆)")]
+        public Image PageIcon;
+        [Tooltip("분류별 아이콘(CAT_* 순서)")]
+        public Sprite[] PageIcons;
         [Tooltip("분류 넘김 좌우 버튼(늘 보인다 — 분류 4개를 돌아가며 넘긴다)")]
         public GameObject[] PagerObjects;
         [Tooltip("이 분류에 무장이 없을 때 켜는 글자")]
@@ -318,6 +322,7 @@ namespace ACO
                 string cat = CategoryNames != null && _category < CategoryNames.Length ? CategoryNames[_category] : "";
                 PageText.text = cat + "<size=70%>   " + (_category + 1) + " / " + CATEGORY_COUNT + (pages > 1 ? "   (" + (_page + 1) + "/" + pages + ")" : "") + "</size>";
             }
+            if (PageIcon && PageIcons != null && _category < PageIcons.Length) { PageIcon.sprite = PageIcons[_category]; }
             if (ButtonImages == null) { return; }
             // 이 분류·쪽의 줄 → 목록 번호
             int size = ButtonImages.Length;

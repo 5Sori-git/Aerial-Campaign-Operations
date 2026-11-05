@@ -194,17 +194,32 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         ACO_SpecialWeaponCatalog.InstallForBake();
         BakePlayerMissiles();
         BakePlayerProgress();
+        ACO_HUDBuilder.EnsureConsoleFreeFlightButton();
+        ACO_HUDBuilder.EnsureBoardLayout();
+        ACO_HUDBuilder.EnsureHangarStyle();
+        ACO_HUDBuilder.EnsureSpectatorIconGap();
         BakeGameFlow();
         BakePhaseModules();
+        BakeFortress();
+        BakeTimeSensitive();
+        BakeFleet();
+        BakeRailgun();
+        BakeTierHealth();
         BakeTacticalMaps();
         BakeHudSettings();
         BakeRadio();
         BakeRwr();
         BakeCiws();
         BakeUnderwater();
+        BakeGunWater();
         BakeDebugPanels();
         BakeUiLayers();
         BakeRadar();
+        BakeEcm();
+        BakeDeckTaxi();
+        BakeVehicleMarks();
+        BakeBulletFlyby();
+        BakeCatapultCrew();
         BakeSeatRecenter();
         BakeUiSound();
         BakeSuperAces();
@@ -302,6 +317,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
     /// 거리 단위를 표적 마커·페이즈 모듈·HUD 설정에, HideSavHud면 SAV HUD(SAV_HUDController)를 크기 0으로(끄면 다시 1로) 둔다.
     private static void BakeFlightHud()
     {
+        ACO_HUDBuilder.EnsureFlightHudLayout();
         ACO_FlightHud hud = Object.FindObjectOfType<ACO_FlightHud>(true);
         ACO_Units units = hud != null && hud.Units != null ? hud.Units : Object.FindObjectOfType<ACO_Units>(true);
         ACO_TacName tac = Object.FindObjectOfType<ACO_TacName>(true);
@@ -446,6 +462,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             {
                 if (c.SkyFog != null) { roots.Add(c.SkyFog.gameObject); }
                 if (c.CloudVeil != null) { roots.Add(c.CloudVeil.gameObject); }
+                if (c.CloudVolume != null) { roots.Add(c.CloudVolume.gameObject); }
             }
             foreach (ACO_Rain c in root.GetComponentsInChildren<ACO_Rain>(true))
             {
@@ -468,6 +485,25 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (moved > 0) { Debug.Log($"[ACO] 화면 효과 {moved}개(하늘 안개 돔·물안개 막·비·물빛 벽)를 FX 레이어({FxLayer})로 옮겼습니다 — 관전 카메라가 그리지 않습니다."); }
     }
 
+    /// 관전 카메라 전용 빗방울: 비와 같은 메시·머티리얼을 카메라 자식으로, 메인 카메라가 그리지 않는 레이어(18)에 둔다. 비는 FX 레이어라 관전 카메라가 그리지 않는다.
+    private static Renderer CreateSpectatorRain(Transform cam, Renderer source)
+    {
+        var go = new GameObject("SpectatorRain");
+        Undo.RegisterCreatedObjectUndo(go, "ACO spectator rain");
+        go.layer = ACO_HUDBuilder.SpectatorOnlyLayer;
+        go.transform.SetParent(cam, false);
+        go.AddComponent<MeshFilter>().sharedMesh = source.GetComponent<MeshFilter>().sharedMesh;
+        MeshRenderer r = go.AddComponent<MeshRenderer>();
+        r.sharedMaterial = source.sharedMaterial;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        r.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        r.enabled = false;
+        Debug.Log("[ACO] 관전 카메라 전용 비(SpectatorRain)를 만들었습니다.", go);
+        return r;
+    }
+
     /// 관전 패널(ACO_SpectatorCam): 플레이어 기체(ACO_VehicleUpgrades가 있는 SaccEntity), 해수면·지면 레이어(미션 생성기), 카메라 전용 하늘 안개 돔 머티리얼,
     /// 카메라가 그리는 레이어(UI·FX 빼기), 플레이어 미사일 무장 → 관전 패널(미사일·표적 캠).
     private static void BakeSpectators()
@@ -487,6 +523,16 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             if (gen == null) { gen = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
             if (clouds == null) { clouds = root.GetComponentInChildren<ACO_CloudField>(true); }
         }
+        // 관전 패널은 슬롯 순서로 넘긴다: 게임 흐름의 칸 순서를 앞에 둔다
+        ACO_GameFlow flow = Object.FindObjectOfType<ACO_GameFlow>(true);
+        if (flow != null && flow.Aircraft != null)
+        {
+            var ordered = new List<SaccFlightAndVehicles.SaccEntity>();
+            foreach (SaccFlightAndVehicles.SaccEntity e in flow.Aircraft) { if (e != null && vehicles.Contains(e) && !ordered.Contains(e)) { ordered.Add(e); } }
+            foreach (SaccFlightAndVehicles.SaccEntity e in vehicles) { if (!ordered.Contains(e)) { ordered.Add(e); } }
+            vehicles = ordered;
+        }
+        ACO_Rain rain = Object.FindObjectOfType<ACO_Rain>();
         ACO_SpectatorCam first = specs.Count > 0 ? specs[0] : null;
         if (specs.Count > 1) { Debug.LogWarning($"[ACO] 관전 패널이 {specs.Count}개입니다 — 미사일 캠은 첫 패널 '{first.name}'에만 연결됩니다(카메라를 여러 개 켜면 그만큼 무겁다).", first); }
         foreach (ACO_SpectatorCam s in specs)
@@ -496,6 +542,13 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             bool same = s.Vehicles != null && s.Vehicles.Length == arr.Length;
             for (int i = 0; same && i < arr.Length; i++) { same = s.Vehicles[i] == arr[i]; }
             if (!same) { s.Vehicles = arr; changed = true; }
+            if (s.Flow != flow) { s.Flow = flow; changed = true; }
+            if (s.Rain != rain) { s.Rain = rain; changed = true; }
+            if (s.RainRenderer == null && s.Cam != null && rain != null && rain.RainRenderer != null)
+            {
+                s.RainRenderer = CreateSpectatorRain(s.Cam.transform, rain.RainRenderer);
+                changed = true;
+            }
             if (gen != null && (s.SeaLevel != gen.SeaLevel || s.GroundLayers != gen.GroundLayers)) { s.SeaLevel = gen.SeaLevel; s.GroundLayers = gen.GroundLayers; changed = true; }
             if (s.SkyFogDome != null && clouds != null && clouds.SkyFog != null && s.SkyFogDome.sharedMaterial != clouds.SkyFog.sharedMaterial)
             {
@@ -563,6 +616,37 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             weathers.AddRange(root.GetComponentsInChildren<ACO_Weather>(true));
             if (terrain == null) { terrain = root.GetComponentInChildren<ACO_HexTerrain>(true); }
             if (flow == null) { flow = root.GetComponentInChildren<ACO_GameFlow>(true); }
+        }
+        // ACO_Sky가 둘이면 날씨가 따로 돌아 디버그 패널·게임 진행이 한쪽만 바꾸고, 다른 쪽 구름층이 그대로 남는다.
+        // 첫 번째만 쓰고 나머지는 끈다(지우지 않는다 — 켜면 돌아온다). 첫 번째가 꺼져 있으면 켠다 — 다 꺼지면 날씨가 돌지 않아 맑음에 멈춘다
+        if (weathers.Count > 0 && !weathers[0].gameObject.activeSelf)
+        {
+            GameObject first = weathers[0].gameObject;
+            Undo.RecordObject(first, "ACO sky");
+            first.SetActive(true);
+            MarkChanged(first);
+            Debug.LogWarning($"[ACO] 하늘(ACO_Sky) '{first.transform.parent?.name}/{first.name}'이 꺼져 있어 켰습니다 — 꺼져 있으면 날씨가 돌지 않아 맑음에서 바뀌지 않습니다.");
+        }
+        for (int i = weathers.Count - 1; i >= 1; i--)
+        {
+            GameObject extra = weathers[i].gameObject;
+            if (extra.activeSelf)
+            {
+                Undo.RecordObject(extra, "ACO duplicate sky");
+                extra.SetActive(false);
+                MarkChanged(extra);
+                Debug.LogWarning($"[ACO] 하늘(ACO_Sky)이 {weathers.Count}개라 '{extra.transform.parent?.name}/{extra.name}'을 껐습니다 — 날씨가 따로 돌아 구름층이 남던 원인입니다. 필요 없으면 지워도 됩니다.");
+            }
+            weathers.RemoveAt(i);
+        }
+        foreach (ACO_CloudField f in fields.ToArray())
+        {
+            if (!f.gameObject.activeInHierarchy) { fields.Remove(f); }
+        }
+        foreach (ACO_HudSettings settings in Object.FindObjectsOfType<ACO_HudSettings>(true))
+        {
+            ACO_CloudField keep = weathers.Count > 0 ? weathers[0].Clouds : null;
+            if (settings.Clouds != keep) { settings.Clouds = keep; MarkChanged(settings); }
         }
         foreach (ACO_Weather w in weathers)
         {
@@ -729,6 +813,281 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
 
     /// 레이더 접촉 목록(HUD 레이더와 같은 오브젝트, 씬에 하나) ↔ 생성기·게임 진행, HUD 레이더 ↔ HUD 설정 패널,
     /// NPC 미사일 런처(날아가는 미사일 등록), 조종석 지도(기체마다).
+    /// 플레이어 ECM: 기체의 ECM 모듈을 모으고, 재밍 판정을 적 런처·적 대공포에 잇는다. 아군 함선·헬기는 잇지 않는다 — 내 재밍에 아군이 묶이지 않게.
+    /// 총탄이 스치는 소리: 레이더 아래에 한 벌 만들고, 나를 쏠 수 있는 기총과 잇는다.
+    private static void BakeBulletFlyby()
+    {
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        if (contacts == null) { return; }
+        ACO_BulletFlyby flyby = Object.FindObjectOfType<ACO_BulletFlyby>(true);
+        if (flyby == null)
+        {
+            var go = new GameObject("BulletFlyby");
+            go.transform.SetParent(contacts.transform, false);
+            Undo.RegisterCreatedObjectUndo(go, "ACO bullet flyby");
+            flyby = go.AddUdonSharpComponent<ACO_BulletFlyby>();
+            var sources = new AudioSource[3];
+            for (int i = 0; i < sources.Length; i++)
+            {
+                var child = new GameObject("Source_" + i);
+                child.transform.SetParent(go.transform, false);
+                AudioSource s = child.AddComponent<AudioSource>();
+                s.playOnAwake = false;
+                s.spatialBlend = 0f;
+                s.dopplerLevel = 0f;
+                sources[i] = s;
+            }
+            flyby.Sources = sources;
+            ACO_SyncModeFixer.FixHierarchy(go, false);
+            Debug.Log("[ACO] 총탄이 스치는 소리를 만들었습니다: BulletFlyby");
+        }
+        if (flyby.Contacts != contacts) { flyby.Contacts = contacts; MarkChanged(flyby); }
+        if (flyby.Clips == null || flyby.Clips.Length == 0)
+        {
+            var clips = new List<AudioClip>();
+            for (int i = 1; i <= 4; i++)
+            {
+                AudioClip c = AssetDatabase.LoadAssetAtPath<AudioClip>($"Assets/ACO_Addon/Audio/Generated/ACO_Bullet_Whiz_{i}.wav");
+                if (c != null) { clips.Add(c); }
+            }
+            flyby.Clips = clips.ToArray();
+            MarkChanged(flyby);
+        }
+        foreach (ACO_NPCGun gun in Object.FindObjectsOfType<ACO_NPCGun>(true))
+        {
+            ACO_BulletFlyby want = IsFriendlyUnit(gun) ? null : flyby;
+            if (gun.Flyby != want) { gun.Flyby = want; MarkChanged(gun); }
+        }
+    }
+
+    /// 플레이어 기체의 표시(헐넘버·이름·킬마크)와 콜사인 패널의 헐넘버 칸.
+    private static void BakeVehicleMarks()
+    {
+        ACO_HUDBuilder.EnsureTacHullPanel();
+        // 먼저 샘플 기체에서 잡은 자리가 있으면 기체에 처음 넣을 때 그대로 쓴다
+        ACO_DecalStudio studio = Object.FindObjectOfType<ACO_DecalStudio>(true);
+        Transform template = studio != null && studio.SampleRoot != null ? studio.SampleRoot.Find("ACO_Marks/Marks") : null;
+        SaccFlightAndVehicles.SaccEntity first = null;
+        foreach (ACO_VehicleUpgrades up in Object.FindObjectsOfType<ACO_VehicleUpgrades>(true))
+        {
+            var entity = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+            if (entity == null) { continue; }
+            ACO_HUDBuilder.EnsureVehicleMarks(entity, template);
+            if (first == null) { first = entity; }
+        }
+        if (studio != null) { ACO_HUDBuilder.EnsurePreviewMarks(studio.SampleRoot, first); }
+    }
+
+    /// 기체 자동화가 갑판 영역을 읽을 수 있게 진행도를 잇는다.
+    private static void BakeDeckTaxi()
+    {
+        ACO_PlayerProgress progress = Object.FindObjectOfType<ACO_PlayerProgress>(true);
+        if (progress == null) { return; }
+        foreach (ACO_VehicleAutomation a in Object.FindObjectsOfType<ACO_VehicleAutomation>(true))
+        {
+            if (a.Progress != progress) { a.Progress = progress; MarkChanged(a); }
+        }
+    }
+
+    /// 항모 프리팹 안의 이름으로 찾는다(인스턴스 값이 Transform에 있어 비활성도 찾는다).
+    private static Transform FindSceneTransform(string name, Vector3 near)
+    {
+        Transform best = null;
+        float bestDist = float.MaxValue;
+        foreach (Transform t in Object.FindObjectsOfType<Transform>(true))
+        {
+            if (t.name != name && !t.name.StartsWith(name + " ")) { continue; }
+            float d = (t.position - near).sqrMagnitude;
+            if (d < bestDist) { bestDist = d; best = t; }
+        }
+        return best;
+    }
+
+    /// 가까운 JBD를 잇고 경첩(사출 방향 쪽 끝)을 잰다. 움직여야 하니 정적 배칭에서 뺀다.
+    private static void BakeJbd(ACO_CatapultCrew crew)
+    {
+        if (crew.Trigger == null) { return; }
+        Transform jbd = crew.Jbd != null ? crew.Jbd : FindSceneTransform("JBD", crew.transform.position);
+        Renderer r = jbd != null ? jbd.GetComponent<Renderer>() : null;
+        if (r == null) { Debug.LogWarning($"[ACO] {crew.name}: JBD를 찾지 못했습니다."); return; }
+        Bounds b = r.bounds;
+        Vector3 f = crew.transform.forward;
+        Vector3 hinge = b.center + f * (Mathf.Abs(f.x) * b.extents.x + Mathf.Abs(f.z) * b.extents.z);
+        if (crew.Jbd != jbd || crew.JbdHinge != hinge)
+        {
+            crew.Jbd = jbd;
+            crew.JbdHinge = hinge;
+            MarkChanged(crew);
+            Debug.Log($"[ACO] {crew.name}: {jbd.name}을 이었습니다(거리 {Vector3.Distance(jbd.position, crew.transform.position):0.0}m, 판 크기 {b.size}).");
+        }
+        StaticEditorFlags flags = GameObjectUtility.GetStaticEditorFlags(jbd.gameObject);
+        if ((flags & StaticEditorFlags.BatchingStatic) != 0)
+        {
+            GameObjectUtility.SetStaticEditorFlags(jbd.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
+            MarkChanged(jbd.gameObject);
+        }
+    }
+
+    /// 발함지휘소 요원: 처음 한 번 지휘소 바닥에 사출 방향을 보고 놓는다. 놓인 뒤의 자리는 건드리지 않는다.
+    private static void BakeLaunchOperator(List<ACO_CatapultCrew> crews)
+    {
+        ACO_LaunchOperator op = Object.FindObjectOfType<ACO_LaunchOperator>(true);
+        if (op == null)
+        {
+            Transform station = FindSceneTransform("発艦指揮所", Vector3.zero);
+            GameObject prefab = ACO_PrefabBuilder.EnsureLaunchOperatorPrefab();
+            if (station == null || prefab == null || crews.Count == 0) { Debug.LogWarning("[ACO] 발함지휘소 또는 요원 프리팹을 찾지 못했습니다."); return; }
+            Renderer r = station.GetComponent<Renderer>();
+            Bounds b = r != null ? r.bounds : new Bounds(station.position, Vector3.one);
+            Vector3 pos = b.center;
+            // 안쪽에서 아래로 쏴 바닥을 찾는다(없으면 바닥면)
+            pos.y = Physics.Raycast(b.center, Vector3.down, out RaycastHit hit, b.extents.y + 1f, 2049) ? hit.point.y : b.min.y;
+            GameObject holder = GameObject.Find("ACO_DeckCrew");
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder != null ? holder.transform : null);
+            Undo.RegisterCreatedObjectUndo(go, "ACO launch operator");
+            go.name = "LaunchOperator";
+            go.transform.SetPositionAndRotation(pos, crews[0].transform.rotation);
+            MarkChanged(go.transform);
+            op = go.GetComponent<ACO_LaunchOperator>();
+            Debug.Log($"[ACO] 발함지휘소 요원을 놓았습니다: 위치 {pos}, 지휘소 크기 {b.size} — 어긋나면 씬에서 옮기세요.");
+        }
+        if (op.Crews == null || !new HashSet<ACO_CatapultCrew>(op.Crews).SetEquals(crews))
+        {
+            op.Crews = crews.ToArray();
+            MarkChanged(op);
+        }
+    }
+
+    /// 캐터펄트마다 갑판 요원을 한 벌 놓고 기체·HUD 설정과 잇는다. 놓인 뒤의 자리는 건드리지 않는다.
+    private static void BakeCatapultCrew()
+    {
+        var triggers = new List<Transform>();
+        foreach (Transform t in Object.FindObjectsOfType<Transform>(true))
+        {
+            if (t.name == "Trigger" && t.gameObject.layer == 24 && t.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true) == null) { triggers.Add(t); }
+        }
+        if (triggers.Count == 0) { return; }
+        ACO_PrefabBuilder.EnsureCrewAnimations();
+        GameObject prefab = ACO_PrefabBuilder.EnsureCatapultCrewPrefab();
+        ACO_PrefabBuilder.EnsureCatapultCrewExtras();
+        ACO_PrefabBuilder.EnsureCatapultCrewModels();
+        if (prefab == null) { return; }
+        ACO_HUDBuilder.EnsureHudDeckCrewCard();
+
+        var crews = new List<ACO_CatapultCrew>(Object.FindObjectsOfType<ACO_CatapultCrew>(true));
+        foreach (Transform trigger in triggers)
+        {
+            if (crews.Exists(c => c.Trigger == trigger)) { continue; }
+            GameObject holder = GameObject.Find("ACO_DeckCrew");
+            if (holder == null)
+            {
+                holder = new GameObject("ACO_DeckCrew");
+                Undo.RegisterCreatedObjectUndo(holder, "ACO deck crew");
+            }
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, holder.transform);
+            Undo.RegisterCreatedObjectUndo(go, "ACO deck crew");
+            go.name = "CatapultCrew_" + (crews.Count + 1);
+            Vector3 forward = trigger.forward;
+            forward.y = 0f;
+            Vector3 pos = trigger.position;
+            // 2049 = 갑판도 기체 접지와 같은 마스크로 찾는다
+            if (Physics.Raycast(pos + Vector3.up * 5f, Vector3.down, out RaycastHit hit, 20f, 2049)) { pos = hit.point; }
+            go.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(forward));
+            ACO_CatapultCrew crew = go.GetComponent<ACO_CatapultCrew>();
+            crew.Trigger = trigger;
+            MarkChanged(go.transform);
+            MarkChanged(crew);
+            crews.Add(crew);
+            Debug.Log($"[ACO] 갑판 요원을 놓았습니다: {go.name}");
+        }
+
+        foreach (ACO_CatapultCrew crew in crews) { BakeJbd(crew); }
+        BakeLaunchOperator(crews);
+
+        var catapults = new List<ACO_DFUNC_Catapult>(Object.FindObjectsOfType<ACO_DFUNC_Catapult>(true));
+        foreach (ACO_CatapultCrew crew in crews)
+        {
+            if (crew.Catapults == null || !new HashSet<ACO_DFUNC_Catapult>(crew.Catapults).SetEquals(catapults))
+            {
+                crew.Catapults = catapults.ToArray();
+                MarkChanged(crew);
+            }
+        }
+        foreach (ACO_DFUNC_Catapult cat in catapults)
+        {
+            if (cat.Crews == null || !new HashSet<ACO_CatapultCrew>(cat.Crews).SetEquals(crews))
+            {
+                cat.Crews = crews.ToArray();
+                MarkChanged(cat);
+            }
+        }
+        foreach (ACO_HudSettings settings in Object.FindObjectsOfType<ACO_HudSettings>(true))
+        {
+            if (settings.Crews == null || !new HashSet<ACO_CatapultCrew>(settings.Crews).SetEquals(crews))
+            {
+                settings.Crews = crews.ToArray();
+                MarkChanged(settings);
+            }
+        }
+    }
+
+    private static void BakeEcm()
+    {
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        if (contacts == null) { return; }
+        var pods = new List<ACO_DFUNC_Missile>();
+        foreach (ACO_DFUNC_Missile m in Object.FindObjectsOfType<ACO_DFUNC_Missile>(true))
+        {
+            if (!m.EcmMode) { continue; }
+            pods.Add(m);
+            if (m.EcmHub != contacts) { m.EcmHub = contacts; MarkChanged(m); }
+            // 먼저 설치된 모듈은 주 무장의 미사일이 들어가 있다
+            if (m.Missile != null) { m.Missile = null; MarkChanged(m); }
+        }
+        if (contacts.EcmPods == null || !new HashSet<ACO_DFUNC_Missile>(contacts.EcmPods).SetEquals(pods))
+        {
+            contacts.EcmPods = pods.ToArray();
+            MarkChanged(contacts);
+        }
+        // 구역 안에서 들리는 소리: 2D 루프 하나(내 기체가 구역 안일 때만 켠다)
+        Transform soundObj = contacts.transform.Find("EcmSound");
+        if (soundObj == null)
+        {
+            soundObj = new GameObject("EcmSound").transform;
+            soundObj.SetParent(contacts.transform, false);
+            Undo.RegisterCreatedObjectUndo(soundObj.gameObject, "ACO ECM sound");
+        }
+        AudioSource sound = soundObj.GetComponent<AudioSource>();
+        if (sound == null) { sound = soundObj.gameObject.AddComponent<AudioSource>(); }
+        if (sound.clip == null)
+        {
+            sound.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ACO_Addon/Audio/Generated/ACO_Ecm_Loop.wav");
+            sound.loop = true;
+            sound.playOnAwake = false;
+            sound.spatialBlend = 0f;
+            sound.volume = 0.45f;
+            MarkChanged(sound);
+        }
+        if (contacts.EcmSound != sound) { contacts.EcmSound = sound; MarkChanged(contacts); }
+        foreach (ACO_MissileLauncher l in Object.FindObjectsOfType<ACO_MissileLauncher>(true))
+        {
+            ACO_RadarContacts want = IsFriendlyUnit(l) ? null : contacts;
+            if (l.EcmHub != want) { l.EcmHub = want; MarkChanged(l); }
+        }
+        foreach (ACO_AAGunSite aa in Object.FindObjectsOfType<ACO_AAGunSite>(true))
+        {
+            ACO_RadarContacts want = IsFriendlyUnit(aa) ? null : contacts;
+            if (aa.EcmHub != want) { aa.EcmHub = want; MarkChanged(aa); }
+        }
+        Debug.Log($"[ACO] 전자전: ECM 모듈 {pods.Count}개를 이었습니다.");
+    }
+
+    private static bool IsFriendlyUnit(Component c)
+    {
+        ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>(true);
+        return escort != null && !escort.Hostile;
+    }
+
     private static void BakeRadar()
     {
         ACO_RadarContacts contacts = null;
@@ -1012,6 +1371,10 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         {
             foreach (ACO_MissionManager manager in root.GetComponentsInChildren<ACO_MissionManager>(true))
             {
+                ACO_PhaseModuleSetup.EnsureFortress(manager);
+                ACO_PhaseModuleSetup.EnsureFleet(manager);
+                ACO_PhaseModuleSetup.EnsureRailgun(manager);
+                ACO_PhaseModuleSetup.ApplyDefaultWeights(manager);
                 ACO_PhaseModule[] modules = manager.GetComponentsInChildren<ACO_PhaseModule>(true);
                 manager.Modules = modules;
                 MarkChanged(manager);
@@ -1087,6 +1450,14 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (flows.Count > 1) { Debug.LogWarning($"[ACO] 게임 진행(ACO_GameFlow)이 {flows.Count}개 있습니다. '{flow.name}' 하나만 연결합니다.", flow); }
 
         if (flow.Manager == null) { flow.Manager = manager; }
+        if (flow.ReadyTuneVersion < 1)
+        {
+            flow.ReadyTuneVersion = 1;
+            flow.ReadyCountdown = 30f;
+            MarkChanged(flow);
+        }
+        ACO_ScoreHUD flowHud = Object.FindObjectOfType<ACO_ScoreHUD>(true);
+        if (flow.Hud != flowHud) { flow.Hud = flowHud; MarkChanged(flow); }
         // 지형 이름: 프리셋이 늘었으면 새 이름을 붙인다
         string[] defNames = { "BIG ISLAND", "ARCHIPELAGO", "TWIN ISLANDS", "ATOLL", "ISLAND CHAIN", "PLATEAU", "MOUNTAIN RANGE", "CANYON", "COASTLINE", "VOLCANO", "REEF ISLANDS", "BASIN" };
         if (flow.TerrainNames == null || flow.TerrainNames.Length < defNames.Length)
@@ -1166,6 +1537,17 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         flow.StatusTexts = status.ToArray();
         flow.BannerTexts = banners.ToArray();
         flow.PhaseTexts = phaseTexts.ToArray();
+        var phaseIcons = new List<UnityEngine.UI.Image>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (UnityEngine.UI.Image img in root.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            {
+                if (img.name == ACO_HUDBuilder.FlowPhaseIconName) { phaseIcons.Add(img); }
+            }
+        }
+        flow.PhaseIcons = phaseIcons.ToArray();
+        flow.PhaseLevelSprites = new Sprite[5];
+        for (int i = 0; i < flow.PhaseLevelSprites.Length; i++) { flow.PhaseLevelSprites[i] = ACO_HUDBuilder.LoadIcon("phase_" + (i + 1)); }
         flow.PhaseInfoTexts = phaseInfos.ToArray();
         flow.TerrainTexts = terrainTexts.ToArray();
         // 출격 카운트다운 판: 상태 글자·배너가 있는 패널(캔버스)마다 하나 — 없으면 만든다
@@ -1342,6 +1724,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
     {
         var sites = new List<ACO_AAGunSite>();
         int defaults = 0;
+        int tuned = 0;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (ACO_AAGunSite aa in root.GetComponentsInChildren<ACO_AAGunSite>(true))
@@ -1351,9 +1734,18 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                     if (ApplyInterceptDefaults(aa)) { defaults++; }
                     MarkChanged(aa);
                 }
+                // 공용 포대 프리팹은 판이 같아 건드리지 않는다 — 프리팹 수정이 씬 값에 가리지 않는다
+                if (ApplyShellRadius(aa)) { MarkChanged(aa.Gun); }
+                if (aa.InterceptTuneVersion < CiwsTuneVersion && (aa.InterceptProtectLayers.value & (1 << 29)) != 0)
+                {
+                    ApplyEnemyCiwsTune(aa);
+                    MarkChanged(aa);
+                    tuned++;
+                }
                 if (aa.InterceptProtectLayers.value != 0) { sites.Add(aa); }
             }
         }
+        if (tuned > 0) { Debug.Log($"[ACO] 적 CIWS {tuned}문에 새 요격 수치를 넣었습니다."); }
         ACO_AAGunSite[] list = sites.ToArray();
         int linked = 0;
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
@@ -1457,6 +1849,48 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         }
     }
 
+    /// 기총 탄이 수면 아래로 들어가면 사라지게: 탄 파티클의 Trigger 모듈에 씬의 Water 트리거(레이어 4 BoxCollider — 깊이 200m)를 넣는다.
+    /// 파티클 Collision 모듈은 트리거 콜라이더에 막히지 않고 플레이어 기총은 그 모듈을 명중 판정에 쓰므로, 따로 도는 Trigger 모듈을 쓴다.
+    /// 프레임마다 "안에 있는가"를 보므로 상자가 두꺼워야 빠른 탄이 건너뛰지 않는다. 대상: NPC 예광탄, 플레이어 기총 탄(ACO_GunDamageBonus가 붙은 파티클).
+    private static void BakeGunWater()
+    {
+        BoxCollider water = null;
+        foreach (BoxCollider c in Object.FindObjectsOfType<BoxCollider>(true))
+        {
+            if (!c.isTrigger || !c.enabled || c.gameObject.layer != 4) { continue; }
+            if (water == null || c.bounds.size.x > water.bounds.size.x) { water = c; }
+        }
+        ACO_MissionGenerator generator = Object.FindObjectOfType<ACO_MissionGenerator>(true);
+        float sea = generator != null ? generator.SeaLevel : 0f;
+        if (water == null || Mathf.Abs(water.bounds.max.y - sea) > 5f || water.bounds.size.y < 50f)
+        {
+            Debug.LogWarning("[ACO] 수면 트리거(레이어 4 BoxCollider, 윗면 = 해수면, 깊이 50m 이상)를 찾지 못해 기총 탄을 수면에서 지우지 못합니다.", water);
+            return;
+        }
+        var systems = new List<ParticleSystem>();
+        foreach (ACO_NPCGun gun in Object.FindObjectsOfType<ACO_NPCGun>(true)) { if (gun.VisualParticle != null) { systems.Add(gun.VisualParticle); } }
+        foreach (ACO_GunDamageBonus bonus in Object.FindObjectsOfType<ACO_GunDamageBonus>(true))
+        {
+            ParticleSystem ps = bonus.GetComponent<ParticleSystem>();
+            if (ps != null) { systems.Add(ps); }
+        }
+        int changed = 0;
+        foreach (ParticleSystem ps in systems)
+        {
+            ParticleSystem.TriggerModule trigger = ps.trigger;
+            if (trigger.enabled && trigger.colliderCount == 1 && trigger.GetCollider(0) == water && trigger.inside == ParticleSystemOverlapAction.Kill) { continue; }
+            trigger.enabled = true;
+            trigger.SetCollider(0, water);
+            trigger.inside = ParticleSystemOverlapAction.Kill;
+            trigger.enter = ParticleSystemOverlapAction.Kill;
+            trigger.outside = ParticleSystemOverlapAction.Ignore;
+            trigger.exit = ParticleSystemOverlapAction.Ignore;
+            MarkChanged(ps);
+            changed++;
+        }
+        if (changed > 0) { Debug.Log($"[ACO] 기총 탄 파티클 {changed}개가 수면에서 사라지게 했습니다(Trigger 모듈 → {water.name})."); }
+    }
+
     /// 물속 연출(ACO_Underwater, 메뉴 ACO → Environment → Add Water Effects가 만든다): 해수면 = 미션 생성기 SeaLevel, 안개는 구름 필드와 같이 쓴다.
     private static void BakeUnderwater()
     {
@@ -1501,6 +1935,27 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
     /// 요격 기본값(프리팹 빌더·Bake 공용). 함선 CIWS(MarkerLabel "CIWS") = 적 요격: 적 항공기·지상(29, 30)을 노린 미사일, 사거리 1.2km, 방어 반경 600m,
     /// 다른 함선 ×2. 아군 호위 유닛(ACO_EscortUnit, Hostile 아님)의 대공포(이름에 "AAGun") = 아군 요격: 아군 항공기·지상(25, 26), 사거리·반경 1.5km, 배수 1.
     /// 그 밖(지상 대공포·함포 등)은 요격하지 않는다. 기본값을 넣었으면 true. 어느 쪽이든 InterceptDefaultsApplied를 켠다.
+    /// 적 CIWS 요격 수치의 판 번호. 수치를 바꾸면 올린다 — 씬·프리팹의 먼저 만든 CIWS에 Bake가 한 번 다시 넣는다.
+    private const int CiwsTuneVersion = 1;
+
+    /// 적 CIWS 요격 수치: AAM 최고 속도(600m/s)면 사거리를 1.5초에 지나 혼자서는 겨우 맞출 수 있고, 다음 발까지 쉰다 — 일제 사격이 뚫는다.
+    private static void ApplyEnemyCiwsTune(ACO_AAGunSite aa)
+    {
+        aa.InterceptRange = 900f;
+        aa.InterceptReactionTime = 0.5f;
+        aa.InterceptKillTime = 1f;
+        aa.InterceptCooldown = 1.5f;
+        aa.InterceptTuneVersion = CiwsTuneVersion;
+    }
+
+    /// 대공포 탄 도착 판정 반경: 아직 없으면 넣는다. CIWS는 조밀한 탄, 그 밖의 포는 큰 탄이라 넓다. 넣었으면 true.
+    public static bool ApplyShellRadius(ACO_AAGunSite aa)
+    {
+        if (aa.Gun == null || aa.Gun.ShellHitRadius > 0f) { return false; }
+        aa.Gun.ShellHitRadius = aa.MarkerLabel == "CIWS" ? 20f : 45f;
+        return true;
+    }
+
     public static bool ApplyInterceptDefaults(ACO_AAGunSite aa)
     {
         aa.InterceptDefaultsApplied = true;
@@ -1509,9 +1964,10 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         if (aa.MarkerLabel == "CIWS")
         {
             aa.InterceptProtectLayers = (1 << 29) | (1 << 30);
-            aa.InterceptRange = 1200f;
             aa.DefenseRadius = 600f;
             aa.OtherDefenseFactor = 2f;
+            ApplyEnemyCiwsTune(aa);
+            return true;
         }
         else if (escort != null && !escort.Hostile && aa.name.Contains("AAGun"))
         {
@@ -1604,6 +2060,296 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         }
     }
 
+    /// 공중 요새: 풀에 없으면 프리팹(없으면 만든다)을 풀 아래에 하나 둔다 — 부위가 많아 손으로 넣기 번거롭다.
+    private static void EnsureFortress(Transform poolRoot)
+    {
+        if (ACO_PrefabBuilder.IsFortressOutdated())
+        {
+            ACO_PrefabBuilder.BuildFortress();
+            Debug.Log("[ACO] 공중 요새 프리팹을 Archangel 모델로 다시 만들었습니다.");
+        }
+        ACO_PrefabBuilder.EnsureTurretShellRadius();
+        ACO_PrefabBuilder.EnsureFortressBlast();
+        ACO_PrefabBuilder.EnsurePartMarkers("NPC_Fortress");
+        ACO_PrefabBuilder.EnsureFortressLaunchPoints();
+        ACO_PrefabBuilder.EnsureFortressHullLayer();
+        if (poolRoot.GetComponentInChildren<ACO_FlyingFortress>(true) != null) { return; }
+        GameObject prefab = ACO_PrefabBuilder.Exists("NPC_Fortress")
+            ? AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf("NPC_Fortress"))
+            : ACO_PrefabBuilder.BuildFortress();
+        if (prefab == null) { return; }
+        GameObject go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, poolRoot);
+        Undo.RegisterCreatedObjectUndo(go, "ACO fortress");
+        go.SetActive(false);
+        MarkChanged(go);
+        Debug.Log("[ACO] 공중 요새 NPC_Fortress를 유닛 풀에 넣었습니다.", go);
+    }
+
+    /// 랜스 포대: 프리팹이 없으면 만들고 풀에 넣는다.
+    private static void EnsureRailgun(Transform poolRoot)
+    {
+        ACO_PrefabBuilder.EnsureRailgunHorizon();
+        ACO_PrefabBuilder.EnsurePartMarkers("NPC_Railgun");
+        ACO_PrefabBuilder.EnsureRailgunMinis();
+        ACO_PrefabBuilder.EnsureRailgunTurrets();
+        ACO_PrefabBuilder.EnsureRailgunLayout();
+        if (poolRoot.GetComponentInChildren<ACO_Railgun>(true) != null) { return; }
+        AddFleetUnit(poolRoot, "NPC_Railgun", ACO_PrefabBuilder.BuildRailgun);
+    }
+
+    private static void BakeRailgun()
+    {
+        ACO_Railgun gun = Object.FindObjectOfType<ACO_Railgun>(true);
+        ACO_PhaseRailgun phase = Object.FindObjectOfType<ACO_PhaseRailgun>(true);
+        if (gun == null) { return; }
+        if (phase == null) { Debug.LogWarning("[ACO] 랜스 포대: 페이즈 모듈(ACO_PhaseRailgun)이 없습니다.", gun); return; }
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        ACO_CloudField clouds = Object.FindObjectOfType<ACO_CloudField>();
+        if (gun.Phase != phase || gun.Contacts != contacts || gun.Clouds != clouds) { gun.Phase = phase; gun.Contacts = contacts; gun.Clouds = clouds; MarkChanged(gun); }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        // 씬에 저장된 옛 기초 값(반경 200m)을 넓어진 기초에 맞춘다
+        ACO_MissionGenerator generator = Object.FindObjectOfType<ACO_MissionGenerator>(true);
+        if (generator != null && generator.RailgunPadRadius == 200f)
+        {
+            generator.RailgunPadRadius = 530f;
+            generator.RailgunMaxRelief = 80f;
+            MarkChanged(generator);
+        }
+        if (gun.MiniGuns != null)
+        {
+            foreach (ACO_MiniRailgun mini in gun.MiniGuns)
+            {
+                if (mini == null || (mini.Phase == phase && mini.Contacts == contacts)) { continue; }
+                mini.Phase = phase;
+                mini.Contacts = contacts;
+                MarkChanged(mini);
+            }
+        }
+        // 먼저 만든 모듈의 대사 표에 소형 레일건 줄을 더한다
+        if (System.Array.IndexOf(phase.LineEvent, ACO_PhaseRailgun.SIT_MINI_FIRE) < 0)
+        {
+            ArrayUtility.Add(ref phase.LineEvent, ACO_PhaseRailgun.SIT_MINI_FIRE);
+            ArrayUtility.Add(ref phase.LineSpeaker, ACO_PhaseBoss.SPEAKER_AWACS);
+            ArrayUtility.Add(ref phase.LineText, "Those smaller guns are leading you! Do not fly straight, keep turning!");
+            ArrayUtility.Add(ref phase.LineClip, null);
+            MarkChanged(phase);
+        }
+    }
+
+    /// 지상 유닛 숙련도 체력의 기준(BaseHealth, 베테랑)을 SaccTarget 체력으로 맞춘다 — 동기화되는 Health는 게임 중 믿을 수 없다(늦게 들어온 클라이언트에겐 깎인 값).
+    private static void BakeTierHealth()
+    {
+        int changed = 0;
+        foreach (ACO_AAGunSite u in Object.FindObjectsOfType<ACO_AAGunSite>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_SAMSite u in Object.FindObjectsOfType<ACO_SAMSite>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_MobileUnit u in Object.FindObjectsOfType<ACO_MobileUnit>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_Warship u in Object.FindObjectsOfType<ACO_Warship>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        if (changed > 0) { Debug.Log($"[ACO] 지상 유닛 {changed}곳의 기준 체력(BaseHealth, 베테랑)을 채웠습니다."); }
+    }
+
+    /// 함대전: 기함·항모가 풀에 없으면 프리팹(없으면 만든다)을 넣는다. 호위함·순양함·구축함은 풀의 기존 유닛을 함께 쓴다.
+    private static void EnsureFleet(Transform poolRoot)
+    {
+        bool hasFlagship = false;
+        foreach (ACO_EscortUnit e in poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true)) { if (e.Role == ACO_EscortUnit.ROLE_FLAGSHIP) { hasFlagship = true; } }
+        if (!hasFlagship) { AddFleetUnit(poolRoot, "NPC_Flagship", ACO_PrefabBuilder.BuildFlagship); }
+        bool hasCarrier = false;
+        foreach (ACO_Warship s in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (s.ReservedForFleet) { hasCarrier = true; } }
+        if (!hasCarrier) { AddFleetUnit(poolRoot, "NPC_Carrier", ACO_PrefabBuilder.BuildCarrier); }
+    }
+
+    private static void AddFleetUnit(Transform poolRoot, string prefabName, System.Func<GameObject> build)
+    {
+        GameObject prefab = ACO_PrefabBuilder.Exists(prefabName) ? AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf(prefabName)) : build();
+        if (prefab == null) { return; }
+        GameObject go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, poolRoot);
+        Undo.RegisterCreatedObjectUndo(go, "ACO fleet");
+        go.SetActive(false);
+        MarkChanged(go);
+        Debug.Log($"[ACO] {prefabName}을 유닛 풀에 넣었습니다.", go);
+    }
+
+    private const int FleetTuneVersion = 1;
+
+    /// 함대전: 이름 BB → CG(순양함), 함선 VLS·함포가 아군 함선(레이어 26)도 노리게(바다 높이라 최저 고도 해제), 무전.
+    /// 프리팹을 다시 만들지 않고 씬 값을 고친다 — 순양함·구축함 모델을 직접 바꿔 뒀다.
+    private static void BakeFleet()
+    {
+        ACO_PhaseFleet phase = Object.FindObjectOfType<ACO_PhaseFleet>(true);
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase != null && phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        // 먼저 만든 모듈: 공통 부모의 기본 이름(요새)을 함대전 이름으로
+        if (phase != null && phase.EnemyName == "FORTRESS COMMAND") { phase.EnemyName = "CARRIER GROUP"; MarkChanged(phase); }
+        // 먼저 만든 표: 기함 입장에서 하는 줄을 함대장으로(글이 그대로인 줄만, 한 번만)
+        if (phase != null && !phase.AllySpeakerApplied)
+        {
+            phase.AllySpeakerApplied = true;
+            string[] flagshipLines =
+            {
+                "Both fleets are in gun range! All ships, open fire!",
+                "Flagship is taking heavy fire! Get those ships off us!",
+                "Flagship is critical! We cannot take much more!",
+            };
+            for (int i = 0; i < phase.LineText.Length && i < phase.LineSpeaker.Length; i++)
+            {
+                if (System.Array.IndexOf(flagshipLines, phase.LineText[i]) >= 0) { phase.LineSpeaker[i] = ACO_PhaseBoss.SPEAKER_ALLY; }
+            }
+            MarkChanged(phase);
+        }
+
+        // 먼저 만들어 둔 프리팹: 포대도 수송기·기함의 AttackPriority를 따르게(한 번만 — 그 뒤 직접 바꾼 값은 그대로)
+        foreach (ACO_EscortUnit e in Object.FindObjectsOfType<ACO_EscortUnit>(true))
+        {
+            if (e.PriorityDefaultsApplied) { continue; }
+            e.PriorityDefaultsApplied = true;
+            bool flagship = e.Role == ACO_EscortUnit.ROLE_FLAGSHIP;
+            if (flagship) { e.AttackPriority = 2500f; }
+            if (flagship || (e.MoveMode == ACO_EscortUnit.MOVE_AIR && !e.Hostile && e.Role == ACO_EscortUnit.ROLE_VIP)) { e.PriorityForSites = true; }
+            MarkChanged(e);
+        }
+        const int friendlyShips = 1 << 26;
+        int changed = 0;
+        foreach (ACO_Warship ship in Object.FindObjectsOfType<ACO_Warship>(true))
+        {
+            if (ship.ExternalPose) { continue; }   // 공중 요새는 함대전에 나오지 않는다
+            if (ship.MarkerLabel == "BB")
+            {
+                ship.MarkerLabel = "CG";
+                ship.TargetName = "Cruiser";
+                MarkChanged(ship);
+                changed++;
+            }
+            if (ship.Parts == null) { continue; }
+            // 사거리는 한 번만 — 두 함대는 3.5km에서 멈춘다. 그 뒤 직접 바꾼 값은 그대로 둔다
+            bool tune = ship.FleetTuneVersion < FleetTuneVersion;
+            if (tune) { ship.FleetTuneVersion = FleetTuneVersion; MarkChanged(ship); }
+            foreach (UdonSharp.UdonSharpBehaviour part in ship.Parts)
+            {
+                ACO_SAMSite sam = part as ACO_SAMSite;
+                ACO_AAGunSite gun = part as ACO_AAGunSite;
+                if (sam != null)
+                {
+                    bool dirty = false;
+                    if ((sam.TargetLayers.value & friendlyShips) == 0) { sam.TargetLayers = sam.TargetLayers.value | friendlyShips; dirty = true; }
+                    if (sam.MinTargetAltitude > -100000f) { sam.MinTargetAltitude = -100000f; dirty = true; }
+                    if (tune && sam.DetectRange < 5000f) { sam.DetectRange = 5000f; dirty = true; }
+                    if (tune && sam.LoseTargetRange < 6000f) { sam.LoseTargetRange = 6000f; dirty = true; }
+                    if (sam.EntityControl != null && (sam.EntityControl.AAMTargetsLayer.value & friendlyShips) == 0)
+                    {
+                        sam.EntityControl.AAMTargetsLayer |= friendlyShips;
+                        MarkChanged(sam.EntityControl);
+                        dirty = true;
+                    }
+                    if (dirty) { MarkChanged(sam); changed++; }
+                }
+                // 함포만(CIWS는 대공·요격 그대로)
+                if (gun != null && part.gameObject.name.Contains("MainGun"))
+                {
+                    bool dirty = false;
+                    if ((gun.TargetLayers.value & friendlyShips) == 0) { gun.TargetLayers = gun.TargetLayers.value | friendlyShips; dirty = true; }
+                    if (gun.MinTargetAltitude > -100000f) { gun.MinTargetAltitude = -100000f; dirty = true; }
+                    if (gun.EntityControl != null && (gun.EntityControl.AAMTargetsLayer.value & friendlyShips) == 0)
+                    {
+                        gun.EntityControl.AAMTargetsLayer |= friendlyShips;
+                        MarkChanged(gun.EntityControl);
+                        dirty = true;
+                    }
+                    if (dirty) { MarkChanged(gun); changed++; }
+                }
+            }
+        }
+        if (changed > 0) { Debug.Log($"[ACO] 함대전: 함선 이름·표적 설정 {changed}곳을 고쳤습니다(BB → CG, VLS·함포가 아군 함선도 노린다)."); }
+    }
+
+    /// TEL: 시한 표적 전용 풀 — 풀에 TelPoolSize대가 되게 프리팹(없으면 만든다)을 넣는다.
+    private const int TelPoolSize = 3;
+    private static void EnsureTels(Transform poolRoot)
+    {
+        int have = poolRoot.GetComponentsInChildren<ACO_TelUnit>(true).Length;
+        if (have >= TelPoolSize) { return; }
+        GameObject prefab = ACO_PrefabBuilder.Exists("NPC_TEL")
+            ? AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf("NPC_TEL"))
+            : ACO_PrefabBuilder.BuildTel();
+        if (prefab == null) { return; }
+        for (int i = have; i < TelPoolSize; i++)
+        {
+            GameObject go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, poolRoot);
+            Undo.RegisterCreatedObjectUndo(go, "ACO TEL");
+            go.SetActive(false);
+            MarkChanged(go);
+        }
+        Debug.Log($"[ACO] TEL NPC_TEL을 유닛 풀에 {TelPoolSize - have}대 넣었습니다.");
+    }
+
+    /// 시한 표적 ↔ TEL: 발사·상승 시간(모듈 값), 끝 고도(씬 SAV 최대 고도 — 대기가 0이 되는 높이), 무전.
+    private static void BakeTimeSensitive()
+    {
+        ACO_PhaseTimeSensitive phase = Object.FindObjectOfType<ACO_PhaseTimeSensitive>(true);
+        if (phase == null) { return; }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        const string oldStart = "High-value targets are on the move. Hit each one before it escapes!";
+        if (phase.StartText == oldStart)
+        {
+            phase.StartText = "Ballistic missile launchers are setting up! Stop every launch!";
+            phase.SuccessText = "All launchers are down. No missiles got through.";
+            phase.FailText = "MISSILE LAUNCHED";
+            phase.FailChatterText = "The missile is out of reach. We failed. All aircraft, return to base.";
+            MarkChanged(phase);
+        }
+        SaccFlightAndVehicles.SaccAirVehicle sav = Object.FindObjectOfType<SaccFlightAndVehicles.SaccAirVehicle>(true);
+        float ceiling = sav != null ? sav.AtmosphereThinningEnd + sav.SeaLevel : 19812f;
+        foreach (ACO_TelUnit tel in Object.FindObjectsOfType<ACO_TelUnit>(true))
+        {
+            float flight = Mathf.Max(phase.TimeLimit - phase.LaunchDelay, 1f);
+            if (Mathf.Approximately(tel.LaunchDelay, phase.LaunchDelay) && Mathf.Approximately(tel.FlightTime, flight) && Mathf.Approximately(tel.CeilingAltitude, ceiling)) { continue; }
+            tel.LaunchDelay = phase.LaunchDelay;
+            tel.FlightTime = flight;
+            tel.CeilingAltitude = ceiling;
+            MarkChanged(tel);
+        }
+    }
+
+    /// 공중 요새 ↔ 보스 페이즈(동기화된 단계·기준값).
+    private static void BakeFortress()
+    {
+        ACO_FlyingFortress fortress = Object.FindObjectOfType<ACO_FlyingFortress>(true);
+        ACO_PhaseFortress phase = Object.FindObjectOfType<ACO_PhaseFortress>(true);
+        if (fortress == null) { return; }
+        if (phase == null) { Debug.LogWarning("[ACO] 공중 요새: 페이즈 모듈(ACO_PhaseFortress)이 없습니다.", fortress); return; }
+        if (fortress.Phase != phase) { fortress.Phase = phase; MarkChanged(fortress); }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+
+        // 땅을 재는 쪽은 요새 외피 레이어를 뺀다 — 위에서 쏘는 레이가 선체에 맞으면 유닛이 그 위에 놓인다
+        int hullBit = 1 << ACO_PrefabBuilder.LayerFortressHull;
+        foreach (ACO_MissionGenerator g in Object.FindObjectsOfType<ACO_MissionGenerator>(true))
+        {
+            if ((g.GroundLayers.value & hullBit) != 0) { g.GroundLayers = g.GroundLayers.value & ~hullBit; MarkChanged(g); }
+        }
+        foreach (ACO_MobileUnit u in Object.FindObjectsOfType<ACO_MobileUnit>(true))
+        {
+            if ((u.GroundLayers.value & hullBit) != 0) { u.GroundLayers = u.GroundLayers.value & ~hullBit; MarkChanged(u); }
+        }
+        foreach (ACO_EscortUnit u in Object.FindObjectsOfType<ACO_EscortUnit>(true))
+        {
+            if ((u.GroundLayers.value & hullBit) != 0) { u.GroundLayers = u.GroundLayers.value & ~hullBit; MarkChanged(u); }
+        }
+    }
+
     /// 미션 생성기의 유닛 풀 = UnitPoolRoot(비면 생성기 자신) 아래의 NPC. 비활성 유닛도 포함한다.
     private static void BakeMissionGenerators()
     {
@@ -1616,14 +2362,18 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         foreach (ACO_MissionGenerator generator in generators)
         {
             Transform poolRoot = generator.UnitPoolRoot != null ? generator.UnitPoolRoot : generator.transform;
+            EnsureFortress(poolRoot);
+            EnsureTels(poolRoot);
+            EnsureFleet(poolRoot);
+            EnsureRailgun(poolRoot);
 
             generator.Fighters = poolRoot.GetComponentsInChildren<ACO_NPCFighterAI>(true);
 
-            // 함선 부위(ACO_Warship 아래의 SAM/대공포)는 함선이 데리고 다니므로 지상 풀에 넣지 않는다.
+            // 함선 부위(ACO_Warship·ACO_EscortUnit 아래의 SAM/대공포)는 함선이 데리고 다니므로 지상 풀에 넣지 않는다.
             var ground = new List<UdonSharp.UdonSharpBehaviour>();
             foreach (ACO_SAMSite sam in poolRoot.GetComponentsInChildren<ACO_SAMSite>(true))
             {
-                if (sam.GetComponentInParent<ACO_Warship>(true) == null) { ground.Add(sam); }
+                if (sam.GetComponentInParent<ACO_Warship>(true) == null && sam.GetComponentInParent<ACO_EscortUnit>(true) == null) { ground.Add(sam); }
             }
             foreach (ACO_AAGunSite aa in poolRoot.GetComponentsInChildren<ACO_AAGunSite>(true))
             {
@@ -1631,6 +2381,7 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
                 if (aa.GetComponentInParent<ACO_Warship>(true) == null && aa.GetComponentInParent<ACO_MobileUnit>(true) == null && aa.GetComponentInParent<ACO_EscortUnit>(true) == null) { ground.Add(aa); }
             }
             ground.AddRange(poolRoot.GetComponentsInChildren<ACO_MobileUnit>(true));
+            ground.AddRange(poolRoot.GetComponentsInChildren<ACO_TelUnit>(true));   // 전용 풀 — 생성기가 일반 배치에서 뺀다
             // 함선: HighValue(전함)는 고가치 표적 풀, 아니면(구축함) 지상 풀 — 생성기가 둘 다 바다에 놓는다.
             var hvts = new List<UdonSharp.UdonSharpBehaviour>();
             hvts.AddRange(poolRoot.GetComponentsInChildren<ACO_StaticTarget>(true));
@@ -1641,6 +2392,11 @@ public class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             }
             generator.GroundUnits = ground.ToArray();
             generator.HighValueTargets = hvts.ToArray();
+            generator.Fortress = poolRoot.GetComponentInChildren<ACO_FlyingFortress>(true);
+            generator.Manager = Object.FindObjectOfType<ACO_MissionManager>(true);
+            generator.Railgun = poolRoot.GetComponentInChildren<ACO_Railgun>(true);
+            generator.Carrier = null;
+            foreach (ACO_Warship ship in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (ship.ReservedForFleet) { generator.Carrier = ship; } }
             generator.EscortUnits = poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true);
             // 곡사포는 생성기의 호위 대상 목록에서 표적을 고른다.
             foreach (ACO_ArtilleryGun art in poolRoot.GetComponentsInChildren<ACO_ArtilleryGun>(true))

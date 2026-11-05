@@ -272,14 +272,16 @@ namespace ACO
             {
                 UdonSharpBehaviour h = Generator.HighValueTargets[i];
                 if (h == null) { continue; }
-                AddUnit(h.transform, h.GetComponent<SaccTarget>(), KIND_GROUND, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
+                int hvtKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_HVT, i) ? KIND_AIR : KIND_GROUND;
+                AddUnit(h.transform, h.GetComponent<SaccTarget>(), hvtKind, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
             }
             // 함선 부위(VLS/함포/CIWS)는 각자 따로 표시된다.
             for (int i = 0; i < parts; i++)
             {
                 UdonSharpBehaviour pt = Generator.GetUnitBehaviour(ACO_MissionGenerator.CAT_PART, i);
                 if (pt == null) { continue; }
-                AddUnit(pt.transform, pt.GetComponent<SaccTarget>(), KIND_GROUND, ReadLabel(pt, "PRT"), null, ACO_MissionGenerator.CAT_PART, i);
+                int partKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_PART, i) ? KIND_AIR : KIND_GROUND;
+                AddUnit(pt.transform, pt.GetComponent<SaccTarget>(), partKind, ReadLabel(pt, "PRT"), null, ACO_MissionGenerator.CAT_PART, i);
             }
             for (int i = 0; i < escorts; i++)
             {
@@ -310,6 +312,14 @@ namespace ACO
             for (int u = 0; u < _unitCount; u++)
             {
                 _unitHidden[u] = _unitCat[u] == ACO_MissionGenerator.CAT_PART && Generator.IsUnitSuppressed(_unitCat[u], _unitIdx[u]);
+                // TEL: 탄도탄이 뜨면 공중 표적으로 그린다
+                if (_unitCat[u] == ACO_MissionGenerator.CAT_GROUND && Generator.IsTelUnit(_unitIdx[u]))
+                {
+                    bool airborne = Generator.IsTelAirborne(_unitIdx[u]);
+                    _unitKind[u] = airborne ? KIND_AIR : KIND_GROUND;
+                    ACO_TelUnit tel = Generator.GroundUnits[_unitIdx[u]].GetComponent<ACO_TelUnit>();
+                    if (tel != null) { _unitLabel[u] = airborne ? tel.MissileLabel : tel.MarkerLabel; }
+                }
                 if (_unitFriendly[u]) { _unitObjective[u] = false; }
                 else if (Manager == null) { _unitObjective[u] = _unitCat[u] == ACO_MissionGenerator.CAT_HVT; }
                 else { _unitObjective[u] = tag != 0 && Generator.GetUnitTag(_unitCat[u], _unitIdx[u]) == tag; }
@@ -545,17 +555,25 @@ namespace ACO
             return null;
         }
 
-        /// 락온 마커가 속한 유닛 번호. 표적이 바뀔 때만 찾는다.
+        /// 락온 마커가 속한 유닛 번호. 표적이 바뀔 때만 찾는다. 부위는 함선·요새의 자식이기도 하므로 가장 가까운 조상을 고른다 —
+        /// 안 그러면 본체 마커가 락온한 부위 자리로 옮겨 가고 부위 마커는 락온 표시가 안 된다.
         private int FindUnitOf(GameObject marker)
         {
             if (marker == null) { return -1; }
             Transform t = marker.transform;
+            int best = -1;
+            Transform bestRoot = null;
             for (int u = 0; u < _unitCount; u++)
             {
                 Transform root = _unitTransform[u];
-                if (root != null && t.IsChildOf(root)) { return u; }
+                if (root == null || !t.IsChildOf(root)) { continue; }
+                if (bestRoot == null || root.IsChildOf(bestRoot))
+                {
+                    best = u;
+                    bestRoot = root;
+                }
             }
-            return -1;
+            return best;
         }
 
         /// 락온 대상 테두리: 락온을 시도하는 동안 일정한 속도로 깜빡이고, 락온되면 빨간색으로 켜진다. k = 락온 칸.

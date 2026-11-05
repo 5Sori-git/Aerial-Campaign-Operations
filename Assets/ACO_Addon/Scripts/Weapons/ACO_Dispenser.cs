@@ -46,6 +46,13 @@ namespace ACO
         private int _sound;
         private float _duration;
 
+        /// 앞쪽 BurstDistance 안에 땅이나 바다가 있는가 — 표적을 놓친 탄이 뿌릴 때를 정한다.
+        public bool HasGroundAhead(Vector3 origin, Vector3 direction)
+        {
+            RaycastHit hit;
+            return Physics.Raycast(origin, direction, out hit, BurstDistance, GroundLayers, QueryTriggerInteraction.Collide);
+        }
+
         /// 터지는 순간: 원뿔을 target 쪽으로 돌려 자탄을 뿌리고, 떨어질 자리·시각을 정한다.
         public void Burst(Vector3 origin, Vector3 direction)
         {

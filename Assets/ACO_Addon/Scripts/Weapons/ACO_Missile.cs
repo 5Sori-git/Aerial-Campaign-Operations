@@ -65,6 +65,9 @@ namespace ACO
         public float MaxTrackingAngle = 90f;
         [Tooltip("추적 불가 상태가 이 시간(초) 연속되면 타겟을 영구히 놓친다")]
         public float UnlockTime = 0.1f;
+        [Tooltip("발사 후 이 시간(초) 동안은 시커 범위를 벗어나거나 노칭을 당해도 표적을 놓치지 않는다. 플레어·채프는 막지 않는다(IgnoreCountermeasures). "
+            + "0 = 끔. 플레이어 무장은 ACO_DFUNC_Missile.LockHoldTime이 0보다 크면 그 값으로 덮어쓴다")]
+        public float LockHoldTime = 0f;
 
         // 플레어/채프: 표적이 켜면 100% 속는다 — NPC는 ACO_NPCFighterAI의 플레어, 플레이어는 SAV 대응탄(MissileType에 맞는 NumActiveChaff/Flares/OtherCM > 0).
         [Header("대응책")]
@@ -174,6 +177,8 @@ namespace ACO
         // CIWS 미사일 요격(런처가 넣는다 — Bake가 런처에 씬의 요격 CIWS 목록을 굽는다): 0.1초마다 이 중 나를 덮는 CIWS를 고르고(ACO_AAGunSite.CanIntercept),
         // 매 프레임 맡은 CIWS 하나에 InterceptTick — 시간이 다 차면 피해 없이 터진다(Intercept). 표적을 놓친(플레어·빗나감) 미사일은 막지 않는다.
         [System.NonSerialized] public ACO_AAGunSite[] InterceptSites;
+        // 플레이어 ECM(NPC 런처가 넣는다): 재밍 구역 안에 ECM_BREAK초 머물면 표적을 놓친다. 0.25초마다만 묻는다.
+        [System.NonSerialized] public ACO_RadarContacts EcmHub;
         // 시스키밍(LASM, 런처가 넣는다): 표적이 함선(ACO_Warship)이면 해수면(함선 기준점 높이) + SkimAltitude로 낮게 깔려 가다가(완만하게 내려가고,
         // 앞쪽 지형이 높으면 넘는다) 수평 거리 SkimTerminalDistance 안에서 꽂힌다. 함선을 노리는 동안 CIWS 요격을 받지 않는다. 함선이 아니면 보통 유도.
         [System.NonSerialized] public bool SeaSkim;
@@ -193,6 +198,7 @@ namespace ACO
 
         private float _speed;
         private float _lifeTimer;
+        private float _lockHoldTimer;
         private float _straightTimer;
         private float _coldTimer;
         // 콜드 런치 중 속도 벡터. 기수(transform)가 돌아가도 이동은 이 벡터(사출 속도 + 중력)를 따른다.
@@ -215,6 +221,10 @@ namespace ACO
         private Collider[] _splashHits = new Collider[MAX_SPLASH_COLLIDERS];
         private SaccTarget[] _splashDamaged = new SaccTarget[MAX_SPLASH_HITS];
         private bool _targetLost;
+        private const float ECM_CHECK = 0.25f;
+        private const float ECM_BREAK = 1f;
+        private float _ecmCheck;
+        private float _ecmHeld;
         private bool _missileIncoming;
         private const int PROXIMITY_LAYERS = 1 << 29;   // 적 항공기 락온 마커(ProximityAnyEnemy)
         private Collider[] _proxHits = new Collider[16];
@@ -288,6 +298,7 @@ namespace ACO
             _speed = cold ? ColdLaunchSpeed : LaunchSpeed;
             _speed = Mathf.Max(_speed, LaunchInheritSpeed);
             _lifeTimer = MaxLifetime;
+            _lockHoldTimer = LockHoldTime;
             _straightTimer = FlyStraightTime;
             _coldTimer = cold ? ColdLaunchTime : 0f;
             // 런처가 EnableWeapon 전에 발사 지점의 자세를 넣어 두므로 지금의 앞쪽이 사출 방향이다.
@@ -299,6 +310,8 @@ namespace ACO
             _exploded = false;
             _diving = false;
             _targetLost = false;
+            _ecmCheck = 0f;
+            _ecmHeld = 0f;
             _decoyed = false;
             _decoyFlares = null;
             _decoySAV = null;
@@ -395,6 +408,7 @@ namespace ACO
             float dt = Time.deltaTime;
 
             _lifeTimer -= dt;
+            _lockHoldTimer -= dt;
             if (_lifeTimer <= 0f)
             {
                 Explode(false);
@@ -486,6 +500,20 @@ namespace ACO
             }
             if (_decoyed) { TrackDecoy(dt, turnRate); return; }
             if (_targetLost) { return; }
+            if (EcmHub != null)
+            {
+                _ecmCheck -= dt;
+                if (_ecmCheck <= 0f)
+                {
+                    _ecmCheck = ECM_CHECK;
+                    _ecmHeld = EcmHub.IsJammed(transform.position) ? _ecmHeld + ECM_CHECK : 0f;
+                    if (_ecmHeld >= ECM_BREAK)
+                    {
+                        LoseTarget();
+                        return;
+                    }
+                }
+            }
 
             if (!TargetIsValid() || _unlockTimer >= UnlockTime)
             {
@@ -714,6 +742,7 @@ namespace ACO
 
         private bool IsSeekerDefeated(Vector3 dirToTarget)
         {
+            if (_lockHoldTimer > 0f) { return false; }
             float angle = Vector3.Angle(dirToTarget, transform.forward);
             if (_seekerUnlimited)
             {
@@ -749,7 +778,7 @@ namespace ACO
         /// 이 미사일의 속도(CIWS 리드 조준용).
         public Vector3 GetVelocity() { return _coldTimer > 0f ? _coldVelocity : transform.forward * _speed; }
 
-        /// 요격을 받지 않는가: 시스키밍으로 함선을 노리는 중.
+        /// 격추되지 않는가: 시스키밍으로 함선을 노리는 중. CIWS는 그래도 쏜다(붙잡혀 있는 동안 다른 미사일을 못 막는다).
         private bool InterceptImmune() { return SeaSkim && _targetShip; }
 
         /// 0.1초마다 나를 덮는 CIWS를 고르고, 매 프레임 맡은 CIWS 하나에 틱한다(그 CIWS가 다른 미사일을 쏘는 중이면 다음 CIWS).
@@ -757,7 +786,7 @@ namespace ACO
         private bool UpdateIntercept(float dt)
         {
             if (InterceptSites == null || InterceptSites.Length == 0) { return false; }
-            if (_targetLost || _decoyed || !TargetIsValid() || InterceptImmune()) { _icSite = null; return false; }
+            if (_targetLost || _decoyed || !TargetIsValid()) { _icSite = null; return false; }
 
             _icScanTimer -= dt;
             if (_icScanTimer <= 0f)
@@ -776,17 +805,18 @@ namespace ACO
             }
             if (_icNearCount == 0) { _icSite = null; return false; }
 
+            bool noKill = InterceptImmune();
             int result = -1;
             if (_icSite)
             {
-                result = _icSite.InterceptTick(this, _target, dt);
+                result = _icSite.InterceptTick(this, _target, dt, noKill);
                 if (result < 0) { _icSite = null; }
             }
             for (int k = 0; result < 0 && k < _icNearCount; k++)
             {
                 ACO_AAGunSite site = _icNear[k];
                 if (!site) { continue; }
-                result = site.InterceptTick(this, _target, dt);
+                result = site.InterceptTick(this, _target, dt, noKill);
                 if (result >= 0) { _icSite = site; }
             }
             if (result != 1) { return false; }
@@ -995,6 +1025,7 @@ namespace ACO
             {
                 if (_targetStatic)
                 {
+                    NoteHit(_targetStatic);
                     _targetStatic.WeaponDamageTarget(Damage, gameObject, StaticWeaponType());
                 }
                 else if (_targetEntity)
@@ -1029,10 +1060,20 @@ namespace ACO
         /// 산탄(SCM): 살아 있는 표적까지 BurstDistance 안이면 표적 쪽으로 자탄을 뿌리고 탄체는 터진다. 표적을 놓쳤으면 뿌리지 않고 보통 탄처럼 날아간다.
         private bool TryDispense()
         {
-            if (_coldTimer > 0f || _straightTimer > 0f || _targetLost || _decoyed || !TargetIsValid()) { return false; }
-            Vector3 d = _target.position - transform.position;
-            float r = Dispenser.BurstDistance;
-            if (d.sqrMagnitude > r * r) { return false; }
+            if (_coldTimer > 0f || _straightTimer > 0f) { return false; }
+            Vector3 d;
+            if (_targetLost || _decoyed || !TargetIsValid())
+            {
+                // 표적을 놓쳤다: 앞쪽 땅이나 바다가 BurstDistance 안에 들어오면 그쪽으로 뿌린다 — 공중에 뿌리면 어디에도 안 닿는다
+                d = transform.forward;
+                if (!Dispenser.HasGroundAhead(transform.position, d)) { return false; }
+            }
+            else
+            {
+                d = _target.position - transform.position;
+                float r = Dispenser.BurstDistance;
+                if (d.sqrMagnitude > r * r) { return false; }
+            }
             _dispensed = true;
             Dispenser.Burst(transform.position, d.normalized);
             Explode(false);
@@ -1102,9 +1143,18 @@ namespace ACO
                     if (d < best) { best = d; }
                 }
                 float t = Mathf.Clamp01(best / SplashRadius);
+                NoteHit(target);
                 target.WeaponDamageTarget(Damage * Mathf.Lerp(1f, MinSplashFraction, t), gameObject, StaticWeaponType());
                 if (damagedCount < MAX_SPLASH_HITS) { _splashDamaged[damagedCount] = target; damagedCount++; }
             }
+        }
+
+        /// 피해를 넣기 전에 공격자를 직접 적는다. SaccTarget은 오너가 아닌 쏜 사람 화면에서 격추를 미리 판정해(PredictExplode) 자기 피해 이벤트를 버리므로
+        /// 한 방에 부순 표적은 LastHitByPlayer가 비어 작전판에 UNKNOWN으로 뜨고 개인 점수도 빠진다(SAV 파일은 고치지 않는다).
+        private void NoteHit(SaccTarget target)
+        {
+            target.LastHitByPlayer = Networking.LocalPlayer;
+            target.LastHitWeaponType = StaticWeaponType();
         }
 
         /// 피격 기체를 밀고 기수를 튕긴다. 명중 판정을 하는 클라이언트(=그 기체의 오너, 플레이어 기체면 조종사)에서만 불리므로

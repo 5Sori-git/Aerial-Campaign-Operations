@@ -98,6 +98,7 @@ namespace ACO
             _pilot = true;
             _exploded = false;
             if (Progress) { Progress.ReportPiloting(true); }
+            _applied = false;   // 자유 비행에서 남겨 둔 사양도 지금 조종사 값으로 다시 맞춘다
             Apply(true);
             SendConsumableVisuals();
             if (Decal) { Decal.LocalPilotEnter(); }
@@ -139,8 +140,12 @@ namespace ACO
 
         public void SFEXT_O_PilotExit()
         {
-            Apply(false);
-            if (Decal) { Decal.LocalPilotExit(); }
+            // 자유 비행: 내려도 사양을 남긴다(격추됐거나 기체가 회수되면 ClearKeptSpec이 지운다)
+            if (!KeepSpec())
+            {
+                Apply(false);
+                if (Decal) { Decal.LocalPilotExit(); }
+            }
             // 스스로 내렸으면(폭발이 아니면) 내린 자리를 알린다 — 안전지대 밖이면 격추로 센다.
             if (_pilot && !_exploded && Progress && EntityControl && !EntityControl.dead)
             {
@@ -168,8 +173,26 @@ namespace ACO
         [NetworkCallable]
         public void NetConsumableVisuals(byte mask) { ShowConsumables(mask); }
 
+        private bool KeepSpec() { return Progress && Progress.FreeFlight && !_exploded; }
+
         // 내리면(모든 클라이언트) 끈다
-        public void SFEXT_G_PilotExit() { ShowConsumables(0); }
+        public void SFEXT_G_PilotExit()
+        {
+            if (!Progress || !Progress.FreeFlight) { ShowConsumables(0); }
+        }
+
+        public void SFEXT_G_RespawnButton() { ClearKeptSpec(); }
+        public void SFEXT_G_ReAppear() { ClearKeptSpec(); }
+
+        /// 빈 기체가 회수됐다: 자유 비행에서 남겨 둔 사양을 지운다.
+        private void ClearKeptSpec()
+        {
+            if (_pilot || (EntityControl && EntityControl.Occupied)) { return; }
+            ShowConsumables(0);
+            if (!_applied) { return; }
+            Apply(false);
+            if (Decal) { Decal.LocalPilotExit(); }
+        }
 
         // 늦게 들어온 사람에게 다시
         public override void OnPlayerJoined(VRCPlayerApi player)

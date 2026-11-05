@@ -26,8 +26,10 @@ namespace ACO
         public ACO_GameFlow Flow;
 
         [Header("패널 표시 (프리팹 빌더가 채운다)")]
-        [Tooltip("보유 크레딧과 지난 미션 보상")]
+        [Tooltip("보유 크레딧(크게)")]
         public TextMeshProUGUI CreditsText;
+        [Tooltip("지난 미션 보상. 비면 CreditsText 둘째 줄에 쓴다")]
+        public TextMeshProUGUI LastRewardText;
         [Tooltip("분류 탭 버튼 배경(CAT_* 순서)")]
         public Image[] TabImages;
         [Tooltip("강화 줄 버튼(남는 줄은 끈다)")]
@@ -220,9 +222,11 @@ namespace ACO
             }
             if (CreditsText)
             {
-                string s = Progress.IsReady() ? "CREDITS " + Progress.GetCredits().ToString("N0") + " CR" : "CREDITS - (LOADING)";
+                string s = Progress.IsReady() ? Progress.GetCredits().ToString("N0") + "<size=50%> CR</size>" : "<size=50%>LOADING...</size>";
                 string last = Progress.GetLastRewardSummary();
-                if (last != "") { s += "\n<size=55%>LAST MISSION: " + last + "</size>"; }
+                if (last != "") { last = "LAST MISSION: " + last; }
+                if (LastRewardText) { LastRewardText.text = last; }
+                else if (last != "") { s += "\n<size=45%>" + last + "</size>"; }
                 CreditsText.text = s;
             }
 

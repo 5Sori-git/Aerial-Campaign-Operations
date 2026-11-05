@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using VRC.SDKBase;
 using SaccFlightAndVehicles;
 
 namespace ACO
@@ -375,6 +376,9 @@ namespace ACO
                 }
                 float t = Mathf.Clamp01(best / SplashRadius);
                 float dmg = Damage * Mathf.Lerp(1f, MinSplashFraction, t);
+                // 쏜 사람 화면의 격추 예측이 피해 이벤트를 버려 공격자가 비는 것을 막는다(ACO_Missile.NoteHit 참고)
+                target.LastHitByPlayer = Networking.LocalPlayer;
+                target.LastHitWeaponType = WeaponType;
                 target.WeaponDamageTarget(dmg, gameObject, WeaponType);
                 if (DebugHitLog) { Debug.Log("[ACO]   범위 피해: '" + target.gameObject.name + "' 거리 " + best.ToString("0") + "m, 피해 " + dmg.ToString("0") + " (체력 " + target.Health.ToString("0") + ")", target); }
                 if (damagedCount < MAX_SPLASH_HITS) { _damaged[damagedCount] = target; damagedCount++; }

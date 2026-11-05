@@ -47,6 +47,23 @@ namespace ACO
         public float FireIntervalJitter = 2f;
         [Tooltip("탄착점이 흩어지는 반경(m)")]
         public float Spread = 25f;
+
+        private bool _hasTierBase;
+        private float _baseFireInterval;
+        private float _baseSpread;
+
+        /// 지상 유닛 숙련도(생성기가 스폰할 때 — 모든 클라이언트). 배율은 프리팹 값 기준이라 여러 번 불러도 누적되지 않는다.
+        public void ApplyTier(float intervalMul, float spreadMul)
+        {
+            if (!_hasTierBase)
+            {
+                _hasTierBase = true;
+                _baseFireInterval = FireInterval;
+                _baseSpread = Spread;
+            }
+            FireInterval = _baseFireInterval * intervalMul;
+            Spread = _baseSpread * spreadMul;
+        }
         [Tooltip("포탑 회전 속도(도/초)")]
         public float TurnRate = 25f;
         public float RetargetInterval = 1f;

@@ -73,6 +73,8 @@ namespace ACO
         public TextMeshPro RadarAltText;
         public Transform ThrottleFill;
         public Transform ThrottleAbLine;
+        [Tooltip("스로틀 위치(목표 출력) 표시 — 막대는 실제 엔진 출력이라 이 표시를 뒤따라간다")]
+        public Transform ThrottleTarget;
         public TextMeshPro ThrottleText;
         [Tooltip("피치 래더 칸(RungAngles 순서, 각도 도 — 0 = 수평선)")]
         public Transform[] Rungs;
@@ -86,6 +88,8 @@ namespace ACO
         public TextMeshPro GText;
         public TextMeshPro AoaText;
         public TextMeshPro StatusText;
+        [Tooltip("내 기체가 아군 ECM 구역 안일 때 보이는 문구")]
+        public TextMeshPro EcmText;
         [Tooltip("잔탄 세 칸: 고른 무장 쉐브론 | 무장 이름(AmmoText) | 수(오른쪽 맞춤) — 한 줄씩")]
         public TextMeshPro AmmoMarkText;
         public TextMeshPro AmmoText;
@@ -388,6 +392,14 @@ namespace ACO
                 p.y = Mathf.Clamp01(air.ThrottleAfterburnerPoint) * ThrottleHeight;
                 ThrottleAbLine.localPosition = p;
             }
+            if (ThrottleTarget)
+            {
+                // 스로틀 입력은 조종사 쪽에만 있다
+                SetActive(ThrottleTarget.gameObject, air.Piloting);
+                Vector3 p = ThrottleTarget.localPosition;
+                p.y = Mathf.Clamp01(air.ThrottleInput) * ThrottleHeight;
+                ThrottleTarget.localPosition = p;
+            }
         }
 
         private void UpdateRadarAlt(Vector3 pos)
@@ -555,6 +567,7 @@ namespace ACO
         private void UpdateTexts(int v, SaccAirVehicle air, float heading, float kt, float ft)
         {
             if (HeadingText) { HeadingText.text = (Mathf.RoundToInt(heading) % 360).ToString("000"); }
+            if (EcmText) { SetActive(EcmText.gameObject, Contacts != null && Contacts.LocalJammed); }
             if (SpeedText) { SpeedText.text = Mathf.RoundToInt(kt).ToString(); }
             if (AltText) { AltText.text = Mathf.RoundToInt(ft).ToString(); }
             if (RadarAltText)
@@ -648,7 +661,7 @@ namespace ACO
                 {
                     mark += Mark(_selectedAco != null && _selectedAco != msl);
                     names += sp.GetModuleId() + "\n";
-                    counts += (m.GetUdonTypeName() == GetUdonTypeName<ACO_DFUNC_Missile>() ? ((ACO_DFUNC_Missile)m).GetAmmo().ToString() : "-") + "\n";
+                    counts += (m.GetUdonTypeName() == GetUdonTypeName<ACO_DFUNC_Missile>() ? ((ACO_DFUNC_Missile)m).GetHudCount() : "-") + "\n";
                 }
             }
             DFUNC_Flares flr = FlareFuncs != null && v < FlareFuncs.Length ? FlareFuncs[v] : null;

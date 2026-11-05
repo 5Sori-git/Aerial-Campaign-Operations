@@ -68,8 +68,8 @@ public static class ACO_PhaseModuleSetup
         if (!HasChild(mgr, "Phase_TimeSensitive"))
         {
             ACO_PhaseTimeSensitive m = Create<ACO_PhaseTimeSensitive>(mgr, "Phase_TimeSensitive");
-            Setup(m, "TIME SENSITIVE", "TARGET ESCAPED", 2, false, "High-value targets are on the move. Hit each one before it escapes!", "All time-sensitive targets eliminated.",
-                "The target escaped. Mission failed. All aircraft, return to base.");
+            Setup(m, "TIME SENSITIVE", "MISSILE LAUNCHED", 2, false, "Ballistic missile launchers are setting up! Stop every launch!", "All launchers are down. No missiles got through.",
+                "The missile is out of reach. We failed. All aircraft, return to base.");
             made++; log.Append("\n  시한 표적");
         }
         if (!HasChild(mgr, "Phase_AirSuperiority"))
@@ -124,6 +124,103 @@ public static class ACO_PhaseModuleSetup
         ACO_SceneBaker.BakePhaseModulesNow();
         Debug.Log(made > 0 ? "[ACO] 기본 페이즈 모듈을 만들었습니다(" + made + "개):" + log + "\n  값·대사는 모듈 인스펙터에서 바꾸고 씬을 저장하세요."
                            : "[ACO] 기본 페이즈 모듈 10개가 이미 모두 있습니다.", mgr);
+    }
+
+    /// 공중 요새 페이즈(없으면 만든다 — Bake가 부른다). 값·대사는 모듈 인스펙터, 나오는 때는 ACO → Missions → Phase Weights.
+    /// 이전 기본값(보너스 전용, 3페이즈부터)으로 만든 모듈은 5번째 페이즈 기본값으로 한 번 옮긴다(직접 고친 값은 건드리지 않는다).
+    public static void EnsureFortress(ACO_MissionManager manager)
+    {
+        ACO_PhaseFortress existing = manager.GetComponentInChildren<ACO_PhaseFortress>(true);
+        if (existing != null)
+        {
+            bool oldBonus = existing.BonusOnly && existing.PhaseName == "BONUS - FLYING FORTRESS";
+            bool oldNormal = !existing.BonusOnly && existing.MinPhase == 3 && (existing.PhaseWeights == null || existing.PhaseWeights.Length == 0);
+            if (!oldBonus && !oldNormal) { return; }
+            existing.PhaseName = "FLYING FORTRESS";
+            FortressDefaults(existing);
+            EditorUtility.SetDirty(existing);
+            Debug.Log("[ACO] 공중 요새 페이즈를 5번째 페이즈 기본값으로 옮겼습니다.", existing);
+            return;
+        }
+        ACO_PhaseFortress m = Create<ACO_PhaseFortress>(manager, "Phase_Fortress");
+        Setup(m, "FLYING FORTRESS", "CITY DESTROYED", 1, false,
+            "A massive contact is circling the city. It's a flying fortress! Take out its air defenses first!",
+            "The core is gone! The fortress is going down! Outstanding work!",
+            "The fortress has hit the city... We've lost it. All units, withdraw.");
+        FortressDefaults(m);
+        m.ClearBonus = 8000;
+        Debug.Log("[ACO] 공중 요새 페이즈 모듈 Phase_Fortress를 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 일반 페이즈, 5번째 페이즈에서만 나온다(다른 종류 가중치 1 기준 3배 — 표에서 바꾼다).
+    private static void FortressDefaults(ACO_PhaseFortress m)
+    {
+        m.BonusOnly = false;
+        m.MinPhase = 1;
+        m.Weight = 1f;
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 0f, 3f };
+    }
+
+    /// 함대전 지원 페이즈(없으면 만든다 — Bake가 부른다). 4번째 페이즈 위주. 값·대사는 모듈 인스펙터, 나오는 때는 ACO → Missions → Phase Weights.
+    public static void EnsureFleet(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseFleet>(true) != null) { return; }
+        ACO_PhaseFleet m = Create<ACO_PhaseFleet>(manager, "Phase_Fleet");
+        Setup(m, "FLEET ACTION", "FLAGSHIP LOST", 1, false,
+            "Enemy carrier group ahead. Our fleet is closing to gun range. Support them and sink that carrier!",
+            "The carrier is going down! The enemy fleet is breaking off!",
+            "The flagship is lost... All units, withdraw.");
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 0.5f };
+        m.ClearBonus = 5000;
+        m.EnemyName = "CARRIER GROUP";
+        Debug.Log("[ACO] 함대전 페이즈 모듈 Phase_Fleet을 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 랜스 포대 페이즈(없으면 만든다 — Bake가 부른다). 5번째 페이즈의 보스 — 요새와 같은 가중치라 지형이 허락하면 반반으로 나온다.
+    public static void EnsureRailgun(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseRailgun>(true) != null) { return; }
+        ACO_PhaseRailgun m = Create<ACO_PhaseRailgun>(manager, "Phase_Railgun");
+        Setup(m, "LANCE BATTERY", "BASE DESTROYED", 1, false,
+            "Strategic railgun detected, and it is locked on our base! Bring air-to-ground ordnance!",
+            "The Lance is down. All aircraft, good kill.",
+            "The base is gone. All units, withdraw.");
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 0f, 3f };
+        m.ClearBonus = 8000;
+        m.EnemyName = "LANCE COMMAND";
+        Debug.Log("[ACO] 랜스 포대 페이즈 모듈 Phase_Railgun을 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 모듈 이름별 페이즈 가중치 기본값(1~5). 뒤로 갈수록 어려운 임무 — 4는 함대전, 5는 공중 요새 위주.
+    private static readonly string[] WeightNames = { "Phase_Strike", "Phase_SEAD", "Phase_AirSuperiority", "Phase_ScoreAttack", "Phase_TimeSensitive", "Phase_Escort", "Phase_Convoy", "Phase_Amphibious", "Phase_Intercept", "Phase_AceSquadron" };
+    private static readonly float[][] WeightValues =
+    {
+        new[] { 3f, 2f, 0.5f, 0.2f, 0.1f },
+        new[] { 2f, 2f, 0.5f, 0.2f, 0.1f },
+        new[] { 3f, 2f, 0.5f, 0.2f, 0.1f },
+        new[] { 0f, 2f, 1f, 0.2f, 0.1f },
+        new[] { 0f, 2f, 1.5f, 0.3f, 0.1f },
+        new[] { 0f, 2f, 2f, 0.3f, 0.1f },
+        new[] { 0f, 0.5f, 3f, 0.5f, 0.1f },
+        new[] { 0f, 0f, 3f, 0.5f, 0.1f },
+        new[] { 0f, 0.5f, 2f, 0.5f, 0.1f },
+        new[] { 0f, 0f, 2f, 1f, 0.3f },
+    };
+
+    /// 페이즈 가중치가 비어 있는 기본 모듈에 기본값을 넣는다(Bake가 부른다 — 직접 넣은 값은 건드리지 않는다).
+    public static void ApplyDefaultWeights(ACO_MissionManager manager)
+    {
+        int applied = 0;
+        foreach (ACO_PhaseModule m in manager.GetComponentsInChildren<ACO_PhaseModule>(true))
+        {
+            int k = System.Array.IndexOf(WeightNames, m.gameObject.name);
+            if (k < 0 || m.BonusOnly || (m.PhaseWeights != null && m.PhaseWeights.Length > 0)) { continue; }
+            m.PhaseWeights = (float[])WeightValues[k].Clone();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            applied++;
+        }
+        if (applied > 0) { Debug.Log($"[ACO] 페이즈 가중치 기본값을 모듈 {applied}개에 넣었습니다(ACO → Missions → Phase Weights)."); }
     }
 
     private static ACO_MissionManager FindManager()

@@ -48,6 +48,8 @@ namespace ACO
         [Header("락온")]
         [Tooltip("조준을 이만큼 유지해야 발사할 수 있다. 0이면 즉시 발사")]
         public float LockTime = 2f;
+        [Tooltip("빌드 시 ACO_SceneBaker가 적 런처에 넣는다 — 플레이어 ECM 구역 안의 표적은 잠그지 못하고, 쏜 미사일도 교란된다. 아군 런처는 비운다")]
+        public ACO_RadarContacts EcmHub;
         [Tooltip("조준이 끊기면 락온 진행도가 초당 이 속도로 감소한다")]
         public float LockDecayRate = 1.5f;
         [Tooltip("락온 중 타겟 플레이어 조종석에 경고음을 보낸다")]
@@ -71,6 +73,9 @@ namespace ACO
         private bool _initialized;
 
         private float _lockProgress;
+        private Transform _aimMarker;
+        private float _ecmCheck;
+        private bool _ecmJammed;
         private int _aimTargetIdx = -1;
         private float _warningTimer;
 
@@ -139,9 +144,22 @@ namespace ACO
                 GameObject[] list = EntityControl ? EntityControl.AAMTargets : null;
                 GameObject marker = list != null && targetIndex < list.Length ? list[targetIndex] : null;
                 _aimSmoke = marker ? marker.GetComponentInParent<ACO_FlareDispenser>() : null;
+                _aimMarker = marker ? marker.transform : null;
+                _ecmCheck = 0f;
             }
             // 연막 속 표적은 락온할 수 없다(쌓인 락온도 잃는다)
             if (_aimSmoke != null && _aimSmoke.IsObscured()) { _lockProgress = 0f; return; }
+            // ECM 구역 안의 표적도 같다. 0.25초마다만 묻는다
+            if (EcmHub != null && _aimMarker != null)
+            {
+                _ecmCheck -= dt;
+                if (_ecmCheck <= 0f)
+                {
+                    _ecmCheck = 0.25f;
+                    _ecmJammed = EcmHub.IsJammed(_aimMarker.position);
+                }
+                if (_ecmJammed) { _lockProgress = 0f; return; }
+            }
 
             _lockProgress += dt;
 
@@ -263,6 +281,7 @@ namespace ACO
                 acoMissile.ShooterJudgesHit = false; // NPC 미사일은 피격자가 판정한다
                 acoMissile.IsShooter = false;
                 acoMissile.InterceptSites = InterceptSites;
+                acoMissile.EcmHub = EcmHub;
                 // 플레이어 무장이 넣는 특수 동작은 NPC 미사일에선 늘 끈다(풀은 이 런처 것)
                 acoMissile.SeaSkim = false;
             }

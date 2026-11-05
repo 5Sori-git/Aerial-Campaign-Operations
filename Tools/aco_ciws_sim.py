@@ -17,12 +17,14 @@ SCAN = 0.1
 
 
 class Ciws:
-    def __init__(self, pos, ship, rng=1200.0, radius=600.0, react=0.5, kill=0.5, other=2.0):
+    def __init__(self, pos, ship, rng=900.0, radius=600.0, react=0.5, kill=1.0, other=2.0, cool=1.5):
+        self.cool = cool
         self.pos, self.ship, self.rng, self.radius, self.react, self.kill, self.other = pos, ship, rng, radius, react, kill, other
         self.reset()
 
     def reset(self):
         self.cur = None
+        self.busy = -100.0
         self.last = -100.0
         self.prog = 0.0
         self.need = 0.0
@@ -37,6 +39,7 @@ class Ciws:
             return -1
         if self.cur is not m:
             if self.cur is not None and now - self.last < IC_HOLD: return -1
+            if now < self.busy: return -1
             idle = now - self.last > IC_IDLE
             self.cur = m
             self.prog = 0.0
@@ -46,6 +49,7 @@ class Ciws:
         self.prog += dt
         if self.prog < self.need: return 0
         self.cur = None
+        self.busy = now + self.cool
         self.kills += 1
         return 1
 
@@ -157,7 +161,7 @@ def scenario(name, specs, shooters, runs=400, sites_fn=fleet):
 
 
 def main():
-    print('함대: 전함 CIWS 2 + 구축함 2척(500m, CIWS 1씩). CIWS 사거리 1.2km, 방어 반경 600m, 반응 0.5 + 격추 0.5초, 다른 함선 ×2')
+    print('함대: 전함 CIWS 2 + 구축함 2척(500m, CIWS 1씩). CIWS 사거리 900m, 방어 반경 600m, 반응 0.5 + 격추 1.0초, 재교전 대기 1.5초, 다른 함선 ×2')
     scenario('LAGM 1발 → 전함 (900m/s)', salvo(1, 'BB', 900), ['A'])
     scenario('4AGM 일제 → 전함', salvo(4, 'BB', 900), ['A'])
     scenario('4AGM 일제 → 구축함', salvo(4, 'DD1', 900, bearing=60), ['A'])
@@ -169,7 +173,7 @@ def main():
     scenario('ADAM 속도(300m/s) 1발 → 전함', salvo(1, 'BB', 300), ['A'])
     # 아군 CIWS: 호위함 2척(아군) CIWS가 1.5km 안의 플레이어를 노린 적 SAM(800m/s)을 막는다
     def friendly():
-        return [Ciws((0, 18, 18), 'FFG1', rng=1500, radius=1500, other=1.0), Ciws((0, 10, -45), 'FFG1', rng=1500, radius=1500, other=1.0)]
+        return [Ciws((0, 18, 18), 'FFG1', rng=1500, radius=1500, kill=0.5, other=1.0, cool=0.0), Ciws((0, 10, -45), 'FFG1', rng=1500, radius=1500, kill=0.5, other=1.0, cool=0.0)]
     SHIPS['P'] = (300, 600, 400)
     sam = [('S0', (5000, 50, 5000), SHIPS['P'], 'P', 800, 0.0, False)]
     scenario('아군 CIWS: 함대 위 플레이어를 노린 SAM 1발', sam, ['S'], sites_fn=friendly)

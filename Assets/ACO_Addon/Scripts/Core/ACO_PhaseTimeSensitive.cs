@@ -4,7 +4,9 @@ using VRC.SDKBase;
 
 namespace ACO
 {
-    /// 시한 표적 페이즈(모듈) — 표적 Count개가 하나씩 나타난다. 각 표적은 배치된 순간부터 TimeLimit초 안에 부숴야 하고, 놓치면(도주) 미션 실패.
+    /// 시한 표적 페이즈(모듈) — 이동식 탄도탄 발사대(TEL, 전용 풀 ACO_TelUnit) Count대가 하나씩 나타난다. 각 표적은 배치된 순간부터 TimeLimit초 안에 부숴야 하고, 놓치면(요격 불가) 미션 실패.
+    /// 앞 LaunchDelay초는 발사 준비(지상 표적 — 공대지), 그 뒤는 탄도탄 상승(공중 표적 — 공대공). 체력은 하나라 어느 쪽이든 부수면 그 표적은 끝이다.
+    /// 무전: 발견·발사·요격 한계·파괴(발사 전/후) 관제 대사 — 모든 클라이언트가 TEL 상태를 보고 각자 재생한다.
     /// 표적 사이 간격 Interval초. 첫 표적을 못 놓으면 다른 종류로 바뀌고, 이후 표적을 못 놓으면 그 표적만 건너뛴다.
     /// 성공 보너스 = 잡은 수 × HitBonus(관리자가 페이즈 클리어 보너스·배율을 더한다).
     ///
@@ -23,6 +25,8 @@ namespace ACO
         public int Count = 3;
         [Tooltip("표적마다 주어지는 시간(초) — 배치된 순간부터")]
         public float TimeLimit = 90f;
+        [Tooltip("배치부터 탄도탄 발사까지(초) — 남은 시간은 상승(공대공) 구간. Bake가 TEL에 넣는다")]
+        public float LaunchDelay = 30f;
         [Tooltip("표적 사이 간격(초)")]
         public float Interval = 8f;
         [Tooltip("표적을 놓을 거리(m) — 플레이어 평균 위치 기준")]
@@ -33,6 +37,24 @@ namespace ACO
         [Tooltip("잡은 표적 하나당 보너스(페이즈 배율을 곱한다)")]
         public int HitBonus = 300;
 
+        [Header("대사 (관제 — 비우면 안 나온다)")]
+        [Tooltip("Bake가 넣는다")]
+        public ACO_Chatter Chatter;
+        [Tooltip("음성이 이 시간(초)보다 오래 밀리면 버린다")]
+        public float VoiceQueueDelay = 8f;
+        [Tooltip("요격 불가까지 이 시간(초) 남으면 LineLimit")]
+        public float LimitWarnTime = 15f;
+        [TextArea] public string LineSpotted = "New TEL spotted! It is setting up to fire. Hit it on the ground!";
+        public AudioClip LineSpottedClip;
+        [TextArea] public string LineLaunch = "Launch detected! Missile in the air! Intercept it before it leaves the atmosphere!";
+        public AudioClip LineLaunchClip;
+        [TextArea] public string LineLimit = "It is almost out of reach! Take the shot now!";
+        public AudioClip LineLimitClip;
+        [TextArea] public string LineTelDown = "TEL destroyed on the ground. Good kill.";
+        public AudioClip LineTelDownClip;
+        [TextArea] public string LineMissileDown = "Missile intercepted! Splash one!";
+        public AudioClip LineMissileDownClip;
+
         [UdonSynced] private int _stamp;
         [UdonSynced] private int _index;
         [UdonSynced] private int _hits;
@@ -41,6 +63,14 @@ namespace ACO
 
         private bool _planHasPoint;
         private Vector3 _planPoint;
+
+        // 지금 표적(대사·진행 글자 — 모든 클라이언트 지역 상태)
+        private ACO_TelUnit _tel;
+        private int _telTag;
+        private bool _saidLaunch;
+        private bool _saidLimit;
+        private bool _saidDown;
+        private float _lineTimer;
 
         private int TargetCount() { return Mathf.Max(Count, 1); }
         private bool IsCurrent() { return Manager != null && _stamp == CurrentStamp(); }
@@ -51,7 +81,7 @@ namespace ACO
         {
             _planHasPoint = false;
             if (Generator == null) { return false; }
-            if (Generator.CountFreeLandGround() < 1 || !Generator.HasGroundNear(focus, DistanceMin, DistanceMax)) { return false; }
+            if (!Generator.CanDeployTel() || !Generator.HasGroundNear(focus, DistanceMin, DistanceMax)) { return false; }
             _planPoint = Generator.GetCheckedPoint();
             _planHasPoint = true;
             return true;
@@ -88,12 +118,12 @@ namespace ACO
                 if (_index == 0 && _planHasPoint)
                 {
                     // 첫 표적은 사전 확인이 찾은 자리에(확인이 통과하면 배치도 된다).
-                    Generator.RequestDeployObjective(ACO_MissionGenerator.OBJ_GROUND, tag, 1, -1, _planPoint, -1f, -1f);
+                    Generator.RequestDeployObjective(ACO_MissionGenerator.OBJ_TEL, tag, 1, -1, _planPoint, -1f, -1f);
                     _planHasPoint = false;
                 }
                 else
                 {
-                    Generator.RequestDeployObjective(ACO_MissionGenerator.OBJ_GROUND, tag, 1, -1, Manager.GetPlayerCenter(), DistanceMin, DistanceMax);
+                    Generator.RequestDeployObjective(ACO_MissionGenerator.OBJ_TEL, tag, 1, -1, Manager.GetPlayerCenter(), DistanceMin, DistanceMax);
                 }
                 SyncNow();
                 return RESULT_RUNNING;
@@ -181,6 +211,60 @@ namespace ACO
             _planHasPoint = false;
         }
 
+        // ───────────── 대사 (모든 클라이언트) ─────────────
+
+        void Update()
+        {
+            _lineTimer -= Time.deltaTime;
+            if (_lineTimer > 0f) { return; }
+            _lineTimer = 0.25f;
+            if (!IsCurrent() || !_deployed || Generator == null) { return; }
+            CheckLines();
+        }
+
+        private void CheckLines()
+        {
+            // 앞 표적의 파괴를 먼저 — 순번이 바로 넘어가 태그가 바뀌어도 놓치지 않게
+            if (_tel != null && !_saidDown && _tel.IsDestroyed())
+            {
+                _saidDown = true;
+                if (_saidLaunch) { Say(LineMissileDown, LineMissileDownClip); }
+                else { Say(LineTelDown, LineTelDownClip); }
+            }
+            int tag = Manager.MakePhaseTag(1 + _index);
+            if (tag != _telTag)
+            {
+                ACO_TelUnit tel = Generator.GetTelByTag(tag);
+                if (tel == null) { return; }
+                _telTag = tag;
+                _tel = tel;
+                // 처음 본 표적: 지금 상태를 기준으로 삼는다(늦게 들어온 클라이언트가 지난 대사를 듣지 않게)
+                _saidLaunch = tel.IsAirborne();
+                _saidLimit = false;
+                _saidDown = tel.IsDestroyed();
+                if (!_saidLaunch && !_saidDown) { Say(LineSpotted, LineSpottedClip); }
+                return;
+            }
+            if (_tel == null || _tel.IsDestroyed()) { return; }
+            if (!_saidLaunch && _tel.IsAirborne())
+            {
+                _saidLaunch = true;
+                Say(LineLaunch, LineLaunchClip);
+            }
+            if (_saidLimit || !_tel.IsAirborne()) { return; }
+            int deadline = DeadlineMs(tag);
+            if (deadline != 0 && (deadline - Networking.GetServerTimeInMilliseconds()) * 0.001f <= LimitWarnTime)
+            {
+                _saidLimit = true;
+                Say(LineLimit, LineLimitClip);
+            }
+        }
+
+        private void Say(string text, AudioClip clip)
+        {
+            if (Chatter != null && !string.IsNullOrEmpty(text)) { Chatter.SayControl(text, clip, VoiceQueueDelay); }
+        }
+
         // ───────────── 모든 클라이언트 ─────────────
 
         /// 태그 tag 표적의 마감(서버 ms) = 생성기 배치 시각 + TimeLimit. 아직 안 보이면 0.
@@ -199,7 +283,7 @@ namespace ACO
             return found ? first + Mathf.RoundToInt(TimeLimit * 1000f) : 0;
         }
 
-        /// "2/3  0:42" — 잡은 수 / 전체, 지금 표적의 남은 시간(빨갛게). 이번 페이즈 값을 아직 못 받았으면 "-".
+        /// "2/3  LAUNCH 0:12"(발사까지) → "2/3  INTERCEPT 0:42  ALT 24000ft"(요격 불가까지, 탄도탄 고도) — 남은 시간은 빨갛게. 이번 페이즈 값을 아직 못 받았으면 "-".
         public override string GetProgressText()
         {
             if (!IsCurrent()) { return "-"; }
@@ -209,9 +293,12 @@ namespace ACO
                 int deadline = DeadlineMs(Manager.MakePhaseTag(1 + _index));
                 if (deadline != 0)
                 {
-                    float left = Mathf.Max((deadline - Networking.GetServerTimeInMilliseconds()) * 0.001f, 0f);
-                    int sec = Mathf.CeilToInt(left);
-                    s += "  <color=#FF5544>" + (sec / 60) + ":" + (sec % 60).ToString("00") + "</color>";
+                    int now = Networking.GetServerTimeInMilliseconds();
+                    bool airborne = _tel != null && _telTag == Manager.MakePhaseTag(1 + _index) && _tel.IsAirborne();
+                    int until = airborne || _tel == null ? deadline : _tel.GetLaunchMs();
+                    int sec = Mathf.CeilToInt(Mathf.Max((until - now) * 0.001f, 0f));
+                    s += "  <color=#FF5544>" + (airborne ? "INTERCEPT " : "LAUNCH ") + (sec / 60) + ":" + (sec % 60).ToString("00") + "</color>";
+                    if (airborne) { s += "  ALT " + Mathf.RoundToInt(_tel.GetAltitude() * 3.28084f) + "ft"; }
                 }
             }
             return s;
@@ -220,7 +307,7 @@ namespace ACO
         public override string GetDescription()
         {
             if (Description.Length > 0) { return Description; }
-            return "DESTROY " + TargetCount() + " TARGETS BEFORE THEY ESCAPE";
+            return "STOP " + TargetCount() + " BALLISTIC MISSILE LAUNCHERS - HIT THEM ON THE GROUND OR INTERCEPT THE MISSILE";
         }
     }
 }

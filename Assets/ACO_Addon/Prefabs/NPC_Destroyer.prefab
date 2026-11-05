@@ -277,8 +277,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 0
   MuzzleVelocity: 1100
   Spread: 0.6
+  Flyby: {fileID: 0}
 --- !u!114 &3404395345656735787
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -578,13 +580,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1752891777101678067}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 1.2, y: 1.4000001, z: 1.2}
+  m_LocalRotation: {x: -0.38268322, y: -0, z: -0, w: 0.9238797}
+  m_LocalPosition: {x: -3.64, y: 0.589, z: -5.618}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8652274990084210255}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -45, y: 0, z: 0}
 --- !u!1 &1773388972878621936
 GameObject:
   m_ObjectHideFlags: 0
@@ -1025,6 +1027,7 @@ MonoBehaviour:
   EntityControl: {fileID: 465167439977665539}
   TargetHealth: {fileID: 544144685560053259}
   Gun: {fileID: 3881513311167908922}
+  BaseHealth: 0
   ScoreValue: 250
   MarkerLabel: GUN
   TargetLayers:
@@ -1032,7 +1035,7 @@ MonoBehaviour:
     m_Bits: 100663296
   DetectRange: 5000
   LoseTargetRange: 6000
-  MinTargetAltitude: 20
+  MinTargetAltitude: -9999
   ScanInterval: 0.5
   RequireLineOfSight: 1
   LineOfSightBlockers:
@@ -1046,6 +1049,7 @@ MonoBehaviour:
   MaxPitch: 85
   ReturnToRestDelay: 2
   TrackingLag: 1.2
+  AimLeadTime: 0
   AimError: 1.5
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -1056,6 +1060,11 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 0
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -1166,8 +1175,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 0
   MuzzleVelocity: 850
   Spread: 1.5
+  Flyby: {fileID: 0}
 --- !u!114 &7316221453437137938
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1334,13 +1345,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2814128243907945845}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -1.2, y: 1.4000001, z: -1.2}
+  m_LocalRotation: {x: -0.38268322, y: -0, z: -0, w: 0.9238797}
+  m_LocalPosition: {x: 3.64, y: 0.5890002, z: -5.618}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8652274990084210255}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -45, y: 0, z: 0}
 --- !u!1 &2901409712683474905
 GameObject:
   m_ObjectHideFlags: 0
@@ -21353,6 +21364,7 @@ MonoBehaviour:
   EntityControl: {fileID: 1826553378012099349}
   TargetHealth: {fileID: 155704941270453338}
   Gun: {fileID: 5624040352317941660}
+  BaseHealth: 0
   ScoreValue: 150
   MarkerLabel: CIWS
   TargetLayers:
@@ -21374,6 +21386,7 @@ MonoBehaviour:
   MaxPitch: 85
   ReturnToRestDelay: 2
   TrackingLag: 0.35
+  AimLeadTime: 0
   AimError: 0.6
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -21384,6 +21397,11 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 0
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -26382,7 +26400,6 @@ Transform:
   - {fileID: 4569377603348290757}
   - {fileID: 5028215935273821897}
   - {fileID: 2397208208386453733}
-  - {fileID: 60682145836093360}
   m_Father: {fileID: 9018363675100908093}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4146450129096919726
@@ -26420,7 +26437,6 @@ MonoBehaviour:
   - {fileID: 4569377603348290757}
   - {fileID: 5028215935273821897}
   - {fileID: 2397208208386453733}
-  - {fileID: 60682145836093360}
   WorldParent: {fileID: 0}
   NumMissiles: 8
   NumPreInstantiated: 2
@@ -26428,6 +26444,7 @@ MonoBehaviour:
   ReloadTime: 40
   LaunchSound: {fileID: 0}
   LockTime: 3.5
+  EcmHub: {fileID: 0}
   LockDecayRate: 1.5
   SendLockWarning: 1
   LockWarningInterval: 1
@@ -26747,7 +26764,9 @@ MonoBehaviour:
     PrefabModifications: []
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 2698660503898156249}
+  FleetTuneVersion: 0
   TargetHealth: {fileID: 4288937001720538127}
+  BaseHealth: 0
   Parts:
   - {fileID: 4147830272635359414}
   - {fileID: 9141997833491756298}
@@ -26756,6 +26775,9 @@ MonoBehaviour:
   ScoreValue: 500
   MarkerLabel: DD
   HighValue: 0
+  ReservedForFleet: 0
+  ExternalPose: 0
+  PoseOwner: {fileID: 0}
   PartHullDamage: 0.2
   PartCheckInterval: 0.25
   CruiseSpeed: 14
@@ -26821,13 +26843,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6113102514659483351}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -1.2, y: 1.4000001, z: 1.2}
+  m_LocalRotation: {x: -0.13052587, y: -0, z: -0, w: 0.99144495}
+  m_LocalPosition: {x: 0, y: 2.24, z: -0.54}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8652274990084210255}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -15, y: 0, z: 0}
 --- !u!1 &6857327839629077411
 GameObject:
   m_ObjectHideFlags: 0
@@ -26942,37 +26964,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!1 &7536552377656531807
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 60682145836093360}
-  m_Layer: 0
-  m_Name: Cell_3
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &60682145836093360
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7536552377656531807}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 1.2, y: 1.4000001, z: -1.2}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8652274990084210255}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8164518213627284877
 GameObject:
   m_ObjectHideFlags: 0
@@ -27537,16 +27528,17 @@ MonoBehaviour:
   _udonSharpBackingUdonBehaviour: {fileID: 7343695857183682194}
   EntityControl: {fileID: 38120632479940713}
   TargetHealth: {fileID: 5996429824105762016}
+  BaseHealth: 0
   MissileLauncher: {fileID: 4146450129096919726}
   ScoreValue: 300
   MarkerLabel: VLS
   TargetLayers:
     serializedVersion: 2
     m_Bits: 100663296
-  DetectRange: 3000
-  LoseTargetRange: 4000
+  DetectRange: 4500
+  LoseTargetRange: 5000
   RadarConeAngle: 180
-  MinTargetAltitude: 20
+  MinTargetAltitude: -99999
   ScanInterval: 0.5
   RequireLineOfSight: 1
   LineOfSightBlockers:

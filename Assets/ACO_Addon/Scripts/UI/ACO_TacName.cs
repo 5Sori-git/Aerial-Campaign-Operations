@@ -17,6 +17,8 @@ namespace ACO
     {
         /// 저장 키 — 절대 바꾸지 않는다.
         public const string KEY = "aco_tac_name";
+        /// 헐넘버 저장 키 — 절대 바꾸지 않는다. 다른 사람 화면의 기체 표시도 읽는다.
+        public const string KEY_HULL = "aco_hull_no";
         private const int MAX_PLAYERS = 100;
 
         [Header("입력 패널 (프리팹 빌더)")]
@@ -25,6 +27,14 @@ namespace ACO
         public TextMeshProUGUI MessageText;
         [Tooltip("최대 글자 수")]
         public int MaxLength = 12;
+
+        [Header("헐넘버 패널 (프리팹 빌더)")]
+        public InputField HullInput;
+        public TextMeshProUGUI HullText;
+        [Tooltip("헐넘버 최대 글자 수")]
+        public int HullMaxLength = 6;
+
+        [Header("공통")]
         [Tooltip("표시 이름을 다시 정하는 주기(초)")]
         public float RefreshInterval = 1f;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 버튼 효과음을 넣는다")]
@@ -43,8 +53,10 @@ namespace ACO
             if (!Utilities.IsValid(player) || !player.isLocal) { return; }
             _restored = true;
             if (Input) { Input.text = ReadName(player); }
+            if (HullInput) { HullInput.text = ReadHull(player); }
             Refresh();
             UpdateTexts("");
+            UpdateHullText();
         }
 
         void Update()
@@ -78,6 +90,41 @@ namespace ACO
             Refresh();
             UpdateTexts("CALLSIGN CLEARED");
             Play(ACO_UiSound.KIND_CLICK);
+        }
+
+        /// 헐넘버 SET 버튼·입력 끝.
+        public void SubmitHull()
+        {
+            if (!_restored) { Play(ACO_UiSound.KIND_DENY); return; }
+            string hull = Clean(HullInput ? HullInput.text : "", HullMaxLength, false);
+            PlayerData.SetString(KEY_HULL, hull);
+            if (HullInput) { HullInput.text = hull; }
+            UpdateHullText();
+            Play(ACO_UiSound.KIND_CONFIRM);
+        }
+
+        /// 헐넘버 CLEAR 버튼.
+        public void ClearHull()
+        {
+            if (!_restored) { Play(ACO_UiSound.KIND_DENY); return; }
+            PlayerData.SetString(KEY_HULL, "");
+            if (HullInput) { HullInput.text = ""; }
+            UpdateHullText();
+            Play(ACO_UiSound.KIND_CLICK);
+        }
+
+        private string ReadHull(VRCPlayerApi p)
+        {
+            string s;
+            return PlayerData.TryGetString(p, KEY_HULL, out s) ? Clean(s, HullMaxLength, false) : "";
+        }
+
+        private void UpdateHullText()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (!HullText || !Utilities.IsValid(me)) { return; }
+            string hull = ReadHull(me);
+            HullText.text = "YOUR HULL NUMBER: " + (hull.Length > 0 ? hull : "<color=#7FBF8A>(NONE)</color>");
         }
 
         private void Play(int kind)
@@ -140,15 +187,18 @@ namespace ACO
         }
 
         /// 대문자, 영문·숫자·공백·'-'만(기본 글꼴에 있는 글자), 앞뒤 공백 없이, 최대 MaxLength자.
-        private string Sanitize(string raw)
+        private string Sanitize(string raw) { return Clean(raw, MaxLength, true); }
+
+        /// symbols가 false면 영문·숫자만(헐넘버).
+        private string Clean(string raw, int maxLength, bool symbols)
         {
             if (raw == null) { return ""; }
             string up = raw.ToUpper();
             string s = "";
-            for (int i = 0; i < up.Length && s.Length < Mathf.Max(MaxLength, 1); i++)
+            for (int i = 0; i < up.Length && s.Length < Mathf.Max(maxLength, 1); i++)
             {
                 char c = up[i];
-                bool ok = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || (c == ' ' && s.Length > 0);
+                bool ok = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (symbols && (c == '-' || (c == ' ' && s.Length > 0)));
                 if (ok) { s += c.ToString(); }
             }
             return s.Trim();

@@ -80,6 +80,10 @@ namespace ACO
         private const string KEY_VERSION = "aco_ver";       // 저장 형식 버전(나중에 형식을 바꿀 때 한 번만 옮기는 데 쓴다)
         private const int DATA_VERSION = 1;
         private const string KEY_CREDITS = "aco_credits";
+        /// 한 미션 최고 격추수(int) — 다른 사람 화면의 킬마크도 읽는다. 절대 바꾸지 않는다.
+        public const string KEY_BEST_KILLS = "aco_best_kills";
+        /// 한 미션 최고 획득 크레딧(int) — 작전판의 순위가 같은 인스턴스 사람들 것을 읽는다. 절대 바꾸지 않는다.
+        public const string KEY_BEST_REWARD = "aco_best_reward";
         private const string KEY_UPGRADE = "aco_up_";        // + 강화 ID → 산 단계(int)
         private const string KEY_UNLOCK = "aco_unlock_";     // + 무장 ID(격납고 SpecialIds) → 해금(bool)
         private const string KEY_SPECIAL = "aco_special_id"; // 마지막으로 고른 무장 ID(string)
@@ -186,7 +190,12 @@ namespace ACO
         private bool _sortied;
         private bool _piloting;
         private int _deaths;
+        /// 자유 비행 모드(게임 진행이 넣는다): 내려도 기체 사양을 되돌리지 않는다.
+        [System.NonSerialized] public bool FreeFlight;
         private int _personalScore;
+        private int _missionKills;
+        private int _bestKills;
+        private int _bestReward;
         private bool _rewarded;
         private float _rewardAt = -1f;
         private float _pollTimer;
@@ -213,6 +222,13 @@ namespace ACO
             }
             int v;
             _credits = PlayerData.TryGetInt(player, KEY_CREDITS, out v) ? v : StartingCredits;
+            int savedKills = PlayerData.TryGetInt(player, KEY_BEST_KILLS, out v) ? v : 0;
+            // 불러오기 전에 끝난 미션의 기록이 더 크면 지금 저장한다
+            if (_bestKills > savedKills) { PlayerData.SetInt(KEY_BEST_KILLS, _bestKills); }
+            else { _bestKills = savedKills; }
+            int savedReward = PlayerData.TryGetInt(player, KEY_BEST_REWARD, out v) ? v : 0;
+            if (_bestReward > savedReward) { PlayerData.SetInt(KEY_BEST_REWARD, _bestReward); }
+            else { _bestReward = savedReward; }
             for (int i = 0; i < UPGRADE_COUNT; i++)
             {
                 string key = UpgradeKey(i);
@@ -467,6 +483,21 @@ namespace ACO
             _personalScore += points;
         }
 
+        /// 내가 쓰러뜨린 표적 하나(ACO_MissionLog). 기록은 미션이 끝날 때 GrantReward에서 집계한다.
+        public void AddMissionKill()
+        {
+            if (!_inMission || _rewarded) { return; }
+            _missionKills++;
+        }
+
+        // 성공·실패 모두 끝난 미션이면 센다. 도중에 나가면 기록되지 않는다
+        private void SaveBestKills()
+        {
+            if (_missionKills <= _bestKills) { return; }
+            _bestKills = _missionKills;
+            if (_restored) { PlayerData.SetInt(KEY_BEST_KILLS, _bestKills); }
+        }
+
         public int GetMissionDeaths() { return _inMission ? _deaths : 0; }
         public int GetMissionPersonalScore() { return _inMission ? _personalScore : 0; }
 
@@ -505,6 +536,7 @@ namespace ACO
                     _sortied = _piloting;   // 미션 시작 때 이미 타고 있었으면 출격으로 친다
                     _deaths = 0;
                     _personalScore = 0;
+                    _missionKills = 0;
                     _rewarded = false;
                     _rewardAt = -1f;
                     _version++;
@@ -523,6 +555,7 @@ namespace ACO
         {
             if (_rewarded || Manager == null) { return; }
             _rewarded = true;
+            SaveBestKills();
 
             bool success = Manager.GetState() == ACO_MissionManager.STATE_COMPLETE;
             int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
@@ -540,6 +573,11 @@ namespace ACO
             _lastDeaths = _deaths;
             _lastSortied = _sortied || !RequireSortie;
 
+            if (reward > _bestReward)
+            {
+                _bestReward = reward;
+                if (_restored) { PlayerData.SetInt(KEY_BEST_REWARD, _bestReward); }
+            }
             if (reward > 0)
             {
                 if (_restored) { _credits += reward; SaveCredits(); }

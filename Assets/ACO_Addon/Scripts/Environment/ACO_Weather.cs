@@ -163,6 +163,7 @@ namespace ACO
             {
                 Clouds.SetBaseFog(_curDensity, _curColor);
                 Clouds.SetDarkness(Mathf.Lerp(_fromDark, _toDark, k));
+                Clouds.SetSunScale(Mathf.Lerp(_fromSun, _toSun, k));
             }
             else
             {

@@ -28,6 +28,8 @@ namespace ACO
         public SaccTarget TargetHealth;
         [Tooltip("포신 끝의 기총. 사거리/발포각/체류 시간/데미지는 기총 쪽에서 설정한다")]
         public ACO_NPCGun Gun;
+        [Tooltip("숙련도 체력 배율의 기준(베테랑) — Bake가 SaccTarget 체력을 넣는다")]
+        public float BaseHealth = 0f;
         [Tooltip("파괴 시 팀 점수(ACO_MissionManager)")]
         public int ScoreValue = 100;
         [Tooltip("표적 마커에 표시할 약어(3~4글자)")]
@@ -62,6 +64,8 @@ namespace ACO
         [Header("조준 (회피 가능성)")]
         [Tooltip("포탑은 이 시간(초)만큼 늦게 따라가는 타겟 속도로 리드를 잡는다. 클수록 급기동에 약하다(피하기 쉽다). 0이면 완벽 추적")]
         public float TrackingLag = 0.6f;
+        [Tooltip("기총이 없을 때(소형 레일건): 표적의 이 시간(초) 뒤 자리를 겨눈다")]
+        public float AimLeadTime = 0f;
         [Tooltip("포신이 조준점 주위로 흔들리는 최대 각도(도). 기총의 EffectiveAngle보다 작아야 직진하는 타겟을 맞힌다")]
         public float AimError = 0.8f;
         [Tooltip("흔들림 속도(Hz 정도)")]
@@ -81,6 +85,16 @@ namespace ACO
         public float InterceptKillTime = 0.5f;
         [Tooltip("자기 유닛이 아닌 표적(옆 함선·아군기)을 노린 미사일은 걸리는 시간에 이 배수를 곱한다")]
         public float OtherDefenseFactor = 2f;
+        [Tooltip("빌드 시 ACO_SceneBaker가 적 대공포에 넣는다 — 플레이어 ECM 구역 안에서 조준이 흔들리고 요격이 느려진다. 아군 포는 비운다")]
+        public ACO_RadarContacts EcmHub;
+        [Tooltip("ECM 구역 안에서 조준 흔들림 배수")]
+        public float EcmAimFactor = 3f;
+        [Tooltip("ECM 구역 안에서 CIWS 요격 시간 배수")]
+        public float EcmInterceptFactor = 1.5f;
+        [Tooltip("미사일을 떨어뜨린 뒤 다음 미사일을 맡기까지 쉬는 시간(초). 0 = 바로 다음 발")]
+        public float InterceptCooldown = 0f;
+        // Bake가 적 CIWS에 넣은 요격 수치의 판 번호(ACO_SceneBaker.CiwsTuneVersion). 판이 같으면 직접 바꾼 값을 건드리지 않는다
+        [HideInInspector] public int InterceptTuneVersion;
         // Bake가 함선 CIWS·아군 함선 대공포에 요격 기본값을 한 번 넣었다(그 뒤로 직접 바꾼 값은 건드리지 않는다)
         [HideInInspector] public bool InterceptDefaultsApplied;
 
@@ -126,10 +140,13 @@ namespace ACO
         // 기본 자세(시작 시 로컬 회전)와 타겟이 없어진 뒤 흐른 시간
         private Quaternion _restYaw = Quaternion.identity;
         private Quaternion _restPitch = Quaternion.identity;
+        private float _mountUp = 1f;   // 뒤집어 단 포대(배 쪽)는 -1 — 방위축이 아래를 향한다
         private float _noTargetTime;
 
         // 원거리 잠재우기
         private bool _sleeping;
+        private float[] _targetPriority;
+        private bool[] _priorityResolved;
         private float _sleepTimer;
         private SaccEntity[] _aamEntities;
 
@@ -138,6 +155,9 @@ namespace ACO
         private ACO_Missile _icMissile;
         private float _icLastTick = -100f;
         private float _icProgress;
+        private float _icBusyUntil;
+        private float _ecmCheck;
+        private bool _ecmJammed;
         private float _icNeed;
         // 상대하던 미사일이 이 시간(초) 넘게 틱하지 않으면(터졌거나 사거리 밖) 다른 미사일을 받는다
         private const float IC_HOLD = 0.15f;
@@ -162,6 +182,7 @@ namespace ACO
 
             if (TurretYaw) { _restYaw = TurretYaw.localRotation; }
             if (TurretPitch) { _restPitch = TurretPitch.localRotation; }
+            _mountUp = transform.up.y < 0f ? -1f : 1f;
 
             if (!EntityControl) { EntityControl = GetComponentInParent<SaccEntity>(); }
             if (!TargetHealth) { TargetHealth = GetComponentInParent<SaccTarget>(); }
@@ -194,6 +215,16 @@ namespace ACO
             }
 
             bool intercepting = IsIntercepting();
+
+            if (EcmHub != null)
+            {
+                _ecmCheck -= dt;
+                if (_ecmCheck <= 0f)
+                {
+                    _ecmCheck = 0.25f;
+                    _ecmJammed = EcmHub.IsJammed(transform.position);
+                }
+            }
 
             // 원거리 잠재우기: 잠든 동안엔 주기적으로 깨울지만 확인한다. 미사일을 요격하는 동안은 깨어 있고, 끝나면 포탑만 쉬는 자세로 돌린다.
             if (SleepMargin > 0f)
@@ -244,7 +275,79 @@ namespace ACO
             if (Gun) { Gun.GunTick(engageable ? _targetIdx : -1, _targetVel, dt); }
         }
 
+        // ───────────── 소형 레일건이 읽는다 ─────────────
+
+        /// 살아 있고, 깨어 있고, 표적을 쏠 수 있는가.
+        public bool IsEngaged() { return !_disabled && !_sleeping && TargetIsEngageable(); }
+        public Transform GetTargetTransform() { return _target; }
+        public Vector3 GetTargetVelocity() { return _targetVel; }
+
+        // ───────────── 숙련도 ─────────────
+
+        private bool _hasTierBase;
+        private float _baseAimError;
+        private float _baseDwell;
+        private float _baseBurstCooldown;
+
+        /// 지상 유닛 숙련도(생성기가 스폰할 때 — 모든 클라이언트). 배율은 프리팹 값 기준이라 여러 번 불러도 누적되지 않는다.
+        public void ApplyTier(float aimMul, float dwellMul, float burstCooldownMul)
+        {
+            if (!_hasTierBase)
+            {
+                _hasTierBase = true;
+                _baseAimError = AimError;
+                if (Gun)
+                {
+                    _baseDwell = Gun.DwellTime;
+                    _baseBurstCooldown = Gun.BurstCooldown;
+                }
+            }
+            AimError = _baseAimError * aimMul;
+            if (Gun)
+            {
+                Gun.DwellTime = _baseDwell * dwellMul;
+                Gun.BurstCooldown = _baseBurstCooldown * burstCooldownMul;
+            }
+        }
+
         // ───────────── 탐지 ─────────────
+
+        /// 표적 i의 우선순위(m): 마커 부모의 ACO_EscortUnit이 PriorityForSites면 AttackPriority, 아니면 0(NPC 전투기와 같은 방식 — 처음 활성으로 보일 때 한 번 찾는다). g는 활성이어야 한다.
+        private float PriorityOf(int i, GameObject g, int count)
+        {
+            if (_targetPriority == null || _targetPriority.Length != count)
+            {
+                _targetPriority = new float[count];
+                _priorityResolved = new bool[count];
+            }
+            if (!_priorityResolved[i])
+            {
+                _priorityResolved[i] = true;
+                ACO_EscortUnit escort = g.GetComponentInParent<ACO_EscortUnit>();
+                _targetPriority[i] = escort != null && escort.PriorityForSites ? Mathf.Max(escort.AttackPriority, 0f) : 0f;
+            }
+            return _targetPriority[i];
+        }
+
+        /// 지금 표적보다 먼저인 우선 표적이 탐지 거리 안에 있는가(우선순위만큼 가깝게 친 거리로) — 그러면 지금 표적을 유지하지 않고 다시 고른다.
+        private bool PriorityBeats(GameObject[] targets)
+        {
+            if (_targetIdx < 0 || _targetIdx >= targets.Length) { return false; }
+            Vector3 p = transform.position;
+            float current = Vector3.Distance(p, _target.position) - PriorityOf(_targetIdx, targets[_targetIdx], targets.Length);
+            int mask = TargetLayers;
+            for (int i = 0; i < targets.Length; i++)
+            {
+                GameObject g = targets[i];
+                if (i == _targetIdx || !g || !g.activeInHierarchy) { continue; }
+                if (((1 << g.layer) & mask) == 0) { continue; }
+                float priority = PriorityOf(i, g, targets.Length);
+                if (priority <= 0f) { continue; }
+                float d = Vector3.Distance(p, g.transform.position);
+                if (d < DetectRange && d - priority < current) { return true; }
+            }
+            return false;
+        }
 
         private void ScanForTarget()
         {
@@ -253,7 +356,7 @@ namespace ACO
             if (targets == null) { return; }
 
             // 기존 타겟이 아직 유효하면 유지한다(포탑을 이미 돌려 둔 상태를 버리지 않기 위해).
-            if (_target != null && _target.gameObject.activeInHierarchy && !TargetDead()
+            if (_target != null && _target.gameObject.activeInHierarchy && !TargetDead() && !PriorityBeats(targets)
                 && Vector3.Distance(transform.position, _target.position) <= LoseTargetRange
                 && _target.position.y >= MinTargetAltitude && HasLineOfSight(_target.position))
             {
@@ -274,6 +377,8 @@ namespace ACO
                 if (tp.y < MinTargetAltitude) { continue; }
 
                 float d = Vector3.Distance(transform.position, tp);
+                if (d >= DetectRange) { continue; }
+                d -= PriorityOf(i, g, targets.Length);
                 if (d >= bestDist) { continue; }
                 if (!HasLineOfSight(tp)) { continue; }
 
@@ -382,7 +487,7 @@ namespace ACO
             _noTargetTime = 0f;
 
             Vector3 origin = TurretPitch != null ? TurretPitch.position : transform.position;
-            Vector3 aimPoint = Gun != null ? Gun.LeadPoint(_target.position, _aimVel) : _target.position;
+            Vector3 aimPoint = Gun != null ? Gun.LeadPoint(_target.position, _aimVel) : _target.position + _aimVel * AimLeadTime;
             Vector3 aimDir = aimPoint - origin;
             if (aimDir.sqrMagnitude < 0.000001f) { return; }
 
@@ -390,8 +495,9 @@ namespace ACO
             if (AimError > 0f)
             {
                 float t = Time.time * AimErrorFrequency;
-                float nx = (Mathf.PerlinNoise(t, _noiseSeed) - 0.5f) * 2f * AimError;
-                float ny = (Mathf.PerlinNoise(_noiseSeed, t) - 0.5f) * 2f * AimError;
+                float error = _ecmJammed ? AimError * EcmAimFactor : AimError;
+                float nx = (Mathf.PerlinNoise(t, _noiseSeed) - 0.5f) * 2f * error;
+                float ny = (Mathf.PerlinNoise(_noiseSeed, t) - 0.5f) * 2f * error;
                 aimDir = Quaternion.LookRotation(aimDir.normalized, Vector3.up) * Quaternion.Euler(nx, ny, 0f) * Vector3.forward;
             }
             RotateTurret(aimDir, dt);
@@ -406,7 +512,7 @@ namespace ACO
                 Vector3 flat = new Vector3(aimDir.x, 0f, aimDir.z);
                 if (flat.sqrMagnitude > 0.000001f)
                 {
-                    Quaternion want = Quaternion.LookRotation(flat.normalized, Vector3.up);
+                    Quaternion want = Quaternion.LookRotation(flat.normalized, Vector3.up * _mountUp);
                     TurretYaw.rotation = Quaternion.RotateTowards(TurretYaw.rotation, want, YawRate * dt);
                 }
             }
@@ -415,7 +521,8 @@ namespace ACO
             {
                 float pitch = Mathf.Asin(Mathf.Clamp(aimDir.normalized.y, -1f, 1f)) * Mathf.Rad2Deg;
                 pitch = Mathf.Clamp(pitch, MinPitch, MaxPitch);
-                Quaternion want = Quaternion.Euler(-pitch, 0f, 0f);
+                // MinPitch·MaxPitch는 월드 고각이다 — 뒤집어 달면 포탑 쪽 회전 방향만 반대가 된다
+                Quaternion want = Quaternion.Euler(-pitch * _mountUp, 0f, 0f);
                 TurretPitch.localRotation = Quaternion.RotateTowards(TurretPitch.localRotation, want, PitchRate * dt);
             }
         }
@@ -527,7 +634,8 @@ namespace ACO
         }
 
         /// 미사일이 매 프레임 부른다. -1 = 못 맡음(덮지 못하거나 다른 미사일을 쏘는 중 — 미사일은 다른 CIWS를 찾는다), 0 = 쏘는 중, 1 = 요격했다.
-        public int InterceptTick(ACO_Missile missile, Transform target, float dt)
+        /// noKill(시스키밍 LASM): 쏘기만 하고 끝나지 않는다 — 미사일이 터지거나 벗어날 때까지 이 CIWS를 붙잡는다.
+        public int InterceptTick(ACO_Missile missile, Transform target, float dt, bool noKill)
         {
             if (!missile || !CanIntercept(missile.transform.position, target))
             {
@@ -537,18 +645,20 @@ namespace ACO
             float now = Time.time;
             if (_icMissile != missile)
             {
-                if (IsIntercepting()) { return -1; }
+                if (IsIntercepting() || now < _icBusyUntil) { return -1; }
                 bool idle = now - _icLastTick > IC_IDLE;
                 bool own = _defendedRoot && target.IsChildOf(_defendedRoot);
                 _icMissile = missile;
                 _icProgress = 0f;
                 _icNeed = ((idle ? InterceptReactionTime : 0f) + InterceptKillTime) * (own ? 1f : Mathf.Max(OtherDefenseFactor, 0.01f));
+                if (_ecmJammed) { _icNeed *= EcmInterceptFactor; }
                 if (_sleeping) { _sleeping = false; _sleepTimer = SleepCheckInterval; }
             }
             _icLastTick = now;
             _icProgress += dt;
-            if (_icProgress < _icNeed) { return 0; }
+            if (noKill || _icProgress < _icNeed) { return 0; }
             _icMissile = null;
+            _icBusyUntil = now + InterceptCooldown;
             return 1;
         }
 

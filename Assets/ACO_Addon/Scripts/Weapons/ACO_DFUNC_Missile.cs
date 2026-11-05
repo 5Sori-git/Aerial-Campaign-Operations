@@ -122,6 +122,9 @@ namespace ACO
         public float DropTime = 0f;
         [Tooltip("시커 범위 기본값(도). 0 = 미사일 프리팹 값(ACO_Missile.MaxTrackingAngle). 강화 SEEKER CONE이 이 값을 키운다(최대 180 = 전방위)")]
         public float SeekerAngle = 0f;
+        [Tooltip("발사 후 락 유지(초): 이 시간 동안 미사일이 시커 범위를 벗어나거나 노칭을 당해도 표적을 놓치지 않는다. 플레어·채프는 막지 않는다. "
+            + "0 = 미사일 프리팹 값(ACO_Missile.LockHoldTime). 유도 미사일만")]
+        public float LockHoldTime = 0f;
         [Tooltip("미사일 수명(초). 0 = 미사일 프리팹 값. 느린 미사일은 늘린다")]
         public float MissileLifetime = 0f;
         [Tooltip("시스키밍(LASM): 표적이 함선이면 해수면 위 SkimAltitude로 낮게 깔려 날아가고(완만하게 내려간다, 앞쪽 지형이 높으면 넘는다) "
@@ -131,6 +134,14 @@ namespace ACO
         public float SkimAltitude = 8f;
         [Tooltip("시스키밍을 끝내고 표적으로 꽂히는 수평 거리(m)")]
         public float SkimTerminalDistance = 500f;
+
+        [Header("전자전 (ECM — 켜면 미사일 대신 재밍 포드가 된다)")]
+        [Tooltip("켜면 트리거로 재밍을 켠다: EcmDuration초 동안 ACO_RadarContacts.EcmRange 안의 적 미사일이 표적을 놓치고, NPC가 락온하지 못하고, 적 대공포가 흔들린다. 슬롯·다이얼·격납고는 무장과 같다")]
+        public bool EcmMode = false;
+        [Tooltip("재밍 지속 시간(초). 끝난 뒤 SlotReloadTime초 재충전한다")]
+        public float EcmDuration = 10f;
+        [Tooltip("빌드 시 ACO_SceneBaker가 넣는다 — 재밍 상태를 모은다")]
+        public ACO_RadarContacts EcmHub;
 
         [Header("강화 계열")]
         [Tooltip("격납고 강화 중 어느 탭의 효과를 받는가. Missile = 일반 미사일, SpecialAAM = 특수 대공, SpecialAGM = 특수 대지, "
@@ -310,7 +321,7 @@ namespace ACO
                 if (Targets[i]) { _targetEntities[i] = Targets[i].GetComponentInParent<SaccEntity>(); }
             }
 
-            if (Missile)
+            if (Missile && !EcmMode)
             {
                 for (int i = 0; i < Mathf.Max(NumPreInstantiated, 1); i++) { ReturnToPool(InstantiateMissile()); }
                 _ordTemplate = _pool[0].GetComponent<ACO_Ordnance>();
@@ -337,7 +348,11 @@ namespace ACO
         }
 
         public void SFEXT_G_PilotEnter() { gameObject.SetActive(true); }
-        public void SFEXT_G_PilotExit() { gameObject.SetActive(false); }
+        public void SFEXT_G_PilotExit()
+        {
+            _ecmUntilMs = 0;
+            gameObject.SetActive(false);
+        }
 
         public void DFUNC_Selected()
         {
@@ -407,6 +422,7 @@ namespace ACO
 
         public void SFEXT_G_Explode()
         {
+            _ecmUntilMs = 0;
             ResetAmmo();
             if (_selected) { Deselect(); }
         }
@@ -828,8 +844,40 @@ namespace ACO
 
         // ───────────── 발사 ─────────────
 
+        // ───────────── 전자전 ─────────────
+
+        private int _ecmUntilMs;   // 재밍이 끝나는 서버 시각(0 = 꺼짐)
+
+        /// 조종사: 준비됐으면 모두에게 재밍을 켠다 — 판정(미사일·락온·포대)이 클라이언트마다 다르므로 모두 알아야 한다.
+        private void TryEcm()
+        {
+            if (FindReadySlot() < 0) { return; }
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetEcm));
+        }
+
+        public void NetEcm()
+        {
+            Init();
+            _ecmUntilMs = Networking.GetServerTimeInMilliseconds() + Mathf.RoundToInt(EcmDuration * 1000f);
+            if (_slotReadyAt != null && _slotReadyAt.Length > 0) { _slotReadyAt[0] = Time.time + EcmDuration + SlotReloadTime; }
+            if (EcmHub != null) { EcmHub.NotifyEcm(_ecmUntilMs); }
+        }
+
+        public bool IsEcmActive(int now) { return _ecmUntilMs != 0 && _ecmUntilMs - now > 0; }
+
+        /// 비행 HUD의 잔탄 칸: 일반 무장은 잔탄, ECM은 켜진 시간·재충전 시간·준비 완료.
+        public string GetHudCount()
+        {
+            if (!EcmMode) { return GetAmmo().ToString(); }
+            int left = _ecmUntilMs - Networking.GetServerTimeInMilliseconds();
+            if (_ecmUntilMs != 0 && left > 0) { return "ON " + Mathf.CeilToInt(left * 0.001f); }
+            float wait = _slotReadyAt != null && _slotReadyAt.Length > 0 ? _slotReadyAt[0] - Time.time : 0f;
+            return wait > 0f ? "+" + Mathf.CeilToInt(wait) : "RDY";
+        }
+
         private void TryFire()
         {
+            if (EcmMode) { TryEcm(); return; }
             EnsureLockSlots();
             int lockedCount = CountLocked();
             if (lockedCount == 0 && !AllowUnguidedFire && !AutoTargetNearest) { return; }
@@ -1086,6 +1134,7 @@ namespace ACO
                     missile.ColdLaunchGravity = 1f;
                 }
                 if (MissileLifetime > 0f) { missile.MaxLifetime = MissileLifetime; }
+                if (LockHoldTime > 0f) { missile.LockHoldTime = LockHoldTime; }
                 // 피해는 명중을 판정하는 쏜 사람의 값만 쓰인다(범위 피해도 쏜 사람만 준다).
                 if (isShooter) { missile.Damage = Damage; }
                 missile.SplashRadius = isShooter ? splash : 0f;

@@ -5266,15 +5266,17 @@ MonoBehaviour:
   DwellTime: 0.5
   BurstDuration: 2
   BurstCooldown: 1.5
-  DamagePerTick: 3
+  DamagePerTick: 0.5
   MinDamageInterval: 0.15
   MaxDamageInterval: 0.5
   WeaponType: 1
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 0
   MuzzleVelocity: 1000
   Spread: 0.8
+  Flyby: {fileID: 0}
 --- !u!114 &6377687860842637780
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5370,15 +5372,17 @@ MonoBehaviour:
   DwellTime: 0.5
   BurstDuration: 2
   BurstCooldown: 1.5
-  DamagePerTick: 3
+  DamagePerTick: 0.5
   MinDamageInterval: 0.15
   MaxDamageInterval: 0.5
   WeaponType: 1
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 0
   MuzzleVelocity: 1000
   Spread: 0.8
+  Flyby: {fileID: 0}
 --- !u!114 &2322787192818345206
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5726,6 +5730,7 @@ MonoBehaviour:
   EntityControl: {fileID: 2654694528451889221}
   TargetHealth: {fileID: 2624154816699786319}
   Gun: {fileID: 6682948890767923873}
+  BaseHealth: 0
   ScoreValue: 0
   MarkerLabel: GUN
   TargetLayers:
@@ -5747,16 +5752,22 @@ MonoBehaviour:
   MaxPitch: 85
   ReturnToRestDelay: 2
   TrackingLag: 0.5
+  AimLeadTime: 0
   AimError: 0.8
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
     serializedVersion: 2
     m_Bits: 100663296
-  InterceptRange: 3000
-  DefenseRadius: 3000
+  InterceptRange: 1500
+  DefenseRadius: 1500
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
-  OtherDefenseFactor: 1
+  OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -16123,13 +16134,14 @@ MonoBehaviour:
   EntityControl: {fileID: 6468916510737281357}
   TargetHealth: {fileID: 5919658593871111408}
   Gun: {fileID: 3901160613910951712}
+  BaseHealth: 0
   ScoreValue: 0
   MarkerLabel: GUN
   TargetLayers:
     serializedVersion: 2
-    m_Bits: 1610612736
-  DetectRange: 4000
-  LoseTargetRange: 4800
+    m_Bits: 1073741824
+  DetectRange: 5000
+  LoseTargetRange: 5000
   MinTargetAltitude: -100000
   ScanInterval: 0.5
   RequireLineOfSight: 1
@@ -16144,6 +16156,7 @@ MonoBehaviour:
   MaxPitch: 60
   ReturnToRestDelay: 2
   TrackingLag: 0.3
+  AimLeadTime: 0
   AimError: 0.4
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -16154,6 +16167,11 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -26343,8 +26361,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 0
   MuzzleVelocity: 800
   Spread: 0.2
+  Flyby: {fileID: 0}
 --- !u!114 &5599216618234447235
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -31824,6 +31844,7 @@ MonoBehaviour:
   EntityControl: {fileID: 2468009705693350753}
   TargetHealth: {fileID: 3429166201715168365}
   Gun: {fileID: 5831240248685396158}
+  BaseHealth: 0
   ScoreValue: 0
   MarkerLabel: GUN
   TargetLayers:
@@ -31845,6 +31866,7 @@ MonoBehaviour:
   MaxPitch: 85
   ReturnToRestDelay: 2
   TrackingLag: 0.5
+  AimLeadTime: 0
   AimError: 0.8
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -31854,7 +31876,12 @@ MonoBehaviour:
   DefenseRadius: 1500
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
-  OtherDefenseFactor: 1
+  OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -32311,7 +32338,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -32364,7 +32391,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeZ:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -32417,7 +32444,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startRotationX:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 0
       minScalar: 0
       maxCurve:
@@ -32470,7 +32497,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startRotationY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 0
       minScalar: 0
       maxCurve:
@@ -36866,8 +36893,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 14, y: 10, z: 120}
-  m_Center: {x: 0, y: 2, z: 0}
+  m_Size: {x: 14, y: 7.3, z: 122.03}
+  m_Center: {x: 0, y: 1.28, z: 0}
 --- !u!95 &3100389652272805597
 Animator:
   serializedVersion: 5
@@ -36911,7 +36938,7 @@ MonoBehaviour:
     PrefabModifications: []
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 964527417758752124}
-  Health: 1200
+  Health: 300
   RespawnDelay: 0
   ExplodeOther:
   - {fileID: 9138192200404015331}
@@ -36996,6 +37023,8 @@ MonoBehaviour:
   - {fileID: 2661288638035780644}
   - {fileID: 5748758317103543762}
   AttackPriority: 0
+  PriorityForSites: 0
+  PriorityDefaultsApplied: 0
   HideOnDeath:
   - {fileID: 3904187155292606526}
   - {fileID: 1815158507051472852}

@@ -29,6 +29,8 @@ namespace ACO
         [Header("참조")]
         [Tooltip("체력(포탑과 공유). ExplodeOther에 이 스크립트와 포탑을 등록한다")]
         public SaccTarget TargetHealth;
+        [Tooltip("숙련도 체력 배율의 기준(베테랑) — Bake가 SaccTarget 체력을 넣는다")]
+        public float BaseHealth = 0f;
         [Tooltip("포탑/사격(같은 오브젝트의 ACO_AAGunSite). 곡사포는 비운다")]
         public ACO_AAGunSite Turret;
         [Tooltip("곡사포 사격(같은 오브젝트의 ACO_ArtilleryGun). 곡사포만")]

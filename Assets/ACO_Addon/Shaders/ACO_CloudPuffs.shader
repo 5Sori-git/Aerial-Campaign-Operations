@@ -8,7 +8,9 @@
 //  - 가장자리: 알파 투 커버리지(MSAA에서 부드럽게, 정렬 불필요, 깊이 기록) — MSAA가 없으면 알파 테스트처럼 그려진다
 //  - 가까이(_NearFadeEnd → _NearFadeStart) 오면 디더링으로 사라진다(구름 속은 ACO_CloudField가 안개로 채운다)
 //  - 멀리(_LodStart → _LodEnd)는 퍼프 일부를 접고(_LodKeep만 남김) 남은 퍼프를 키운다
+//  - _HideBelow·_HideAmount(스크립트): 비구름층이 있을 때 층 윗면보다 낮은 퍼프를 숨긴다 — 층 안에 걸친 뭉게구름이 층의 부드러운 경계로 비치지 않게. 날씨가 바뀌는 동안만 디더링한다
 //  - _Darken: 날씨(비·폭풍)로 어두운 회색 구름, _Flash: 번개(폭풍) — 두꺼운 속이 더 밝게 번쩍인다
+//  - _SunGain(스크립트): 태양 세기 보정 — 층운이 있는 날씨엔 보이는 구름이 층 위(해가 비치는 곳)라 날씨로 줄인 태양을 되돌린다
 // 부드러운 반투명으로 바꾸려면: _Soft 켬, Src Blend = SrcAlpha, Dst Blend = OneMinusSrcAlpha, ZWrite Off, Alpha To Coverage Off, Render Queue 3000
 // (퍼프 정렬이 안 돼 겹친 순서가 틀릴 수 있고 구름 속에서 겹쳐 그리는 비용이 크다).
 Shader "ACO/CloudPuffs"
@@ -31,6 +33,7 @@ Shader "ACO/CloudPuffs"
         _StormColor ("Storm tint", Color) = (0.42, 0.44, 0.5, 1)
         _Flash ("Lightning flash (script)", Range(0, 2)) = 0
         _FlashColor ("Lightning glow", Color) = (0.85, 0.9, 1, 1)
+        _SunGain ("Sun gain (script)", Float) = 1
 
         [Header(Shape)]
         _SizeScale ("Puff size scale", Float) = 1
@@ -44,6 +47,8 @@ Shader "ACO/CloudPuffs"
         _LodStart ("LOD start (m)", Float) = 7000
         _LodEnd ("LOD end (m)", Float) = 22000
         _LodKeep ("LOD puffs kept at end", Range(0.1, 1)) = 0.4
+        _HideBelow ("Hide puffs below height (script)", Float) = 0
+        _HideAmount ("Hide amount (script)", Range(0, 1)) = 0
 
         [Header(Blend mode)]
         [Toggle] _Soft ("Soft (alpha blend) edges", Float) = 0
@@ -61,7 +66,7 @@ Shader "ACO/CloudPuffs"
 
         sampler2D _MainTex;
         float _SizeScale, _Wobble, _WobbleSpeed, _Cutoff;
-        float _NearFadeStart, _NearFadeEnd, _LodStart, _LodEnd, _LodKeep;
+        float _NearFadeStart, _NearFadeEnd, _LodStart, _LodEnd, _LodKeep, _HideBelow, _HideAmount;
 
         struct appdata
         {
@@ -107,6 +112,8 @@ Shader "ACO/CloudPuffs"
             size *= (v.uv1.z <= keep ? 1 : 0) * pow(keep, -0.45);
             // 가까우면 사라진다(완전히 사라지면 접어서 그리지도 않는다)
             fade = towardLight ? 1 : smoothstep(_NearFadeStart, _NearFadeEnd, dist);
+            // 비구름층: 층 윗면보다 낮은 퍼프를 숨긴다(그림자·깊이 패스도 같이). 높이로 잘라서 다 바뀐 뒤엔 디더가 남지 않는다
+            if (c.y < _HideBelow) { fade *= 1 - _HideAmount; }
             size *= fade > 0.001 ? 1 : 0;
 
             posWS = c + (right * v.uv0.x + up * v.uv0.y) * size;
@@ -143,7 +150,7 @@ Shader "ACO/CloudPuffs"
             #include "UnityLightingCommon.cginc"
 
             fixed4 _LitColor, _ShadeColor, _BottomColor, _StormColor, _FlashColor;
-            float _Wrap, _PuffRound, _ThickShade, _Ambient, _Silver, _SilverPower, _Darken, _Soft, _Flash;
+            float _Wrap, _PuffRound, _ThickShade, _Ambient, _Silver, _SilverPower, _Darken, _Soft, _Flash, _SunGain;
 
             struct v2f
             {
@@ -192,16 +199,17 @@ Shader "ACO/CloudPuffs"
 
                 // 감싸는 조명 + 두꺼운 곳 어둡게
                 float lit = saturate((dot(n, L) + _Wrap) / (1 + _Wrap)) * (1 - _ThickShade * thick);
-                float3 sun = _LitColor.rgb * _LightColor0.rgb;
-                float3 col = lerp(_ShadeColor.rgb * (0.35 + 0.65 * saturate(_LightColor0.rgb)), sun, lit);
+                float3 light = _LightColor0.rgb * _SunGain;
+                float3 sun = _LitColor.rgb * light;
+                float3 col = lerp(_ShadeColor.rgb * (0.35 + 0.65 * saturate(light)), sun, lit);
                 // 하늘 환경광
                 col += ShadeSH9(float4(n, 1)) * _Ambient;
                 // 아래쪽·안쪽 어둡게(정점 색)
-                col = lerp(col, _BottomColor.rgb * (0.4 + 0.6 * saturate(_LightColor0.rgb)), i.data.y * saturate(0.6 - n.y * 0.6));
+                col = lerp(col, _BottomColor.rgb * (0.4 + 0.6 * saturate(light)), i.data.y * saturate(0.6 - n.y * 0.6));
                 col *= lerp(0.7, 1, i.data.x);
                 // 은빛 테두리: 해를 등지고 보면 얇은 가장자리가 빛난다
                 float3 V = normalize(i.worldPos - CenterEye());
-                col += _LightColor0.rgb * _Silver * pow(saturate(dot(V, L)), _SilverPower) * (1 - thick);
+                col += light * _Silver * pow(saturate(dot(V, L)), _SilverPower) * (1 - thick);
                 // 날씨: 어두운 회색
                 col = lerp(col, dot(col, float3(0.3, 0.5, 0.2)) * _StormColor.rgb * 1.6, _Darken);
                 // 번개: 두꺼운 곳(속)이 더 밝게 — 안에서 번쩍이는 느낌
@@ -220,7 +228,7 @@ Shader "ACO/CloudPuffs"
                     a = (tex.a - _Cutoff) / fw + 0.5;
                     clip(a);
                     // 가까운 페이드는 디더링(MSAA와 상관없이)
-                    clip(i.data.z - Dither(i.pos.xy) - 0.001);
+                    clip(i.data.z - Dither(i.pos.xy) * 0.998 - 0.001);   // 0.998: 페이드가 1이면 어떤 픽셀도 지우지 않는다
                 }
                 fixed4 o = fixed4(col, a);
                 UNITY_APPLY_FOG(i.fogCoord, o);

@@ -460,6 +460,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3275965009561866855}
   TargetHealth: {fileID: 835724795572679736}
   Gun: {fileID: 2164468018769612883}
+  BaseHealth: 0
   ScoreValue: 0
   MarkerLabel: GUN
   TargetLayers:
@@ -481,6 +482,7 @@ MonoBehaviour:
   MaxPitch: 20
   ReturnToRestDelay: 2
   TrackingLag: 0.5
+  AimLeadTime: 0
   AimError: 0.8
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -491,6 +493,8 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
   InterceptDefaultsApplied: 0
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -20640,6 +20644,8 @@ MonoBehaviour:
   DefenseGuns:
   - {fileID: 6346103658647250217}
   AttackPriority: 500
+  PriorityForSites: 0
+  PriorityDefaultsApplied: 0
   HideOnDeath: []
   ShowOnDeath:
   - {fileID: 7216102334587748271}

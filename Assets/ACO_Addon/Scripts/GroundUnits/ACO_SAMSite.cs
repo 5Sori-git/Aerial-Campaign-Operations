@@ -17,6 +17,8 @@ namespace ACO
         public SaccEntity EntityControl;
         [Tooltip("체력/데미지/리스폰은 SaccTarget이 소유한다(0.2-1절). ExplodeOther에 이 스크립트를 등록해야 격추 통지를 받는다")]
         public SaccTarget TargetHealth;
+        [Tooltip("숙련도 체력 배율의 기준(베테랑) — Bake가 SaccTarget 체력을 넣는다")]
+        public float BaseHealth = 0f;
         public ACO_MissileLauncher MissileLauncher;
         [Tooltip("파괴 시 팀 점수(ACO_MissionManager)")]
         public int ScoreValue = 150;
@@ -85,6 +87,8 @@ namespace ACO
 
         // 원거리 잠재우기
         private bool _sleeping;
+        private float[] _targetPriority;
+        private bool[] _priorityResolved;
         private float _sleepTimer;
         private SaccEntity[] _aamEntities;
 
@@ -177,6 +181,64 @@ namespace ACO
             _fireCooldown = PostFireDelay;
         }
 
+        private bool _hasTierBase;
+        private float _baseLockTime;
+        private float _baseFireInterval;
+        private float _baseReloadTime;
+
+        /// 지상 유닛 숙련도(생성기가 스폰할 때 — 모든 클라이언트). 배율은 프리팹 값 기준이라 여러 번 불러도 누적되지 않는다.
+        public void ApplyTier(float lockMul, float reloadMul)
+        {
+            if (!MissileLauncher) { return; }
+            if (!_hasTierBase)
+            {
+                _hasTierBase = true;
+                _baseLockTime = MissileLauncher.LockTime;
+                _baseFireInterval = MissileLauncher.FireInterval;
+                _baseReloadTime = MissileLauncher.ReloadTime;
+            }
+            MissileLauncher.LockTime = _baseLockTime * lockMul;
+            MissileLauncher.FireInterval = _baseFireInterval * reloadMul;
+            MissileLauncher.ReloadTime = _baseReloadTime * reloadMul;
+        }
+
+        /// 표적 i의 우선순위(m): 마커 부모의 ACO_EscortUnit이 PriorityForSites면 AttackPriority, 아니면 0(NPC 전투기와 같은 방식 — 처음 활성으로 보일 때 한 번 찾는다). g는 활성이어야 한다.
+        private float PriorityOf(int i, GameObject g, int count)
+        {
+            if (_targetPriority == null || _targetPriority.Length != count)
+            {
+                _targetPriority = new float[count];
+                _priorityResolved = new bool[count];
+            }
+            if (!_priorityResolved[i])
+            {
+                _priorityResolved[i] = true;
+                ACO_EscortUnit escort = g.GetComponentInParent<ACO_EscortUnit>();
+                _targetPriority[i] = escort != null && escort.PriorityForSites ? Mathf.Max(escort.AttackPriority, 0f) : 0f;
+            }
+            return _targetPriority[i];
+        }
+
+        /// 지금 표적보다 먼저인 우선 표적이 탐지 거리 안에 있는가(우선순위만큼 가깝게 친 거리로) — 그러면 지금 표적을 유지하지 않고 다시 고른다.
+        private bool PriorityBeats(GameObject[] targets)
+        {
+            if (_targetIdx < 0 || _targetIdx >= targets.Length) { return false; }
+            Vector3 p = transform.position;
+            float current = Vector3.Distance(p, _target.position) - PriorityOf(_targetIdx, targets[_targetIdx], targets.Length);
+            int mask = TargetLayers;
+            for (int i = 0; i < targets.Length; i++)
+            {
+                GameObject g = targets[i];
+                if (i == _targetIdx || !g || !g.activeInHierarchy) { continue; }
+                if (((1 << g.layer) & mask) == 0) { continue; }
+                float priority = PriorityOf(i, g, targets.Length);
+                if (priority <= 0f) { continue; }
+                float d = Vector3.Distance(p, g.transform.position);
+                if (d < DetectRange && d - priority < current) { return true; }
+            }
+            return false;
+        }
+
         private void ScanForTarget()
         {
             if (!EntityControl) { return; }
@@ -184,7 +246,7 @@ namespace ACO
             if (targets == null) { return; }
 
             // 기존 타겟이 아직 쓸만하면 유지한다(락온 진행도를 버리지 않기 위해).
-            if (_target && TargetInRange(_target, LoseTargetRange) && _target.gameObject.activeInHierarchy)
+            if (_target && TargetInRange(_target, LoseTargetRange) && _target.gameObject.activeInHierarchy && !PriorityBeats(targets))
             {
                 return;
             }
@@ -203,6 +265,8 @@ namespace ACO
                 if (t.position.y < MinTargetAltitude) { continue; }
 
                 float d = Vector3.Distance(transform.position, t.position);
+                if (d >= DetectRange) { continue; }
+                d -= PriorityOf(i, g, targets.Length);
                 if (d >= bestDist) { continue; }
                 if (!InRadarCone(t.position)) { continue; }
                 if (!HasLineOfSight(t.position)) { continue; }

@@ -17,7 +17,7 @@ namespace ACO
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 게임 진행을 넣는다")]
         public ACO_GameFlow Flow;
         [Tooltip("0 = JOIN/LEAVE, 1 = READY, 2 = LAUNCH, 3 = 지형 리롤, 4 = 페이즈 −, 5 = 페이즈 +, 6 = 명단 칸, 7 = 내 행동, 8 = LEAVE")]
-        [Range(0, 8)] public int Action;
+        [Range(0, 9)] public int Action;
         [Tooltip("명단 칸 카드(Action 6)의 칸 번호(0부터)")]
         public int Slot;
         [Tooltip("버튼 글자(프리팹 빌더가 넣는다)")]

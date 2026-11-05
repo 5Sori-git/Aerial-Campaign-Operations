@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 using VRC.SDKBase;
 using VRC.SDK3.Components;
@@ -12,6 +13,9 @@ namespace ACO
     /// 데칼 스튜디오(격납고, 로컬 — 동기화 없음): 내 데칼 이미지(URL)와 자리를 정한다. 실기체에는 탑승할 때 ACO_VehicleDecal이 보낸다.
     ///  - 이미지: URL 입력 칸(VRCUrlInputField — VRChat 키보드)에 붙여 넣고 LOAD. VRChat 제약상 URL은 저장할 수 없어 접속마다 다시 넣는다.
     ///    받기는 이 스크립트 하나가 모든 데칼(내 것·다른 사람 기체 것)을 맡는다: 같은 URL은 한 번만(캐시), 월드 전체 제한(5초에 1장)에 맞춰 차례로(DownloadGap).
+    ///    패널에서 고른 이미지가 대기열 맨 앞이다. 실패는 한 번 자동으로 다시 받고, 끝내 실패해도 LOAD를 누르면 다시 받는다. 응답이 없으면 DownloadTimeout 뒤 실패로 친다(대기열이 멈추지 않게).
+    ///    불러온 이미지는 패널의 작은 창(LoadedImage)에 비율을 지켜 보인다 — 받는 동안엔 이전 이미지가 남아 있다.
+    ///    LOAD는 지금 고른 데칼(1 또는 2)의 이미지를 바꾼다. 이미지를 넣지 않은 데칼은 다른 데칼의 이미지를 같이 쓴다(하나만 넣으면 둘 다 그 이미지).
     ///  - 자리: 격납고 샘플 기체(SampleRoot — 실기체와 같은 모델, 같은 기준점)에 데칼 건(ACO_DecalGun)을 겨누고 방아쇠를 누르는 순간 그 자리에 찍고 저장. 데칼 2개(1·2를 골라 놓는다),
     ///    SIZE ±(×1.15), ROTATE ±(15°), FLIP(좌우), MIRROR(1을 기체 좌우 대칭 자리에 2로 — 좌우도 뒤집어 밖에서 바로 읽힌다), CLEAR(고른 데칼 끄기).
     ///    자리는 샘플 기준 상대값(위치·회전·크기·뒤집기·켜짐)으로 플레이어 영구 저장에 기종(DecalKey)별로 남는다 — 확정·조정할 때마다 바로.
@@ -27,6 +31,7 @@ namespace ACO
         public const int ACT_MIRROR = 5;
         public const int ACT_CLEAR = 6;
         public const int ACT_HIDE_OTHERS = 7;
+        public const int ACT_RESET_GUN = 8;
         private const int CACHE = 16;
         private const string KEY_PREFIX = "aco_decal_";
         private const string KEY_HIDE = "aco_decal_hide_others";
@@ -46,7 +51,15 @@ namespace ACO
         public TextMeshProUGUI SelectText;
         public TextMeshProUGUI SizeText;
         public TextMeshProUGUI HideText;
+        [Tooltip("불러온 이미지를 보여 주는 작은 창")]
+        public RawImage LoadedImage;
+        [Tooltip("이미지가 아직 없을 때 보이는 글자")]
+        public GameObject LoadedEmpty;
+        [Tooltip("작은 창의 한 변(픽셀 단위 — 긴 쪽이 이 크기가 된다)")]
+        public float LoadedImageSize = 200f;
         public ACO_UiSound Sound;
+        [Tooltip("데칼 건 — RESET GUN이 받침대로 돌려놓는다")]
+        public ACO_DecalGun Gun;
         [Tooltip("실기체 데칼 전부(Bake) — HIDE OTHERS를 바꾸면 바로 다시 그린다")]
         public ACO_VehicleDecal[] VehicleDecals;
 
@@ -57,8 +70,10 @@ namespace ACO
         public float Depth = 0.6f;
         [Tooltip("다운로드 간격(초) — VRChat 제한 5초")]
         public float DownloadGap = 5.5f;
+        [Tooltip("이 시간(초) 안에 응답이 없으면 실패로 치고 대기열을 넘긴다")]
+        public float DownloadTimeout = 30f;
 
-        private VRCUrl _url = VRCUrl.Empty;
+        private VRCUrl[] _urls = new VRCUrl[] { VRCUrl.Empty, VRCUrl.Empty };
         private int _selected;
         private bool _restored;
         private bool _hideOthers;
@@ -73,16 +88,20 @@ namespace ACO
         private string[] _cacheUrl = new string[CACHE];
         private Texture2D[] _cacheTex = new Texture2D[CACHE];
         private int[] _cacheState = new int[CACHE];   // 0 없음, 1 대기, 2 받는 중, 3 성공, 4 실패
+        private int[] _cacheRetries = new int[CACHE];
         private VRCUrl[] _cacheVrcUrl = new VRCUrl[CACHE];
         private float _nextDownload;
         private int _downloading = -1;
+        private string _downloadingUrl = "";   // 칸이 다른 이미지로 다시 쓰여도 늦게 온 응답을 알아본다
+        private float _downloadStart;
+        private int _evictNext;
 
         void Start()
         {
             _downloader = new VRCImageDownloader();
             for (int i = 0; i < 2; i++) { _rot[i] = Quaternion.identity; _size[i] = 1f; }
             ApplyPreview();
-            UpdateTexts("PASTE AN IMAGE URL AND PRESS LOAD");
+            UpdateTexts("PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD");
         }
 
         public override void OnPlayerRestored(VRCPlayerApi player)
@@ -121,12 +140,39 @@ namespace ACO
             {
                 VRCUrl u = UrlInput != null ? UrlInput.GetUrl() : VRCUrl.Empty;
                 if (u == null || string.IsNullOrEmpty(u.Get())) { UpdateTexts("<color=#FF5544>NO URL</color>"); return ACO_UiSound.KIND_DENY; }
-                _url = u;
-                Request(_url);
-                UpdateTexts("LOADING IMAGE...");
+                _urls[_selected] = u;
+                int c = Find(u.Get());
+                if (c >= 0 && _cacheState[c] == 3)
+                {
+                    // 이미 받아 둔 이미지 — 받기 응답이 오지 않으므로 여기서 바로 바꾼다
+                    ApplyPreview();
+                    UpdateTexts(LoadedText());
+                    return ACO_UiSound.KIND_CONFIRM;
+                }
+                if (c >= 0 && _cacheState[c] == 4)
+                {
+                    // 실패했던 이미지 — 다시 받는다
+                    _cacheState[c] = 1;
+                    _cacheRetries[c] = 0;
+                }
+                Request(u);
+                UpdateTexts(WaitText());
                 return ACO_UiSound.KIND_CONFIRM;
             }
-            if (action == ACT_SELECT) { _selected = _selected == 0 ? 1 : 0; UpdateTexts(""); return ACO_UiSound.KIND_CLICK; }
+            if (action == ACT_RESET_GUN)
+            {
+                if (!Gun) { return ACO_UiSound.KIND_DENY; }
+                Gun.ResetToHome();
+                UpdateTexts("DECAL GUN RETURNED");
+                return ACO_UiSound.KIND_CLICK;
+            }
+            if (action == ACT_SELECT)
+            {
+                _selected = _selected == 0 ? 1 : 0;
+                ApplyLoadedImage();
+                UpdateTexts("");
+                return ACO_UiSound.KIND_CLICK;
+            }
             if (action == ACT_HIDE_OTHERS)
             {
                 _hideOthers = !_hideOthers;
@@ -155,6 +201,7 @@ namespace ACO
                 _size[1] = _size[0];
                 _flip[1] = !_flip[0];
                 _on[1] = true;
+                _urls[1] = _urls[0];   // 대칭은 같은 이미지
                 Save(1);
                 ApplyPreview();
                 UpdateTexts("DECAL 1 MIRRORED TO DECAL 2");
@@ -199,6 +246,28 @@ namespace ACO
         private void ApplyPreview()
         {
             for (int i = 0; i < 2; i++) { ApplyPreviewOne(i, _on[i]); }
+            ApplyLoadedImage();
+        }
+
+        /// 작은 창: 받아 둔 이미지를 비율대로 보인다. 아직 없으면 지금 보이는 것을 그대로 둔다.
+        private void ApplyLoadedImage()
+        {
+            if (!LoadedImage) { return; }
+            Texture2D tex = GetTexture(GetUrl(_selected));
+            if (tex == null)
+            {
+                if (LoadedImage.texture == null)
+                {
+                    LoadedImage.enabled = false;
+                    if (LoadedEmpty) { LoadedEmpty.SetActive(true); }
+                }
+                return;
+            }
+            float k = LoadedImageSize / Mathf.Max(Mathf.Max(tex.width, tex.height), 1);
+            LoadedImage.texture = tex;
+            LoadedImage.rectTransform.sizeDelta = new Vector2(tex.width * k, tex.height * k);
+            LoadedImage.enabled = true;
+            if (LoadedEmpty) { LoadedEmpty.SetActive(false); }
         }
 
         private void ApplyPreviewOne(int i, bool visible)
@@ -210,7 +279,7 @@ namespace ACO
             else { t.localPosition = _pos[i]; t.localRotation = _rot[i]; }
             Material m = PreviewMaterials != null && i < PreviewMaterials.Length ? PreviewMaterials[i] : null;
             if (m == null) { return; }
-            Texture2D tex = GetTexture(_url);
+            Texture2D tex = GetTexture(GetUrl(i));
             m.SetFloat("_Size", _size[i]);
             m.SetFloat("_Flip", _flip[i] ? 1f : 0f);
             if (tex != null) { m.SetTexture("_MainTex", tex); }
@@ -272,7 +341,13 @@ namespace ACO
         public float GetSize(string key, int i) { return Mathf.Clamp(F(key, i, "size", 1f), MinSize, MaxSize); }
         public bool GetFlip(string key, int i) { return I(key, i, "flip") > 0; }
 
-        public VRCUrl GetUrl() { return _url; }
+        private bool HasUrl(int i) { return _urls[i] != null && !string.IsNullOrEmpty(_urls[i].Get()); }
+
+        /// 데칼 i의 이미지 — 자기 이미지가 없으면 다른 데칼의 이미지.
+        public VRCUrl GetUrl(int i) { return HasUrl(i) ? _urls[i] : _urls[1 - i]; }
+
+        private string LoadedText() { return "DECAL " + (_selected + 1) + " IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT"; }
+
         public bool HideOthers() { return _hideOthers; }
 
         // ───────────── 이미지 (캐시·대기열 — 모든 데칼이 같이 쓴다) ─────────────
@@ -288,6 +363,7 @@ namespace ACO
             _cacheVrcUrl[slot] = url;
             _cacheTex[slot] = null;
             _cacheState[slot] = 1;
+            _cacheRetries[slot] = 0;
         }
 
         /// 받아 둔 이미지(없거나 아직이면 null).
@@ -313,49 +389,115 @@ namespace ACO
             return -1;
         }
 
-        /// 빈 칸, 없으면 받는 중이 아닌 가장 앞 칸(오래된 것)을 다시 쓴다.
+        /// 빈 칸, 없으면 실패한 칸 → 받아 둔 칸 → 기다리는 칸 순으로 돌아가며 다시 쓴다. 받는 중인 칸과 패널이 쓰는 이미지는 건드리지 않는다.
         private int FreeSlot()
         {
             for (int i = 0; i < CACHE; i++) { if (_cacheState[i] == 0) { return i; } }
-            for (int i = 0; i < CACHE; i++) { if (_cacheState[i] != 2) { return i; } }
-            return 0;
+            int reuse = PickReuse(4);
+            if (reuse < 0) { reuse = PickReuse(3); }
+            if (reuse < 0) { reuse = PickReuse(1); }
+            return reuse >= 0 ? reuse : (_downloading == 0 ? 1 : 0);
+        }
+
+        private int PickReuse(int state)
+        {
+            for (int k = 0; k < CACHE; k++)
+            {
+                int i = (_evictNext + k) % CACHE;
+                if (_cacheState[i] != state || IsCurrent(_cacheUrl[i])) { continue; }
+                _evictNext = (i + 1) % CACHE;
+                return i;
+            }
+            return -1;
+        }
+
+        /// 패널이 고른 이미지가 먼저, 그다음 앞 칸부터.
+        private int NextPending()
+        {
+            for (int s = 0; s < 2; s++)
+            {
+                VRCUrl u = _urls[s == 0 ? _selected : 1 - _selected];
+                int mine = u != null ? Find(u.Get()) : -1;
+                if (mine >= 0 && _cacheState[mine] == 1) { return mine; }
+            }
+            for (int i = 0; i < CACHE; i++) { if (_cacheState[i] == 1) { return i; } }
+            return -1;
+        }
+
+        private string WaitText()
+        {
+            float wait = _nextDownload - Time.time;
+            if (_downloading >= 0 || wait > 0.5f) { return "LOADING IMAGE... (VRCHAT ALLOWS ONE IMAGE EVERY 5 SECONDS)"; }
+            return "LOADING IMAGE...";
         }
 
         void Update()
         {
-            if (_downloading >= 0 || Time.time < _nextDownload || _downloader == null) { return; }
-            for (int i = 0; i < CACHE; i++)
+            if (_downloading >= 0)
             {
-                if (_cacheState[i] != 1) { continue; }
-                _cacheState[i] = 2;
-                _downloading = i;
-                _nextDownload = Time.time + DownloadGap;
-                TextureInfo info = new TextureInfo();
-                info.GenerateMipMaps = true;
-                info.WrapModeU = TextureWrapMode.Clamp;
-                info.WrapModeV = TextureWrapMode.Clamp;
-                _downloader.DownloadImage(_cacheVrcUrl[i], null, (IUdonEventReceiver)this, info);
+                // 응답이 오지 않으면 대기열이 영영 멈춘다
+                if (Time.time - _downloadStart < DownloadTimeout) { return; }
+                FailDownload(_downloading, _downloadingUrl, "TIMED OUT");
+            }
+            if (Time.time < _nextDownload || _downloader == null) { return; }
+            int i = NextPending();
+            if (i < 0) { return; }
+            _cacheState[i] = 2;
+            _downloading = i;
+            _downloadingUrl = _cacheUrl[i];
+            _downloadStart = Time.time;
+            _nextDownload = Time.time + DownloadGap;
+            TextureInfo info = new TextureInfo();
+            info.GenerateMipMaps = true;
+            info.WrapModeU = TextureWrapMode.Clamp;
+            info.WrapModeV = TextureWrapMode.Clamp;
+            _downloader.DownloadImage(_cacheVrcUrl[i], null, (IUdonEventReceiver)this, info);
+            if (IsCurrent(_downloadingUrl)) { UpdateTexts("DOWNLOADING IMAGE..."); }
+        }
+
+        private bool IsCurrent(string url)
+        {
+            for (int i = 0; i < 2; i++) { if (HasUrl(i) && url == _urls[i].Get()) { return true; } }
+            return false;
+        }
+
+        /// 지금 받는 이미지의 응답이면 대기열을 넘긴다(시간 초과 뒤 늦게 온 응답이 다음 받기를 끊지 않게).
+        private void EndDownload(string url)
+        {
+            if (url != _downloadingUrl) { return; }
+            _downloading = -1;
+            _downloadingUrl = "";
+        }
+
+        /// 실패: 한 번은 자동으로 다시 받고, 그래도 안 되면 실패로 남긴다(LOAD를 누르면 다시 받는다).
+        private void FailDownload(int i, string url, string reason)
+        {
+            EndDownload(url);
+            if (i < 0 || _cacheUrl[i] != url) { return; }
+            if (_cacheRetries[i] < 1)
+            {
+                _cacheRetries[i]++;
+                _cacheState[i] = 1;
+                if (IsCurrent(url)) { UpdateTexts("RETRYING IMAGE..."); }
                 return;
             }
+            _cacheState[i] = 4;
+            if (IsCurrent(url)) { UpdateTexts("<color=#FF5544>IMAGE FAILED: " + reason + " - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)</color>"); }
         }
 
         public override void OnImageLoadSuccess(IVRCImageDownload result)
         {
-            int i = Find(result.Url.Get());
+            string url = result.Url.Get();
+            int i = Find(url);
             if (i >= 0) { _cacheTex[i] = result.Result; _cacheState[i] = 3; }
-            _downloading = -1;
-            if (_url != null && result.Url.Get() == _url.Get()) { ApplyPreview(); UpdateTexts("IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT"); }
+            EndDownload(url);
+            if (IsCurrent(url)) { ApplyPreview(); UpdateTexts(LoadedText()); }
         }
 
         public override void OnImageLoadError(IVRCImageDownload result)
         {
-            int i = Find(result.Url.Get());
-            if (i >= 0) { _cacheState[i] = 4; }
-            _downloading = -1;
-            if (_url != null && result.Url.Get() == _url.Get())
-            {
-                UpdateTexts("<color=#FF5544>IMAGE FAILED: " + result.Error + " (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)</color>");
-            }
+            string url = result.Url.Get();
+            FailDownload(Find(url), url, result.Error.ToString());
         }
     }
 }

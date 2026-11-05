@@ -334,6 +334,12 @@ namespace ACO
             Enqueue(who, color, text, null, MaxQueueDelay, channel);
         }
 
+        /// 관제(PhaseSpeaker) 이름·색·채널로 바로 넣는다 — 페이즈 모듈의 상황별 대사.
+        public void SayControl(string text, AudioClip clip, float maxDelay)
+        {
+            SayVoice(SpeakerName(PhaseSpeaker), SpeakerColor(PhaseSpeaker), text, clip, maxDelay, SpeakerChannel(PhaseSpeaker));
+        }
+
         /// 음성 + 자막을 바로 넣는다(clip이 없으면 자막만). maxDelay보다 오래 밀리면 버린다.
         public void SayVoice(string who, Color color, string text, AudioClip clip, float maxDelay, int channel)
         {
@@ -341,6 +347,9 @@ namespace ACO
             if (string.IsNullOrEmpty(text) && clip == null) { return; }
             Enqueue(who, color, text, clip, maxDelay, channel);
         }
+
+        /// 밀려 있는 대사를 버린다(지금 나오는 대사는 그대로) — 급한 대사를 바로 넣을 때.
+        public void ClearQueue() { _qCount = 0; }
 
         // ───────────── 대기열 ─────────────
 
@@ -398,6 +407,22 @@ namespace ACO
                 Show(_qWho[k], _qColor[k], _qText[k], _qClip[k], _qChannel[k]);
                 break;
             }
+        }
+
+        /// 대사 한 줄이 다음 줄을 띄울 수 있게 될 때까지 걸리는 시간(초) — Show와 같은 계산(PTT는 관제기 채널 기준).
+        public float GetLineTime(string text, AudioClip clip)
+        {
+            float duration = Mathf.Max(MinDisplayTime, (text != null ? text.Length : 0) * SecondsPerChar);
+            float tail = 0f;
+            if (clip)
+            {
+                AudioClip pttStart = PttStartOf(CH_CONTROL);
+                AudioClip pttEnd = PttEndOf(CH_CONTROL);
+                float lead = PttLead >= 0f ? PttLead : (pttStart ? pttStart.length : 0f);
+                duration = Mathf.Max(duration, lead + clip.length + 0.3f);
+                tail = pttEnd ? pttEnd.length : 0f;
+            }
+            return duration + tail + Gap;
         }
 
         private void Show(string who, Color color, string text, AudioClip clip, int channel)

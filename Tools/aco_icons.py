@@ -339,6 +339,16 @@ def i_w_scm(c):
     seg(c, (6, 92), (94, 92), 5)
 
 
+def i_w_ecm(c):
+    # 전자전: 기체에서 양쪽으로 퍼지는 전파
+    jet(c, 50, 50, 0.34, True)
+    for r in (26, 36, 46):
+        for side in (-1, 1):
+            pts = [(50 + side * r * math.cos(math.radians(a)), 50 + r * math.sin(math.radians(a))) for a in range(-34, 35, 8)]
+            for p0, p1 in zip(pts, pts[1:]):
+                seg(c, p0, p1, 5)
+
+
 def i_w_lasm(c):
     # 대함: 파도 바로 위로 깔려 가는 미사일 → 함선
     missile(c, 30, 56, 0, 40, 5.5, 12, 7, 10)
@@ -468,6 +478,249 @@ def i_credits(c):
     fill_poly(c, [(42, 48), (50, 58), (42, 68), (34, 58)])
 
 
+def i_hangar(c):
+    # 격납고: 둥근 지붕 + 기둥 + 바닥, 안에 기체
+    arc(c, 50, 58, 42, 180, 360)
+    seg(c, (8, 58), (8, 88)); seg(c, (92, 58), (92, 88)); seg(c, (2, 88), (98, 88))
+    jet(c, 50, 62, 0.5, False, 4.5)
+
+
+def i_upgrade(c):
+    # 강화: 위로 겹친 갈매기 둘 + 받침
+    poly(c, [(22, 50), (50, 22), (78, 50)], 8, False)
+    poly(c, [(22, 72), (50, 44), (78, 72)], 8, False)
+    seg(c, (26, 88), (74, 88), 7)
+
+
+def i_roster(c):
+    # 출격 명단: 가운데 조종사 + 양옆 윙맨
+    circle(c, 50, 34, 15)
+    arc(c, 50, 86, 30, 180, 360)
+    seg(c, (20, 86), (80, 86))
+    circle(c, 17, 46, 9, 5); circle(c, 83, 46, 9, 5)
+    arc(c, 15, 84, 18, 215, 330, 5); arc(c, 85, 84, 18, 210, 325, 5)
+
+
+def i_ready(c):
+    # 준비: 원 안의 체크
+    circle(c, 50, 50, 40)
+    poly(c, [(30, 52), (45, 67), (72, 34)], 9, False)
+
+
+def i_launch(c):
+    # 출격: 위로 치솟는 기체 + 뒤쪽 궤적
+    jet(c, 50, 36, 0.62, True)
+    dashed(c, (50, 92), (50, 68), 7.0, 5.0, 6.0)
+    dashed(c, (30, 92), (30, 76), 6.0, 5.0, 5.0)
+    dashed(c, (70, 92), (70, 76), 6.0, 5.0, 5.0)
+
+
+def i_operation(c):
+    # 작전: 접힌 지도 + 위치 표시
+    poly(c, [(10, 28), (36, 18), (64, 28), (90, 18), (90, 76), (64, 86), (36, 76), (10, 86)])
+    seg(c, (36, 18), (36, 76), 4); seg(c, (64, 28), (64, 86), 4)
+    circle(c, 50, 46, 9, 5)
+
+
+def i_phases(c):
+    # 페이즈: 깃발
+    seg(c, (26, 12), (26, 90), 7)
+    fill_poly(c, [(26, 16), (80, 30), (26, 48)])
+
+
+def mountains(c, y=74):
+    poly(c, [(8, y), (36, 26), (52, 50), (66, 34), (92, y)], W, True)
+
+
+def i_terrain(c):
+    # 지형: 산 + 해
+    mountains(c, 80)
+    circle(c, 76, 22, 9, 5)
+
+
+def i_reroll(c):
+    # 새 지형: 산을 두른 순환 화살표
+    poly(c, [(26, 66), (42, 40), (52, 54), (60, 44), (74, 66)], 5, True)
+    arc(c, 50, 54, 40, 200, 340, 6)
+    head(c, (87, 39), 72, 15)
+    arc(c, 50, 54, 40, 20, 160, 6)
+    head(c, (13, 69), 252, 15)
+
+
+def i_leave(c):
+    # 나가기: 문 + 밖으로 나가는 화살표
+    poly(c, [(58, 30), (58, 14), (14, 14), (14, 86), (58, 86), (58, 70)], W, False)
+    seg(c, (36, 50), (86, 50), 7)
+    head(c, (90, 50), 0, 18)
+
+
+def i_power(c):
+    # 전원
+    arc(c, 50, 54, 34, 300, 600)
+    seg(c, (50, 12), (50, 52), 8)
+
+
+def i_screen(c):
+    # 화면 해상도: 모니터 + 받침
+    rrect(c, 8, 16, 92, 70, 5)
+    seg(c, (50, 70), (50, 86)); seg(c, (32, 86), (68, 86))
+    poly(c, [(34, 32), (22, 43), (34, 54)], 5, False)
+    poly(c, [(66, 32), (78, 43), (66, 54)], 5, False)
+
+
+def i_target(c):
+    # 대상: 조준 틀 + 기체
+    for x, y, sx, sy in ((10, 10, 1, 1), (90, 10, -1, 1), (10, 90, 1, -1), (90, 90, -1, -1)):
+        seg(c, (x, y), (x + 24 * sx, y)); seg(c, (x, y), (x, y + 24 * sy))
+    jet(c, 50, 50, 0.46, True)
+
+
+def i_camera(c):
+    # 컷: 영화 카메라
+    rrect(c, 8, 40, 66, 84, 6)
+    circle(c, 24, 24, 13, 5); circle(c, 52, 24, 13, 5)
+    poly(c, [(66, 54), (92, 42), (92, 82), (66, 70)], 6, True)
+
+
+def i_score(c):
+    # 점수: 우승컵
+    poly(c, [(28, 14), (72, 14), (68, 46), (58, 58), (42, 58), (32, 46)], W, True)
+    arc(c, 28, 28, 14, 90, 270, 5); arc(c, 72, 28, 14, 270, 450, 5)
+    seg(c, (50, 58), (50, 76), 7); seg(c, (30, 86), (70, 86), 8); seg(c, (38, 76), (62, 76), 6)
+
+
+def eagle_wing(c, s, feathers, span):
+    # 펼친 날개(s = 1 오른쪽, -1 왼쪽): 끝이 깃털로 갈라진다
+    x = lambda v: 50 + s * v
+    pts = [(x(8), 38), (x(span * 0.5), 24 - span * 0.1), (x(span), 30 - span * 0.1)]
+    for i in range(feathers):
+        t = i / float(feathers)
+        fx = span - t * (span - 12) * 0.92
+        fy = 58 + t * 22 - span * 0.1
+        pts.append((x(fx), fy))
+        pts.append((x(fx - span / feathers * 0.42), fy - 12))
+    pts.append((x(8), 58))
+    fill_poly(c, pts)
+
+
+def eagle_body(c):
+    fill_poly(c, [(50, 22), (58, 28), (58, 40), (61, 62), (66, 84), (56, 78), (50, 90), (44, 78), (34, 84), (39, 62), (42, 40), (42, 28)])
+    fill_poly(c, [(46, 25), (50, 12), (58, 26)])
+
+
+# 난이도(페이즈 수): 병아리 → 참새 → 매 → 독수리 → 왕관 쓴 독수리. 색은 게임 진행이 입힌다.
+def i_phase_1(c):
+    # 병아리: 달걀 껍데기에서 나온 머리
+    arc(c, 50, 42, 26, 180, 360)
+    seg(c, (24, 42), (24, 54)); seg(c, (76, 42), (76, 54))
+    fill_circle(c, 41, 38, 4.5); fill_circle(c, 59, 38, 4.5)
+    fill_poly(c, [(44, 46), (56, 46), (50, 55)])
+    poly(c, [(16, 54), (28, 64), (38, 54), (50, 64), (62, 54), (72, 64), (84, 54)], 5.5, False)
+    arc(c, 50, 54, 34, 15, 165)
+    seg(c, (16, 54), (17, 62), 5.5); seg(c, (84, 54), (83, 62), 5.5)
+
+
+def i_phase_2(c):
+    # 참새: 동그란 몸 + 접은 날개 + 치켜든 꼬리, 나뭇가지에 앉아 있다
+    circle(c, 44, 46, 27, 6)
+    fill_poly(c, [(18, 36), (5, 41), (18, 46)])
+    fill_circle(c, 32, 37, 4)
+    poly(c, [(40, 44), (60, 40), (67, 52), (50, 62)], 5)
+    seg(c, (68, 38), (92, 18), 7); seg(c, (70, 46), (94, 30), 7)
+    seg(c, (36, 72), (34, 86), 5); seg(c, (52, 72), (54, 86), 5)
+    seg(c, (14, 87), (78, 87), 6)
+
+
+def i_phase_3(c):
+    # 매: 위에서 본 활공 — 넓은 날개와 부채 꼬리, 선으로만
+    poly(c, [(46, 22), (50, 12), (54, 22), (56, 34), (72, 30), (97, 44), (84, 46), (90, 53), (76, 53), (79, 60), (58, 56),
+             (63, 80), (50, 90), (37, 80), (42, 56), (21, 60), (24, 53), (10, 53), (16, 46), (3, 44), (28, 30), (44, 34)], 5.5)
+
+
+def i_phase_4(c):
+    # 독수리: 넓게 편 날개, 채움
+    for s in (1, -1): eagle_wing(c, s, 4, 44)
+    eagle_body(c)
+
+
+def i_phase_5(c):
+    # 왕관 쓴 독수리
+    for s in (1, -1): eagle_wing(c, s, 5, 46)
+    eagle_body(c)
+    fill_poly(c, [(36, 14), (40, 2), (46, 10), (50, 0), (54, 10), (60, 2), (64, 14)])
+
+
+def i_decal(c):
+    # 데칼: 스프레이 캔 + 뿜는 점
+    rrect(c, 18, 38, 58, 92, 6)
+    rrect(c, 28, 24, 48, 38, 3)
+    seg(c, (38, 24), (38, 14), 6)
+    for x, y, r in ((62, 14, 4), (76, 10, 4), (90, 8, 4), (72, 24, 4), (86, 24, 4), (88, 40, 4)):
+        fill_circle(c, x, y, r)
+
+
+def i_download(c):
+    # 불러오기: 받침으로 내려오는 화살표
+    seg(c, (50, 10), (50, 56), 8)
+    head(c, (50, 66), 90, 22)
+    poly(c, [(14, 66), (14, 88), (86, 88), (86, 66)], 7, False)
+
+
+def i_swap(c):
+    # 데칼 1·2: 겹친 두 장
+    rrect(c, 10, 10, 62, 62, 6)
+    rrect(c, 38, 38, 90, 90, 6)
+
+
+def i_size(c):
+    # 크기: 대각선 양쪽 화살표
+    seg(c, (24, 76), (76, 24), 7)
+    head(c, (86, 14), -45, 22)
+    head(c, (14, 86), 135, 22)
+
+
+def i_rotate(c):
+    # 회전
+    arc(c, 50, 52, 34, 330, 590, 7)
+    head(c, (82, 38), 90, 20)
+
+
+def i_flip(c):
+    # 뒤집기: 축 양쪽의 삼각형
+    dashed(c, (50, 8), (50, 92), 9.0, 6.0, 5.0)
+    poly(c, [(38, 24), (38, 76), (8, 76)], 6)
+    fill_poly(c, [(62, 24), (62, 76), (92, 76)])
+
+
+def i_mirror(c):
+    # 대칭: 축 양쪽의 원
+    dashed(c, (50, 8), (50, 92), 9.0, 6.0, 5.0)
+    circle(c, 24, 50, 17, 6)
+    fill_circle(c, 76, 50, 19)
+
+
+def i_clear(c):
+    # 지우기: 휴지통
+    seg(c, (16, 26), (84, 26), 7); seg(c, (38, 14), (62, 14), 7)
+    poly(c, [(26, 26), (32, 90), (68, 90), (74, 26)], 6, False)
+    seg(c, (42, 40), (43, 76), 5); seg(c, (58, 40), (57, 76), 5)
+
+
+def i_hide(c):
+    # 숨기기: 눈 + 사선
+    arc(c, 50, 84, 50, 225, 315, 6)
+    arc(c, 50, 16, 50, 45, 135, 6)
+    circle(c, 50, 50, 9, 6)
+    seg(c, (16, 86), (84, 14), 8)
+
+
+def i_gun_reset(c):
+    # 총 되돌리기: 권총 모양을 두른 되돌림 화살표
+    fill_poly(c, [(30, 38), (70, 38), (70, 50), (52, 50), (48, 70), (36, 70), (38, 50), (30, 50)])
+    arc(c, 50, 52, 41, 200, 500, 6)
+    head(c, (10, 44), 280, 18)
+
+
 ICONS = [
     ("hull", i_hull), ("mobility", i_mobility), ("engine", i_engine), ("fuel", i_fuel), ("stability", i_stability),
     ("damage", i_damage), ("ammo", i_ammo), ("turn", i_turn), ("lock_speed", i_lock_speed), ("lock_range", i_lock_range),
@@ -478,8 +731,14 @@ ICONS = [
     ("weapon_4agm", i_w_4agm), ("weapon_lagm", i_w_lagm), ("weapon_laam", i_w_laam), ("weapon_sasm", i_w_sasm),
     ("weapon_qaam", i_w_qaam), ("weapon_hpaa", i_w_hpaa), ("weapon_hvaa", i_w_hvaa),
     ("weapon_flak", i_w_flak), ("weapon_ccaa", i_w_ccaa), ("weapon_adam", i_w_adam), ("weapon_lasm", i_w_lasm),
-    ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm),
+    ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
+    ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
+    ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),
+    ("power", i_power), ("screen", i_screen), ("target", i_target), ("camera", i_camera), ("score", i_score),
+    ("decal", i_decal), ("download", i_download), ("swap", i_swap), ("size", i_size), ("rotate", i_rotate), ("flip", i_flip),
+    ("mirror", i_mirror), ("clear", i_clear), ("hide", i_hide), ("gun_reset", i_gun_reset),
+    ("phase_1", i_phase_1), ("phase_2", i_phase_2), ("phase_3", i_phase_3), ("phase_4", i_phase_4), ("phase_5", i_phase_5),
 ]
 
 

@@ -164,7 +164,7 @@ namespace ACO
             VRCShader.SetGlobalFloat(_idWet, _wet);
         }
 
-        private bool InShelter(Vector3 p)
+        public bool InShelter(Vector3 p)
         {
             if (ShelterBoxes == null) { return false; }
             for (int i = 0; i < ShelterBoxes.Length; i++)
