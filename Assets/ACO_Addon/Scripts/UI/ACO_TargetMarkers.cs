@@ -28,6 +28,8 @@ namespace ACO
         public ACO_MissionGenerator Generator;
         [Tooltip("빌드 시 ACO_SceneBaker가 넣는다. 있으면 지금 페이즈 목표(태그)만 빨간 TGT로, 없으면 고가치 표적을 목표로 표시")]
         public ACO_MissionManager Manager;
+        [Tooltip("함내 구역. Bake가 넣는다. 안에 있으면 마커와 크로스헤어를 그리지 않는다(벽 너머로 비치지 않게)")]
+        public ACO_InteriorZone Interior;
 
         [Header("표시")]
         [Tooltip("이 거리(m) 안의 유닛만 표시한다")]
@@ -171,6 +173,8 @@ namespace ACO
         private bool[] _markerBarOn;
         private int[] _markerBarLevel;
         private int _usedLastFrame;
+        private bool _inInterior;
+        private bool _clearedInside;
         private string[] _markerText;    // 위 글자 캐시(같은 글이면 TMP를 건드리지 않는다)
         private ACO_EscortUnit _routeUnit;
         private float _routeTimer;
@@ -344,12 +348,20 @@ namespace ACO
             VRCPlayerApi local = Networking.LocalPlayer;
             if (local == null) { return; }
             VRCPlayerApi.TrackingData head = local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
+            _inInterior = Interior != null && Interior.Contains(head.position);
             UpdateCrosshair(head.position, head.rotation);
             if (Markers == null) { return; }
 
             Vector3 headPos = head.position;
             Vector3 headFwd = head.rotation * Vector3.forward;
             Vector3 headUp = head.rotation * Vector3.up;
+
+            if (_inInterior)
+            {
+                if (!_clearedInside) { ClearForInterior(headPos, headUp); }
+                return;
+            }
+            _clearedInside = false;
 
             _objectiveTimer -= Time.deltaTime;
             if (_objectiveTimer <= 0f && Generator != null)
@@ -510,6 +522,22 @@ namespace ACO
                 _infoDistFor[m] = _lockDist[k];
             }
             UpdateInfo(focusMarker, focusUnit);
+            UpdateDiamonds(headPos, headUp);
+        }
+
+        /// 격실에 들어온 순간 한 번: 켜진 마커, 이름표, 락온 표시를 모두 끈다. 나가면 다음 프레임에 다시 그린다.
+        private void ClearForInterior(Vector3 headPos, Vector3 headUp)
+        {
+            _clearedInside = true;
+            for (int i = 0; i < _usedLastFrame; i++)
+            {
+                if (_markerOn[i]) { Markers[i].gameObject.SetActive(false); _markerOn[i] = false; }
+            }
+            _usedLastFrame = 0;
+            ReadLockState(null);
+            for (int k = 0; k < MAX_LOCKS; k++) { _lockMarker[k] = -1; }
+            for (int i = 0; i < _infoUnitFor.Length; i++) { _infoUnitFor[i] = -1; }
+            UpdateInfo(-1, -1);
             UpdateDiamonds(headPos, headUp);
         }
 
@@ -755,7 +783,7 @@ namespace ACO
         private void UpdateCrosshair(Vector3 headPos, Quaternion headRot)
         {
             if (!Crosshair) { return; }
-            bool show = ShowCrosshair && ((Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING) || Time.time < _previewUntil);
+            bool show = !_inInterior && ShowCrosshair && ((Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING) || Time.time < _previewUntil);
             if (Crosshair.gameObject.activeSelf != show) { Crosshair.gameObject.SetActive(show); }
             if (!show) { return; }
             float d = Mathf.Max(CrosshairDistance, 0.1f);

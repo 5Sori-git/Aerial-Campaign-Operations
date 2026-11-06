@@ -386,26 +386,64 @@ public static class ACO_SpecialWeaponCatalog
     }
 
     /// 셋업 검사 [고치기]: 씬의 모든 특수무장 슬롯에 없는 모듈을 넣고 격납고 목록을 맞춘 뒤 Bake.
+    [MenuItem("ACO/Weapons/Install Special Weapons")]
     public static void Install()
     {
         int modules = InstallModules();
-        ACO_SceneBaker.BakeNeighbors();   // Bake가 격납고 목록도 맞춘다(InstallForBake)
+        InstallEcm();
+        ACO_SceneBaker.BakeNeighbors();   // Bake가 격납고 목록도 맞춘다(SyncLoadouts)
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         Debug.Log($"[ACO] 특수무장 카탈로그: 기체 모듈 {modules}개를 넣고 격납고 목록을 맞췄습니다.");
     }
 
-    /// Bake가 부른다: 새 예제 정의(코드에 더해졌는데 아직 파일이 없는 것)를 만들고, 기체 특수무장 슬롯에 없는 모듈을 넣고, 격납고 목록을 정의에 맞춘다.
-    /// 새 무장을 더하고 Bake만 하면 격납고와 기체에 다 들어간다.
-    public static void InstallForBake()
+    private const string EcmLoopPath = "Assets/ACO_Addon/Audio/Generated/ACO_Ecm_Loop.wav";
+
+    private static ACO_RadarContacts FindEcmHub()
     {
-        int modules = InstallModules();
-        SyncLoadouts();
-        if (modules > 0)
+        foreach (ACO_DFUNC_Missile m in Object.FindObjectsOfType<ACO_DFUNC_Missile>(true))
         {
-            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-            Debug.Log($"[ACO] 특수무장 카탈로그: 기체 모듈 {modules}개를 넣었습니다.");
+            if (m.EcmMode) { return Object.FindObjectOfType<ACO_RadarContacts>(true); }
         }
+        return null;
     }
+
+    /// ECM 모듈이 있는데 구역 소리가 없는가.
+    public static bool EcmSoundMissing()
+    {
+        ACO_RadarContacts contacts = FindEcmHub();
+        return contacts != null && contacts.transform.Find("EcmSound") == null;
+    }
+
+    /// ECM 설치: 먼저 들어간 모듈의 미사일을 비우고, 구역 안에서 들리는 2D 루프를 만든다. 연결은 Bake가 한다.
+    private static void InstallEcm()
+    {
+        ACO_RadarContacts contacts = FindEcmHub();
+        if (contacts == null) { return; }
+        foreach (ACO_DFUNC_Missile m in Object.FindObjectsOfType<ACO_DFUNC_Missile>(true))
+        {
+            if (!m.EcmMode || m.Missile == null) { continue; }
+            m.Missile = null;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        Transform soundObj = contacts.transform.Find("EcmSound");
+        if (soundObj == null)
+        {
+            soundObj = new GameObject("EcmSound").transform;
+            soundObj.SetParent(contacts.transform, false);
+            Undo.RegisterCreatedObjectUndo(soundObj.gameObject, "ACO ECM sound");
+        }
+        AudioSource sound = soundObj.GetComponent<AudioSource>();
+        if (sound == null) { sound = soundObj.gameObject.AddComponent<AudioSource>(); }
+        if (sound.clip != null) { return; }
+        sound.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(EcmLoopPath);
+        sound.loop = true;
+        sound.playOnAwake = false;
+        sound.spatialBlend = 0f;
+        sound.volume = 0.45f;
+        EditorUtility.SetDirty(sound);
+    }
+
 
     /// 씬의 모든 특수무장 슬롯에 없는 모듈을 넣는다(새 예제 정의부터 만든다). 넣은 수.
     private static int InstallModules()

@@ -29,6 +29,9 @@ public static class ACO_LightingSetup
     private static readonly Color AmbientGround = new Color(0.48f, 0.46f, 0.43f);
     private const float SunShadowStrength = 0.8f;
     private const float PostContrast = 0f;
+    private const float MaxBakeResolution = 8f;
+    // GPU가 메모리 부족으로 실패하면(로그의 GBuffer raster job failed) ProgressiveCPU로 바꾼다
+    private const LightingSettings.Lightmapper BakeBackend = LightingSettings.Lightmapper.ProgressiveGPU;
     private static readonly Color FogColor = new Color(0.66f, 0.75f, 0.84f);
     private static readonly Color HangarLightColor = new Color(1f, 0.94f, 0.82f);
 
@@ -87,8 +90,36 @@ public static class ACO_LightingSetup
     public static void Bake()
     {
         if (Lightmapping.isRunning) { Debug.Log("[ACO] 이미 굽는 중입니다."); return; }
+        EnsureBakeSettings();
         Lightmapping.BakeAsync();
         Debug.Log("[ACO] 라이트 굽기를 시작했습니다(오른쪽 아래 진행 막대). 항모가 커서 몇 분 걸릴 수 있습니다.");
+    }
+
+    /// 씬의 라이트 설정 에셋이 끊겨 있으면 Unity 기본값(40텍셀/m, CPU)으로 구워 몇 시간이 걸린다. 굽기 전에 ACO 설정을 잇는다.
+    private static void EnsureBakeSettings()
+    {
+        LightingSettings ls = null;
+        try { ls = Lightmapping.lightingSettings; } catch (System.Exception) { }
+        if (ls != null && AssetDatabase.Contains(ls))
+        {
+            if (ls.lightmapper != BakeBackend)
+            {
+                ls.lightmapper = BakeBackend;
+                EditorUtility.SetDirty(ls);
+                AssetDatabase.SaveAssets();
+                Debug.Log($"[ACO] 라이트 굽기를 {BakeBackend}로 바꿨습니다.");
+            }
+            if (ls.lightmapResolution > MaxBakeResolution)
+            {
+                Debug.LogWarning($"[ACO] 라이트맵 해상도가 {ls.lightmapResolution}텍셀/m입니다. 함내 격실은 여기에 5배를 곱하므로 오래 걸립니다. 권장은 4입니다.");
+            }
+            return;
+        }
+        var log = new System.Text.StringBuilder("[ACO] 씬에 라이트 설정이 없어 ACO 굽기 설정을 만들어 이었습니다. 씬을 저장하세요.");
+        SetUpBakeSettings(log);
+        EditorSceneManagerMarkDirty();
+        AssetDatabase.SaveAssets();
+        Debug.Log(log.ToString());
     }
 
     public static bool IsSetUp()
@@ -189,7 +220,7 @@ public static class ACO_LightingSetup
         ls.realtimeGI = false;                                  // 실시간 GI(Enlighten)는 무겁고 이 월드엔 필요 없다
         ls.bakedGI = true;
         ls.mixedBakeMode = MixedLightingMode.IndirectOnly;      // 직사광·그림자는 실시간, 간접광만 굽는다
-        ls.lightmapper = LightingSettings.Lightmapper.ProgressiveGPU;
+        ls.lightmapper = BakeBackend;
         ls.lightmapResolution = 4f;
         ls.lightmapPadding = 4;
         ls.lightmapMaxSize = 2048;

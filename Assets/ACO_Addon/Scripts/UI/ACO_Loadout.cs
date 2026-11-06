@@ -102,6 +102,7 @@ namespace ACO
         private bool _started;
         private bool _restoredSeen;
         private int _seenVersion = -1;
+        private string _seenSpecial = "";
         private string _message = "";
 
         void Start()
@@ -131,6 +132,14 @@ namespace ACO
             {
                 _seenVersion = Progress.GetVersion();
                 Refresh();
+            }
+            // 복제 패널에서 고른 무장을 따라간다. 기체는 어느 패널이든 하나만 보므로 패널끼리 맞아야 한다
+            string saved2 = Progress.GetSavedSpecialId();
+            if (_restoredSeen && saved2 != _seenSpecial)
+            {
+                _seenSpecial = saved2;
+                int index = IndexOfId(saved2);
+                if (index >= 0 && index != _special && IsUnlocked(index)) { Equip(index); }
             }
         }
 

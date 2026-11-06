@@ -29,7 +29,7 @@ namespace ACO
         public ACO_HexTerrain Terrain;
 
         [Header("프리팹 (ACO → Create Prefabs...의 지형 장식 — 직접 만든 모델로 바꿔 끼워도 된다)")]
-        [Tooltip("도시 칸 하나를 덮는 블록(원점 = 칸 윗면 중심, 육각 윗면 안쪽 약 340m). 칸마다 무작위 변형")]
+        [Tooltip("도시 칸 하나를 덮는 블록(원점 = 칸 윗면 중심, 육각 윗면 전체 + 비탈 큰길). 칸마다 무작위 변형. 0도와 180도로만 돌려 놓는다")]
         public GameObject[] CityBlockPrefabs;
         [Tooltip("마을(원점 = 칸 윗면 중심, 반경 약 250m 안)")]
         public GameObject[] VillagePrefabs;
@@ -444,7 +444,8 @@ namespace ACO
             {
                 int c = k < 0 ? center : _nb[center * 6 + (startDir + k) % 6];
                 if (k >= 0 && (c < 0 || _taken[c] || _ch[c] < _sea || Mathf.Abs(_ch[c] - h) > FlatTolerance || _over[c] > MaxOverhang)) { continue; }
-                AddBlock(c, PickVariant(CityBlockPrefabs, c), _hexR * 0.95f, Mathf.Floor(Hash(c, 421, _jobSeed) * 5.999f) * 60f);
+                // 도시 격자는 칸 간격의 정수 배라서 0도, 180도로만 돌려야 칸끼리 도로가 이어진다
+                AddBlock(c, PickVariant(CityBlockPrefabs, c), _hexR * 0.95f, Hash(c, 421, _jobSeed) < 0.5f ? 0f : 180f);
                 blocks++;
                 if (portCell < 0 && PortPrefab != null && _seaN[c] > 0)
                 {

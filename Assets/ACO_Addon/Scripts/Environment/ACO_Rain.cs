@@ -25,6 +25,8 @@ namespace ACO
         public float MaxAltitude = 1500f;
         [Tooltip("지붕 아래 상자 — 이 트랜스폼의 단위 상자(위치·회전·크기 = 상자) 안에서는 비가 안 온다(격납고 등). 콜라이더가 아니라 물리에 영향 없음")]
         public Transform[] ShelterBoxes;
+        [Tooltip("함내 구역. Bake가 넣는다. 격실 안은 지붕 아래로 친다")]
+        public ACO_InteriorZone Interior;
 
         [Header("소리 (선택)")]
         [Tooltip("빗소리 루프(2D 권장). 세기에 맞춰 볼륨이 바뀐다")]
@@ -166,6 +168,7 @@ namespace ACO
 
         public bool InShelter(Vector3 p)
         {
+            if (Interior != null && Interior.Contains(p)) { return true; }
             if (ShelterBoxes == null) { return false; }
             for (int i = 0; i < ShelterBoxes.Length; i++)
             {

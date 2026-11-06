@@ -37,7 +37,7 @@ namespace ACO
     /// 무장이 어느 계열인지는 무장 모듈 인스펙터의 ACO_DFUNC_Missile.UpgradeFamily(드롭다운). GetFamilyUpgradeId(계열, STAT_*)로 항목 번호를 얻는다.
     /// 특수무장 해금: 무장 ID별(aco_unlock_ + ID). 가격이 0인 무장은 처음부터 해금.
     /// 저장은 항목 번호가 아니라 고정 ID로 한다(강화: aco_up_ + _upgradeKeys) — 항목을 더하거나 순서를 바꿔도 기존 기록이 틀어지지 않는다.
-    /// 소모품(상점 SUPPLY 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
+    /// 소모품(상점 ITEMS 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
     /// 산 소모품은 탑승할 때마다 적용되고(ACO_VehicleUpgrades), 출격한 미션이 끝나 보상을 받을 때 모두 쓴 것으로 사라진다(재출격해도 그 미션 동안은 유지).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PlayerProgress : UdonSharpBehaviour
@@ -67,12 +67,13 @@ namespace ACO
         public const int STAT_RELOAD = 7;      // 재장전 속도(슬롯 장전 시간 ÷ 배수, 모든 계열)
 
         // 분류(상점 탭) — 항목 번호는 이 순서로 이어진다
-        public const int CAT_AIRFRAME = 0;     // 0~5
+        public const int CAT_AIRFRAME = 0;     // 0~4
         public const int CAT_MISSILE = 1;      // 6~12
         public const int CAT_SP_AAM = 2;       // 13~19
         public const int CAT_SP_AGM = 3;       // 20~25
         public const int CAT_SP_BOMB = 4;      // 26~29
-        public const int CATEGORY_COUNT = 5;
+        public const int CAT_OTHER = 5;        // 5 — 항목 번호는 그대로 두고 탭만 나눴다
+        public const int CATEGORY_COUNT = 6;
         public const int UPGRADE_COUNT = 30;
         public const int MAX_CATEGORY_LENGTH = 7;   // 상점 줄 수(가장 긴 탭)
 
@@ -135,10 +136,10 @@ namespace ACO
         [Tooltip("이 콜라이더들의 영역(바운딩 박스 — 축에 맞춘 상자) 안에서 내리면 격추로 치지 않는다(항모 갑판, 기지 등). "
             + "밖에서 미션 중에 내리면 격추로 센다. 비우면 어디서 내려도 페널티 없음")]
         public Collider[] SafeZones;
+        [Tooltip("함내 구역. Bake가 넣는다. 격실 안도 안전지대다")]
+        public ACO_InteriorZone Interior;
 
-        [Header("강화 (항목 번호 순: 기체 6 / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
-        [Tooltip("상점 탭 이름(CAT_* 순서)")]
-        public string[] CategoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB" };
+        [Header("강화 (항목 번호 순: 기체 5 + 기타(기총) 1 / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
         public string[] UpgradeNames = new string[] {
             "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "STABILITY", "GUN DAMAGE",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
@@ -167,7 +168,7 @@ namespace ACO
         [Tooltip("단계별 가격 배수. 길이 = 최대 단계(10). 뒤로 갈수록 가파르게 오른다")]
         public float[] LevelCostScale = new float[] { 1f, 1.4f, 1.9f, 2.6f, 3.5f, 4.6f, 6f, 7.8f, 10f, 13f };
 
-        [Header("소모품 (상점 SUPPLY 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
+        [Header("소모품 (상점 ITEMS 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
         public string[] ConsumableNames = new string[] { "ARMOR PLATE", "CM POD", "EXTRA AMMO", "FUEL TANK" };
         [Tooltip("상점에 보일 효과 한 줄")]
         public string[] ConsumableEffects = new string[] { "HULL +25%", "FLARES +50%", "SP. AMMO +50%", "FUEL +50%" };
@@ -313,25 +314,23 @@ namespace ACO
         /// 계열의 능력치 배수(그 계열에 없으면 1).
         public float GetFamilyFactor(int family, int stat) { return GetUpgradeFactor(GetFamilyUpgradeId(family, stat)); }
 
+        // 상점 탭(CAT_* 순서): 이름, 첫 항목 번호, 항목 수
+        private string[] _categoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB", "OTHER" };
+        private int[] _categoryStarts = new int[] { 0, 6, 13, 20, 26, 5 };
+        private int[] _categoryLengths = new int[] { 5, 7, 7, 6, 4, 1 };
+
         /// 분류(CAT_*)의 첫 항목 번호와 항목 수(상점 탭).
-        public int GetCategoryStart(int cat)
-        {
-            int start = 0;
-            for (int c = 0; c < cat && c < CATEGORY_COUNT; c++) { start += GetCategoryLength(c); }
-            return start;
-        }
-        public int GetCategoryLength(int cat)
-        {
-            if (cat == CAT_MISSILE || cat == CAT_SP_AAM) { return 7; }
-            if (cat == CAT_AIRFRAME || cat == CAT_SP_AGM) { return 6; }
-            return cat >= 0 && cat < CATEGORY_COUNT ? 4 : 0;
-        }
+        public int GetCategoryStart(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryStarts[cat] : 0; }
+        public int GetCategoryLength(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryLengths[cat] : 0; }
         public int GetUpgradeCategory(int id)
         {
-            for (int cat = CATEGORY_COUNT - 1; cat > 0; cat--) { if (id >= GetCategoryStart(cat)) { return cat; } }
+            for (int cat = 0; cat < CATEGORY_COUNT; cat++)
+            {
+                if (id >= _categoryStarts[cat] && id < _categoryStarts[cat] + _categoryLengths[cat]) { return cat; }
+            }
             return CAT_AIRFRAME;
         }
-        public string GetCategoryName(int cat) { return CategoryNames != null && cat >= 0 && cat < CategoryNames.Length ? CategoryNames[cat] : ""; }
+        public string GetCategoryName(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryNames[cat] : ""; }
 
         /// 다음 단계 가격. 이미 최대 단계면 -1.
         public int GetUpgradeCost(int id)
@@ -469,6 +468,7 @@ namespace ACO
         public bool IsInSafeZone(Vector3 position)
         {
             if (SafeZones == null || SafeZones.Length == 0) { return true; }
+            if (Interior != null && Interior.Contains(position)) { return true; }
             for (int i = 0; i < SafeZones.Length; i++)
             {
                 if (SafeZones[i] && SafeZones[i].bounds.Contains(position)) { return true; }
@@ -500,6 +500,16 @@ namespace ACO
 
         public int GetMissionDeaths() { return _inMission ? _deaths : 0; }
         public int GetMissionPersonalScore() { return _inMission ? _personalScore : 0; }
+        public int GetMissionKills() { return _missionKills; }
+
+        /// 지금 미션이 성공으로 끝나면 받을 크레딧(표시용). 실제 보상은 GrantReward가 정한다.
+        public int GetMissionRewardPreview()
+        {
+            if (!_inMission || Manager == null || (RequireSortie && !_sortied)) { return 0; }
+            int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
+            int personal = Mathf.RoundToInt(Mathf.Max(_personalScore, 0) * PersonalShare);
+            return Mathf.RoundToInt((team + personal) * RewardFraction(true, _deaths));
+        }
 
         void Update()
         {

@@ -15568,6 +15568,7 @@ MonoBehaviour:
   EntityControl: {fileID: 4611046597706696649}
   TargetHealth: {fileID: 9161924094821272526}
   Gun: {fileID: 1257260371627345506}
+  BaseHealth: 0
   ScoreValue: 100
   MarkerLabel: AAG
   TargetLayers:
@@ -15587,8 +15588,10 @@ MonoBehaviour:
   PitchRate: 50
   MinPitch: -5
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.6
+  AimLeadTime: 0
   AimError: 0.8
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -15599,7 +15602,12 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
-  InterceptDefaultsApplied: 0
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -21427,8 +21435,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 45
   MuzzleVelocity: 900
   Spread: 0.6
+  Flyby: {fileID: 0}
 --- !u!114 &5735019522528702548
 MonoBehaviour:
   m_ObjectHideFlags: 0

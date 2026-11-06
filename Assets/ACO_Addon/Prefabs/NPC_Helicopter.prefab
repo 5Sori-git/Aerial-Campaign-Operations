@@ -15354,6 +15354,7 @@ MonoBehaviour:
   PitchRate: 40
   MinPitch: -70
   MaxPitch: 30
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.4
   AimLeadTime: 0
@@ -15367,9 +15368,12 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
   InterceptCooldown: 0
   InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -15864,8 +15868,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 45
   MuzzleVelocity: 900
   Spread: 0.6
+  Flyby: {fileID: 0}
 --- !u!114 &5584578699101647259
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -272,7 +272,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 45
   MuzzleVelocity: 850
   Spread: 1.5
   Flyby: {fileID: 0}
@@ -991,7 +991,6 @@ MonoBehaviour:
     PrefabModifications: []
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 1823278471757607862}
-  FleetTuneVersion: 0
   TargetHealth: {fileID: 7719851798562867394}
   BaseHealth: 0
   Parts:
@@ -6020,6 +6019,11 @@ MonoBehaviour:
   FireInterval: 0.5
   ReloadTime: 20
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -6435,7 +6439,7 @@ MonoBehaviour:
     m_Bits: 100663296
   DetectRange: 5000
   LoseTargetRange: 6000
-  MinTargetAltitude: -20000
+  MinTargetAltitude: -100000
   ScanInterval: 0.5
   RequireLineOfSight: 1
   LineOfSightBlockers:
@@ -6447,6 +6451,7 @@ MonoBehaviour:
   PitchRate: 15
   MinPitch: -5
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 1.2
   AimLeadTime: 0
@@ -6465,7 +6470,7 @@ MonoBehaviour:
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
   InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -6820,6 +6825,11 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -17023,10 +17033,10 @@ MonoBehaviour:
   TargetLayers:
     serializedVersion: 2
     m_Bits: 100663296
-  DetectRange: 3000
-  LoseTargetRange: 4000
+  DetectRange: 5000
+  LoseTargetRange: 6000
   RadarConeAngle: 180
-  MinTargetAltitude: 20
+  MinTargetAltitude: -100000
   ScanInterval: 0.5
   RequireLineOfSight: 1
   LineOfSightBlockers:
@@ -17282,7 +17292,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 20
   MuzzleVelocity: 1100
   Spread: 0.6
   Flyby: {fileID: 0}
@@ -18585,6 +18595,7 @@ MonoBehaviour:
   PitchRate: 110
   MinPitch: -5
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.35
   AimLeadTime: 0
@@ -18592,18 +18603,18 @@ MonoBehaviour:
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
     serializedVersion: 2
-    m_Bits: 0
-  InterceptRange: 1200
+    m_Bits: 1610612736
+  InterceptRange: 900
   DefenseRadius: 600
   InterceptReactionTime: 0.5
-  InterceptKillTime: 0.5
+  InterceptKillTime: 1
   OtherDefenseFactor: 2
   EcmHub: {fileID: 0}
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
-  InterceptCooldown: 0
-  InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptCooldown: 1.5
+  InterceptTuneVersion: 1
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -18717,6 +18728,11 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -19118,7 +19134,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 20
   MuzzleVelocity: 1100
   Spread: 0.6
   Flyby: {fileID: 0}
@@ -19512,6 +19528,7 @@ MonoBehaviour:
   PitchRate: 110
   MinPitch: -5
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.35
   AimLeadTime: 0
@@ -19519,18 +19536,18 @@ MonoBehaviour:
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
     serializedVersion: 2
-    m_Bits: 0
-  InterceptRange: 1200
+    m_Bits: 1610612736
+  InterceptRange: 900
   DefenseRadius: 600
   InterceptReactionTime: 0.5
-  InterceptKillTime: 0.5
+  InterceptKillTime: 1
   OtherDefenseFactor: 2
   EcmHub: {fileID: 0}
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
-  InterceptCooldown: 0
-  InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptCooldown: 1.5
+  InterceptTuneVersion: 1
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -35086,6 +35103,11 @@ MonoBehaviour:
   FireInterval: 0.5
   ReloadTime: 20
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -35417,10 +35439,10 @@ MonoBehaviour:
   TargetLayers:
     serializedVersion: 2
     m_Bits: 100663296
-  DetectRange: 3000
-  LoseTargetRange: 4000
+  DetectRange: 5000
+  LoseTargetRange: 6000
   RadarConeAngle: 180
-  MinTargetAltitude: 20
+  MinTargetAltitude: -100000
   ScanInterval: 0.5
   RequireLineOfSight: 1
   LineOfSightBlockers:

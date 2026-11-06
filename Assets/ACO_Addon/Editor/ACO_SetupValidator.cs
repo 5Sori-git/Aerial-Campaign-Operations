@@ -12,7 +12,7 @@ using Object = UnityEngine.Object;
 /// 셋업 검사 창(메뉴 ACO → Setup Check...). 씬을 훑어 ACO 셋업에서 빠진 것을 목록으로 보여 준다 — 오류(빨강: 이대로면 동작 안 함),
 /// 경고(노랑: 일부 기능이 꺼짐), 정보(회색: 선택 기능). 자동으로 고칠 수 있는 항목은 [고치기], 직접 손봐야 하는 항목은 [선택]으로 그 오브젝트를 고른다.
 /// 고치기는 기존 메뉴(Create ..., Add Upgrade Extension, 프리팹 다시 만들기 등)를 그대로 부르고, 끝나면 Bake와 다시 검사를 한다.
-public class ACO_SetupValidator : EditorWindow
+public partial class ACO_SetupValidator : EditorWindow
 {
     private const int OK = 0;
     private const int INFO = 1;
@@ -28,6 +28,8 @@ public class ACO_SetupValidator : EditorWindow
         public string Text;
         public Object Target;
         public Action Fix;
+        public bool Manual;      // 자동 수정 모두에서 뺀다(끄기처럼 직접 보고 눌러야 하는 것)
+        public string IgnoreId;  // 있으면 무시 버튼을 보여 준다(ACO_PrefabTuning 항목 ID)
     }
 
     private readonly List<Item> _items = new List<Item>();
@@ -53,7 +55,7 @@ public class ACO_SetupValidator : EditorWindow
             if (GUILayout.Button("다시 검사", EditorStyles.toolbarButton, GUILayout.Width(80f))) { Run(); }
             if (GUILayout.Button("Bake", EditorStyles.toolbarButton, GUILayout.Width(60f))) { ACO_SceneBaker.BakeNeighbors(); Run(); }
             int fixable = 0;
-            foreach (Item it in _items) { if (it.Fix != null && it.Severity > OK) { fixable++; } }
+            foreach (Item it in _items) { if (it.Fix != null && !it.Manual && it.Severity > OK) { fixable++; } }
             using (new EditorGUI.DisabledScope(fixable == 0))
             {
                 if (GUILayout.Button($"자동 수정 {fixable}개 모두", EditorStyles.toolbarButton, GUILayout.Width(130f))) { FixAll(); }
@@ -90,6 +92,12 @@ public class ACO_SetupValidator : EditorWindow
                 {
                     if (GUILayout.Button("고치기", GUILayout.Width(52f))) { ApplyFix(it); GUIUtility.ExitGUI(); }
                 }
+                if (it.IgnoreId != null && GUILayout.Button("무시", GUILayout.Width(44f)))
+                {
+                    ACO_PrefabTuning.MarkApplied(it.IgnoreId);
+                    Run();
+                    GUIUtility.ExitGUI();
+                }
             }
         }
         EditorGUILayout.EndScrollView();
@@ -118,7 +126,7 @@ public class ACO_SetupValidator : EditorWindow
         for (int guard = 0; guard < 40; guard++)
         {
             Item next = null;
-            foreach (Item it in _items) { if (it.Fix != null && it.Severity > OK) { next = it; break; } }
+            foreach (Item it in _items) { if (it.Fix != null && !it.Manual && it.Severity > OK) { next = it; break; } }
             if (next == null) { break; }
             Action fix = next.Fix;
             try { fix(); }
@@ -163,7 +171,15 @@ public class ACO_SetupValidator : EditorWindow
         CheckCore();
         CheckFlow();
         CheckPanels();
+        CheckInterior();
         CheckAircraft();
+        CheckSceneParts();
+        CheckPool();
+        CheckCrew();
+        CheckBoard();
+        CheckSky();
+        CheckPrefabVersions();
+        CheckTuning();
         Repaint();
     }
 
@@ -308,6 +324,24 @@ public class ACO_SetupValidator : EditorWindow
         if (teleporters.Count > 0) { Add(g, OK, $"장소 이동 버튼 {teleporters.Count}개"); }
     }
 
+    /// 함내 격실의 바깥 문. 격실이 없으면 묻지 않는다. 문 위치는 함선 모델에 맞춰 손으로 정한다.
+    private void CheckInterior()
+    {
+        const string g = "함내 격실";
+        if (FindOne<ACO_InteriorZone>() == null) { return; }
+        List<ACO_Teleporter> teleporters = FindAll<ACO_Teleporter>();
+        string[] names = { ACO_InteriorBuilder.ShipHatchHangar, ACO_InteriorBuilder.ShipHatchDeck };
+        foreach (string name in names)
+        {
+            if (teleporters.Exists(t => t.name.StartsWith(name, StringComparison.Ordinal))) { Add(g, OK, $"바깥 문 {name}"); }
+            else
+            {
+                string missing = name;
+                Add(g, WARN, $"바깥 문({name})이 없습니다. 복도 문이 어디로도 가지 않고, 돌아올 문이 없습니다. [고치기]로 놓은 뒤 벽으로 옮기고 Bake 하세요.", null, () => PlacePrefab(missing, ACO_InteriorBuilder.UpdateSystems));
+            }
+        }
+    }
+
     private void CheckPanels()
     {
         const string g = "패널 / HUD";
@@ -348,6 +382,11 @@ public class ACO_SetupValidator : EditorWindow
         }
         else { Add(g, OK, "격납고", hangar); }
 
+        if (ACO_SpecialWeaponCatalog.EcmSoundMissing())
+        {
+            Add(g, WARN, "ECM 구역 소리가 없습니다 — [고치기]로 설치합니다.", null, ACO_SpecialWeaponCatalog.Install);
+        }
+
         // 특수무장 카탈로그(무장 정의 프리팹 → 격납고 목록 + 기체 모듈)
         int notInstalled = ACO_SpecialWeaponCatalog.CountNotInstalled();
         if (notInstalled > 0)
@@ -366,6 +405,10 @@ public class ACO_SetupValidator : EditorWindow
         if (map == null) { Add(g, INFO, "작전 테이블(3D 미니맵)이 없습니다(선택).", null, ACO_SceneBaker.CreateTacticalMap); }
         else if (map.HomeBase == null) { Add(g, WARN, "작전 테이블의 HomeBase(항모)가 비어 있습니다.", map); }
         else { Add(g, OK, "작전 테이블", map); }
+        if (map != null && map.MapRoot != null && map.MapRoot.Find(ACO_RadarBuilder.TacticalNorthName) == null)
+        {
+            Add(g, WARN, "작전 테이블에 북쪽 표시가 없습니다.", map, () => ACO_RadarBuilder.EnsureTacticalNorthMark(map));
+        }
 
         if (FindOne<ACO_CreditBoard>() == null) { Add(g, INFO, "크레딧 보드가 없습니다(선택) — 사용한 에셋 출처 표기(CC-BY 에셋을 쓰면 필수).", null, () => PlacePrefab("ACO_CreditBoard", ACO_HUDBuilder.CreateCreditBoardPrefab)); }
 
@@ -432,6 +475,12 @@ public class ACO_SetupValidator : EditorWindow
             {
                 Add(g, WARN, $"'{n}': 키보드 단축키 {staleKeys}개가 꺼진 옛 기능(DFUNC_AAM·특수무장 자리의 옛 기능)을 가리킵니다 — 데스크톱에서 키로 무기를 못 고릅니다.", e,
                     () => ACO_PlayerMissileSetup.FixKeyboardBindings(e));
+            }
+
+            if (ACO_SceneBaker.VehiclePartsMissing(e))
+            {
+                Add(g, WARN, $"'{n}': 기체 표시, 데칼, 기총 강화 중 빠진 것이 있습니다 — [고치기]는 기체 셋업을 한 번에 한다.", e,
+                    () => { ACO_SpecialWeaponCatalog.EnsureExamples(); ACO_PlayerMissileSetup.SetupVehicle(e); ACO_SpecialWeaponCatalog.SyncLoadouts(); });
             }
 
             ACO_VehicleUpgrades up = e.GetComponentInChildren<ACO_VehicleUpgrades>(true);

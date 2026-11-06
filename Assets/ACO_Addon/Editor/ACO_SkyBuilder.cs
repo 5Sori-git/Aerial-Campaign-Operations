@@ -20,6 +20,8 @@ public static class ACO_SkyBuilder
     private const string CloudMaterialPath = "Assets/ACO_Addon/Generated/ACO_Clouds.mat";
     private const string RainMaterialPath = "Assets/ACO_Addon/Generated/ACO_Rain.mat";
     private const string RainMeshPath = "Assets/ACO_Addon/Generated/ACO_RainDrops.asset";
+    public static Mesh RainMesh() { return AssetDatabase.LoadAssetAtPath<Mesh>(RainMeshPath); }
+    public static Material RainMaterial() { return AssetDatabase.LoadAssetAtPath<Material>(RainMaterialPath); }
     private const string PuffTexturePath = "Assets/ACO_Addon/Textures/Clouds/ACO_CloudPuffs.png";
     private const int VariantCount = 10;
     private const int PoolSize = 64;

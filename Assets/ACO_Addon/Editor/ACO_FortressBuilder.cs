@@ -8,7 +8,7 @@ using ACO;
 /// 공중 요새 NPC_Fortress: 모델은 Assets/ARCANGEL의 archangel 프리팹(중첩 인스턴스 "Model")이다 — 격납고가 있는 대형 비행 함선.
 /// 구조(루트 = 함선 규칙 — 코어 SaccTarget·히트박스·Animator는 루트):
 ///  - Model / Hull(충돌: archangelcollidor 메시 + 후면 해치 막이 — 자체 SaccTarget으로 피해를 흡수해 코어로 번지지 않는다)
-///  - Parts(방공 18곳 = 공용 포대 프리팹, ACO_TurretPrefabs. 엔진 4 = 후면 노즐 묶음) / Core(격납고 안 — 코어 단계에 후면 해치가 열린다)
+///  - Parts(방공 18곳 = 공용 포대 프리팹, 자리는 ACO_TurretModels의 FortressSites. 엔진 4 = 후면 노즐 묶음) / Core(격납고 안의 세운 원자로 — 코어 단계에 후면 해치가 열린다)
 ///  - 요새는 공중 표적이다 — 락온 마커를 모두 적 항공기 레이어(29)로 옮겨 공대공 무장만 잠긴다.
 public static partial class ACO_PrefabBuilder
 {
@@ -176,44 +176,9 @@ public static partial class ACO_PrefabBuilder
         return go;
     }
 
-    /// 지금 프리팹이 Archangel 모델 전의 것인가 — Bake가 다시 만든다. 모델이 프로젝트에 없으면 있는 프리팹을 그대로 쓴다.
-    public static bool IsFortressOutdated()
-    {
-        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PathOf("NPC_Fortress"));
-        if (prefab == null || AssetDatabase.LoadAssetAtPath<GameObject>(ArchangelPrefabPath) == null) { return false; }
-        ACO_FlyingFortress f = prefab.GetComponent<ACO_FlyingFortress>();
-        return f == null || f.Hatches == null || f.Hatches.Length == 0;
-    }
-
     /// 처음에 꺼 두는 부위(엔진·냉각기)의 락온 마커 이름. "AAMTarget"이면 안 된다: SAV Target 애니메이터가 그 이름의 활성 상태를 다루고
     /// (TargetExplode 클립, Write Defaults 켜짐) 시작할 때 값(꺼짐)을 매 프레임 되돌려 켜도 바로 꺼진다 — 락온이 안 된다.
     private const string PartMarkerName = "LockMarker";
-
-    /// 이미 있는 프리팹의 부위 마커 이름만 고친다(다시 만들면 바꿔 끼운 모델이 사라진다).
-    public static void EnsurePartMarkers(string prefabName)
-    {
-        string path = PathOf(prefabName);
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            int changed = 0;
-            foreach (ACO_FortressPart part in root.GetComponentsInChildren<ACO_FortressPart>(true))
-            {
-                if (part.LockMarkers == null) { continue; }
-                foreach (GameObject marker in part.LockMarkers)
-                {
-                    if (marker == null || marker.name == PartMarkerName) { continue; }
-                    marker.name = PartMarkerName;
-                    changed++;
-                }
-            }
-            if (changed == 0) { return; }
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log($"[ACO] {prefabName}: 부위 락온 마커 {changed}개의 이름을 고쳤습니다(애니메이터가 끄던 문제).");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
 
     private static GameObject NewLockMarker(Transform parent, string name, int layer, float radius)
     {
@@ -246,21 +211,19 @@ public static partial class ACO_PrefabBuilder
         return s;
     }
 
-    /// 포대 한 곳. surface = 모델 표면 자리. 배 쪽 포대는 뒤집어 단다. 고각 범위는 월드 기준이다 — 배 쪽은 아래로, 윗면은 위로.
-    private static void AddFortressGun(Transform parts, string prefab, string name, Vector3 surface, bool top, float scale, List<UdonSharp.UdonSharpBehaviour> list)
+    /// 포대 한 곳. surface = 모델 표면 자리, rotation = 표면에 맞춘 자세.
+    private static void AddFortressGun(Transform parts, string prefab, string name, Vector3 surface, Quaternion rotation, float scale, List<UdonSharp.UdonSharpBehaviour> list)
     {
-        GameObject part = NewTurret(prefab, name, parts, surface, top ? Quaternion.identity : Quaternion.Euler(0f, 0f, 180f), scale);
+        GameObject part = NewTurret(prefab, name, parts, surface, rotation, scale);
         ACO_AAGunSite aa = part.GetComponent<ACO_AAGunSite>();
-        aa.MinPitch = top ? -20f : -85f;
-        aa.MaxPitch = top ? 85f : 20f;
-        PrefabUtility.RecordPrefabInstancePropertyModifications(aa);
+        SetFortressPitch(aa);
         SetAirTarget(part);
         list.Add(aa);
     }
 
-    private static void AddFortressVls(Transform parts, string name, Vector3 surface, float scale, List<UdonSharp.UdonSharpBehaviour> list)
+    private static void AddFortressVls(Transform parts, string name, Vector3 surface, Quaternion rotation, float scale, List<UdonSharp.UdonSharpBehaviour> list)
     {
-        GameObject part = NewTurret(TurretVls, name, parts, surface, Quaternion.identity, scale);
+        GameObject part = NewTurret(TurretVls, name, parts, surface, rotation, scale);
         SetAirTarget(part);
         list.Add(part.GetComponent<ACO_SAMSite>());
     }
@@ -274,12 +237,6 @@ public static partial class ACO_PrefabBuilder
     }
 
     /// 좌우 대칭 한 쌍.
-    private static void AddFortressGunPair(Transform parts, string prefab, string name, int index, float x, float y, float side, bool top, List<UdonSharp.UdonSharpBehaviour> list)
-    {
-        AddFortressGun(parts, prefab, name + "_" + index, FortressPoint(x, y, ArchangelCenterZ - side), top, 3f, list);
-        AddFortressGun(parts, prefab, name + "_" + (index + 1), FortressPoint(x, y, ArchangelCenterZ + side), top, 3f, list);
-    }
-
     // 후면 노즐 한쪽 묶음(모델 좌표 y, z — +z 쪽 값, 반대쪽은 ArchangelCenterZ 기준 대칭). 안쪽 4개·바깥쪽 5개가 엔진 하나씩이다.
     private static readonly float[,] NozzlesInner = { { -4.5f, 116f }, { -9.5f, 103.5f }, { -23f, 117.5f }, { 1.5f, 128.5f } };
     private static readonly float[,] NozzlesOuter = { { -17.5f, 130f }, { -12f, 142.5f }, { -25.5f, 156.5f }, { -31f, 144f }, { -36.5f, 131.5f } };
@@ -494,24 +451,6 @@ public static partial class ACO_PrefabBuilder
         return blast;
     }
 
-    /// 이미 있는 프리팹에 대폭발만 더한다 — 다시 만들면 프리팹을 직접 고친 내용이 사라진다.
-    public static void EnsureFortressBlast()
-    {
-        string path = PathOf("NPC_Fortress");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_FlyingFortress fortress = root.GetComponent<ACO_FlyingFortress>();
-            if (fortress == null || fortress.Blast != null) { return; }
-            fortress.Blast = CreateFortressBlast(root.transform);
-            ACO_SyncModeFixer.FixHierarchy(root, false);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 공중 요새 프리팹에 대폭발(FortressBlast)을 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
     private static Mesh LoadArchangelCollider()
     {
         foreach (Object o in AssetDatabase.LoadAllAssetsAtPath(ArchangelColliderPath))
@@ -549,50 +488,6 @@ public static partial class ACO_PrefabBuilder
             points[i] = go.transform;
         }
         fortress.LaunchPoints = points;
-    }
-
-    /// 이미 있는 프리팹에 출격 자리만 더한다 — 다시 만들면 프리팹을 직접 고친 내용이 사라진다.
-    public static void EnsureFortressLaunchPoints()
-    {
-        string path = PathOf("NPC_Fortress");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_FlyingFortress fortress = root.GetComponent<ACO_FlyingFortress>();
-            if (fortress == null || fortress.Hatches == null || fortress.Hatches.Length != 3) { return; }
-            if (fortress.LaunchPoints != null && fortress.LaunchPoints.Length > 0) { return; }
-            AddFortressLaunchPoints(root.transform, fortress);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 공중 요새 프리팹에 측면 해치 출격 자리(Launch_L/R)를 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
-    /// 이미 있는 프리팹의 외피 레이어만 바꾼다 — 다시 만들면 프리팹을 직접 고친 내용이 사라진다.
-    public static void EnsureFortressHullLayer()
-    {
-        string path = PathOf("NPC_Fortress");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_FlyingFortress fortress = root.GetComponent<ACO_FlyingFortress>();
-            ACO_Warship ship = root.GetComponent<ACO_Warship>();
-            Transform hull = root.transform.Find("Hull");
-            if (fortress == null || ship == null || hull == null || hull.gameObject.layer == LayerFortressHull) { return; }
-            hull.gameObject.layer = LayerFortressHull;
-            // 추락 충돌이 자기 해치 막이에 걸리지 않게 격침 때 같이 끈다
-            var cols = new List<Collider>(ship.DisableCollidersOnDeath);
-            if (fortress.HatchBlockers != null)
-            {
-                foreach (Collider c in fortress.HatchBlockers) { if (c != null && !cols.Contains(c)) { cols.Add(c); } }
-            }
-            ship.DisableCollidersOnDeath = cols.ToArray();
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 공중 요새 외피를 Environment 레이어로 옮겼습니다 — 코어는 격납고 입구로만 맞습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
     public static GameObject BuildFortress()
@@ -653,18 +548,12 @@ public static partial class ACO_PrefabBuilder
         var body = new GameObject("Parts").transform;
         body.SetParent(root.transform, false);
         var defense = new List<UdonSharp.UdonSharpBehaviour>();
-        AddFortressGunPair(body, TurretFlak, "Flak_Top", 0, -240f, 31.7f, 170f, true, defense);
-        AddFortressGunPair(body, TurretFlak, "Flak_Top", 2, 170f, 33.4f, 75f, true, defense);
-        AddFortressGunPair(body, TurretFlak, "Flak_Belly", 0, 60f, -32.7f, 62f, false, defense);
-        AddFortressGunPair(body, TurretFlak, "Flak_Belly", 2, -300f, -42.8f, 45f, false, defense);
-        AddFortressGunPair(body, TurretCiws, "CIWS_Top", 0, 320f, 35.1f, 30f, true, defense);
-        AddFortressGunPair(body, TurretCiws, "CIWS_Top", 2, -330f, 40.2f, 205f, true, defense);
-        AddFortressGun(body, TurretCiws, "CIWS_Belly_0", FortressPoint(230f, -39.9f, ArchangelCenterZ), false, 3f, defense);
-        AddFortressGun(body, TurretCiws, "CIWS_Belly_1", FortressPoint(-60f, -57.1f, ArchangelCenterZ), false, 3f, defense);
-        AddFortressVls(body, "VLS_0", FortressPoint(-80f, 33.9f, ArchangelCenterZ - 105f), 3.5f, defense);
-        AddFortressVls(body, "VLS_1", FortressPoint(-80f, 33.9f, ArchangelCenterZ + 105f), 3.5f, defense);
-        AddFortressVls(body, "VLS_2", FortressPoint(-230f, 37.5f, ArchangelCenterZ - 80f), 3.5f, defense);
-        AddFortressVls(body, "VLS_3", FortressPoint(-230f, 37.5f, ArchangelCenterZ + 80f), 3.5f, defense);
+        foreach (FortressSite site in FortressSites)
+        {
+            Vector3 point = FortressPoint(site.Model.x, site.Model.y, site.Model.z);
+            if (site.Prefab == TurretVls) { AddFortressVls(body, site.Name, point, FortressSiteRotation(site), FortressVlsScale, defense); }
+            else { AddFortressGun(body, site.Prefab, site.Name, point, FortressSiteRotation(site), FortressGunScale, defense); }
+        }
 
         // 엔진: 왼쪽·오른쪽 번갈아(ACO_FlyingFortress가 칸 번호로 기우는 쪽을 정한다). 모델 +z가 요새의 왼쪽이다
         var engines = new[]
@@ -749,7 +638,10 @@ public static partial class ACO_PrefabBuilder
             new Quaternion(0.014747916f, 0.043481644f, -0.07821297f, 0.9958788f),
         };
         fortress.HatchBlockers = new Collider[] { hatchPlug };
+        hullCols.Add(hatchPlug);   // 추락 충돌이 자기 해치 막이에 걸리지 않게 격침 때 같이 끈다
+        ship.DisableCollidersOnDeath = hullCols.ToArray();
         AddFortressLaunchPoints(root.transform, fortress);
+        ApplyFortressCore(root);
 
         return SaveAndCleanup(root, path);
     }

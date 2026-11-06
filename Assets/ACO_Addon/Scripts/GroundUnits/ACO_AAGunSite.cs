@@ -58,6 +58,8 @@ namespace ACO
         public float PitchRate = 50f;
         public float MinPitch = -5f;
         public float MaxPitch = 85f;
+        [Tooltip("켜면 방위와 고각을 받침 기준으로 잰다. 경사면에 기울여 단 포대용이고, MinPitch·MaxPitch도 받침 기준이 된다")]
+        public bool MountRelativeAim;
         [Tooltip("교전할 타겟이 없어진 뒤 이 시간(초)이 지나면 포탑을 처음 자세로 되돌린다. 잠깐 시야가 가려질 때마다 돌아가지 않게 둔다")]
         public float ReturnToRestDelay = 2f;
 
@@ -135,6 +137,8 @@ namespace ACO
         // 오너 여부 재확인(늦게 들어온 클라이언트는 네트워크가 자리 잡기 전 IsOwner가 틀릴 수 있고, 꺼져 있는 동안의 소유권 변경은 이벤트가 오지 않는다)
         private float _ownerCheckTimer;
         private bool _disabled;
+        private bool _aimLocked;
+        private Vector3 _aimLockPoint;
         private float _noiseSeed;
 
         // 기본 자세(시작 시 로컬 회전)와 타겟이 없어진 뒤 흐른 시간
@@ -281,6 +285,16 @@ namespace ACO
         public bool IsEngaged() { return !_disabled && !_sleeping && TargetIsEngageable(); }
         public Transform GetTargetTransform() { return _target; }
         public Vector3 GetTargetVelocity() { return _targetVel; }
+        public bool IsAlive() { return !_disabled; }
+
+        /// 소형 레일건: 정한 자리에 포신을 고정한다. 표적을 잃어도 풀 때까지 그 자리를 본다.
+        public void LockAim(Vector3 point)
+        {
+            _aimLocked = true;
+            _aimLockPoint = point;
+        }
+
+        public void UnlockAim() { _aimLocked = false; }
 
         // ───────────── 숙련도 ─────────────
 
@@ -478,6 +492,13 @@ namespace ACO
         {
             if (!TurretYaw && !TurretPitch) { return; }
 
+            if (_aimLocked)
+            {
+                _noTargetTime = 0f;
+                RotateTurret(_aimLockPoint - (TurretPitch != null ? TurretPitch.position : transform.position), dt);
+                return;
+            }
+
             if (!engageable)
             {
                 _noTargetTime += dt;
@@ -507,6 +528,7 @@ namespace ACO
         private void RotateTurret(Vector3 aimDir, float dt)
         {
             if (aimDir.sqrMagnitude < 0.000001f) { return; }
+            if (MountRelativeAim) { RotateOnMount(aimDir, dt); return; }
             if (TurretYaw)
             {
                 Vector3 flat = new Vector3(aimDir.x, 0f, aimDir.z);
@@ -524,6 +546,27 @@ namespace ACO
                 // MinPitch·MaxPitch는 월드 고각이다 — 뒤집어 달면 포탑 쪽 회전 방향만 반대가 된다
                 Quaternion want = Quaternion.Euler(-pitch * _mountUp, 0f, 0f);
                 TurretPitch.localRotation = Quaternion.RotateTowards(TurretPitch.localRotation, want, PitchRate * dt);
+            }
+        }
+
+        /// 기울여 단 포대: 조준 방향을 받침 좌표로 바꿔 돌린다. 포탑이 받침에서 벗어나지 않는다.
+        private void RotateOnMount(Vector3 aimDir, float dt)
+        {
+            Vector3 local = transform.InverseTransformDirection(aimDir);
+            if (TurretYaw)
+            {
+                Vector3 flat = new Vector3(local.x, 0f, local.z);
+                if (flat.sqrMagnitude > 0.000001f)
+                {
+                    Quaternion want = Quaternion.LookRotation(flat.normalized);
+                    TurretYaw.localRotation = Quaternion.RotateTowards(TurretYaw.localRotation, want, YawRate * dt);
+                }
+            }
+            if (TurretPitch)
+            {
+                float pitch = Mathf.Asin(Mathf.Clamp(local.normalized.y, -1f, 1f)) * Mathf.Rad2Deg;
+                pitch = Mathf.Clamp(pitch, MinPitch, MaxPitch);
+                TurretPitch.localRotation = Quaternion.RotateTowards(TurretPitch.localRotation, Quaternion.Euler(-pitch, 0f, 0f), PitchRate * dt);
             }
         }
 

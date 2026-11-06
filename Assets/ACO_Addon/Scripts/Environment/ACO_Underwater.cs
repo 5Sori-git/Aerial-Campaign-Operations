@@ -27,6 +27,8 @@ namespace ACO
         public float FadeSpeed = 6f;
         [Tooltip("Bake가 씬의 구름 필드를 넣는다(안개를 같이 쓴다). 비면 안개를 직접 쓴다")]
         public ACO_CloudField Clouds;
+        [Tooltip("함내 구역. Bake가 넣는다. 격실은 해수면 아래에 놓여도 물속이 아니다")]
+        public ACO_InteriorZone Interior;
 
         [Header("시야")]
         [Tooltip("물속 안개 밀도(Exponential Squared — 0.03이면 약 50m 앞이 거의 안 보인다)")]
@@ -93,7 +95,8 @@ namespace ACO
             if (!Utilities.IsValid(_local)) { return; }
             Vector3 head = _local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
             float surface = SurfaceHeight(head.x, head.z);
-            _under = _under ? head.y < surface : head.y < surface - EnterDepth;
+            bool dry = Interior != null && Interior.Contains(head);
+            _under = !dry && (_under ? head.y < surface : head.y < surface - EnterDepth);
             float target = _under ? 1f : 0f;
             if (_amount == target && _applied == _amount) { return; }
             _amount = Mathf.MoveTowards(_amount, target, Time.deltaTime * FadeSpeed);

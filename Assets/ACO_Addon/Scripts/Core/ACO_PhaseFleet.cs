@@ -55,8 +55,6 @@ namespace ACO
             SPEAKER_ENEMY, SPEAKER_ALLY,
             SPEAKER_ENEMY, SPEAKER_ALLY,
             SPEAKER_ENEMY, SPEAKER_AWACS };
-        // Bake가 먼저 만든 표의 함대장 줄을 한 번 나눴다(그 뒤로 직접 바꾼 화자는 건드리지 않는다)
-        [HideInInspector] public bool AllySpeakerApplied;
         [Tooltip("대사")]
         public string[] LineText = new string[] {
             "Enemy fleet in range. All batteries, commence firing!",

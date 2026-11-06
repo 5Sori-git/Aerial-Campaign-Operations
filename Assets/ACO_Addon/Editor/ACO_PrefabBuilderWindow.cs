@@ -33,7 +33,7 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "플레이어 특수무장", Description = "폭탄·로켓 탄체(ACO_Bomb, ACO_Rocket) + 무장 정의 16종(SpecialWeapons/ACO_Special_*: 4AAM·UGB·LGB·RKT·LGR·4AGM·LAGM·LASM·SASM·LAAM·QAAM·HVAA·HPAA·FLAK·CCAA·ADAM) — 상점에서 파는 무장. 있는 예제도 다시 만든다(손본 값 초기화 — 없는 것만 더하려면 ACO → Weapons → Add Missing Special Weapon Examples). 복제해 새 무장을 만든다(복제본은 덮어쓰지 않는다)",
             PrefabNames = new[] { "ACO_Bomb", "ACO_Rocket" }, ExtraPaths = ACO_SpecialWeaponCatalog.ExamplePaths() },
         new Entry { Label = "격납고", Description = "ACO_Hangar — 특수무장 선택/해금, 강화 상점(탭), 크레딧·보상, READY/LAUNCH(관전자는 SPECTATE)", PrefabNames = new[] { "ACO_Hangar" } },
-        new Entry { Label = "지형 장식 (도시/마을/랜드마크)", Description = "도시 블록 3 + 마을 2 + 항구/비행장/등대/레이더/통신탑/유적 임시 모델 — ACO_TerrainFeatures가 육각 지형 위에 놓는다(메시/머티리얼은 Generated/Deco)", PrefabNames = ACO_DecoBuilder.AllNames() },
+        new Entry { Label = "지형 장식 (도시/마을/랜드마크)", Description = "도시 칸 3 + 마을 2 + 항구/비행장/등대/레이더/통신탑/유적 모델(Models/Deco) — ACO_TerrainFeatures가 지형 칸 위에 놓는다", PrefabNames = ACO_DecoBuilder.AllNames() },
         new Entry { Label = "HUD 설정 패널", Description = "ACO_HudSettings — 플레이어별 HUD 조정(점수 패널 위치·크기, 결과·안내 글자 위치·크기, 마커 테두리, 정보 각도, 크로스헤어·RWR 크기·거리), 영구 저장", PrefabNames = new[] { "ACO_HudSettings" } },
         new Entry { Label = "슈퍼에이스 (보너스 페이즈)", Description = "NPC_SuperAce — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적). 생성기 풀 아래에 하나 두면 보너스 페이즈에만 나온다", PrefabNames = new[] { "NPC_SuperAce" } },
         new Entry { Label = "적 폭격기 (요격 대상)", Description = "NPC_Bomber — 요격 페이즈. 도시 상공까지 항로 비행, 도착해 폭탄을 떨어뜨리면 미션 실패. 풀 아래에 4~6대", PrefabNames = new[] { "NPC_Bomber" } },
@@ -51,6 +51,9 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "아군 기함 (함대전)", Description = "NPC_Flagship — Ticonderoga 모델, 주포·VLS 2·CIWS 2. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Flagship" } },
         new Entry { Label = "적 항모 (함대전)", Description = "NPC_Carrier — Kuznetsov 모델, CIWS 4. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Carrier" } },
         new Entry { Label = "랜스 포대 (보스)", Description = "NPC_Railgun — 지상 보스, 방공 12·냉각기 4·코어. 모델은 Visual_* 자식을 바꿔 끼운다. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Railgun" } },
+        new Entry { Label = "함내 격실", Description = "ACO_Interior — 브리핑실, CIC, 복도, 침실. 씬에 놓는 일과 조명은 따로 한다. 다시 만들면 프리팹을 손으로 고친 내용이 사라진다", PrefabNames = new[] { ACO_InteriorBuilder.PrefabName } },
+        new Entry { Label = "평면 지도", Description = "ACO_PlanMap — 브리핑실 벽걸이 지도. 지형, 공역, 목표, 적을 보여 준다", PrefabNames = new[] { ACO_RadarBuilder.PlanMapName } },
+        new Entry { Label = "하이스코어판", Description = "ACO_HiScoreBoard — 복도 게시 공간. 한 미션 최고 획득 크레딧 순위", PrefabNames = new[] { ACO_HUDBuilder.HiScoreName } },
     };
 
     private bool[] _selected;
@@ -192,6 +195,9 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[32]) { Log(built, ACO_PrefabBuilder.BuildFlagship()); }
         if (_selected[33]) { Log(built, ACO_PrefabBuilder.BuildCarrier()); }
         if (_selected[34]) { Log(built, ACO_PrefabBuilder.BuildRailgun()); }
+        if (_selected[35]) { Log(built, ACO_InteriorBuilder.Build()); }
+        if (_selected[36]) { Log(built, ACO_RadarBuilder.CreatePlanMapPrefab()); }
+        if (_selected[37]) { Log(built, ACO_HUDBuilder.CreateHiScorePrefab()); }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

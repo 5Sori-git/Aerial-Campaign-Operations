@@ -11,12 +11,22 @@ namespace ACO
     /// 구매 버튼이 없는 예전 격납고 프리팹이면 줄을 누르자마자 산다.
     /// 버튼 글자: "이름  [##---]  +20%  4,000 CR". 보유 크레딧과 지난 미션 보상도 보여 준다. 진행도 값이 바뀔 때만 다시 그린다.
     /// 패널은 격납고 프리팹(ACO_Hangar)에 같이 있다 — 프리팹 빌더가 만든다. 강화는 다음 탑승부터 적용된다.
-    /// 마지막 탭(TAB_SUPPLY)은 소모품: 줄마다 "이름  효과  READY/가격" — 고르고 구매 버튼으로 산다(종류마다 1개, 출격한 미션이 끝나면 사라진다).
+    /// 마지막 탭(TAB_SUPPLY, 화면 이름 ITEMS)은 소모품: 줄마다 "이름  효과  EQUIPPED/가격" — 고르고 구매 버튼으로 산다(종류마다 1개, 출격한 미션이 끝나면 사라진다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Shop : UdonSharpBehaviour
     {
         /// 소모품 탭 번호(강화 분류 다음).
         public const int TAB_SUPPLY = ACO_PlayerProgress.CATEGORY_COUNT;
+
+        // 탭 설명(CAT_* 순서 + 소모품)
+        private string[] _tabInfo = new string[] {
+            "HULL, HANDLING, ENGINE AND FUEL",
+            "STANDARD MISSILES",
+            "SPECIAL AIR-TO-AIR WEAPONS",
+            "SPECIAL AIR-TO-GROUND WEAPONS",
+            "BOMBS AND ROCKETS",
+            "GUN",
+            "ONE MISSION ONLY - USED WHEN THE MISSION ENDS" };
 
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 진행도를 넣는다")]
         public ACO_PlayerProgress Progress;
@@ -32,6 +42,8 @@ namespace ACO
         public TextMeshProUGUI LastRewardText;
         [Tooltip("분류 탭 버튼 배경(CAT_* 순서)")]
         public Image[] TabImages;
+        [Tooltip("지금 탭의 설명 한 줄")]
+        public TextMeshProUGUI TabInfoText;
         [Tooltip("강화 줄 버튼(남는 줄은 끈다)")]
         public GameObject[] RowObjects;
         [Tooltip("강화 줄 버튼 글자")]
@@ -161,7 +173,7 @@ namespace ACO
                 if (RowTexts != null && row < RowTexts.Length && RowTexts[row])
                 {
                     RowTexts[row].text = Progress.GetConsumableName(row) + "<pos=40%>" + Progress.GetConsumableEffect(row)
-                        + "<pos=70%>" + (owned ? "READY" : price.ToString("N0") + " CR");
+                        + "<pos=70%>" + (owned ? "EQUIPPED" : price.ToString("N0") + " CR");
                 }
                 if (RowIcons != null && row < RowIcons.Length && RowIcons[row] != null)
                 {
@@ -237,6 +249,8 @@ namespace ACO
                     if (TabImages[c]) { TabImages[c].color = c == _tab ? TabSelectedColor : TabColor; }
                 }
             }
+
+            if (TabInfoText) { TabInfoText.text = _tab < _tabInfo.Length ? _tabInfo[_tab] : ""; }
 
             if (_tab == TAB_SUPPLY) { RefreshSupply(); RefreshBuyButton(); return; }
             int start = Progress.GetCategoryStart(_tab);

@@ -5,12 +5,12 @@ using UnityEngine;
 using SaccFlightAndVehicles;
 using ACO;
 
-/// 랜스 포대 NPC_Railgun(지상 보스): 모델은 코드로 만든다(외부 에셋 없음). 텍스처는 Tools/aco_railgun_tex.py(강철 패널 + 노멀맵, 콘크리트, 경고 줄무늬).
+/// 랜스 포대 NPC_Railgun(지상 보스): 모델과 재질은 ACO_LanceModel.cs가 입힌다(ACO_Lance.fbx). 기초(Pad)만 코드로 만든다.
 /// 구조(루트 = 함선 규칙 — 코어 SaccTarget·히트박스·Animator는 루트, 포구 방향 +Z, 바닥 y = 0):
 ///  - Visual_Base(기초·포탑 받침) · Visual_Mount(포신 받침·벽) : 움직이지 않는 모델 — 지우고 다른 모델을 넣어도 된다.
 ///  - BarrelPivot(포신 회전축) → Visual_Barrel(모델), ChargeStrip(충전 빛), Muzzle(포구)
-///  - Armor_L·Armor_R·Armor_Rear(장갑 회전축) → Visual(모델). 좌우 장갑은 벽과 지붕이 한 덩어리라 바깥으로 눕으면 위쪽도 열린다 — 탑어택 무장이 코어로 내리꽂는다.
-///  - Core(구체 + 코일, 마커), Hull(충돌 — 자체 SaccTarget이 피해를 흡수), Parts(방공 12곳, 냉각기 4곳).
+///  - Armor_L·Armor_R(장갑 회전축)·Armor_Rear(고정) → Visual(모델). 좌우 장갑은 벽과 지붕이 한 덩어리라 바깥으로 눕으면 위쪽도 열린다 — 탑어택 무장이 코어로 내리꽂는다.
+///  - Core(노심 + 원자로 구조물, 마커), Hull(충돌 — 자체 SaccTarget이 피해를 흡수), Parts(방공 12곳, 냉각기 4곳).
 /// 다른 모델로 바꿀 때: Visual_* 자식만 갈아 끼우고, 크기가 다르면 Hull 상자와 BarrelPivot·Muzzle·Core 자리를 맞춘다. 로직은 이 Transform들만 쓴다.
 public static partial class ACO_PrefabBuilder
 {
@@ -72,209 +72,16 @@ public static partial class ACO_PrefabBuilder
         return m;
     }
 
-    private static Mesh BuildRailgunBaseMesh(bool concrete)
+    /// 옆면이 깊다 — 기초는 가장 높은 땅에 얹히므로 낮은 쪽 틈을 가린다(FindRailgunSite)
+    private static Mesh BuildRailgunPadMesh()
     {
         var bag = new MeshBag { UvScale = 40f };
-        if (concrete)
-        {
-            // 옆면이 깊다 — 기초는 가장 높은 땅에 얹히므로 낮은 쪽 틈을 가린다(FindRailgunSite)
-            bag.Prism(new Vector3(0f, 0f, 0f), RailgunPadRadius - 20f, RailgunPadRadius, -90f, 8f, 48);
-            bag.Prism(new Vector3(0f, 0f, 0f), 140f, 150f, 8f, 16f, 24);
-            return bag.ToMesh("ACO_Railgun_Pad");
-        }
-        // 포탑 받침 + 포신 받침(양쪽 뺨) + 코어 칸 낮은 틀 + 뒤쪽 축전기 뱅크
-        bag.Prism(new Vector3(0f, 0f, 0f), 112f, 120f, 16f, 28f, 24);
-        for (int s = -1; s <= 1; s += 2)
-        {
-            float x = s * 40f;
-            bag.Hexa(new[]
-            {
-                new Vector3(x - 8f, 28f, 90f), new Vector3(x + 8f, 28f, 90f), new Vector3(x + 8f, 62f, 56f), new Vector3(x - 8f, 62f, 56f),
-                new Vector3(x - 8f, 28f, -8f), new Vector3(x + 8f, 28f, -8f), new Vector3(x + 8f, 62f, 18f), new Vector3(x - 8f, 62f, 18f),
-            });
-            bag.Box(new Vector3(x + s * 14f, 44f, 38f), new Vector3(12f, 24f, 34f));   // 받침 보강
-            bag.Cylinder(new Vector3(x, 50f, 38f), 15f, 15f, 1f, 16);                  // 회전축 덮개 표시
-            // 코어 칸 옆 낮은 틀
-            bag.Box(new Vector3(s * 52f, 32f, -68f), new Vector3(8f, 8f, 104f));
-        }
-        bag.Box(new Vector3(0f, 32f, -122f), new Vector3(112f, 8f, 8f));
-        bag.Box(new Vector3(0f, 46f, -12f), new Vector3(112f, 36f, 10f));              // 앞 격벽(고정)
-        bag.Box(new Vector3(0f, 30f, -68f), new Vector3(96f, 4f, 100f));               // 코어 칸 바닥
-        // 코어를 둘러싼 축전기 묶음(칸 안쪽 — 장갑이 열리면 보인다): 받침 위에 놓고 위를 굵은 모선으로 잇는다
-        for (int s = -1; s <= 1; s += 2)
-        {
-            bag.Box(new Vector3(s * 36f, 33f, -68f), new Vector3(22f, 2f, 96f));
-            bag.Box(new Vector3(s * 36f, 49f, -68f), new Vector3(6f, 3f, 88f));
-            for (int i = 0; i < 4; i++)
-            {
-                float z = -104f + i * 24f;
-                bag.Cylinder(new Vector3(s * 36f, 42f, z), 8f, 8f, 20f, 16);
-                bag.Box(new Vector3(s * 36f, 46.5f, z), new Vector3(16f, 3f, 5f));   // 고정 띠 + 모선 연결
-                bag.Box(new Vector3(s * 36f, 42f, z - 12f), new Vector3(18f, 16f, 4f));   // 사이 칸막이
-            }
-            bag.Box(new Vector3(s * 36f, 42f, -20f), new Vector3(18f, 16f, 4f));
-        }
-        return bag.ToMesh("ACO_Railgun_Mount");
+        bag.Prism(new Vector3(0f, 0f, 0f), RailgunPadRadius - 20f, RailgunPadRadius, -90f, 8f, 48);
+        bag.Prism(new Vector3(0f, 0f, 0f), 140f, 150f, 8f, 16f, 24);
+        return bag.ToMesh("ACO_Railgun_Pad");
     }
 
-    private static Mesh BuildRailgunBarrelMesh()
-    {
-        var bag = new MeshBag { UvScale = 30f };
-        const float length = 320f;
-        // 레일 두 줄(위아래) + 포미 뭉치 + 일정 간격 띠
-        bag.Box(new Vector3(0f, 12f, length * 0.5f - 30f), new Vector3(22f, 12f, length));
-        bag.Box(new Vector3(0f, -12f, length * 0.5f - 30f), new Vector3(22f, 12f, length));
-        bag.Box(new Vector3(-13f, 0f, length * 0.5f - 30f), new Vector3(4f, 14f, length));
-        bag.Box(new Vector3(13f, 0f, length * 0.5f - 30f), new Vector3(4f, 14f, length));
-        bag.Box(new Vector3(0f, 0f, -18f), new Vector3(44f, 44f, 52f));                // 포미
-        bag.Cylinder(new Vector3(0f, 0f, 8f), 25f, 25f, 12f, 8);                       // 회전축 고리(축은 양쪽 뺨에)
-        bag.Box(new Vector3(0f, 0f, 8f), new Vector3(80f, 20f, 20f));
-        for (int i = 0; i < 9; i++)
-        {
-            float z = 40f + i * 30f;
-            float w = i == 8 ? 40f : 32f - i * 0.6f;
-            bag.Box(new Vector3(0f, 0f, z), new Vector3(w, w + 2f, i == 8 ? 12f : 7f));
-        }
-        // 위쪽 냉각 지느러미
-        for (int i = 0; i < 12; i++)
-        {
-            float z = 24f + i * 18f;
-            bag.Box(new Vector3(0f, 22f, z), new Vector3(12f, 8f, 3f));
-        }
-        return bag.ToMesh("ACO_Railgun_Barrel");
-    }
-
-    /// 충전 빛: 레일 사이에 보이는 띠 — ACO_Railgun이 발광을 올린다.
-    private static Mesh BuildRailgunStripMesh()
-    {
-        var bag = new MeshBag();
-        bag.Box(new Vector3(0f, 0f, 130f), new Vector3(14f, 6f, 320f));
-        return bag.ToMesh("ACO_Railgun_ChargeStrip");
-    }
-
-    /// 코어 칸 좌우 장갑 — 회전축이 원점(바닥 바깥 모서리), side = -1 왼쪽, 1 오른쪽. 벽 + 지붕 절반 + 덧댄 판.
-    private static Mesh BuildRailgunClamMesh(int side)
-    {
-        var bag = new MeshBag { UvScale = 30f };
-        const float width = 52f, height = 48f, depth = 104f;
-        float s = side;
-        bag.Box(new Vector3(0f, height * 0.5f, 0f), new Vector3(5f, height, depth));
-        bag.Box(new Vector3(-s * width * 0.5f, height + 2f, 0f), new Vector3(width, 5f, depth));
-        bag.Hexa(new[]   // 지붕 모서리 경사
-        {
-            new Vector3(-3f, height - 8f, depth * 0.5f), new Vector3(3f, height - 8f, depth * 0.5f), new Vector3(3f, height + 4f, depth * 0.5f), new Vector3(-3f, height + 4f, depth * 0.5f),
-            new Vector3(-3f, height - 8f, -depth * 0.5f), new Vector3(3f, height - 8f, -depth * 0.5f), new Vector3(3f, height + 4f, -depth * 0.5f), new Vector3(-3f, height + 4f, -depth * 0.5f),
-        });
-        for (int i = 0; i < 5; i++)
-        {
-            float z = -depth * 0.5f + 12f + i * 20f;
-            bag.Box(new Vector3(s * 3.5f, height * 0.5f, z), new Vector3(2f, height - 8f, 14f));   // 바깥 덧판
-            bag.Box(new Vector3(-s * width * 0.5f, height + 5.5f, z), new Vector3(width - 8f, 2f, 14f));
-        }
-        return bag.ToMesh(side < 0 ? "ACO_Railgun_ClamL" : "ACO_Railgun_ClamR");
-    }
-
-    private static Mesh BuildRailgunRearMesh()
-    {
-        var bag = new MeshBag { UvScale = 30f };
-        bag.Box(new Vector3(0f, 24f, 0f), new Vector3(100f, 48f, 5f));
-        for (int i = 0; i < 4; i++) { bag.Box(new Vector3(-36f + i * 24f, 24f, -3.5f), new Vector3(16f, 40f, 2f)); }
-        return bag.ToMesh("ACO_Railgun_ArmorRear");
-    }
-
-    /// 코어를 감싼 코일: 매끄러운 원환 셋 + 이음봉 넷. 법선을 직접 넣어 면이 각지지도, 이음매가 보이지도 않는다.
-    private static Mesh BuildRailgunCoilMesh()
-    {
-        var verts = new List<Vector3>();
-        var normals = new List<Vector3>();
-        var uvs = new List<Vector2>();
-        var tris = new List<int>();
-        const float uvScale = 20f;
-
-        // (i, j) 격자: a(i) = 고리 중심, ax·ay = 단면 축
-        void Grid(int rows, int cols, System.Func<int, int, Vector3> pos, System.Func<int, int, Vector3> normal)
-        {
-            int start = verts.Count;
-            for (int i = 0; i <= rows; i++)
-            {
-                for (int j = 0; j <= cols; j++)
-                {
-                    verts.Add(pos(i, j));
-                    normals.Add(normal(i, j));
-                    uvs.Add(new Vector2(i * 6f, j * 2f) / uvScale);
-                }
-            }
-            int stride = cols + 1;
-            for (int i = 0; i < rows; i++)
-            {
-                for (int j = 0; j < cols; j++)
-                {
-                    int a = start + i * stride + j;
-                    int b = a + stride;
-                    int c = b + 1;
-                    int d = a + 1;
-                    tris.AddRange(new[] { a, b, c, a, c, d });
-                }
-            }
-        }
-
-        for (int k = -1; k <= 1; k++)
-        {
-            const int major = 72;
-            const int minor = 14;
-            float z = k * 16f;
-            float ring = k == 0 ? 24f : 21f;      // 지붕(높이 76m) 아래에 들어가게
-            float tube = k == 0 ? 3.8f : 3f;
-            Vector3 Dir(int i) { float u = i * Mathf.PI * 2f / major; return new Vector3(Mathf.Cos(u), Mathf.Sin(u), 0f); }
-            Vector3 Out(int i, int j)
-            {
-                float v = j * Mathf.PI * 2f / minor;
-                return Dir(i) * Mathf.Cos(v) + Vector3.forward * Mathf.Sin(v);
-            }
-            Grid(major, minor, (i, j) => Dir(i) * ring + Vector3.forward * z + Out(i, j) * tube, Out);
-        }
-
-        // 세 고리를 잇는 봉(z축)
-        for (int k = 0; k < 4; k++)
-        {
-            const int sides = 12;
-            float angle = (k + 0.5f) * Mathf.PI * 0.5f;
-            Vector3 center = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * 22.5f;
-            Vector3 Side(int j) { float v = j * Mathf.PI * 2f / sides; return new Vector3(Mathf.Cos(v), Mathf.Sin(v), 0f); }
-            Grid(1, sides, (i, j) => center + Side(j) * 1.3f + Vector3.forward * (i == 0 ? -20f : 20f), (i, j) => Side(j));
-        }
-
-        var mesh = new Mesh { name = "ACO_Railgun_Coil" };
-        mesh.SetVertices(verts);
-        mesh.SetNormals(normals);
-        mesh.SetUVs(0, uvs);
-        mesh.SetTriangles(tris, 0);
-        mesh.RecalculateTangents();
-        mesh.RecalculateBounds();
-        return mesh;
-    }
-
-    private static Mesh BuildRailgunCoolerMesh()
-    {
-        var bag = new MeshBag { UvScale = 20f };
-        bag.Box(new Vector3(0f, 3f, 0f), new Vector3(48f, 6f, 48f));
-        bag.Box(new Vector3(0f, 14f, 0f), new Vector3(38f, 16f, 38f));
-        // 방열판: 가운데 기둥과 네 귀 지지대에 끼운다
-        bag.Box(new Vector3(0f, 36f, 0f), new Vector3(20f, 32f, 20f));
-        for (int sx = -1; sx <= 1; sx += 2)
-        {
-            for (int sz = -1; sz <= 1; sz += 2) { bag.Box(new Vector3(sx * 12f, 36f, sz * 12f), new Vector3(2.5f, 32f, 2.5f)); }
-        }
-        for (int i = 0; i < 7; i++) { bag.Box(new Vector3(0f, 25f + i * 4f, 0f), new Vector3(36f - i * 1.5f, 1.6f, 36f - i * 1.5f)); }
-        bag.Prism(new Vector3(0f, 0f, 0f), 10f, 12f, 50f, 60f, 16);                     // 위 배기구(기둥에 얹는다)
-        for (int s = -1; s <= 1; s += 2)
-        {
-            bag.Box(new Vector3(s * 21f, 10f, 0f), new Vector3(3f, 10f, 30f));           // 옆 배관
-        }
-        return bag.ToMesh("ACO_Railgun_Cooler");
-    }
-
-    private static ACO_FortressPart AddRailgunCooler(Transform parts, string name, Vector3 pos, Mesh mesh, Material mat, Material hazard)
+    private static ACO_FortressPart AddRailgunCooler(Transform parts, string name, Vector3 pos)
     {
         var root = new GameObject(name);
         root.layer = LayerHitbox;
@@ -284,10 +91,8 @@ public static partial class ACO_PrefabBuilder
         box.size = new Vector3(50f, 62f, 50f);
         box.center = new Vector3(0f, 31f, 0f);
         box.enabled = false;
-        GameObject visual = AddFortressMesh(root.transform, "Visual", mesh, mat, Vector3.zero);
-        var strip = new MeshBag { UvScale = 12f };
-        strip.Box(new Vector3(0f, 7.5f, 0f), new Vector3(40f, 3f, 40f));
-        AddFortressMesh(visual.transform, "Hazard", SaveFortressMesh(strip.ToMesh("ACO_Railgun_CoolerHazard")), hazard, Vector3.zero);
+        GameObject visual = AddFortressMesh(root.transform, "Visual", null, null, Vector3.zero);
+        AddFortressMesh(visual.transform, "Hazard", null, null, Vector3.zero);
         GameObject smoke = CreateFortressSmoke(root.transform, "Smoke", new Vector3(0f, 30f, 0f), 18f, 60f);
         smoke.SetActive(false);
         GameObject marker = NewLockMarker(root.transform, PartMarkerName, LayerEnemyGround, 26f);
@@ -325,65 +130,6 @@ public static partial class ACO_PrefabBuilder
         BoxCollider box = go.AddComponent<BoxCollider>();
         box.center = new Vector3(0f, -20f, 0f);
         box.size = new Vector3(RailgunPadBox, 56f, RailgunPadBox);
-    }
-
-    /// 먼저 만든 프리팹을 새 배치로 옮긴다: 메시는 같은 자산을 고쳐 쓰고(연결 유지), 방공 포대만 벌린다. 다시 만들면 고친 내용이 사라진다.
-    public static void EnsureRailgunLayout()
-    {
-        string path = PathOf("NPC_Railgun");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_Railgun railgun = root.GetComponent<ACO_Railgun>();
-            if (railgun == null || railgun.LayoutVersion >= RailgunLayoutVersion) { return; }
-            int from = railgun.LayoutVersion;
-            railgun.LayoutVersion = RailgunLayoutVersion;
-            // 판 2: 소형 레일건 발사음 전용 소리(같은 프리팹을 고친다)
-            AudioClip miniClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ACO_Addon/Audio/Generated/ACO_Railgun_MiniFire.wav");
-            if (railgun.MiniGuns != null && miniClip != null)
-            {
-                foreach (ACO_MiniRailgun mini in railgun.MiniGuns)
-                {
-                    if (mini == null || mini.FireSound == null) { continue; }
-                    mini.FireSound.clip = miniClip;
-                    mini.FireSound.pitch = 1f;
-                }
-            }
-            if (from >= 1)
-            {
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-                return;
-            }
-            SaveFortressMesh(BuildRailgunBaseMesh(true));
-            SaveFortressMesh(BuildRailgunBaseMesh(false));
-            SaveFortressMesh(BuildRailgunCoilMesh());
-            SaveFortressMesh(BuildRailgunCoolerMesh());
-            int moved = 0;
-            foreach (UdonSharp.UdonSharpBehaviour part in railgun.AirDefense)
-            {
-                if (part == null || part.GetComponent<ACO_MiniRailgun>() != null) { continue; }
-                Transform t = part.transform;
-                Vector3 p = t.localPosition;
-                float r = Mathf.Max(new Vector2(p.x, p.z).magnitude, 1f);
-                float scale = RailgunRingRadius(moved) / r;
-                t.localPosition = new Vector3(p.x * scale, p.y, p.z * scale);
-                PrefabUtility.RecordPrefabInstancePropertyModifications(t);
-                moved++;
-            }
-            Transform hull = root.transform.Find("Hull");
-            foreach (BoxCollider box in hull.GetComponents<BoxCollider>())
-            {
-                if (box.size.x < 300f) { continue; }
-                box.center = new Vector3(0f, -20f, 0f);
-                box.size = new Vector3(RailgunPadBox, 56f, RailgunPadBox);
-            }
-            AddRailgunPadDiagonal(hull);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"[ACO] 랜스 포대: 기초를 넓히고 방공 포대 {moved}곳을 벌렸습니다. 코일·냉각기·축전기 모델을 새로 만들었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
     private static ACO_AAGunSite AddRailgunGun(Transform parts, string name, string prefab, Vector3 pos, float yaw, List<UdonSharp.UdonSharpBehaviour> list)
@@ -430,35 +176,22 @@ public static partial class ACO_PrefabBuilder
     {
         EnsurePrefabFolder();
         GameObject vlsMissile = LoadOrBuildVlsMissile();
-        Material steel = RailgunMaterial("ACO_RailgunSteel", "ACO_Railgun_Steel", true, Color.white, 0.75f, 0.42f);
-        Material barrelMat = RailgunMaterial("ACO_RailgunBarrel", "ACO_Railgun_Steel", true, new Color(0.55f, 0.57f, 0.62f), 0.85f, 0.55f);
-        Material armorMat = RailgunMaterial("ACO_RailgunArmor", "ACO_Railgun_Steel", true, new Color(0.78f, 0.74f, 0.62f), 0.7f, 0.38f);
         Material concrete = RailgunMaterial("ACO_RailgunConcrete", "ACO_Railgun_Concrete", false, Color.white, 0f, 0.15f);
         Material hazard = RailgunMaterial("ACO_RailgunHazard", "ACO_Railgun_Hazard", false, Color.white, 0.2f, 0.3f);
-        Material coreMat = FortressMaterial("ACO_RailgunCore", new Color(0.05f, 0.1f, 0.14f), 0f, 0.8f, new Color(0.5f, 2.4f, 5f));
-        Material stripMat = FortressMaterial("ACO_RailgunStrip", Color.black, 0f, 0.5f, new Color(0.4f, 1.2f, 3f));
-        Mesh padMesh = SaveFortressMesh(BuildRailgunBaseMesh(true));
-        Mesh mountMesh = SaveFortressMesh(BuildRailgunBaseMesh(false));
-        Mesh barrelMesh = SaveFortressMesh(BuildRailgunBarrelMesh());
-        Mesh stripMesh = SaveFortressMesh(BuildRailgunStripMesh());
-        Mesh clamL = SaveFortressMesh(BuildRailgunClamMesh(-1));
-        Mesh clamR = SaveFortressMesh(BuildRailgunClamMesh(1));
-        Mesh rearMesh = SaveFortressMesh(BuildRailgunRearMesh());
-        Mesh coilMesh = SaveFortressMesh(BuildRailgunCoilMesh());
-        Mesh coolerMesh = SaveFortressMesh(BuildRailgunCoolerMesh());
+        Mesh padMesh = SaveFortressMesh(BuildRailgunPadMesh());
 
         var root = new GameObject("NPC_Railgun");
         root.layer = LayerHitbox;
 
         // 코어 히트박스(장갑이 열렸을 때만). SaccTarget 규칙상 루트에.
         BoxCollider coreCol = root.AddComponent<BoxCollider>();
-        coreCol.size = new Vector3(48f, 48f, 48f);
+        coreCol.size = LanceCoreHitSize;
         coreCol.center = RailgunCorePos;
         coreCol.enabled = false;
 
         // 고정 모델 — Visual_* 아래만 바꾸면 다른 모델이 된다
         AddFortressMesh(root.transform, "Visual_Base", padMesh, concrete, Vector3.zero);
-        GameObject mount = AddFortressMesh(root.transform, "Visual_Mount", mountMesh, steel, Vector3.zero);
+        GameObject mount = AddFortressMesh(root.transform, "Visual_Mount", null, null, Vector3.zero);
         var hazardRing = new MeshBag { UvScale = 10f };
         hazardRing.Prism(Vector3.zero, 141f, 143f, 16f, 17f, 16);
         AddFortressMesh(mount.transform, "HazardRing", SaveFortressMesh(hazardRing.ToMesh("ACO_Railgun_HazardRing")), hazard, Vector3.zero);
@@ -467,37 +200,31 @@ public static partial class ACO_PrefabBuilder
         var pivot = new GameObject("BarrelPivot").transform;
         pivot.SetParent(root.transform, false);
         pivot.localPosition = new Vector3(0f, 50f, 38f);
-        AddFortressMesh(pivot, "Visual_Barrel", barrelMesh, barrelMat, Vector3.zero);
-        GameObject strip = AddFortressMesh(pivot, "ChargeStrip", stripMesh, stripMat, Vector3.zero);
+        AddFortressMesh(pivot, "Visual_Barrel", null, null, Vector3.zero);
+        GameObject strip = AddFortressMesh(pivot, "ChargeStrip", null, null, Vector3.zero);
         Transform muzzle = NewChild(pivot.gameObject, "Muzzle", new Vector3(0f, 0f, 295f));
 
         // 코어 + 장갑(좌우는 벽과 지붕이 한 덩어리 — 바깥으로 누우면 위도 열린다)
         var coreRoot = new GameObject("Core").transform;
         coreRoot.SetParent(root.transform, false);
         coreRoot.localPosition = RailgunCorePos;
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.name = "CoreSphere";
-        sphere.layer = LayerHitbox;
-        Object.DestroyImmediate(sphere.GetComponent<Collider>());
-        sphere.transform.SetParent(coreRoot, false);
-        sphere.transform.localScale = Vector3.one * 38f;
-        sphere.GetComponent<MeshRenderer>().sharedMaterial = coreMat;
-        AddFortressMesh(coreRoot, "Visual_Coil", coilMesh, barrelMat, Vector3.zero);
+        AddFortressMesh(coreRoot, "CoreSphere", null, null, Vector3.zero);
+        AddFortressMesh(coreRoot, "Visual_Frame", null, null, Vector3.zero);
         GameObject coreMarker = NewLockMarker(coreRoot, "AAMTarget", LayerEnemyGround, 26f);
         coreMarker.SetActive(false);
 
         var armorL = new GameObject("Armor_L").transform;
         armorL.SetParent(root.transform, false);
-        armorL.localPosition = new Vector3(-54f, 28f, -68f);
-        AddFortressMesh(armorL, "Visual", clamL, armorMat, Vector3.zero).transform.localPosition = Vector3.zero;
+        armorL.localPosition = LanceHingeL;
+        AddFortressMesh(armorL, "Visual", null, null, Vector3.zero);
         var armorR = new GameObject("Armor_R").transform;
         armorR.SetParent(root.transform, false);
-        armorR.localPosition = new Vector3(54f, 28f, -68f);
-        AddFortressMesh(armorR, "Visual", clamR, armorMat, Vector3.zero);
+        armorR.localPosition = LanceHingeR;
+        AddFortressMesh(armorR, "Visual", null, null, Vector3.zero);
         var armorRear = new GameObject("Armor_Rear").transform;
         armorRear.SetParent(root.transform, false);
         armorRear.localPosition = new Vector3(0f, 28f, -122f);
-        AddFortressMesh(armorRear, "Visual", rearMesh, armorMat, Vector3.zero);
+        AddFortressMesh(armorRear, "Visual", null, null, Vector3.zero);
 
         // 충돌: 자체 SaccTarget이 피해를 흡수한다. 코어 칸 위는 비워 두고, 닫힌 동안만 ArmorClosed가 덮는다.
         var hull = new GameObject("Hull");
@@ -510,7 +237,7 @@ public static partial class ACO_PrefabBuilder
             new[] { new Vector3(0f, 22f, 0f), new Vector3(230f, 14f, 230f) },
             new[] { new Vector3(-40f, 45f, 40f), new Vector3(18f, 34f, 100f) },
             new[] { new Vector3(40f, 45f, 40f), new Vector3(18f, 34f, 100f) },
-            new[] { new Vector3(0f, 46f, -12f), new Vector3(112f, 36f, 10f) },
+            new[] { LanceBulkheadCenter, LanceBulkheadSize },
         })
         {
             BoxCollider c = hull.AddComponent<BoxCollider>();
@@ -523,8 +250,8 @@ public static partial class ACO_PrefabBuilder
         closed.layer = LayerHitbox;
         closed.transform.SetParent(hull.transform, false);
         BoxCollider closedCol = closed.AddComponent<BoxCollider>();
-        closedCol.center = new Vector3(0f, 52f, -68f);
-        closedCol.size = new Vector3(112f, 48f, 112f);
+        closedCol.center = LanceClosedCenter;
+        closedCol.size = LanceClosedSize;
         hullCols.Add(closedCol);
         AddTargetAnimator(hull);
         SaccTarget armor = hull.AddUdonSharpComponent<SaccTarget>();
@@ -545,13 +272,8 @@ public static partial class ACO_PrefabBuilder
             else if (i % 3 == 1) { AddRailgunGun(body, "CIWS_" + i, TurretCiws, p, ringAngles[i], defense); }
             else { defense.Add(NewTurret(TurretVls, "VLS_" + i, body, p, Quaternion.identity, 3f).GetComponent<ACO_SAMSite>()); }
         }
-        var coolers = new[]
-        {
-            AddRailgunCooler(body, "Cooler_FL", new Vector3(-120f, 16f, 76f), coolerMesh, steel, hazard),
-            AddRailgunCooler(body, "Cooler_FR", new Vector3(120f, 16f, 76f), coolerMesh, steel, hazard),
-            AddRailgunCooler(body, "Cooler_RL", new Vector3(-112f, 16f, -96f), coolerMesh, steel, hazard),
-            AddRailgunCooler(body, "Cooler_RR", new Vector3(112f, 16f, -96f), coolerMesh, steel, hazard),
-        };
+        var coolers = new ACO_FortressPart[LanceCoolerNames.Length];
+        for (int i = 0; i < coolers.Length; i++) { coolers[i] = AddRailgunCooler(body, LanceCoolerNames[i], LanceCoolerPlaces[i]); }
         var partList = new List<UdonSharp.UdonSharpBehaviour>(defense);
         partList.AddRange(coolers);
 
@@ -603,8 +325,6 @@ public static partial class ACO_PrefabBuilder
         railgun.BarrelPivot = pivot;
         railgun.Muzzle = muzzle;
         railgun.ChargeGlow = strip.GetComponent<MeshRenderer>();
-        railgun.ArmorPanels = new[] { armorL, armorR, armorRear };
-        railgun.ArmorOpenEuler = new[] { new Vector3(0f, 0f, 80f), new Vector3(0f, 0f, -80f), new Vector3(-85f, 0f, 0f) };
         railgun.ArmorColliders = new Collider[] { closedCol };
         railgun.CoreHitbox = coreCol;
         railgun.CoreMarkers = new[] { coreMarker };
@@ -618,6 +338,7 @@ public static partial class ACO_PrefabBuilder
         railgun.Blast = CreateFortressBlast(root.transform);
         AddRailgunHorizon(root.transform, railgun);
         AddRailgunMinis(root.transform, railgun, ship);
+        ApplyLanceModel(root);
 
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_Railgun.prefab");
     }
@@ -659,11 +380,10 @@ public static partial class ACO_PrefabBuilder
         railgun.HorizonSound = boom;
     }
 
-    /// 소형 레일건 4문(기초 앞쪽 둘 + 좌우 둘): 대공포 틀(탐지·조준·체력)에서 기총을 빼고 ACO_MiniRailgun을 얹는다. 방공 부위라 1단계 목표이고 수리도 된다.
-    /// 탄·폭발 파티클은 넷이 함께 쓴다 — 루트 아래 둬 크기 배율을 받지 않는다.
+    private const float MiniShellStretch = 0.04f;
+
     private static void AddRailgunMinis(Transform root, ACO_Railgun railgun, ACO_Warship ship)
     {
-        Material steel = RailgunMaterial("ACO_RailgunBarrel", "ACO_Railgun_Steel", true, new Color(0.55f, 0.57f, 0.62f), 0.85f, 0.55f);
         var fx = new GameObject("MiniFx").transform;
         fx.SetParent(root, false);
         Color white = new Color(0.8f, 0.95f, 1f);
@@ -671,109 +391,115 @@ public static partial class ACO_PrefabBuilder
         SetBlastShape(shell, ParticleSystemShapeType.Sphere, 0.1f);
         ParticleSystemRenderer shellRenderer = shell.GetComponent<ParticleSystemRenderer>();
         shellRenderer.renderMode = ParticleSystemRenderMode.Stretch;
-        shellRenderer.velocityScale = 0.08f;
+        shellRenderer.velocityScale = MiniShellStretch;
         shellRenderer.lengthScale = 1f;
         ParticleSystem burst = CreateBlastSystem(fx, "Burst", new Vector2(3f, 3.8f), new Vector2(4f, 22f), new Vector2(70f, 140f), 0f, 130, new Color(1f, 0.55f, 0.18f), new Color(0.12f, 0.1f, 0.1f), 0.95f);
         SetBlastShape(burst, ParticleSystemShapeType.Sphere, 125f);
         ParticleSystem flash = CreateBlastSystem(fx, "BurstFlash", new Vector2(0.4f, 0.4f), Vector2.zero, new Vector2(420f, 420f), 0f, 6, new Color(1f, 0.95f, 0.8f), new Color(1f, 0.6f, 0.2f), 1f);
         SetBlastShape(flash, ParticleSystemShapeType.Sphere, 0.1f);
-
-        var spec = new GunSpec
-        {
-            BodySize = new Vector3(3f, 1.4f, 3f), BarrelLength = 10f, BarrelThickness = 0.55f,
-            Health = 260f, Armor = 1f, Score = 350, Label = "RGN",
-            DetectRange = 6500f, LoseTargetRange = 7500f, YawRate = 50f, PitchRate = 40f, TrackingLag = 0.2f, AimError = 0.2f,
-        };
         Transform parts = root.Find("Parts");
-        Vector3[] places = { new Vector3(58f, 8f, 160f), new Vector3(-58f, 8f, 160f), new Vector3(134f, 16f, 0f), new Vector3(-134f, 16f, 0f) };
         var minis = new List<ACO_MiniRailgun>();
         var defense = new List<UdonSharp.UdonSharpBehaviour>(railgun.AirDefense);
         var all = new List<UdonSharp.UdonSharpBehaviour>(ship.Parts);
-        for (int i = 0; i < places.Length; i++)
+        for (int i = 0; i < LanceMiniPlaces.Length; i++)
         {
-            GameObject part = CreateAAGunObject("MiniRailgun_" + i, spec);
-            part.transform.SetParent(parts, false);
-            part.transform.localPosition = places[i];
-            part.transform.localScale = Vector3.one * 3f;
-            foreach (MeshRenderer r in part.GetComponentsInChildren<MeshRenderer>(true)) { r.sharedMaterial = steel; }
-            ACO_AAGunSite aa = part.GetComponent<ACO_AAGunSite>();
-            // 기총을 뺀다 — 사격은 ACO_MiniRailgun이 한다
-            Object.DestroyImmediate(aa.Gun.gameObject);
-            aa.Gun = null;
-            ACO_MiniRailgun mini = part.AddUdonSharpComponent<ACO_MiniRailgun>();
-            aa.AimLeadTime = mini.LeadTime;
-            mini.Site = aa;
-            mini.Muzzle = NewChild(aa.TurretPitch.gameObject, "Muzzle", new Vector3(0f, 0f, spec.BarrelLength));
-            mini.ShellParticle = shell;
-            mini.BurstParticle = burst;
-            mini.BurstFlash = flash;
-            mini.FireSound = CreateRailgunSound(fx, "MiniFire_" + i, "ACO_Railgun_MiniFire", 300f, 7000f, false);
-            mini.BurstSound = CreateRailgunSound(fx, "MiniBurst_" + i, "ACO_Explosion_Small", 400f, 6000f, false);
-            mini.Laser = CreateMiniLaser(fx, i);
+            GameObject part = NewTurret(TurretMini, "MiniRailgun_" + i, parts, LanceMiniPlaces[i], Quaternion.identity, 3f);
+            ACO_MiniRailgun mini = part.GetComponent<ACO_MiniRailgun>();
+            LinkMiniFx(mini, shell, burst, flash);
             minis.Add(mini);
-            defense.Add(aa);
-            all.Add(aa);
+            defense.Add(mini.Site);
+            all.Add(mini.Site);
         }
         railgun.MiniGuns = minis.ToArray();
         railgun.AirDefense = defense.ToArray();
         ship.Parts = all.ToArray();
     }
 
-    private static LineRenderer CreateMiniLaser(Transform parent, int index)
+    /// 탄·폭발 파티클은 소형 레일건끼리 함께 쓴다 — 랜스 포대의 MiniFx에 있어 인스턴스에서 잇는다.
+    private static void LinkMiniFx(ACO_MiniRailgun mini, ParticleSystem shell, ParticleSystem burst, ParticleSystem flash)
+    {
+        mini.ShellParticle = shell;
+        mini.BurstParticle = burst;
+        mini.BurstFlash = flash;
+        PrefabUtility.RecordPrefabInstancePropertyModifications(mini);
+    }
+
+    /// 소형 레일건 프리팹: 대공포 틀(탐지·조준·체력)에서 기총을 뺀 것 + 레이저·소리.
+    private static GameObject BuildMiniTurret()
+    {
+        var spec = new GunSpec
+        {
+            BodySize = new Vector3(3f, 1.4f, 3f), BarrelLength = 10f, BarrelThickness = 0.55f,
+            Health = 260f, Armor = 1f, Score = 350, Label = "RGN",
+            DetectRange = 6500f, LoseTargetRange = 7500f, YawRate = 50f, PitchRate = 40f, TrackingLag = 0.2f, AimError = 0.2f,
+        };
+        GameObject part = CreateAAGunObject(TurretMini, spec);
+        ACO_AAGunSite aa = part.GetComponent<ACO_AAGunSite>();
+        // 기총을 뺀다 — 사격은 ACO_MiniRailgun이 한다
+        Object.DestroyImmediate(aa.Gun.gameObject);
+        aa.Gun = null;
+        if (aa.TargetHealth != null) { aa.BaseHealth = aa.TargetHealth.Health; }
+        ACO_MiniRailgun mini = part.AddUdonSharpComponent<ACO_MiniRailgun>();
+        mini.Site = aa;
+        aa.AimLeadTime = mini.LeadTime;
+        mini.Muzzle = NewChild(aa.TurretPitch.gameObject, "Muzzle", new Vector3(0f, 0f, spec.BarrelLength));
+        mini.FireSound = CreateRailgunSound(part.transform, "FireSound", "ACO_Railgun_MiniFire", 300f, 7000f, false);
+        mini.BurstSound = CreateRailgunSound(part.transform, "BurstSound", "ACO_Explosion_Small", 400f, 6000f, false);
+        mini.Laser = CreateMiniLaser(part.transform);
+        ApplyMiniModel(part);
+        return SaveAndCleanup(part, PathOf(TurretMini));
+    }
+
+    /// 먼저 만든 소형 레일건 넷을 프리팹 인스턴스로 바꾼다. 자리와 크기는 그대로 둔다.
+    public static void ConvertRailgunMinis()
+    {
+        string path = PathOf("NPC_Railgun");
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            ACO_Railgun railgun = root.GetComponent<ACO_Railgun>();
+            ACO_Warship ship = root.GetComponent<ACO_Warship>();
+            if (railgun == null || ship == null || railgun.MiniGuns == null || railgun.MiniGuns.Length == 0) { return; }
+            ACO_MiniRailgun first = railgun.MiniGuns[0];
+            if (first == null || PrefabUtility.IsPartOfPrefabInstance(first.gameObject)) { return; }
+            ParticleSystem shell = first.ShellParticle;
+            ParticleSystem burst = first.BurstParticle;
+            ParticleSystem flash = first.BurstFlash;
+            if (shell != null) { shell.GetComponent<ParticleSystemRenderer>().velocityScale = MiniShellStretch; }
+            var defense = new List<UdonSharp.UdonSharpBehaviour>(railgun.AirDefense);
+            var parts = new List<UdonSharp.UdonSharpBehaviour>(ship.Parts);
+            for (int i = 0; i < railgun.MiniGuns.Length; i++)
+            {
+                ACO_MiniRailgun old = railgun.MiniGuns[i];
+                Transform t = old.transform;
+                GameObject part = NewTurret(TurretMini, old.name, t.parent, t.localPosition, t.localRotation, t.localScale.x);
+                part.transform.SetSiblingIndex(t.GetSiblingIndex());
+                ACO_MiniRailgun fresh = part.GetComponent<ACO_MiniRailgun>();
+                LinkMiniFx(fresh, shell, burst, flash);
+                int d = defense.IndexOf(old.Site);
+                if (d >= 0) { defense[d] = fresh.Site; }
+                int p = parts.IndexOf(old.Site);
+                if (p >= 0) { parts[p] = fresh.Site; }
+                if (old.Laser != null) { Object.DestroyImmediate(old.Laser.gameObject); }
+                if (old.FireSound != null) { Object.DestroyImmediate(old.FireSound.gameObject); }
+                if (old.BurstSound != null) { Object.DestroyImmediate(old.BurstSound.gameObject); }
+                Object.DestroyImmediate(old.gameObject);
+                railgun.MiniGuns[i] = fresh;
+            }
+            railgun.AirDefense = defense.ToArray();
+            ship.Parts = parts.ToArray();
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            Debug.Log($"[ACO] 소형 레일건을 {TurretMini} 프리팹의 인스턴스로 바꿨습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    private static LineRenderer CreateMiniLaser(Transform parent)
     {
         LineRenderer line = CreateRailgunBeam(parent, "WarnBeam", new Color(1f, 0.05f, 0.03f), 1f);
-        line.gameObject.name = "MiniLaser_" + index;
+        line.gameObject.name = "Laser";
         return line;
     }
 
-    /// 이미 있는 프리팹에 소형 레일건만 더한다 — 다시 만들면 바꿔 끼운 모델이 사라진다.
-    public static void EnsureRailgunMinis()
-    {
-        string path = PathOf("NPC_Railgun");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_Railgun railgun = root.GetComponent<ACO_Railgun>();
-            if (railgun == null) { return; }
-            if (railgun.MiniGuns != null && railgun.MiniGuns.Length > 0)
-            {
-                // 먼저 만든 소형 레일건: 레이저만 더한다
-                bool added = false;
-                for (int i = 0; i < railgun.MiniGuns.Length; i++)
-                {
-                    ACO_MiniRailgun mini = railgun.MiniGuns[i];
-                    if (mini == null || mini.Laser != null) { continue; }
-                    mini.Laser = CreateMiniLaser(root.transform.Find("MiniFx"), i);
-                    added = true;
-                }
-                if (!added) { return; }
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-                Debug.Log("[ACO] 소형 레일건에 사선 레이저를 넣었습니다.");
-                return;
-            }
-            AddRailgunMinis(root.transform, railgun, root.GetComponent<ACO_Warship>());
-            ACO_SyncModeFixer.FixHierarchy(root, false);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 랜스 포대 프리팹에 소형 레일건 4문을 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
-    /// 이미 있는 프리팹에 지평선 섬광만 더한다 — 다시 만들면 바꿔 끼운 모델이 사라진다.
-    public static void EnsureRailgunHorizon()
-    {
-        string path = PathOf("NPC_Railgun");
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_Railgun railgun = root.GetComponent<ACO_Railgun>();
-            if (railgun == null || railgun.HorizonFlash != null) { return; }
-            AddRailgunHorizon(root.transform, railgun);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 랜스 포대 프리팹에 지평선 섬광을 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
 }

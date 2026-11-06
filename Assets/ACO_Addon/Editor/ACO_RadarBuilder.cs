@@ -12,8 +12,12 @@ using ACO;
 /// 메시·머티리얼은 Generated(ACO_Radar*). 셰이더는 ACO/RadarVertexColor(정점 색).
 public static class ACO_RadarBuilder
 {
+    public const string TacticalNorthName = "NorthMark";
+    private const float TacticalNorthLift = 0.01f;
+
     private const string GeneratedDir = "Assets/ACO_Addon/Generated";
     private const string ObjectName = "ACO_CockpitMap";
+    public const string PlanMapName = "ACO_PlanMap";
 
     // ───────────── HUD 레이더 ─────────────
 
@@ -124,13 +128,41 @@ public static class ACO_RadarBuilder
 
         ACO_CockpitMap map = UdonSharpUndo.AddComponent<ACO_CockpitMap>(go);
         map.EntityControl = e;
+        BuildMapScreen(go.transform, map, shader);
+        ACO_SyncModeFixer.FixHierarchy(go, true);
+        EditorUtility.SetDirty(map);
+        return map;
+    }
 
+    /// 브리핑실 벽걸이 평면 지도 프리팹. 앞면이 루트 +Z이고, 화면 크기는 1 x 1이다.
+    public static GameObject CreatePlanMapPrefab()
+    {
+        Shader shader = Shader.Find("ACO/RadarVertexColor");
+        if (shader == null) { return null; }
+        EnsureGenerated();
+        var root = new GameObject(PlanMapName);
+        ACO_CockpitMap map = root.AddUdonSharpComponent<ACO_CockpitMap>();
+        map.WallMode = true;
+        map.BlipSize = 0.022f;
+        var face = new GameObject("Face");
+        face.transform.SetParent(root.transform, false);
+        face.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        BuildMapScreen(face.transform, map, shader);
+        ACO_SyncModeFixer.FixHierarchy(root, false);
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"Assets/ACO_Addon/Prefabs/{PlanMapName}.prefab");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
+        return prefab;
+    }
+
+    /// 지도 화면(바다, 지형, 공역 고리, 점)을 만들어 지도에 잇는다.
+    private static void BuildMapScreen(Transform go, ACO_CockpitMap map, Shader shader)
+    {
         // 깊이 검사(조종석에 가려진다) — 테두리 → 바다 → 지형 → 공역 고리 → 점 순서는 렌더 큐
         Mesh quad = LoadOrBuildMesh("ACO_RadarQuad", () => BuildQuad(0.5f));
-        MakeRenderer(go.transform, "Bezel", LoadOrBuildMesh("ACO_RadarBezel", () => BuildQuad(0.54f)),
+        MakeRenderer(go, "Bezel", LoadOrBuildMesh("ACO_RadarBezel", () => BuildQuad(0.54f)),
             LoadOrSaveMaterial(shader, new Color(0.02f, 0.02f, 0.025f, 1f), "ACO_RadarMapBezel", 3000, CompareFunction.LessEqual));
         var screen = new GameObject("Screen");
-        screen.transform.SetParent(go.transform, false);
+        screen.transform.SetParent(go, false);
         MakeRenderer(screen.transform, "Sea", quad,
             LoadOrSaveMaterial(shader, new Color(0.05f, 0.13f, 0.24f, 1f), "ACO_RadarMapSea", 3001, CompareFunction.LessEqual));
         MeshRenderer terrain = MakeRenderer(screen.transform, "Terrain", null,
@@ -147,9 +179,34 @@ public static class ACO_RadarBuilder
         map.TerrainFilter = terrain.GetComponent<MeshFilter>();
         map.BlipFilter = blips.GetComponent<MeshFilter>();
         map.Border = border.transform;
-        ACO_SyncModeFixer.FixHierarchy(go, true);
-        EditorUtility.SetDirty(map);
-        return map;
+    }
+
+    /// 작전 테이블의 북쪽 표시. 평면 지도와 같은 삼각형을 지도 면에 눕힌다. MapRoot의 +Z가 북쪽이다.
+    /// 메시는 반지름 1 기준이고 크기로 지도 반지름에 맞춘다.
+    public static void EnsureTacticalNorthMark(ACO_TacticalMap map)
+    {
+        if (map == null || map.MapRoot == null) { return; }
+        Transform mark = map.MapRoot.Find(TacticalNorthName);
+        if (mark == null)
+        {
+            Mesh mesh = LoadOrBuildMesh("ACO_MapNorthMark", BuildTacticalNorthMark);
+            Material material = LoadOrSaveMaterial(Shader.Find("ACO/RadarVertexColor"), new Color(0.35f, 1f, 0.45f, 0.9f), "ACO_RadarMapNorth", 3004, CompareFunction.LessEqual);
+            mark = MakeRenderer(map.MapRoot, TacticalNorthName, mesh, material).transform;
+            Undo.RegisterCreatedObjectUndo(mark.gameObject, "ACO north mark");
+        }
+        Undo.RecordObject(mark, "ACO north mark");
+        mark.localPosition = Vector3.up * TacticalNorthLift;
+        mark.localRotation = Quaternion.identity;
+        mark.localScale = new Vector3(map.MapRadius, 1f, map.MapRadius);
+        EditorUtility.SetDirty(mark);
+    }
+
+    private static Mesh BuildTacticalNorthMark()
+    {
+        // 위에서 볼 때 시계 방향이 앞면이다
+        var v = new List<Vector3> { new Vector3(0f, 0f, 0.98f), new Vector3(0.05f, 0f, 0.88f), new Vector3(-0.05f, 0f, 0.88f) };
+        var t = new List<int> { 0, 1, 2 };
+        return Finish(v, t);
     }
 
     /// 화면 위쪽 가장자리의 북쪽 표시(위를 가리키는 작은 삼각형).

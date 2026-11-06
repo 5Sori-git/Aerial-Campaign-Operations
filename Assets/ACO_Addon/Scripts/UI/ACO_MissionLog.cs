@@ -39,6 +39,8 @@ namespace ACO
         public TextMeshPro PilotText;
         [Tooltip("한 미션 최고 획득 크레딧 순위")]
         public TextMeshPro BestText;
+        [Tooltip("이번 미션의 내 격추 수와 획득 크레딧")]
+        public TextMeshPro MyResultText;
 
         [Header("기록")]
         [Tooltip("격추 확인 주기(초)")]
@@ -271,6 +273,27 @@ namespace ACO
             BestText.text = s;
         }
 
+        private string _myResultShown = "";
+
+        /// 이번 미션의 내 결과. 진행 중에는 지금 끝나면 받을 예상 값(~)을, 보상이 나오면 확정 값을 보여 준다.
+        private void RefreshMyResult()
+        {
+            if (MyResultText == null || Progress == null) { return; }
+            string kills = "-";
+            string credits = "-";
+            if (_hasMission)
+            {
+                kills = Progress.GetMissionKills().ToString();
+                credits = Progress.HasRewardFor(_seenStartMs)
+                    ? "<color=#FFD24D>+" + Progress.GetLastReward().ToString("N0") + " CR</color>"
+                    : "~" + Progress.GetMissionRewardPreview().ToString("N0") + " CR";
+            }
+            string s = "KILLS<pos=45%>" + kills + "\nCREDITS<pos=45%>" + credits;
+            if (s == _myResultShown) { return; }
+            _myResultShown = s;
+            MyResultText.text = s;
+        }
+
         void Update()
         {
             _bestTimer -= Time.deltaTime;
@@ -309,6 +332,7 @@ namespace ACO
             if (state != ACO_MissionManager.STATE_IDLE && _hasMission) { CheckPhases(); }
 
             RefreshHeader();
+            RefreshMyResult();
             if (_bodyDirty) { RefreshBody(); }
         }
 

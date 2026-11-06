@@ -1813,6 +1813,7 @@ public static partial class ACO_PrefabBuilder
         ship.ShowOnDeath = new GameObject[] { deathFx };
         ship.HideOnDeath = new GameObject[0];
         ship.DisableCollidersOnDeath = new Collider[] { hullCol, bridgeCol };
+        ACO_PrefabTuning.TuneShip(ship);
 
         ACO_WaterFxBuilder.AddWake(root.transform);   // 항적(움직일 때만)
         return SaveAndCleanup(root, $"{PrefabDir}/{spec.PrefabName}.prefab");
@@ -1977,6 +1978,7 @@ public static partial class ACO_PrefabBuilder
             missile.TopAttack = true;
             missile.TopAttackAltitude = 700f;
             missile.TopAttackDiveAngle = 55f;
+            ApplyScmModel(root);
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PathOf("ACO_Missile_SCM"));
             Debug.Log($"[ACO] SCM 탄체 프리팹 생성 완료: {PathOf("ACO_Missile_SCM")}");
             return prefab;
@@ -2089,7 +2091,7 @@ public static partial class ACO_PrefabBuilder
     {
         ACO_SyncModeFixer.FixHierarchy(root, false);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
-        Object.DestroyImmediate(root);
+        DestroyAfterSetup(root);
         return prefab;
     }
 }

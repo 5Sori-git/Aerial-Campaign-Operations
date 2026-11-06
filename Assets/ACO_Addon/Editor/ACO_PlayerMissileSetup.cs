@@ -99,6 +99,8 @@ public static class ACO_PlayerMissileSetup
         if (special != null && ACO_SpecialWeaponCatalog.InstallVehicle(entity, special, primary, fallbackAmmo) > 0) { changed = true; }
         // 6) 키보드
         if (FixKeyboardBindings(entity) > 0) { changed = true; }
+        // 7) 기체 표시, 데칼, 기총 강화
+        if (ACO_SceneBaker.InstallVehicleParts(entity)) { changed = true; }
         return changed;
     }
 

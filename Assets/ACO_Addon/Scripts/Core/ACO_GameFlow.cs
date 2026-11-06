@@ -92,8 +92,6 @@ namespace ACO
         public string[] SlotNames;
         [Tooltip("명단의 절반 이상이 READY면 이 시간(초) 뒤 READY 안 한 사람을 명단에서 빼고 출격 카운트다운에 들어간다")]
         public float ReadyCountdown = 30f;
-        [Tooltip("Bake가 ReadyCountdown 기본값을 바꿨는지 — 한 번만 바꾸고, 그 뒤 인스펙터 값은 건드리지 않는다")]
-        public int ReadyTuneVersion;
         [Tooltip("머리를 따라오는 안내 글자 — 자동 시작 카운트다운을 어디서든 볼 수 있게. Bake가 넣는다")]
         public ACO_ScoreHUD Hud;
         [Tooltip("명단 전원이 READY면 이 시간(초) 뒤 출격한다. 그동안 리롤·페이즈 변경을 잠근다(READY를 풀거나 새로 들어오면 취소)")]

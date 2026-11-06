@@ -10559,6 +10559,7 @@ MonoBehaviour:
   PitchRate: 70
   MinPitch: -10
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.5
   AimLeadTime: 0
@@ -15849,7 +15850,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 45
   MuzzleVelocity: 800
   Spread: 0.2
   Flyby: {fileID: 0}
@@ -21375,6 +21376,11 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -22192,7 +22198,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 45
   MuzzleVelocity: 1000
   Spread: 0.8
   Flyby: {fileID: 0}
@@ -22498,6 +22504,11 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  Hatches: []
+  HatchAngle: 110
+  HatchHoldTime: 4
+  HatchOpenTime: 0.5
+  HatchCloseTime: 1.2
   LockTime: 3.5
   EcmHub: {fileID: 0}
   LockDecayRate: 1.5
@@ -27701,6 +27712,7 @@ MonoBehaviour:
   PitchRate: 15
   MinPitch: -10
   MaxPitch: 60
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.3
   AimLeadTime: 0
@@ -27719,7 +27731,7 @@ MonoBehaviour:
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
   InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -28606,6 +28618,7 @@ MonoBehaviour:
   PitchRate: 70
   MinPitch: -10
   MaxPitch: 85
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.5
   AimLeadTime: 0
@@ -28910,7 +28923,7 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
-  ShellHitRadius: 0
+  ShellHitRadius: 45
   MuzzleVelocity: 1000
   Spread: 0.8
   Flyby: {fileID: 0}
@@ -29137,9 +29150,9 @@ MonoBehaviour:
   - {fileID: 5135435506028661978}
   - {fileID: 4518095221621507677}
   - {fileID: 2089877984867784263}
-  AttackPriority: 3000
-  PriorityForSites: 0
-  PriorityDefaultsApplied: 0
+  AttackPriority: 2500
+  PriorityForSites: 1
+  PriorityDefaultsApplied: 1
   HideOnDeath:
   - {fileID: 7258694176191970647}
   - {fileID: 1125096082778455984}

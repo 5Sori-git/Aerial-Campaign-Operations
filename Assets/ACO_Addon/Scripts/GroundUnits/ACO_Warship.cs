@@ -25,9 +25,6 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_Warship : UdonSharpBehaviour
     {
-        // Bake가 함대전 사거리를 넣은 판 번호 — 같으면 직접 고친 값을 건드리지 않는다
-        [HideInInspector] public int FleetTuneVersion;
-
         [Header("참조")]
         [Tooltip("본체 체력. ExplodeOther에 이 스크립트를 등록해야 격침 통지를 받는다")]
         public SaccTarget TargetHealth;

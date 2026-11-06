@@ -45,6 +45,15 @@ namespace ACO
         public float ReloadTime = 20f;
         public AudioSource LaunchSound;
 
+        [Header("덮개 (VLS)")]
+        [Tooltip("덮개의 경첩. 비우면 없는 것으로 친다. 락온을 시작하거나 발사하면 모두 열리고, 조용해지면 닫힌다")]
+        public Transform[] Hatches;
+        public float HatchAngle = 110f;
+        [Tooltip("마지막 경고·발사 뒤 이 시간(초)이 지나면 닫는다")]
+        public float HatchHoldTime = 4f;
+        public float HatchOpenTime = 0.5f;
+        public float HatchCloseTime = 1.2f;
+
         [Header("락온")]
         [Tooltip("조준을 이만큼 유지해야 발사할 수 있다. 0이면 즉시 발사")]
         public float LockTime = 2f;
@@ -79,9 +88,19 @@ namespace ACO
         private int _aimTargetIdx = -1;
         private float _warningTimer;
 
+        private Quaternion[] _hatchRest;
+        private float _hatchOpen;
+        private float _hatchCloseAt;
+        private bool _hatchMoving;
+
         void Start()
         {
             Initialize();
+        }
+
+        void OnEnable()
+        {
+            _hatchMoving = false;   // 꺼져 있던 동안 지연 이벤트가 끊겼을 수 있다
         }
 
         private void Initialize()
@@ -93,6 +112,12 @@ namespace ACO
             InEditor = Networking.LocalPlayer == null;
             IsOwner = Networking.IsOwner(gameObject);
             _ammo = NumMissiles;
+
+            if (Hatches != null)
+            {
+                _hatchRest = new Quaternion[Hatches.Length];
+                for (int i = 0; i < Hatches.Length; i++) { if (Hatches[i]) { _hatchRest[i] = Hatches[i].localRotation; } }
+            }
 
             // 미사일 풀은 "시작 시점 이후에 추가된 자식"이다. 미사일은 MoveBackToPool에서 스스로 여기로 돌아온다.
             _numChildrenStart = transform.childCount;
@@ -203,6 +228,7 @@ namespace ACO
         [NetworkCallable]
         public void LockWarningEvent(ushort targetIndex)
         {
+            OpenHatches();
             if (!EntityControl) { return; }
             GameObject[] targets = EntityControl.AAMTargets;
             if (targets == null || targetIndex >= targets.Length) { return; }
@@ -231,6 +257,7 @@ namespace ACO
         {
             if (!_initialized) { Initialize(); }
             if (!AAM) { return; }
+            OpenHatches();
 
             // 각 클라이언트가 스스로 판정하므로 오너에서만 true가 된다.
             IsOwner = Networking.IsOwner(gameObject);
@@ -293,6 +320,32 @@ namespace ACO
             UdonSharpBehaviour missileBehaviour = missile.GetComponent<UdonSharpBehaviour>();
             if (missileBehaviour) { missileBehaviour.SendCustomEvent("EnableWeapon"); }
             if (Radar != null && acoMissile != null) { Radar.AddMissile(acoMissile); }
+        }
+
+        /// 경고·발사 이벤트로 모든 클라이언트에서 불린다. 움직이는 동안만 프레임을 쓴다.
+        private void OpenHatches()
+        {
+            if (Hatches == null || Hatches.Length == 0) { return; }
+            if (!_initialized) { Initialize(); }
+            _hatchCloseAt = Time.time + HatchHoldTime;
+            if (_hatchMoving) { return; }
+            _hatchMoving = true;
+            SendCustomEventDelayedFrames(nameof(HatchTick), 1);
+        }
+
+        public void HatchTick()
+        {
+            if (!_hatchMoving) { return; }
+            bool open = Time.time < _hatchCloseAt;
+            float rate = open ? 1f / Mathf.Max(HatchOpenTime, 0.01f) : 1f / Mathf.Max(HatchCloseTime, 0.01f);
+            _hatchOpen = Mathf.MoveTowards(_hatchOpen, open ? 1f : 0f, rate * Time.deltaTime);
+            Quaternion turn = Quaternion.Euler(0f, 0f, -HatchAngle * _hatchOpen);
+            for (int i = 0; i < Hatches.Length; i++)
+            {
+                if (Hatches[i]) { Hatches[i].localRotation = _hatchRest[i] * turn; }
+            }
+            if (!open && _hatchOpen <= 0f) { _hatchMoving = false; return; }
+            SendCustomEventDelayedFrames(nameof(HatchTick), 1);
         }
 
         private Transform GetLaunchPoint()

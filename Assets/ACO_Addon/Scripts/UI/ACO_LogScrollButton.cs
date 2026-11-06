@@ -15,7 +15,8 @@ namespace ACO
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 버튼 효과음을 넣는다")]
         public ACO_UiSound Sound;
 
-        public override void Interact()
+        /// UI 버튼 OnClick에서 부른다.
+        public void Click()
         {
             if (!Log) { Log = GetComponentInParent<ACO_MissionLog>(); }
             if (!Log) { return; }

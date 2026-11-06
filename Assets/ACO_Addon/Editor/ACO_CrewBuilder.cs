@@ -10,7 +10,7 @@ using ACO;
 /// 갑판 요원: 수신호 클립, 애니메이터 컨트롤러, 프리팹 NPC_CatapultCrew.
 /// 자세는 팔다리 뼈의 방향(캐릭터 기준 x = 오른쪽, y = 위, z = 앞)으로 적고, 실제 모델에 입혀 Unity가 Humanoid 값으로 바꾸게 한다 —
 /// 근육 수치를 어림하지 않아 눈으로 보지 않고도 방향이 맞고, 자세를 고칠 때도 방향만 고치면 된다.
-/// 표를 고치면 CrewClipVersion을 올린다 — Bake가 Crew_*.anim을 다시 만든다(수동: 메뉴 ACO → Deck Crew → Rebuild Animations).
+/// 표를 고치면 CrewClipVersion을 올린다 — Setup Check가 Crew_*.anim을 다시 만든다(수동: 메뉴 ACO → Deck Crew → Rebuild Animations).
 /// 컨트롤러는 없는 상태만 더하므로 상태의 클립을 직접 바꿔 끼워도 남는다. 프리팹도 없을 때만 만든다(모델·색을 직접 고쳐도 남는다).
 public static partial class ACO_PrefabBuilder
 {
@@ -647,7 +647,7 @@ public static partial class ACO_PrefabBuilder
 
     private static string CrewVersionClip => $"{CrewAnimDir}/Crew_{CrewStates[0]}.anim";
 
-    private static bool CrewClipsCurrent()
+    public static bool CrewClipsCurrent()
     {
         AssetImporter stamp = AssetImporter.GetAtPath(CrewVersionClip);
         return stamp == null || stamp.userData == CrewClipVersion.ToString();

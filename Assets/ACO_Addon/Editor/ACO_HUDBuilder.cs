@@ -179,9 +179,11 @@ public static class ACO_HUDBuilder
         EnsureLockVisuals(markers);   // 특수무장용 십자 메시
         EnsureCrosshair(markers);
         EnsureRwr(markers);
+        ACO_RadarBuilder.EnsureHudRadar(markers);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_HUD.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_HUD");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
@@ -243,19 +245,20 @@ public static class ACO_HUDBuilder
         MakeWorldIcon(texts.transform, "ScoreIcon", LoadIcon("score"), new Vector3(17.8f, 18.4f, 0f), 5.6f, HangarGold);
         MakeText(texts.transform, "ScoreTitle", new Vector3(21.5f, 20.6f, 0f), 18f, HangarGold,
             TextAlignmentOptions.TopLeft, new Vector2(16.5f, 5f), new Vector2(0f, 1f), font, textMat, "SCORE");
-        TextMeshPro logText = MakeText(texts.transform, "LogText", new Vector3(-38f, 14.5f, 0f), 13f, TextGreen,
-            TextAlignmentOptions.TopLeft, new Vector2(50f, 38f), new Vector2(0f, 1f), font, textMat, "TIME<pos=13%>GRID<pos=27%>PILOT");
+        TextMeshPro logText = MakeText(texts.transform, "LogText", new Vector3(-34.5f, 14.5f, 0f), 13f, TextGreen,
+            TextAlignmentOptions.TopLeft, new Vector2(46.5f, 38f), new Vector2(0f, 1f), font, textMat, "TIME<pos=13%>GRID<pos=27%>PILOT");
         TextMeshPro pilotText = MakeText(texts.transform, "PilotText", new Vector3(15f, 14.5f, 0f), 13f, TextGreen,
             TextAlignmentOptions.TopLeft, new Vector2(23f, 38f), new Vector2(0f, 1f), font, textMat, "PILOT<pos=58%>KILLS");
 
         log.HeaderText = header;
         log.LogText = logText;
         log.PilotText = pilotText;
-        EnsureLogScrollButtons(log);
+        AddLogScrollButtons(root.transform, log, font);
         ApplyBoardLayout(log, texts.transform, font);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_MissionBoard.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_MissionBoard");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
@@ -279,7 +282,6 @@ public static class ACO_HUDBuilder
 
     public const string LogScrollName = "ScrollButtons";
 
-    /// 작전판 스크롤 버튼(판 아래 띠: NEWER · OLDER · LATEST — 콜라이더 Interact). 이미 있으면 그대로. 만들었으면 true(Bake도 부른다 — 예전 작전판).
     private const float BoardScale = 0.7f;   // 4 x 2.5m → 2.8 x 1.75m
 
     /// 판을 줄이고, 긴 결과는 제목 칸 안에서 줄을 바꿔 글자를 줄이며, 오른쪽 아래에 최고 획득 순위를 놓는다.
@@ -295,75 +297,83 @@ public static class ACO_HUDBuilder
         header.rectTransform.sizeDelta = new Vector2(46f, 9.4f);
         log.PilotText.rectTransform.sizeDelta = new Vector2(23f, 16f);
         log.MaxPilots = Mathf.Min(log.MaxPilots, 8);
+        // 조종사 표 아래: 이번 미션의 내 결과
         Material textMat = font.material;
-        MakeWorldIcon(texts, "BestIcon", LoadIcon("credits"), new Vector3(17.4f, -4.4f, 0f), 3.6f, HangarGold);
-        MakeText(texts, "BestTitle", new Vector3(20f, -2.9f, 0f), 13f, HangarGold,
-            TextAlignmentOptions.TopLeft, new Vector2(18f, 3f), new Vector2(0f, 1f), font, textMat, "BEST MISSION PAY");
-        log.BestText = MakeText(texts, "BestText", new Vector3(15f, -6.8f, 0f), 13f, TextGreen,
-            TextAlignmentOptions.TopLeft, new Vector2(23f, 16f), new Vector2(0f, 1f), font, textMat, "PILOT<pos=62%>BEST CR");
+        MakeWorldIcon(texts, "MyIcon", LoadIcon("credits"), new Vector3(17.4f, -4.4f, 0f), 3.6f, HangarGold);
+        MakeText(texts, "MyTitle", new Vector3(20f, -2.9f, 0f), 13f, HangarGold,
+            TextAlignmentOptions.TopLeft, new Vector2(18f, 3f), new Vector2(0f, 1f), font, textMat, "MY MISSION");
+        log.MyResultText = MakeText(texts, "MyResult", new Vector3(15f, -7.4f, 0f), 18f, TextGreen,
+            TextAlignmentOptions.TopLeft, new Vector2(23f, 10f), new Vector2(0f, 1f), font, textMat, "KILLS<pos=45%>-\nCREDITS<pos=45%>-");
     }
 
-    /// 먼저 만든 작전판을 고친다 — 다시 만들면 직접 고친 내용이 사라진다.
-    public static void EnsureBoardLayout()
+    public const string HiScoreName = "ACO_HiScoreBoard";
+    public const string HiScoreTextName = "BestText";
+
+    /// 복도 게시 공간의 하이스코어판. 판에 Udon이 없고, 글자는 작전판(ACO_MissionLog.BestText)이 쓴다. Bake가 잇는다.
+    public static GameObject CreateHiScorePrefab()
     {
-        string path = $"{PrefabDir}/ACO_MissionBoard.prefab";
+        EnsureFolder("Assets/ACO_Addon", "Prefabs");
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-        if (font == null || AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
+        if (font == null)
         {
-            ACO_MissionLog log = root.GetComponent<ACO_MissionLog>();
-            if (log == null || log.BestText != null || log.HeaderText == null || log.PilotText == null) { return; }
-            Transform texts = log.HeaderText.transform.parent;
-            ApplyBoardLayout(log, texts, font);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 작전판: 크기를 줄이고 긴 결과 줄바꿈과 최고 획득 순위를 넣었습니다.");
+            Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath}");
+            return null;
         }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
+        var root = new GameObject(HiScoreName);
+        // TMP 글자는 -Z 쪽에서 읽히므로 앞면을 180° 돌려 루트 +Z에서 읽히게 한다.
+        var face = new GameObject("Face");
+        face.transform.SetParent(root.transform, false);
+        face.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        GameObject bg = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        bg.name = "Background";
+        Object.DestroyImmediate(bg.GetComponent<Collider>());
+        bg.transform.SetParent(face.transform, false);
+        bg.transform.localPosition = new Vector3(0f, 0f, 0.01f);
+        bg.transform.localScale = new Vector3(3.2f, 2.4f, 1f);
+        MeshRenderer r = bg.GetComponent<MeshRenderer>();
+        r.sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_BoardBackground.mat");
+        r.shadowCastingMode = ShadowCastingMode.Off;
+        r.receiveShadows = false;
+
+        // 글자: 한 단위 = 0.05m, 판은 64 x 48 단위.
+        var texts = new GameObject("Texts");
+        texts.transform.SetParent(face.transform, false);
+        texts.transform.localScale = Vector3.one * 0.05f;
+        Material textMat = font.material;
+        MakeWorldIcon(texts.transform, "BestIcon", LoadIcon("score"), new Vector3(-26f, 18.6f, 0f), 6f, HangarGold);
+        MakeText(texts.transform, "BestTitle", new Vector3(-21f, 21.5f, 0f), 34f, HangarGold,
+            TextAlignmentOptions.TopLeft, new Vector2(46f, 6f), new Vector2(0f, 1f), font, textMat, "HIGH SCORE");
+        MakeText(texts.transform, HiScoreTextName, new Vector3(-29f, 13.5f, 0f), 30f, TextGreen,
+            TextAlignmentOptions.TopLeft, new Vector2(58f, 34f), new Vector2(0f, 1f), font, textMat, "PILOT<pos=62%>BEST CR");
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/{HiScoreName}.prefab");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
+        AssetDatabase.SaveAssets();
+        return prefab;
     }
 
-    public static bool EnsureLogScrollButtons(ACO_MissionLog log)
+    /// 작전판 스크롤 UI 버튼. 기록 왼쪽의 세로 막대로, 위가 최신이다: 겹친 쉐브론(최신으로) · 위(최근 쪽) · 맨 아래 아래(오래된 쪽).
+    /// 프리팹을 만들 때만 넣는다.
+    private static void AddLogScrollButtons(Transform board, ACO_MissionLog log, TMP_FontAsset font)
     {
-        Transform face = log.transform.Find("Face");
-        if (face == null) { Debug.LogWarning($"[ACO] 작전판 '{log.name}'에 Face가 없어 스크롤 버튼을 달지 못했습니다 — 작전판 프리팹을 다시 만드세요.", log); return false; }
-        if (face.Find(LogScrollName) != null) { return false; }
-        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-        Shader bgShader = Shader.Find("Unlit/Color");
-        if (font == null || bgShader == null) { return false; }
-        Material btnMat = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_BoardButton.mat");
-        if (btnMat == null)
-        {
-            btnMat = new Material(bgShader) { name = "ACO_BoardButton" };
-            btnMat.SetColor("_Color", ButtonGreen);
-            btnMat = SaveAsset(btnMat, $"{GeneratedDir}/ACO_BoardButton.mat");
-        }
-        // 판(4 x 2.5m) 바로 아래 띠 — Face는 180° 돈 앞면이라 글자가 -Z 쪽(보는 쪽)에서 읽힌다
-        Transform group = NewChild(face, LogScrollName, new Vector3(0f, -1.42f, -0.02f));
-        Undo.RegisterCreatedObjectUndo(group.gameObject, "ACO log scroll");
-        string[] labels = { "NEWER", "OLDER", "LATEST" };
-        int[] steps = { -1, 1, 0 };
+        RectTransform canvas = MakeUiPanel(board, 200f, 1900f);
+        canvas.name = LogScrollName;
+        // 기록 칸(세로 14.5 ~ -23.5 글자 단위)의 왼쪽. 앞면이 +Z라 왼쪽이 +X다
+        canvas.localPosition = new Vector3(1.88f, -0.225f, 0.02f);
+        Object.DestroyImmediate(canvas.Find("Background").gameObject);   // 버튼만 보이게
+        MakeUiBox(canvas, "Track", new Vector2(0f, -95f), new Vector2(10f, 1350f), new Color(0.35f, 1f, 0.45f, 0.18f));
+        string[] labels = { "LATEST", "NEWER", "OLDER" };
+        string[] icons = { "chevron_top", "chevron_up", "chevron_down" };
+        int[] steps = { 0, -1, 1 };
+        float[] heights = { 865f, 680f, -865f };
         for (int i = 0; i < labels.Length; i++)
         {
-            Transform b = NewChild(group, "Btn_" + labels[i], new Vector3(-0.7f + i * 0.7f, 0f, 0f));
-            BoxCollider c = b.gameObject.AddComponent<BoxCollider>();
-            c.size = new Vector3(0.6f, 0.22f, 0.04f);
-            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Object.DestroyImmediate(quad.GetComponent<Collider>());
-            quad.name = "Background";
-            quad.transform.SetParent(b, false);
-            quad.transform.localPosition = new Vector3(0f, 0f, 0.005f);
-            quad.transform.localScale = new Vector3(0.6f, 0.22f, 1f);
-            MeshRenderer qr = quad.GetComponent<MeshRenderer>();
-            qr.sharedMaterial = btnMat;
-            qr.shadowCastingMode = ShadowCastingMode.Off;
-            qr.receiveShadows = false;
-            MakeText(b, "Label", Vector3.zero, 1.1f, TextGreen, TextAlignmentOptions.Center, new Vector2(0.6f, 0.22f), new Vector2(0.5f, 0.5f), font, font.material, labels[i]);
-            ACO_LogScrollButton btn = b.gameObject.AddUdonSharpComponent<ACO_LogScrollButton>();
+            Image img = MakeUiButton(canvas, "Btn_" + labels[i], new Vector2(0f, heights[i]), new Vector2(200f, 170f), font, "", 80f);
+            MakeIcon(img.rectTransform, "Icon", LoadIcon(icons[i]), Vector2.zero, 130f);
+            ACO_LogScrollButton btn = img.gameObject.AddUdonSharpComponent<ACO_LogScrollButton>();
             btn.Log = log;
             btn.Step = steps[i];
-            btn.InteractionText = labels[i];
+            WireClick(img.GetComponent<Button>(), btn);
         }
-        return true;
     }
 
     /// 작전 콘솔 글자 이름 — Bake가 이 이름으로 찾아 ACO_GameFlow의 BannerTexts/PhaseTexts/PhaseInfoTexts/TerrainTexts에 넣는다.
@@ -395,30 +405,6 @@ public static class ACO_HUDBuilder
         if (label != null) { label.fontSize = Mathf.Min(label.fontSize, 38f); }
         MakeFlowButton(canvas, "FreeFlight", pos + new Vector2(255f, 0f), new Vector2(width, height), font, "FREE FLIGHT: OFF", ACO_GameFlow.ACTION_FREE_FLIGHT, 42f);
         return true;
-    }
-
-    /// 먼저 만든 작전 콘솔에 자유 비행 버튼을 더한다 — 다시 만들면 직접 고친 내용이 사라진다.
-    public static void EnsureConsoleFreeFlightButton()
-    {
-        string path = $"{PrefabDir}/ACO_MissionConsole.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-        if (font == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            foreach (RectTransform canvas in root.GetComponentsInChildren<RectTransform>(true))
-            {
-                if (canvas.Find("Reroll") == null) { continue; }
-                if (AddFreeFlightButton(canvas, font))
-                {
-                    PrefabUtility.SaveAsPrefabAsset(root, path);
-                    Debug.Log("[ACO] 작전 콘솔에 자유 비행 버튼을 넣었습니다.");
-                }
-                break;
-            }
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
     public static void CreateMissionConsolePrefab()
@@ -488,8 +474,10 @@ public static class ACO_HUDBuilder
         Image leave = MakeFlowButton(canvas, "Leave", new Vector2(900f, -620f), new Vector2(500f, 180f), font, "LEAVE", ACO_GameFlow.ACTION_LEAVE, 50f);
         AddButtonIcon(leave, LoadIcon("leave"), 96f, IconColor);
 
+        AddFlowCountdown(canvas);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_MissionConsole.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_MissionConsole");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
@@ -519,12 +507,16 @@ public static class ACO_HUDBuilder
 
         ACO_Shop shop = root.AddUdonSharpComponent<ACO_Shop>();
 
-        const float left = -700f;
-        const float right = 700f;
+        // 강화 항목이 늘어 강화 칸을 넓히고 특수무장 칸을 줄였다. 두 카드 사이 40, 양끝 20
+        const float left = -810f;
+        const float right = 590f;
+        const float specialWidth = 1140f;
+        const float upgradeWidth = 1580f;
+        const float sortieLeft = -700f;
         RectTransform canvas = MakeUiPanel(root.transform, 2800f, 1900f);
         // 구획 카드(글자·버튼 뒤): 특수무장, 강화, 출격
-        MakeUiBox(canvas, "SpecialCard", new Vector2(left, -110f), new Vector2(1360f, 1140f), HangarCardColor);
-        MakeUiBox(canvas, "UpgradeCard", new Vector2(right, -110f), new Vector2(1360f, 1140f), HangarCardColor);
+        MakeUiBox(canvas, "SpecialCard", new Vector2(left, -110f), new Vector2(specialWidth, 1140f), HangarCardColor);
+        MakeUiBox(canvas, "UpgradeCard", new Vector2(right, -110f), new Vector2(upgradeWidth, 1140f), HangarCardColor);
         MakeUiBox(canvas, "SortieCard", new Vector2(0f, -805f), new Vector2(2760f, 270f), HangarCardColor);
 
         MakeUiText(canvas, "Title", new Vector2(50f, 820f), new Vector2(1200f, 130f), 96f, font, "HANGAR");
@@ -542,14 +534,14 @@ public static class ACO_HUDBuilder
         lastReward.color = new Color(1f, 0.9f, 0.6f, 0.9f);
 
         // 왼쪽: 특수무장
-        MakeHangarHeader(canvas, "SpecialHeader", "tab_missile", new Vector2(left, 410f), font, "SPECIAL WEAPON");
-        TextMeshProUGUI selection = MakeUiText(canvas, "Selection", new Vector2(left, 250f), new Vector2(1300f, 230f), 44f, font, "SPECIAL WEAPON: -");
+        MakeHangarHeader(canvas, "SpecialHeader", "tab_missile", new Vector2(left, 410f), specialWidth, font, "SPECIAL WEAPON");
+        TextMeshProUGUI selection = MakeUiText(canvas, "Selection", new Vector2(left, 250f), new Vector2(specialWidth - 60f, 230f), 44f, font, "SPECIAL WEAPON: -");
         // 분류 넘김: < 분류 이름 > (공대공 → 공대지 → 폭탄 → 기타)
-        Image prev = MakeUiButton(canvas, "PrevPage", new Vector2(left - 540f, 80f), new Vector2(160f, 90f), font, "<", 60f);
-        Image next = MakeUiButton(canvas, "NextPage", new Vector2(left + 540f, 80f), new Vector2(160f, 90f), font, ">", 60f);
-        TextMeshProUGUI pageText = MakeUiText(canvas, "PageText", new Vector2(left, 80f), new Vector2(900f, 90f), 46f, font, "AIR-TO-AIR");
+        Image prev = MakeUiButton(canvas, "PrevPage", new Vector2(left - 450f, 80f), new Vector2(160f, 90f), font, "<", 60f);
+        Image next = MakeUiButton(canvas, "NextPage", new Vector2(left + 450f, 80f), new Vector2(160f, 90f), font, ">", 60f);
+        TextMeshProUGUI pageText = MakeUiText(canvas, "PageText", new Vector2(left, 80f), new Vector2(700f, 90f), 46f, font, "AIR-TO-AIR");
         pageText.color = new Color(1f, 0.85f, 0.35f, 1f);
-        Image pageIcon = MakeIcon(canvas, "PageIcon", LoadIcon("tab_sp_aam"), new Vector2(left - 400f, 80f), 76f);
+        Image pageIcon = MakeIcon(canvas, "PageIcon", LoadIcon("tab_sp_aam"), new Vector2(left - 310f, 80f), 76f);
         pageIcon.color = pageText.color;
         loadout.PageIcon = pageIcon;
         loadout.PageIcons = new[] { LoadIcon("tab_sp_aam"), LoadIcon("tab_sp_agm"), LoadIcon("tab_sp_bomb"), LoadIcon("cm_pod") };
@@ -563,13 +555,13 @@ public static class ACO_HUDBuilder
         {
             float y = -10f - k * 100f;
             string name = k < count ? names[k] : "-";
-            Image img = MakeUiButton(canvas, $"Button_{k}", new Vector2(left, y), new Vector2(1240f, 92f), font, name, 42f);
+            Image img = MakeUiButton(canvas, $"Button_{k}", new Vector2(left, y), new Vector2(specialWidth - 120f, 92f), font, name, 42f);
             TextMeshProUGUI label = img.GetComponentInChildren<TextMeshProUGUI>();
             label.alignment = TextAlignmentOptions.Left;
             label.margin = new Vector4(130f, 0f, 70f, 0f);
             string id = loadout.SpecialIds != null && k < loadout.SpecialIds.Length ? loadout.SpecialIds[k] : "";
-            Image icon = MakeIcon(img.rectTransform, "Icon", k < count ? SpecialIcon(id) : null, new Vector2(-560f, 0f), 80f);
-            Image lockIcon = MakeIcon(img.rectTransform, "Lock", lockSprite, new Vector2(585f, 0f), 46f);
+            Image icon = MakeIcon(img.rectTransform, "Icon", k < count ? SpecialIcon(id) : null, new Vector2(-450f, 0f), 80f);
+            Image lockIcon = MakeIcon(img.rectTransform, "Lock", lockSprite, new Vector2(475f, 0f), 46f);
             lockIcon.color = new Color(1f, 0.85f, 0.3f, 0.95f);
             labels[k] = label;
             icons[k] = icon;
@@ -582,7 +574,7 @@ public static class ACO_HUDBuilder
             WireClick(img.GetComponent<Button>(), hb);
             images[k] = img;
         }
-        TextMeshProUGUI empty = MakeUiText(canvas, "EmptyText", new Vector2(left, -160f), new Vector2(1200f, 100f), 40f, font, "NO WEAPONS IN THIS CATEGORY YET");
+        TextMeshProUGUI empty = MakeUiText(canvas, "EmptyText", new Vector2(left, -160f), new Vector2(specialWidth - 120f, 100f), 40f, font, "NO WEAPONS IN THIS CATEGORY YET");
         empty.color = new Color(0.56f, 0.66f, 0.6f, 1f);
         empty.gameObject.SetActive(false);
         loadout.EmptyText = empty.gameObject;
@@ -601,7 +593,7 @@ public static class ACO_HUDBuilder
         buyButton.Loadout = loadout;
         buyButton.Action = ACO_HangarButton.ACTION_BUY_SPECIAL;
         WireClick(buy.GetComponent<Button>(), buyButton);
-        MakeUiText(canvas, "SpecialHint", new Vector2(left, -615f), new Vector2(1300f, 40f), 28f, font, "APPLIED WHEN YOU ENTER THE COCKPIT");
+        MakeUiText(canvas, "SpecialHint", new Vector2(left, -615f), new Vector2(specialWidth - 60f, 40f), 28f, font, "APPLIED WHEN YOU ENTER THE COCKPIT");
 
         loadout.SelectionText = selection;
         loadout.ButtonImages = images;
@@ -617,33 +609,40 @@ public static class ACO_HUDBuilder
         loadout.BuyText = buy.GetComponentInChildren<TextMeshProUGUI>();
 
         // 오른쪽: 강화 상점 — 분류 탭(CAT_*) + 강화 줄(분류 중 가장 긴 것만큼, 게임 중 상점이 탭에 맞게 글자를 쓰고 남는 줄을 숨긴다)
-        MakeHangarHeader(canvas, "UpgradeHeader", "upgrade", new Vector2(right, 410f), font, "UPGRADES");
+        MakeHangarHeader(canvas, "UpgradeHeader", "upgrade", new Vector2(right, 410f), upgradeWidth, font, "UPGRADES");
         // 기본 이름(프리팹 글자 미리보기용)
         var defaultsGo = new GameObject("ACO_ProgressDefaults");
         ACO_PlayerProgress defaults = defaultsGo.AddComponent<ACO_PlayerProgress>();
         string[] upgradeNames = defaults.UpgradeNames;
-        string[] categoryNames = defaults.CategoryNames;
+        var categoryNames = new string[ACO_PlayerProgress.CATEGORY_COUNT];
+        for (int c = 0; c < categoryNames.Length; c++) { categoryNames[c] = defaults.GetCategoryName(c); }
         int rowCount = 0;
         for (int c = 0; c < ACO_PlayerProgress.CATEGORY_COUNT; c++) { rowCount = Mathf.Max(rowCount, defaults.GetCategoryLength(c)); }
-        rowCount = Mathf.Max(rowCount, ACO_PlayerProgress.CONSUMABLE_COUNT);   // SUPPLY 탭
+        rowCount = Mathf.Max(rowCount, ACO_PlayerProgress.CONSUMABLE_COUNT);   // ITEMS 탭
         shop.UpgradeIcons = BuildUpgradeIcons(defaults);
         shop.ConsumableIcons = new[] { LoadIcon("hull"), LoadIcon("cm_pod"), LoadIcon("ammo"), LoadIcon("fuel") };
         Object.DestroyImmediate(defaultsGo);
 
-        // 탭: 강화 분류 + 마지막 SUPPLY(소모품). 패널 폭(1300)에 맞춰 나눈다.
+        // 탭: 강화 분류 + 마지막 ITEMS(소모품). 강화 칸 폭에 맞춰 나눈다.
         int tabCount = ACO_PlayerProgress.CATEGORY_COUNT + 1;
-        float tabStep = 1300f / tabCount;
+        float rowWidth = upgradeWidth - 60f;
+        float tabStep = rowWidth / tabCount;
         var tabImages = new Image[tabCount];
         for (int c = 0; c < tabCount; c++)
         {
-            string label = c == ACO_Shop.TAB_SUPPLY ? "SUPPLY" : (categoryNames != null && c < categoryNames.Length ? categoryNames[c] : $"TAB {c}");
+            string label = c == ACO_Shop.TAB_SUPPLY ? "ITEMS" : (categoryNames != null && c < categoryNames.Length ? categoryNames[c] : $"TAB {c}");
             float x = right + (c - (tabCount - 1) * 0.5f) * tabStep;
-            Image img = MakeUiButton(canvas, $"Tab_{c}", new Vector2(x, 320f), new Vector2(tabStep - 10f, 100f), font, label, 26f);
+            Image img = MakeUiButton(canvas, $"Tab_{c}", new Vector2(x, 320f), new Vector2(tabStep - 10f, 100f), font, label, 24f);
             Sprite tabIcon = c < TabIconNames.Length ? LoadIcon(TabIconNames[c]) : null;
             if (tabIcon != null)
             {
-                img.GetComponentInChildren<TextMeshProUGUI>().margin = new Vector4(56f, 0f, 4f, 0f);
-                MakeIcon(img.rectTransform, "Icon", tabIcon, new Vector2(-(tabStep - 10f) * 0.5f + 34f, 0f), 54f);
+                // 왼쪽 선(8) 뒤에 아이콘 50, 그 뒤 8을 띄워 글자를 놓는다. 긴 이름은 줄인다
+                TextMeshProUGUI tabLabel = img.GetComponentInChildren<TextMeshProUGUI>();
+                tabLabel.margin = new Vector4(72f, 0f, 6f, 0f);
+                tabLabel.fontSizeMax = tabLabel.fontSize;
+                tabLabel.fontSizeMin = 16f;
+                tabLabel.enableAutoSizing = true;
+                MakeIcon(img.rectTransform, "Icon", tabIcon, new Vector2(-(tabStep - 10f) * 0.5f + 39f, 0f), 50f);
             }
             ACO_HangarButton hb = img.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
             hb.Shop = shop;
@@ -653,6 +652,9 @@ public static class ACO_HUDBuilder
             tabImages[c] = img;
         }
 
+        TextMeshProUGUI tabInfo = MakeUiText(canvas, "TabInfo", new Vector2(right, 240f), new Vector2(rowWidth, 44f), 30f, font, "");
+        tabInfo.color = HangarGold;
+
         var rowObjects = new GameObject[rowCount];
         var rowTexts = new TextMeshProUGUI[rowCount];
         var rowImages = new Image[rowCount];
@@ -660,11 +662,11 @@ public static class ACO_HUDBuilder
         for (int row = 0; row < rowCount; row++)
         {
             string label = upgradeNames != null && row < upgradeNames.Length ? upgradeNames[row] : $"UPGRADE {row}";
-            Image img = MakeUiButton(canvas, $"Upgrade_{row}", new Vector2(right, 190f - row * 110f), new Vector2(1300f, 96f), font, label, 40f);
+            Image img = MakeUiButton(canvas, $"Upgrade_{row}", new Vector2(right, 168f - row * 100f), new Vector2(rowWidth, 88f), font, label, 40f);
             TextMeshProUGUI t = img.GetComponentInChildren<TextMeshProUGUI>();
             t.alignment = TextAlignmentOptions.Left;
-            t.margin = new Vector4(110f, 0f, 30f, 0f);
-            rowIcons[row] = MakeIcon(img.rectTransform, "Icon", null, new Vector2(-590f, 0f), 76f);
+            t.margin = new Vector4(130f, 0f, 30f, 0f);
+            rowIcons[row] = MakeIcon(img.rectTransform, "Icon", null, new Vector2(-rowWidth * 0.5f + 60f, 0f), 76f);
             ACO_HangarButton hb = img.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
             hb.Shop = shop;
             hb.Action = ACO_HangarButton.ACTION_BUY_UPGRADE;
@@ -685,12 +687,13 @@ public static class ACO_HUDBuilder
         shop.BuyButton = shopBuy.gameObject;
         shop.BuyText = shopBuy.GetComponentInChildren<TextMeshProUGUI>();
 
-        TextMeshProUGUI message = MakeUiText(canvas, "UpgradeMessage", new Vector2(right, -645f), new Vector2(1300f, 60f), 34f, font,
+        TextMeshProUGUI message = MakeUiText(canvas, "UpgradeMessage", new Vector2(right, -645f), new Vector2(rowWidth, 60f), 34f, font,
             "SELECT AN UPGRADE, THEN PRESS BUY");
 
         shop.CreditsText = credits;
         shop.LastRewardText = lastReward;
         shop.TabImages = tabImages;
+        shop.TabInfoText = tabInfo;
         shop.RowObjects = rowObjects;
         shop.RowTexts = rowTexts;
         shop.RowImages = rowImages;
@@ -699,15 +702,17 @@ public static class ACO_HUDBuilder
 
         // 아래: 출격 — 명단·준비 상태(게임 진행이 글자를 쓴다) + READY(미션 전) + LAUNCH(미션 중 재출격)
         MakeIcon(canvas, "RosterIcon", LoadIcon("roster"), new Vector2(-1310f, -730f), 96f);
-        MakeFlowStatus(canvas, new Vector2(left, -805f), new Vector2(1300f, 270f), 34f, font, 120f);
+        MakeFlowStatus(canvas, new Vector2(sortieLeft, -805f), new Vector2(1300f, 270f), 34f, font, 120f);
         Image ready = MakeFlowButton(canvas, "Ready", new Vector2(450f, -810f), new Vector2(500f, 170f), font, "READY", ACO_GameFlow.ACTION_TOGGLE_READY);
         AddButtonIcon(ready, LoadIcon("ready"), 84f, IconColor);
         Image launch = MakeFlowButton(canvas, "Launch", new Vector2(1000f, -810f), new Vector2(500f, 170f), font, "LAUNCH", ACO_GameFlow.ACTION_LAUNCH);
         AddButtonIcon(launch, LoadIcon("launch"), 96f, IconColor);
         ApplyHangarStyle(canvas, shop, loadout);
 
+        AddFlowCountdown(canvas);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_Hangar.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_Hangar");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
@@ -778,56 +783,6 @@ public static class ACO_HUDBuilder
         loadout.BuyDisabledColor = HangarRowDim;
     }
 
-    /// 먼저 만든 격납고 패널의 색과 항목 모양을 바꾼다 — 위치·연결은 그대로.
-    public static void EnsureHangarStyle()
-    {
-        string path = $"{PrefabDir}/ACO_Hangar.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_Shop shop = root.GetComponent<ACO_Shop>();
-            ACO_Loadout loadout = root.GetComponent<ACO_Loadout>();
-            RectTransform canvas = root.transform.Find("Canvas") as RectTransform;
-            if (shop == null || loadout == null || canvas == null) { return; }
-            Transform first = canvas.Find("Upgrade_0");
-            if (first == null || first.Find("Edge") != null) { return; }
-            ApplyHangarStyle(canvas, shop, loadout);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 격납고 패널의 색과 항목 모양을 바꿨습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
-    /// 관전 패널: 아이콘과 글자 사이를 띄운다.
-    public static void EnsureSpectatorIconGap()
-    {
-        string path = $"{PrefabDir}/ACO_SpectatorPanel.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            bool changed = false;
-            foreach (Image img in root.GetComponentsInChildren<Image>(true))
-            {
-                if (img.GetComponent<Button>() == null) { continue; }
-                RectTransform icon = img.transform.Find("Icon") as RectTransform;
-                if (icon != null) { changed |= SetIconGap(img, icon.sizeDelta.x); }
-            }
-            foreach (RectTransform rt in root.GetComponentsInChildren<RectTransform>(true))
-            {
-                if (rt.name == "TargetIcon" && Mathf.Abs(rt.anchoredPosition.x + 480f) < 1f) { rt.anchoredPosition += Vector2.left * 34f; changed = true; }
-                else if (rt.name == "ShotIcon" && Mathf.Abs(rt.anchoredPosition.x - 805f) < 1f) { rt.anchoredPosition += Vector2.left * 26f; changed = true; }
-            }
-            if (changed)
-            {
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-                Debug.Log("[ACO] 관전 패널: 아이콘과 글자 사이를 띄웠습니다.");
-            }
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
     private const float ButtonIconInset = 26f;
     private const float ButtonIconGap = 18f;
 
@@ -846,11 +801,11 @@ public static class ACO_HUDBuilder
     }
 
     /// 격납고 구획 제목 띠: 왼쪽 아이콘 + 왼쪽 정렬 글자.
-    private static void MakeHangarHeader(RectTransform canvas, string name, string icon, Vector2 pos, TMP_FontAsset font, string text)
+    private static void MakeHangarHeader(RectTransform canvas, string name, string icon, Vector2 pos, float width, TMP_FontAsset font, string text)
     {
-        MakeUiBox(canvas, name + "Strip", pos, new Vector2(1360f, 90f), new Color(0.35f, 1f, 0.45f, 0.14f));
-        MakeIcon(canvas, name + "Icon", LoadIcon(icon), pos + new Vector2(-620f, 0f), 72f);
-        TextMeshProUGUI t = MakeUiText(canvas, name, pos, new Vector2(1300f, 80f), 52f, font, text);
+        MakeUiBox(canvas, name + "Strip", pos, new Vector2(width, 90f), new Color(0.35f, 1f, 0.45f, 0.14f));
+        MakeIcon(canvas, name + "Icon", LoadIcon(icon), pos + new Vector2(-width * 0.5f + 60f, 0f), 72f);
+        TextMeshProUGUI t = MakeUiText(canvas, name, pos, new Vector2(width - 60f, 80f), 52f, font, text);
         t.alignment = TextAlignmentOptions.Left;
         t.margin = new Vector4(100f, 0f, 0f, 0f);
     }
@@ -874,11 +829,9 @@ public static class ACO_HUDBuilder
     public const string FlowCountdownName = "ACO_FlowCountdown";
 
     /// 패널 전체를 덮는 반투명 판 + 가운데 큰 글자(처음엔 꺼 둔다, 클릭은 막지 않는다 — 아래 버튼이 거절 안내를 띄운다).
-    /// 이미 있으면 그것을 돌려준다. 항상 맨 위(마지막 자식)에 둔다.
-    public static GameObject EnsureFlowCountdown(RectTransform canvas)
+    /// 패널의 마지막 자식이어야 맨 위에 그려진다. 프리팹을 만들 때만 부른다.
+    private static GameObject AddFlowCountdown(RectTransform canvas)
     {
-        Transform old = canvas.Find(FlowCountdownName);
-        if (old != null) { old.SetAsLastSibling(); return old.gameObject; }
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
         if (font == null) { return null; }
 
@@ -993,7 +946,8 @@ public static class ACO_HUDBuilder
         panel.ModuleTexts = texts;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_DebugPanel.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_DebugPanel");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         Debug.Log($"[ACO] 디버그 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 씬에 두고 Bake하면 관리자·생성기·진행도에 연결됩니다. 공개 월드에선 AllowedPlayers에 이름을 넣거나 끄세요.");
         Selection.activeObject = prefab;
@@ -1175,7 +1129,8 @@ public static class ACO_HUDBuilder
         g.Beam = beam;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_DecalStudio.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_DecalStudio");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         Debug.Log($"[ACO] 데칼 스튜디오 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 격납고에 두고 SampleRoot(샘플 기체 기준점)·DecalKey를 넣은 뒤 Bake하세요.");
         Selection.activeObject = prefab;
@@ -1227,26 +1182,6 @@ public static class ACO_HUDBuilder
         tac.HullText = MakeUiText(canvas, "HullCurrent", new Vector2(-150f, -100f), new Vector2(900f, 70f), 34f, font, "YOUR HULL NUMBER: -");
         tac.HullText.alignment = TextAlignmentOptions.Left;
         tac.HullInput = input;
-    }
-
-    /// 먼저 만든 콜사인 패널에 헐넘버 패널을 더한다 — 다시 만들면 직접 고친 내용이 사라진다.
-    public static void EnsureTacHullPanel()
-    {
-        string path = $"{PrefabDir}/ACO_TacNamePanel.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-        Font legacy = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        if (font == null || legacy == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_TacName tac = root.GetComponent<ACO_TacName>();
-            if (tac == null || tac.HullInput != null) { return; }
-            AddHullPanel(root, tac, font, legacy);
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] 콜사인 패널에 헐넘버 패널을 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
     // ───────────── 기체 표시(헐넘버·이름·킬마크) ─────────────
@@ -1594,7 +1529,8 @@ public static class ACO_HUDBuilder
         AddHullPanel(root, tac, font, legacy);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_TacNamePanel.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_TacNamePanel");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         Debug.Log($"[ACO] TAC 네임 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 격납고 등에 두고 Bake하면 표적 마커(아군기 콜사인)에 연결됩니다.");
         Selection.activeObject = prefab;
@@ -1644,77 +1580,6 @@ public static class ACO_HUDBuilder
     {
         return SaveMesh(LineMesh("ACO_FHud_ThrottleMark", 0.09f,
             new Vector2(-0.8f, 0.45f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-0.8f, -0.45f)), "ACO_FHud_ThrottleMark");
-    }
-
-    /// 이미 있는 비행 HUD 프리팹을 고친다: 값 상자를 테이프 바깥으로 옮기고 ECM SUPPORT 문구와 스로틀 위치 표시를 더한다. 다시 만들면 고친 내용이 사라진다.
-    public static void EnsureFlightHudLayout()
-    {
-        string path = $"{PrefabDir}/ACO_FlightHud.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_FlightHud hud = root.GetComponent<ACO_FlightHud>();
-            if (hud == null || hud.Canvas == null) { return; }
-            bool layout = hud.EcmText == null;
-            bool mark = hud.ThrottleTarget == null && hud.ThrottleAbLine != null;
-            if (!layout && !mark) { return; }
-            if (layout) { ApplyFlightValueLayout(hud); }
-            if (mark) { AddThrottleMark(hud); }
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
-    private static void AddThrottleMark(ACO_FlightHud hud)
-    {
-        Transform parent = hud.ThrottleAbLine.parent;
-        GameObject mark = Object.Instantiate(hud.ThrottleAbLine.gameObject, parent);
-        mark.name = "TargetMark";
-        mark.transform.localPosition = new Vector3(FlightThrottleMarkX, 0f, 0f);
-        mark.GetComponent<MeshFilter>().sharedMesh = ThrottleMarkMesh();
-        hud.ThrottleTarget = mark.transform;
-        var lines = new List<MeshRenderer>(hud.LineRenderers) { mark.GetComponent<MeshRenderer>() };
-        hud.LineRenderers = lines.ToArray();
-        Debug.Log("[ACO] 비행 HUD: 스로틀 위치 표시(>)를 넣었습니다.");
-    }
-
-    private static void ApplyFlightValueLayout(ACO_FlightHud hud)
-    {
-        Transform canvas = hud.Canvas;
-        MoveX(canvas, "SpeedBox", -FlightValueBoxX);
-        MoveX(canvas, "SpeedText", -FlightValueTextX);
-        MoveX(canvas, "AltBox", FlightValueBoxX);
-        MoveX(canvas, "AltText", FlightValueTextX);
-        MoveX(canvas, "RadarAltText", FlightValueTextX);
-        MoveX(canvas, "Throttle", FlightThrottleX);
-        MoveX(canvas, "ThrottleText", FlightThrottleX);
-        TextMeshPro ecm = Object.Instantiate(hud.ThrottleText.gameObject, canvas).GetComponent<TextMeshPro>();
-        ecm.gameObject.name = "EcmText";
-        ecm.rectTransform.anchoredPosition = FlightEcmTextPos;
-        ecm.fontSize = 8f * FlightTextScale;
-        ecm.alignment = TextAlignmentOptions.Center;
-        ecm.text = "ECM SUPPORT";
-        ecm.gameObject.SetActive(false);
-        hud.EcmText = ecm;
-        var texts = new List<TextMeshPro>(hud.AllTexts) { ecm };
-        hud.AllTexts = texts.ToArray();
-        Debug.Log("[ACO] 비행 HUD: 속도·고도 값 상자를 테이프 바깥으로 옮기고 ECM SUPPORT 문구를 넣었습니다.");
-    }
-
-    private static void MoveX(Transform parent, string name, float x)
-    {
-        Transform t = parent.Find(name);
-        if (t == null) { return; }
-        // 글자는 RectTransform이라 자리가 anchoredPosition에 있다(프리팹의 localPosition은 0)
-        if (t is RectTransform rect)
-        {
-            rect.anchoredPosition = new Vector2(x, rect.anchoredPosition.y);
-            return;
-        }
-        Vector3 p = t.localPosition;
-        p.x = x;
-        t.localPosition = p;
     }
 
     /// 비행 HUD 프리팹(ACO_FlightHud + ACO_Units): Root(머리 + 기체 자세로 움직인다) → Canvas(1단위 = 1°). 모두 UI 레이어, 선은 ACO/MarkerOverlay(맨 위), 글자는 TMP 오버레이.
@@ -2043,6 +1908,30 @@ public static class ACO_HUDBuilder
         return ~((1 << 5) | (1 << 10) | (1 << 12) | (1 << 19) | (1 << ACO_SceneBaker.FxLayer));
     }
 
+    /// 관전 카메라 전용 비. 하늘을 만든 뒤라야 메시·머티리얼이 있다.
+    private static Renderer AddSpectatorRain(Transform cam)
+    {
+        Mesh mesh = ACO_SkyBuilder.RainMesh();
+        Material mat = ACO_SkyBuilder.RainMaterial();
+        if (mesh == null || mat == null)
+        {
+            Debug.LogWarning("[ACO] 관전 패널: 비 메시·머티리얼이 없어 관전 카메라 비를 넣지 않았습니다 — 하늘을 먼저 만드세요.");
+            return null;
+        }
+        var go = new GameObject("SpectatorRain");
+        go.layer = SpectatorOnlyLayer;
+        go.transform.SetParent(cam, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        MeshRenderer r = go.AddComponent<MeshRenderer>();
+        r.sharedMaterial = mat;
+        r.shadowCastingMode = ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.lightProbeUsage = LightProbeUsage.Off;
+        r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        r.enabled = false;
+        return r;
+    }
+
     /// 관전 패널: 큰 스크린(3.2 x 1.8m, 렌더 텍스처 HD 1280x720 / FHD 1920x1080) + 아래 조작 줄(POWER, HD/FHD, TARGET < >, SHOT < >, 상태) + 관전 카메라(꺼진 채)
     /// + 카메라 전용 하늘 안개 돔 + 스트림 카메라용 전체 화면(VRChat 카메라가 스크린 4m 안이면 그 화면 전체가 관전 화면).
     /// 씬에 두고 Bake하면 플레이어 기체·해수면·미사일 무장이 연결된다.
@@ -2188,6 +2077,7 @@ public static class ACO_HUDBuilder
         spec.StatusText = MakeUiText(canvas, "StatusText", new Vector2(300f, -140f), new Vector2(2400f, 70f), 36f, font, "SPECTATOR CAMERA OFF");
 
         spec.Cam = cam;
+        spec.RainRenderer = AddSpectatorRain(cam.transform);
         spec.Screen = sr;
         spec.OnMaterial = onMat;
         spec.OffMaterial = offMat;
@@ -2197,7 +2087,8 @@ public static class ACO_HUDBuilder
         spec.FullscreenOverlay = fsr;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_SpectatorPanel.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_SpectatorPanel");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         Debug.Log($"[ACO] 관전 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 로비 벽에 두고 Bake하면 플레이어 기체·미사일 무장이 연결됩니다. 스크린 해상도는 {SpectatorRtPath}.");
         Selection.activeObject = prefab;
@@ -2820,7 +2711,7 @@ public static class ACO_HUDBuilder
         return icons;
     }
 
-    private static readonly string[] TabIconNames = { "tab_airframe", "tab_missile", "tab_sp_aam", "tab_sp_agm", "tab_sp_bomb", "tab_supply" };
+    private static readonly string[] TabIconNames = { "tab_airframe", "tab_missile", "tab_sp_aam", "tab_sp_agm", "tab_sp_bomb", "damage", "tab_supply" };
 
     /// 특수무장 ID → 아이콘: Textures/Icons/aco_icon_weapon_<id 소문자>.png, 없으면 일반 미사일 그림.
     public static Sprite SpecialIcon(string id)
@@ -2900,40 +2791,6 @@ public static class ACO_HUDBuilder
         return h;
     }
 
-    /// 이미 있는 HUD 설정 패널에 빠진 카드를 더한다(RWR 카드 아래로 차례로) — 다시 만들면 직접 고친 내용이 사라진다.
-    public static void EnsureHudDeckCrewCard()
-    {
-        string path = $"{PrefabDir}/ACO_HudSettings.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
-        GameObject root = PrefabUtility.LoadPrefabContents(path);
-        try
-        {
-            ACO_HudSettings settings = root.GetComponent<ACO_HudSettings>();
-            if (settings == null || settings.ValueTexts == null || settings.ValueTexts.Length >= ACO_HudSettings.ITEM_COUNT) { return; }
-            TextMeshProUGUI sample = settings.ValueTexts[ACO_HudSettings.ITEM_RWR];
-            RectTransform canvas = sample != null ? sample.rectTransform.parent as RectTransform : null;
-            RectTransform card = canvas != null ? canvas.Find("Card_RWR") as RectTransform : null;
-            if (card == null) { return; }
-            var values = new TextMeshProUGUI[ACO_HudSettings.ITEM_COUNT];
-            settings.ValueTexts.CopyTo(values, 0);
-            foreach (HudCategory cat in new[] { DeckCrewCategory, GraphicsCategory })
-            {
-                RectTransform have = canvas.Find($"Card_{cat.Title}") as RectTransform;
-                if (have == null)
-                {
-                    float y0 = card.anchoredPosition.y - card.sizeDelta.y * 0.5f - HudCardGap;
-                    MakeHudCard(canvas, cat, card.anchoredPosition.x, y0, values, sample.font);
-                    have = canvas.Find($"Card_{cat.Title}") as RectTransform;
-                }
-                card = have;
-            }
-            settings.ValueTexts = values;
-            PrefabUtility.SaveAsPrefabAsset(root, path);
-            Debug.Log("[ACO] HUD 설정: 새 항목을 넣었습니다.");
-        }
-        finally { PrefabUtility.UnloadPrefabContents(root); }
-    }
-
     /// HUD 설정 패널 프리팹(판 2.8m x 1.75m, 월드 공간 Canvas, 앞면은 루트 +Z 쪽): 3열에 분류 카드(점수 패널, 결과·안내 글자 / 무전 자막, 표적 마커, 레이더 /
     /// 크로스헤어, RWR) — 카드마다 제목 + 줄(이름 / − / 값 / +), 가운데 열 아래에 RESET. HUD(점수 패널·표적 마커·RWR·자막)는 씬 오브젝트라 Bake가 연결한다.
     public const string CreditsPath = "Assets/ACO_Addon/Credits/ACO_Credits.txt";
@@ -2966,7 +2823,8 @@ public static class ACO_HUDBuilder
         board.Body = body;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_CreditBoard.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_CreditBoard");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         Debug.Log($"[ACO] 크레딧 보드 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 내용은 {CreditsPath}를 고치면 된다(실행할 때 읽는다).");
     }
@@ -3006,7 +2864,8 @@ public static class ACO_HUDBuilder
         settings.ValueTexts = values;
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_HudSettings.prefab");
-        Object.DestroyImmediate(root);
+        ACO_PrefabVersions.Stamp("ACO_HudSettings");
+        ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log($"[ACO] HUD 설정 패널 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 씬(로비·격납고)에 두면 Bake가 HUD를 연결합니다.");
@@ -3105,7 +2964,10 @@ public static class ACO_HUDBuilder
 
     /// 작전 테이블(ACO_TacticalMap)을 씬에 만든다: 둥근 테이블(윗면 = 해수면, 높이 0.9m) + 바다 원판 + 축소 지형 메시 자리 + 마커 원본(꺼 둔 자식).
     /// 마커 = 빈 루트(위치·방향) + Body(모양) + 선택: TGT 고리, Label(이름표), 루트의 꼬리 궤적. 생성기·게임 진행은 Bake가 연결한다.
-    public static GameObject CreateTacticalMap()
+    public static GameObject CreateTacticalMap() { return CreateTacticalMap(true, 1.4f); }
+
+    /// withTable이 거짓이면 받침 없이 지도만 만든다. 루트가 테이블 윗면이 된다(CIC의 Int_PlotTable).
+    public static GameObject CreateTacticalMap(bool withTable, float radius)
     {
         EnsureFolder("Assets/ACO_Addon", "Generated");
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
@@ -3113,24 +2975,10 @@ public static class ACO_HUDBuilder
 
         var root = new GameObject("ACO_TacticalMap");
         ACO_TacticalMap map = root.AddUdonSharpComponent<ACO_TacticalMap>();
-        float r = map.MapRadius;
-        const float tableHeight = 0.9f;
-
-        GameObject table = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        table.name = "Table";
-        table.transform.SetParent(root.transform, false);
-        table.transform.localPosition = new Vector3(0f, tableHeight * 0.5f, 0f);
-        table.transform.localScale = new Vector3(r * 2f + 0.2f, tableHeight * 0.5f, r * 2f + 0.2f);
-        Material tableMat = LoadOrSaveMaterial(unlit, new Color(0.12f, 0.13f, 0.14f), "ACO_MapTable");
-        // 예전에 이 머티리얼이 바다 너울 머티리얼의 Variant(부모 = ACO_OceanSwell)가 돼 탁자가 바다로 보였다 — 부모를 끊고 셰이더·색을 되돌린다
-        if (tableMat.parent != null || tableMat.shader != unlit)
-        {
-            tableMat.parent = null;
-            tableMat.shader = unlit;
-            tableMat.SetColor("_Color", new Color(0.12f, 0.13f, 0.14f));
-            EditorUtility.SetDirty(tableMat);
-        }
-        table.GetComponent<MeshRenderer>().sharedMaterial = tableMat;
+        map.MapRadius = radius;
+        float r = radius;
+        float tableHeight = withTable ? 0.9f : 0f;
+        if (withTable) { MakeMapTable(root.transform, r, tableHeight, unlit); }
 
         var mapRoot = new GameObject("MapRoot");
         mapRoot.transform.SetParent(root.transform, false);
@@ -3160,7 +3008,27 @@ public static class ACO_HUDBuilder
         map.ObjectiveMarker = MakeMapMarker(mapRoot.transform, "ObjectiveMarker", new Vector3(0.018f, 0.014f, 0.018f), new Color(1f, 0.85f, 0.2f), false, false, null);
         map.FriendlyMarker = MakeMapMarker(mapRoot.transform, "FriendlyMarker", airShape, new Color(0.3f, 1f, 0.45f), true, false, null);
         map.BaseMarker = MakeMapMarker(mapRoot.transform, "BaseMarker", new Vector3(0.02f, 0.006f, 0.06f), new Color(0.35f, 0.7f, 1f), false, false, null);
+        ACO_RadarBuilder.EnsureTacticalNorthMark(map);
         return root;
+    }
+
+    private static void MakeMapTable(Transform root, float r, float tableHeight, Shader unlit)
+    {
+        GameObject table = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        table.name = "Table";
+        table.transform.SetParent(root, false);
+        table.transform.localPosition = new Vector3(0f, tableHeight * 0.5f, 0f);
+        table.transform.localScale = new Vector3(r * 2f + 0.2f, tableHeight * 0.5f, r * 2f + 0.2f);
+        Material tableMat = LoadOrSaveMaterial(unlit, new Color(0.12f, 0.13f, 0.14f), "ACO_MapTable");
+        // 예전에 이 머티리얼이 바다 너울 머티리얼의 Variant(부모 = ACO_OceanSwell)가 돼 탁자가 바다로 보였다 — 부모를 끊고 셰이더·색을 되돌린다
+        if (tableMat.parent != null || tableMat.shader != unlit)
+        {
+            tableMat.parent = null;
+            tableMat.shader = unlit;
+            tableMat.SetColor("_Color", new Color(0.12f, 0.13f, 0.14f));
+            EditorUtility.SetDirty(tableMat);
+        }
+        table.GetComponent<MeshRenderer>().sharedMaterial = tableMat;
     }
 
     private static GameObject MakeMapMarker(Transform parent, string name, Vector3 shape, Color color, bool trail, bool tgtRing, TMP_FontAsset labelFont)

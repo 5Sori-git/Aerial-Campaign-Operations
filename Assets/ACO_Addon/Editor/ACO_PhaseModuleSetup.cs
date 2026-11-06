@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
@@ -206,6 +207,36 @@ public static class ACO_PhaseModuleSetup
         new[] { 0f, 0.5f, 2f, 0.5f, 0.1f },
         new[] { 0f, 0f, 2f, 1f, 0.3f },
     };
+
+    /// 보스 모듈이 빠졌는가(요새·함대전·랜스 포대).
+    public static List<string> MissingBossModules(ACO_MissionManager manager)
+    {
+        var missing = new List<string>();
+        if (manager.GetComponentInChildren<ACO_PhaseFortress>(true) == null) { missing.Add("Phase_Fortress"); }
+        if (manager.GetComponentInChildren<ACO_PhaseFleet>(true) == null) { missing.Add("Phase_Fleet"); }
+        if (manager.GetComponentInChildren<ACO_PhaseRailgun>(true) == null) { missing.Add("Phase_Railgun"); }
+        return missing;
+    }
+
+    /// 가중치가 비어 있어 기본값을 받을 모듈 수.
+    public static int CountEmptyWeights(ACO_MissionManager manager)
+    {
+        int n = 0;
+        foreach (ACO_PhaseModule m in manager.GetComponentsInChildren<ACO_PhaseModule>(true))
+        {
+            if (System.Array.IndexOf(WeightNames, m.gameObject.name) >= 0 && !m.BonusOnly && (m.PhaseWeights == null || m.PhaseWeights.Length == 0)) { n++; }
+        }
+        return n;
+    }
+
+    /// Setup Check [고치기]: 빠진 보스 모듈을 넣고 빈 가중치를 채운다.
+    public static void AddBossModules(ACO_MissionManager manager)
+    {
+        EnsureFortress(manager);
+        EnsureFleet(manager);
+        EnsureRailgun(manager);
+        ApplyDefaultWeights(manager);
+    }
 
     /// 페이즈 가중치가 비어 있는 기본 모듈에 기본값을 넣는다(Bake가 부른다 — 직접 넣은 값은 건드리지 않는다).
     public static void ApplyDefaultWeights(ACO_MissionManager manager)

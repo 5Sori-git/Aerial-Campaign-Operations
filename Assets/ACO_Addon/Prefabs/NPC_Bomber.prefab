@@ -10303,6 +10303,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3941570633630972762}
   TargetHealth: {fileID: 8552802090108155912}
   Gun: {fileID: 857882938185194229}
+  BaseHealth: 0
   ScoreValue: 0
   MarkerLabel: GUN
   TargetLayers:
@@ -10322,8 +10323,10 @@ MonoBehaviour:
   PitchRate: 60
   MinPitch: -60
   MaxPitch: 60
+  MountRelativeAim: 0
   ReturnToRestDelay: 2
   TrackingLag: 0.5
+  AimLeadTime: 0
   AimError: 0.9
   AimErrorFrequency: 0.7
   InterceptProtectLayers:
@@ -10334,7 +10337,12 @@ MonoBehaviour:
   InterceptReactionTime: 0.5
   InterceptKillTime: 0.5
   OtherDefenseFactor: 2
-  InterceptDefaultsApplied: 0
+  EcmHub: {fileID: 0}
+  EcmAimFactor: 3
+  EcmInterceptFactor: 1.5
+  InterceptCooldown: 0
+  InterceptTuneVersion: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath:
@@ -10784,6 +10792,8 @@ MonoBehaviour:
   DefenseGuns:
   - {fileID: 3941570633630972762}
   AttackPriority: 0
+  PriorityForSites: 0
+  PriorityDefaultsApplied: 1
   HideOnDeath: []
   ShowOnDeath:
   - {fileID: 1210797112646495592}
@@ -10853,6 +10863,7 @@ MonoBehaviour:
   FlareCooldown: 4
   FlareGravity: 0.35
   SmokeMode: 0
+  GunSmokeChance: 0.5
   Friendly: 0
   FlareParticles: {fileID: 852218563677576048}
   FlareUseEmitter: 0
@@ -15855,8 +15866,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 2049
+  ShellHitRadius: 45
   MuzzleVelocity: 900
   Spread: 0.9
+  Flyby: {fileID: 0}
 --- !u!114 &2904156071360982500
 MonoBehaviour:
   m_ObjectHideFlags: 0
