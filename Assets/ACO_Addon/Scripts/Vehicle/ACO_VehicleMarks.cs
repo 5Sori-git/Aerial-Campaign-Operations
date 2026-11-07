@@ -9,10 +9,10 @@ namespace ACO
 {
     /// 기체 표시(헐넘버·콜사인·킬마크, 양쪽 면). 동기화 코드 없음 — 조종사의 PlayerData는 VRChat이 모두에게 보내 준다.
     /// 프로젝터가 아니라 기체에 붙인 판이다(ACO/MarkText: 카메라 쪽으로 당겨 Z파이팅이 없고, 멀면 사라진다).
-    /// 탑승자가 있는 동안만 보이고, 내가 ShowRange 밖이면 끈다. 값이 바뀔 때만 다시 만든다.
+    /// 탑승자가 있는 동안만 보인다. 거리로 끄지 않는다 — 관전 카메라는 내 몸과 멀리 떨어져 있어서, 먼 글자는 셰이더가 지운다. 값이 바뀔 때만 다시 만든다.
     /// 글자는 Black Ops One(A-Z 0-9 - 공백만 담은 고정 폰트 — 콜사인·헐넘버 입력 규칙과 같다).
     /// 킬마크: 한 미션 최고 격추수를 100·10·1 단위 아이콘으로 줄여 그린다(날개 달린 별 / 전투기 3기 편대 / 전투기). 폰트에 기호가 없어 메시로 만든다.
-    /// 격납고 미리보기(PreviewMode): 데칼 샘플 기체에 얹혀 탑승자 대신 내 값을 보여 준다.
+    /// 격납고 미리보기: EntityControl이 비어 있으면 데칼 샘플 기체다 — 탑승자 대신 내 값을 보여 준다.
     /// 자리: 기체 프리팹의 ACO_Marks/Marks 아래를 옮기면 된다 — Bake가 미리보기로 같은 자리를 복사한다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_VehicleMarks : UdonSharpBehaviour
@@ -20,9 +20,8 @@ namespace ACO
         private const int ICON_KINDS = 3;
 
         [Header("참조 (Bake가 채운다)")]
+        [Tooltip("실제 기체는 반드시 넣는다. 비어 있으면 격납고 샘플로 보고 내 값을 보여 준다")]
         public SaccEntity EntityControl;
-        [Tooltip("격납고 샘플 기체용: 탑승자와 상관없이 내 헐넘버·콜사인·킬마크를 보여 준다")]
-        public bool PreviewMode;
         [Tooltip("글자 묶음 — 보이지 않을 때 이것만 끈다")]
         public GameObject Root;
         public TextMeshPro[] HullTexts;
@@ -31,7 +30,7 @@ namespace ACO
         public MeshFilter[] KillFilters;
 
         [Header("표시")]
-        [Tooltip("내가 이 거리(m) 밖이면 끈다 — 글자가 사라지는 거리(셰이더 _FadeEnd)보다 길게")]
+        [Tooltip("격납고 샘플만: 내가 이 거리(m) 밖이면 끈다")]
         public float ShowRange = 400f;
         [Tooltip("다시 읽는 주기(초)")]
         public float Interval = 1f;
@@ -62,9 +61,11 @@ namespace ACO
         private void Refresh()
         {
             VRCPlayerApi me = Networking.LocalPlayer;
-            bool show = Utilities.IsValid(me) && (me.GetPosition() - transform.position).sqrMagnitude < ShowRange * ShowRange;
-            if (!PreviewMode) { show = show && EntityControl != null && EntityControl.Occupied && !EntityControl.dead; }
-            VRCPlayerApi pilot = !show ? null : (PreviewMode ? me : Networking.GetOwner(EntityControl.gameObject));
+            bool preview = EntityControl == null;
+            bool show = Utilities.IsValid(me);
+            if (preview) { show = show && (me.GetPosition() - transform.position).sqrMagnitude < ShowRange * ShowRange; }
+            else { show = show && EntityControl.Occupied && !EntityControl.dead; }
+            VRCPlayerApi pilot = !show ? null : (preview ? me : Networking.GetOwner(EntityControl.gameObject));
             if (!Utilities.IsValid(pilot)) { show = false; }
             SetShown(show);
             if (!show) { return; }

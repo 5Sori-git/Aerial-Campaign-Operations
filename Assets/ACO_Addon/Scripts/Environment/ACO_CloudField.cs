@@ -92,6 +92,8 @@ namespace ACO
 
         [Header("체적 구름층 (ACO_SkyBuilder가 만든다 — 있으면 판 대신 쓴다)")]
         public Renderer CloudVolume;
+        [Tooltip("관전 카메라가 그리는 체적 구름(카메라 자식, 레이어 18). Bake가 넣는다. CloudVolume은 FX 레이어라 관전 카메라에 찍히지 않는다")]
+        public Renderer SpectatorVolume;
         [Tooltip("비구름층 밀도(1m당). 층 두께 500m면 0.005가 수직으로 약 92% 가린다")]
         public float DeckVolumeDensity = 0.005f;
         public Color DeckTopColor = new Color(0.95f, 0.96f, 0.98f, 1f);
@@ -169,6 +171,7 @@ namespace ACO
             if (FogTopRenderer) { _fogTopMat = FogTopRenderer.material; FogTopRenderer.gameObject.SetActive(false); }
             if (CloudVeil) { _veilMat = CloudVeil.material; CloudVeil.gameObject.SetActive(false); }
             if (CloudVolume) { _volumeMat = CloudVolume.material; CloudVolume.gameObject.SetActive(false); }
+            if (SpectatorVolume && _volumeMat) { SpectatorVolume.sharedMaterial = _volumeMat; }   // 층 높이, 페이드, 번개를 그대로 나눠 쓴다
             CheckSeed();
         }
 
@@ -302,6 +305,7 @@ namespace ACO
             float fade = _planeMode ? 0f : Mathf.Max(_deckFade, _fogFade) * (1f - _underwater);
             bool on = fade > 0f;
             if (CloudVolume.gameObject.activeSelf != on) { CloudVolume.gameObject.SetActive(on); }
+            if (SpectatorVolume && SpectatorVolume.enabled != on) { SpectatorVolume.enabled = on; }
             if (!on) { return; }
             if (layer != _volumeLayer)
             {

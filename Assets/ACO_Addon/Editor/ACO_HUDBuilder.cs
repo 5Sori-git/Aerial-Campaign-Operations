@@ -1240,6 +1240,8 @@ public static class ACO_HUDBuilder
             importer.SaveAndReimport();
         }
         material = new Material(shader) { name = "ACO_MarkIcons" };
+        material.SetFloat("_FadeStart", 1500f);
+        material.SetFloat("_FadeEnd", 1800f);
         material.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(MarkIconPath));
         AssetDatabase.CreateAsset(material, MarkIconMaterialPath);
         return material;
@@ -1357,6 +1359,8 @@ public static class ACO_HUDBuilder
         {
             material = new Material(shader) { name = "ACO_MarkText" };
             material.SetTexture("_MainTex", font.atlasTexture);
+            material.SetFloat("_FadeStart", 1500f);   // 관전 망원 최대 거리까지 글자를 남긴다
+            material.SetFloat("_FadeEnd", 1800f);
             AssetDatabase.CreateAsset(material, MarkMaterialPath);
         }
         Material icons = EnsureMarkIconMaterial(shader);
@@ -1378,7 +1382,6 @@ public static class ACO_HUDBuilder
             kills[i] = MakeKillMark(holder.transform, "Kills" + tag, new Vector3(side * 0.66f, 0.9f, 4.3f), yaw, icons);
         }
         marks.EntityControl = entity;
-        marks.PreviewMode = entity == null;
         marks.Root = holder;
         marks.HullTexts = hull;
         marks.NameTexts = names;
@@ -1908,6 +1911,25 @@ public static class ACO_HUDBuilder
         return ~((1 << 5) | (1 << 10) | (1 << 12) | (1 << 19) | (1 << ACO_SceneBaker.FxLayer));
     }
 
+    /// 관전 카메라 전용 체적 구름. 정점 셰이더가 구를 카메라 둘레로 옮기므로 구는 범위 잡기용이다.
+    private static Renderer AddSpectatorVolume(Transform cam)
+    {
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = "SpectatorCloudVolume";
+        Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.layer = SpectatorOnlyLayer;
+        go.transform.SetParent(cam, false);
+        go.transform.localScale = Vector3.one * 100f;
+        MeshRenderer r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = null;
+        r.shadowCastingMode = ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.lightProbeUsage = LightProbeUsage.Off;
+        r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        r.enabled = false;
+        return r;
+    }
+
     /// 관전 카메라 전용 비. 하늘을 만든 뒤라야 메시·머티리얼이 있다.
     private static Renderer AddSpectatorRain(Transform cam)
     {
@@ -2078,6 +2100,7 @@ public static class ACO_HUDBuilder
 
         spec.Cam = cam;
         spec.RainRenderer = AddSpectatorRain(cam.transform);
+        spec.CloudVolume = AddSpectatorVolume(cam.transform);
         spec.Screen = sr;
         spec.OnMaterial = onMat;
         spec.OffMaterial = offMat;
@@ -2377,7 +2400,9 @@ public static class ACO_HUDBuilder
         r.sharedMaterial = mat;
         r.shadowCastingMode = ShadowCastingMode.Off;
         r.receiveShadows = false;
-        MakeQuad(root.transform, "Dot", Vector3.zero, new Vector3(0.08f, 0.08f, 1f), Resources.GetBuiltinResource<Mesh>("Quad.fbx"), mat);
+        MeshRenderer dot = MakeQuad(root.transform, "Dot", Vector3.zero, new Vector3(0.08f, 0.08f, 1f), Resources.GetBuiltinResource<Mesh>("Quad.fbx"), mat);
+        root.layer = 5;   // UI 레이어: 관전 카메라에 찍히지 않는다
+        dot.gameObject.layer = 5;
         root.SetActive(false);
         return root.transform;
     }

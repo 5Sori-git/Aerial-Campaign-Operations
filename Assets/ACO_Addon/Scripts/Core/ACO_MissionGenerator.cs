@@ -564,6 +564,25 @@ namespace ACO
             // 유닛들의 Start가 한 번 돈 뒤에 숨겨야 나중에 다시 켜도 정상 동작한다.
             if (HidePoolOnStart) { SendCustomEventDelayedFrames(nameof(HidePoolIfIdle), 2); }
             if (GenerateOnStart && Networking.IsOwner(gameObject)) { SendCustomEventDelayedFrames(nameof(GenerateIfEmpty), 3); }
+            SendCustomEventDelayedSeconds(nameof(_AskState), STATE_ASK_SECONDS);
+        }
+
+        private const float STATE_ASK_SECONDS = 5f;
+        private bool _gotState;
+
+        /// 배치 값을 입장 타이밍에 놓치면 다음 배치까지 유닛이 안 보이므로, 한 번 받을 때까지 오너에게 다시 보내 달라고 한다.
+        public void _AskState()
+        {
+            if (_gotState || Networking.IsOwner(gameObject)) { return; }
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.Owner, nameof(NetSendState));
+            SendCustomEventDelayedSeconds(nameof(_AskState), STATE_ASK_SECONDS);
+        }
+
+        /// 배치 중이면 끝날 때 어차피 보낸다. 아직 배치가 없으면 보낼 것이 없다.
+        [NetworkCallable]
+        public void NetSendState()
+        {
+            if (Networking.IsOwner(gameObject) && _deployCount > 0 && !_deploying) { RequestSerialization(); }
         }
 
         private void MarkJoinTime()
@@ -4259,6 +4278,7 @@ namespace ACO
 
         public override void OnDeserialization()
         {
+            _gotState = true;
             MarkJoinTime();
             if (_applyQueued) { return; }
             _applyQueued = true;

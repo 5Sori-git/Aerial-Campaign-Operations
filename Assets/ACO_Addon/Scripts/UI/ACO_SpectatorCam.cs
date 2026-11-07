@@ -52,6 +52,8 @@ namespace ACO
         public Material OffMaterial;
         [Tooltip("관전 카메라 전용 하늘 안개 돔(카메라 자식, 레이어 18). Bake가 하늘 안개 돔 머티리얼을 넣는다")]
         public Renderer SkyFogDome;
+        [Tooltip("관전 카메라 전용 체적 구름(카메라 자식, 레이어 18). 켜고 끄기와 머티리얼은 ACO_CloudField가 맡는다")]
+        public Renderer CloudVolume;
         [Tooltip("해상도(HD/FHD 버튼): 미리 만든 렌더 텍스처 두 장 — Udon은 실행 중에 렌더 텍스처를 만들 수 없다")]
         public RenderTexture TextureHD;
         public RenderTexture TextureFHD;
@@ -188,6 +190,8 @@ namespace ACO
                 _screenMat = Screen.material;
             }
             if (FullscreenOverlay) { _overlayMat = FullscreenOverlay.material; }
+            // 체적 구름은 시선을 깊이로 멈춘다. 그림자가 없는 고공에서도 이 카메라의 깊이가 있어야 한다
+            if (Cam) { Cam.depthTextureMode = DepthTextureMode.Depth; }
             if (RainRenderer)
             {
                 _rainMat = RainRenderer.material;

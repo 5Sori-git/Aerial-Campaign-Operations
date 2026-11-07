@@ -25,7 +25,7 @@ public static class ACO_PrefabVersions
         new Entry { Name = "ACO_HUD", Version = 1, Build = ACO_HUDBuilder.CreateHUDPrefab },
         new Entry { Name = "ACO_HudSettings", Version = 1, Build = ACO_HUDBuilder.CreateHudSettingsPrefab },
         new Entry { Name = "ACO_TacNamePanel", Version = 1, Build = ACO_HUDBuilder.CreateTacNamePanelPrefab },
-        new Entry { Name = "ACO_SpectatorPanel", Version = 1, Build = ACO_HUDBuilder.CreateSpectatorPanelPrefab },
+        new Entry { Name = "ACO_SpectatorPanel", Version = 2, Change = "관전 카메라에 체적 구름을 넣습니다. 고친 뒤 Bake 하세요.", Build = ACO_HUDBuilder.CreateSpectatorPanelPrefab },
         new Entry { Name = "ACO_DebugPanel", Version = 1, Build = ACO_HUDBuilder.CreateDebugPanelPrefab },
         new Entry { Name = "ACO_DecalStudio", Version = 1, Build = ACO_HUDBuilder.CreateDecalStudioPrefab },
         new Entry { Name = "ACO_CreditBoard", Version = 1, Build = ACO_HUDBuilder.CreateCreditBoardPrefab },

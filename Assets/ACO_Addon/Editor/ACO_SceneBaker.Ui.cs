@@ -41,6 +41,11 @@ public partial class ACO_SceneBaker
         }
         ACO_Rain rain = Object.FindObjectOfType<ACO_Rain>();
         ACO_SpectatorCam first = specs.Count > 0 ? specs[0] : null;
+        if (clouds != null && first != null && clouds.SpectatorVolume != first.CloudVolume)
+        {
+            clouds.SpectatorVolume = first.CloudVolume;
+            MarkChanged(clouds);
+        }
         if (specs.Count > 1) { Debug.LogWarning($"[ACO] 관전 패널이 {specs.Count}개입니다 — 미사일 캠은 첫 패널 '{first.name}'에만 연결됩니다(카메라를 여러 개 켜면 그만큼 무겁다).", first); }
         foreach (ACO_SpectatorCam s in specs)
         {
