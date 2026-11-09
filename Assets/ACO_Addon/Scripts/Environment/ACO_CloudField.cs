@@ -171,6 +171,10 @@ namespace ACO
             if (FogTopRenderer) { _fogTopMat = FogTopRenderer.material; FogTopRenderer.gameObject.SetActive(false); }
             if (CloudVeil) { _veilMat = CloudVeil.material; CloudVeil.gameObject.SetActive(false); }
             if (CloudVolume) { _volumeMat = CloudVolume.material; CloudVolume.gameObject.SetActive(false); }
+            _idFogBottom = VRCShader.PropertyToID("_UdonACOFogBottom");
+            _idFogTop = VRCShader.PropertyToID("_UdonACOFogTop");
+            _idFogDensity = VRCShader.PropertyToID("_UdonACOFogDensity");
+            _idFogFade = VRCShader.PropertyToID("_UdonACOFogFade");
             if (SpectatorVolume && _volumeMat) { SpectatorVolume.sharedMaterial = _volumeMat; }   // 층 높이, 페이드, 번개를 그대로 나눠 쓴다
             CheckSeed();
         }
@@ -298,6 +302,17 @@ namespace ACO
             _fogDirty = true;
         }
 
+        // 파티클(연기·불)이 층을 지나며 흐려지는 정도 = 층 뒤 지형과 같게(1배). 예전 2.5배는 층 아래 연기·미사일 꼬리가 지형보다 훨씬 먼저 사라져
+        // (층 위·층 속에서 아래를 보면 땅은 비쳐 보이는데 연기만 없음) 투명해진 것처럼 보였다.
+        private const float PARTICLE_FOG_BOOST = 1f;
+        private int _idFogBottom;
+        private int _idFogTop;
+        private int _idFogDensity;
+        private int _idFogFade;
+        // -1: 처음 한 번은 반드시 전역값을 쓴다. 0으로 두면 층이 없는 날씨(CLOUDY 등)에서 한 번도 쓰지 않아,
+        // 에디터에서 지난 플레이(비구름층)가 남긴 전역 페이드가 그대로 남아 구름 없이도 층 높이 아래 파티클이 흐려졌다.
+        private float _shaderFogFade = -1f;
+
         private void UpdateVolume()
         {
             if (!_volumeMat) { return; }
@@ -306,6 +321,11 @@ namespace ACO
             bool on = fade > 0f;
             if (CloudVolume.gameObject.activeSelf != on) { CloudVolume.gameObject.SetActive(on); }
             if (SpectatorVolume && SpectatorVolume.enabled != on) { SpectatorVolume.enabled = on; }
+            if (fade != _shaderFogFade)
+            {
+                _shaderFogFade = fade;
+                VRCShader.SetGlobalFloat(_idFogFade, fade);   // 파티클은 층보다 뒤에 그려져 스스로 흐려진다(ACO/FxParticle)
+            }
             if (!on) { return; }
             if (layer != _volumeLayer)
             {
@@ -314,6 +334,9 @@ namespace ACO
                 _volumeMat.SetFloat("_SlabBottom", deck ? DeckBottom : -10f);
                 _volumeMat.SetFloat("_SlabTop", deck ? DeckTop : FogLayerTop);
                 _volumeMat.SetFloat("_Density", deck ? DeckVolumeDensity : FogVolumeDensity);
+                VRCShader.SetGlobalFloat(_idFogBottom, deck ? DeckBottom : -10f);
+                VRCShader.SetGlobalFloat(_idFogTop, deck ? DeckTop : FogLayerTop);
+                VRCShader.SetGlobalFloat(_idFogDensity, (deck ? DeckVolumeDensity : FogVolumeDensity) * PARTICLE_FOG_BOOST);
                 _volumeMat.SetColor("_TopColor", deck ? DeckTopColor : FogTopColor);
                 _volumeMat.SetColor("_BottomColor", deck ? DeckUnderColor : FogUnderColor);
             }

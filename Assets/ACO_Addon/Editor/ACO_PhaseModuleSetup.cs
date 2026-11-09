@@ -111,16 +111,15 @@ public static class ACO_PhaseModuleSetup
                 "The city has been bombed... Mission failed. All units, withdraw.");
             made++; log.Append("\n  폭격기 요격");
         }
-        if (!HasChild(mgr, "Phase_Bonus_SuperAce"))
+        if (!HasChild(mgr, "Phase_SuperAce"))
         {
-            ACO_PhaseSuperAce m = Create<ACO_PhaseSuperAce>(mgr, "Phase_Bonus_SuperAce");
-            Setup(m, "BONUS - {ACE}", "TARGET RETREATED", 1, false, "Unidentified fast mover... it's an ace. Everyone, watch yourselves.", "The ace is going down! I can't believe it!",
-                "The ace is withdrawing... he got away.");
-            m.BonusOnly = true;
-            m.BonusTimeLimit = 240f;
-            m.ClearBonus = 15000;
-            Finish(m);
-            made++; log.Append("\n  보너스(슈퍼에이스)");
+            EnsureSuperAce(mgr);
+            made++; log.Append("\n  분신 에이스 형제");
+        }
+        if (!HasChild(mgr, "Phase_Shade"))
+        {
+            EnsureShade(mgr);
+            made++; log.Append("\n  SHADE 편대");
         }
         ACO_SceneBaker.BakePhaseModulesNow();
         Debug.Log(made > 0 ? "[ACO] 기본 페이즈 모듈을 만들었습니다(" + made + "개):" + log + "\n  값·대사는 모듈 인스펙터에서 바꾸고 씬을 저장하세요."
@@ -192,6 +191,160 @@ public static class ACO_PhaseModuleSetup
         Debug.Log("[ACO] 랜스 포대 페이즈 모듈 Phase_Railgun을 미션 관리자 아래에 만들었습니다.", m);
     }
 
+    /// 육상전함 페이즈(없으면 만든다 — Bake가 부른다). 5번째 페이즈의 보스 — 요새·랜스 포대와 같은 가중치. 도시가 있어야 나온다.
+    public static void EnsureLandShip(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseLandShip>(true) != null) { return; }
+        ACO_PrefabBuilder.EnsureLandShipPrograms();
+        ACO_PhaseLandShip m = Create<ACO_PhaseLandShip>(manager, "Phase_LandShip");
+        Setup(m, "LAND DREADNOUGHT", "CITY OVERRUN", 1, false, "", "", "");
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 0f, 3f };
+        m.ClearBonus = 8000;
+        m.EnemyName = "BATTLESHIP COMMAND";
+        ApplyLandShipTexts(m);   // 이름·배너·성공/실패 글자·상황별 대사
+        Debug.Log("[ACO] 육상전함 페이즈 모듈 Phase_LandShip을 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 분신 에이스 형제 페이즈(없으면 만든다). 3~5번째 페이즈의 공중 보스 — 슈퍼에이스 HEADS·TAILS 2기 편대, 실패 조건 없음.
+    /// 예전 보너스 페이즈 모듈(Phase_Bonus_SuperAce)은 지우지 않고 끈다(보너스 후보가 없어지면 미션 끝 보너스가 나오지 않는다).
+    public static void EnsureSuperAce(ACO_MissionManager manager)
+    {
+        ACO_PhaseSuperAce normal = null;
+        foreach (ACO_PhaseSuperAce s in manager.GetComponentsInChildren<ACO_PhaseSuperAce>(true))
+        {
+            if (s.BonusOnly)
+            {
+                if (s.gameObject.activeSelf || s.Enabled)
+                {
+                    Undo.RecordObject(s.gameObject, "ACO disable bonus super ace");
+                    Undo.RecordObject(s, "ACO disable bonus super ace");
+                    s.Enabled = false;   // Bake는 꺼진 모듈도 모으므로 후보에서 빼는 값도 끈다
+                    s.gameObject.SetActive(false);
+                    EditorUtility.SetDirty(s);
+                    EditorUtility.SetDirty(s.gameObject);
+                    Debug.Log("[ACO] 예전 보너스 페이즈 모듈(슈퍼에이스)을 껐습니다 — 분신 에이스는 일반 페이즈로 나온다.", s);
+                }
+                continue;
+            }
+            normal = s;
+        }
+        if (normal != null) { return; }
+        ACO_PhaseSuperAce m = Create<ACO_PhaseSuperAce>(manager, "Phase_SuperAce");
+        Setup(m, "ACES - {ACE}", "", 1, false,
+            "Two bogeys in tight formation... They're aces, and they fly like brothers. Expect decoys. Make sure you're locking the real one!",
+            "Both aces are down! Heads or tails, it doesn't matter now. Good work!",
+            "");
+        m.BonusOnly = false;
+        m.PhaseWeights = new[] { 0f, 0f, 1f, 1f, 1f };
+        m.ClearBonus = 12000;
+        m.Aces = 2;
+        Finish(m);
+        Debug.Log("[ACO] 분신 에이스 형제 페이즈 모듈 Phase_SuperAce를 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// SHADE 편대 페이즈(없으면 만든다). 3~5번째 페이즈의 공중 보스 — 4기 편대(코브라·전방위 미사일·교차 플레어), 실패 조건 없음.
+    public static void EnsureShade(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseShade>(true) != null) { return; }
+        ACO_PhaseShade m = Create<ACO_PhaseShade>(manager, "Phase_Shade");
+        Setup(m, "SHADE SQUADRON", "", 1, false,
+            "Four bandits, tight diamond. Shade squadron... They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!",
+            "Shade squadron is wiped out! Outstanding flying, all aircraft!",
+            "");
+        m.BonusOnly = false;
+        m.PhaseWeights = new[] { 0f, 0f, 1f, 1f, 1f };
+        m.ClearBonus = 14000;
+        m.Aces = ACO_PrefabBuilder.ShadePoolSize;
+        Finish(m);
+        Debug.Log("[ACO] SHADE 편대 페이즈 모듈 Phase_Shade를 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 레이저 에이스 페이즈(없으면 만든다). 4·5번째 페이즈의 공중 보스(단독 에이스 — 2단계에 탄도미사일). 사일로 연출(IcbmSite)이 없으면 만든다.
+    public static void EnsureLaserAce(ACO_MissionManager manager)
+    {
+        ACO_PhaseLaserAce m = manager.GetComponentInChildren<ACO_PhaseLaserAce>(true);
+        if (m == null)
+        {
+            m = Create<ACO_PhaseLaserAce>(manager, "Phase_LaserAce");
+            Setup(m, "ACE - {ACE}", "BASE DESTROYED", 1, false,
+                "Sky Eye to all aircraft. A single enemy ace is inbound. Something about that aircraft is not right. Engage with caution.",
+                "The ace is down and the missile is gone. Outstanding work, all aircraft!",
+                "The missile hit the base... All units, withdraw.");
+            m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 2f };
+            m.ClearBonus = 10000;
+            m.EnemyName = "BORDERLESS";
+            Debug.Log("[ACO] 레이저 에이스 페이즈 모듈 Phase_LaserAce를 미션 관리자 아래에 만들었습니다.", m);
+        }
+        if (m.Site == null)
+        {
+            ACO_IcbmSite site = ACO_PrefabBuilder.BuildIcbmSite(m.transform);
+            if (site != null)
+            {
+                site.Phase = m;
+                m.Site = site;
+                ACO_SyncModeFixer.FixHierarchy(m.gameObject, false);
+                EditorUtility.SetDirty(m);
+            }
+        }
+    }
+
+    // 육상전함 글자·대사(새 모듈과 Setup Check landship-lines-1이 같이 쓴다)
+    private static readonly int[] LandShipLineEvent = { ACO_PhaseLandShip.SIT_SPAWN, ACO_PhaseLandShip.SIT_SPAWN, ACO_PhaseLandShip.SIT_SKIRT_DOWN, ACO_PhaseLandShip.SIT_TRACK_HALF, ACO_PhaseLandShip.SIT_TRACK_HALF, ACO_PhaseLandShip.SIT_VENT_OPEN, ACO_PhaseLandShip.SIT_VENT_OPEN, ACO_PhaseLandShip.SIT_VENT_HALF, ACO_PhaseLandShip.SIT_CORE_OPEN, ACO_PhaseLandShip.SIT_CORE_OPEN, ACO_PhaseLandShip.SIT_CORE_HALF, ACO_PhaseLandShip.SIT_CORE_HALF, ACO_PhaseLandShip.SIT_CITY_FAR, ACO_PhaseLandShip.SIT_CITY_NEAR, ACO_PhaseLandShip.SIT_CITY_LAST, ACO_PhaseLandShip.SIT_CITY_LAST, ACO_PhaseLandShip.SIT_CORE_DOWN, ACO_PhaseLandShip.SIT_CORE_DOWN, ACO_PhaseLandShip.SIT_CITY_HIT, ACO_PhaseLandShip.SIT_CITY_HIT, ACO_PhaseLandShip.SIT_REPAIR, ACO_PhaseLandShip.SIT_REPAIR };
+    private static readonly int[] LandShipLineSpeaker = { ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS };
+    private static readonly string[] LandShipLineText =
+    {
+        "All batteries, open fire. Grind a path to the city.",
+        "A land battleship is moving on the city! Strip its armor plates, then go for the tracks!",
+        "Armor plate down! The track behind it is exposed!",
+        "Half our tracks are gone! Keep moving, full power to the rest!",
+        "Half its tracks are destroyed! It is losing speed. {left} tracks left!",
+        "Exhaust ducts exposed! Seal them, now!",
+        "Those glowing vents behind the tracks are its weak point. Destroy them!",
+        "Half its exhaust vents are gone! Keep at it!",
+        "Reactor overheating! Open the core shutters!",
+        "The shutters on top are open! The core is exposed, hit it with everything you have!",
+        "Core integrity at fifty percent! Hold together!",
+        "The core is failing! Keep hitting it!",
+        "Three kilometers to the city!",
+        "It is almost at the city limits! Stop it now!",
+        "Nothing can stop us now!",
+        "Five hundred meters! Bring it down!",
+        "The reactor... it is going critical!",
+        "Core destroyed! The battleship is going up!",
+        "We have reached the city. Commence bombardment.",
+        "It is inside the city... It is shelling the city!",
+        "Damage control, bring the batteries back online!",
+        "Some of its guns are back online. Watch yourselves!",
+    };
+
+    /// 육상전함 페이즈 이름·배너·성공/실패 글자와 상황별 대사 표를 넣는다(음성은 비운다 — 자막만).
+    public static void ApplyLandShipTexts(ACO_PhaseLandShip m)
+    {
+        m.PhaseName = "LAND DREADNOUGHT";
+        m.Description = "STOP THE LAND BATTLESHIP BEFORE IT REACHES THE CITY";
+        m.FailText = "CITY OVERRUN";
+        m.StartText = "Sky Eye to all aircraft. An enemy land battleship is advancing on the city. Strip its armor, cut its tracks and kill the reactor before it arrives!";
+        m.SuccessText = "Reactor destroyed! The land battleship is finished. Outstanding work, all aircraft!";
+        m.FailChatterText = "The city has fallen... All units, withdraw.";
+        m.LineEvent = (int[])LandShipLineEvent.Clone();
+        m.LineSpeaker = (int[])LandShipLineSpeaker.Clone();
+        m.LineText = (string[])LandShipLineText.Clone();
+        m.LineClip = new AudioClip[LandShipLineText.Length];
+        EditorUtility.SetDirty(m);
+    }
+
+    /// Setup Check: 씬의 육상전함 모듈 글자·대사를 새 표로 바꾼다(손으로 고친 대사도 덮어쓴다).
+    public static void TuneLandShipTexts()
+    {
+        foreach (ACO_PhaseLandShip m in Object.FindObjectsOfType<ACO_PhaseLandShip>(true))
+        {
+            Undo.RecordObject(m, "ACO land ship lines");
+            ApplyLandShipTexts(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+        }
+        Debug.Log("[ACO] 육상전함 페이즈 글자와 대사를 바꿨습니다. 씬을 저장하세요.");
+    }
+
     /// 모듈 이름별 페이즈 가중치 기본값(1~5). 뒤로 갈수록 어려운 임무 — 4는 함대전, 5는 공중 요새 위주.
     private static readonly string[] WeightNames = { "Phase_Strike", "Phase_SEAD", "Phase_AirSuperiority", "Phase_ScoreAttack", "Phase_TimeSensitive", "Phase_Escort", "Phase_Convoy", "Phase_Amphibious", "Phase_Intercept", "Phase_AceSquadron" };
     private static readonly float[][] WeightValues =
@@ -215,6 +368,17 @@ public static class ACO_PhaseModuleSetup
         if (manager.GetComponentInChildren<ACO_PhaseFortress>(true) == null) { missing.Add("Phase_Fortress"); }
         if (manager.GetComponentInChildren<ACO_PhaseFleet>(true) == null) { missing.Add("Phase_Fleet"); }
         if (manager.GetComponentInChildren<ACO_PhaseRailgun>(true) == null) { missing.Add("Phase_Railgun"); }
+        if (manager.GetComponentInChildren<ACO_PhaseLandShip>(true) == null) { missing.Add("Phase_LandShip"); }
+        ACO_PhaseLaserAce laser = manager.GetComponentInChildren<ACO_PhaseLaserAce>(true);
+        if (laser == null || laser.Site == null) { missing.Add("Phase_LaserAce"); }
+        bool twins = false, oldBonus = false;
+        foreach (ACO_PhaseSuperAce s in manager.GetComponentsInChildren<ACO_PhaseSuperAce>(true))
+        {
+            if (!s.BonusOnly) { twins = true; }
+            else if (s.gameObject.activeSelf || s.Enabled) { oldBonus = true; }
+        }
+        if (!twins || oldBonus) { missing.Add("Phase_SuperAce"); }
+        if (manager.GetComponentInChildren<ACO_PhaseShade>(true) == null) { missing.Add("Phase_Shade"); }
         return missing;
     }
 
@@ -235,6 +399,10 @@ public static class ACO_PhaseModuleSetup
         EnsureFortress(manager);
         EnsureFleet(manager);
         EnsureRailgun(manager);
+        EnsureLandShip(manager);
+        EnsureLaserAce(manager);
+        EnsureSuperAce(manager);
+        EnsureShade(manager);
         ApplyDefaultWeights(manager);
     }
 

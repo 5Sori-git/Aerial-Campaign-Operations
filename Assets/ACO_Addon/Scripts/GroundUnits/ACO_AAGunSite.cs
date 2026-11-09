@@ -60,6 +60,9 @@ namespace ACO
         public float MaxPitch = 85f;
         [Tooltip("켜면 방위와 고각을 받침 기준으로 잰다. 경사면에 기울여 단 포대용이고, MinPitch·MaxPitch도 받침 기준이 된다")]
         public bool MountRelativeAim;
+        [Tooltip("좌우 회전 한계(도) — 처음 자세의 정면을 가운데로 한 전체 폭. 360 = 제한 없음. 360보다 작으면 이 폭 밖으로 돌지 않고, "
+            + "이 폭(MountRelativeAim이면 받침 기준 고각 MinPitch~MaxPitch도) 밖의 표적은 고르지 않으며 나가면 놓는다")]
+        public float YawArc = 360f;
         [Tooltip("교전할 타겟이 없어진 뒤 이 시간(초)이 지나면 포탑을 처음 자세로 되돌린다. 잠깐 시야가 가려질 때마다 돌아가지 않게 둔다")]
         public float ReturnToRestDelay = 2f;
 
@@ -372,7 +375,7 @@ namespace ACO
             // 기존 타겟이 아직 유효하면 유지한다(포탑을 이미 돌려 둔 상태를 버리지 않기 위해).
             if (_target != null && _target.gameObject.activeInHierarchy && !TargetDead() && !PriorityBeats(targets)
                 && Vector3.Distance(transform.position, _target.position) <= LoseTargetRange
-                && _target.position.y >= MinTargetAltitude && HasLineOfSight(_target.position))
+                && _target.position.y >= MinTargetAltitude && InArc(_target.position) && HasLineOfSight(_target.position))
             {
                 return;
             }
@@ -394,6 +397,7 @@ namespace ACO
                 if (d >= DetectRange) { continue; }
                 d -= PriorityOf(i, g, targets.Length);
                 if (d >= bestDist) { continue; }
+                if (!InArc(tp)) { continue; }
                 if (!HasLineOfSight(tp)) { continue; }
 
                 bestDist = d;
@@ -409,7 +413,39 @@ namespace ACO
             if (TargetDead()) { return false; }
             if (_target.position.y < MinTargetAltitude) { return false; }
             if (RequireLineOfSight && !_hasLineOfSight) { return false; }
+            if (!InArc(_target.position)) { return false; }
             return Vector3.Distance(transform.position, _target.position) <= LoseTargetRange;
+        }
+
+        /// 좌우 한계(YawArc < 360) 안인가: 처음 자세의 정면 기준 방위가 ±YawArc/2 안(MountRelativeAim이면 받침 기준 고각도 MinPitch~MaxPitch 안). 한계가 없으면 늘 참.
+        private bool InArc(Vector3 worldPos)
+        {
+            if (YawArc >= 359.9f) { return true; }
+            Vector3 origin = TurretPitch != null ? TurretPitch.position : transform.position;
+            Vector3 l = Quaternion.Inverse(_restYaw) * YawFrame().InverseTransformDirection(worldPos - origin);
+            if (l.sqrMagnitude < 0.000001f) { return true; }
+            if (Mathf.Abs(Mathf.Atan2(l.x, l.z) * Mathf.Rad2Deg) > YawArc * 0.5f) { return false; }
+            if (MountRelativeAim)
+            {
+                float p = Mathf.Asin(Mathf.Clamp(l.normalized.y, -1f, 1f)) * Mathf.Rad2Deg;
+                if (p < MinPitch || p > MaxPitch) { return false; }
+            }
+            return true;
+        }
+
+        /// 방위 포탑의 부모 좌표계(방위 회전을 재는 기준).
+        private Transform YawFrame() { return TurretYaw != null && TurretYaw.parent != null ? TurretYaw.parent : transform; }
+
+        /// 좌우 한계가 있을 때의 방위 회전: 처음 자세 기준 각도로 ±YawArc/2 안에서만 돈다(짧은 쪽 회전이 한계 밖을 지나지 않게 각도로 움직인다).
+        private void RotateYawArc(Vector3 aimDir, float dt)
+        {
+            Vector3 f = Quaternion.Inverse(_restYaw) * YawFrame().InverseTransformDirection(aimDir);
+            if (f.x * f.x + f.z * f.z < 0.000001f) { return; }
+            float half = YawArc * 0.5f;
+            float want = Mathf.Clamp(Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg, -half, half);
+            Vector3 c = Quaternion.Inverse(_restYaw) * (TurretYaw.localRotation * Vector3.forward);
+            float cur = Mathf.Atan2(c.x, c.z) * Mathf.Rad2Deg;
+            TurretYaw.localRotation = _restYaw * Quaternion.Euler(0f, Mathf.MoveTowards(cur, want, YawRate * dt), 0f);
         }
 
         private bool TargetDead()
@@ -529,7 +565,8 @@ namespace ACO
         {
             if (aimDir.sqrMagnitude < 0.000001f) { return; }
             if (MountRelativeAim) { RotateOnMount(aimDir, dt); return; }
-            if (TurretYaw)
+            if (TurretYaw && YawArc < 359.9f) { RotateYawArc(aimDir, dt); }
+            else if (TurretYaw)
             {
                 Vector3 flat = new Vector3(aimDir.x, 0f, aimDir.z);
                 if (flat.sqrMagnitude > 0.000001f)
@@ -553,7 +590,8 @@ namespace ACO
         private void RotateOnMount(Vector3 aimDir, float dt)
         {
             Vector3 local = transform.InverseTransformDirection(aimDir);
-            if (TurretYaw)
+            if (TurretYaw && YawArc < 359.9f) { RotateYawArc(aimDir, dt); }
+            else if (TurretYaw)
             {
                 Vector3 flat = new Vector3(local.x, 0f, local.z);
                 if (flat.sqrMagnitude > 0.000001f)

@@ -21,6 +21,11 @@ public static partial class ACO_PrefabBuilder
     private const float VlsCell = 1.2f;
     private const float VlsHinge = 2.12f;
     private const float VlsDeck = 1.2f;
+    // 긴 VLS(Vls16_*): 행 간격 2.4, 8행. 몸체 길이 19.5(벽 바깥)
+    private const int Vls16Rows = 8;
+    private const float Vls16Pitch = 2.4f;
+    private static readonly Vector3 Vls16HitSize = new Vector3(5f, 1.2f, 19.5f);
+    private static float Vls16RowZ(int row) { return (row - (Vls16Rows - 1) * 0.5f) * Vls16Pitch; }
 
     private class FortressSite
     {
@@ -191,6 +196,7 @@ public static partial class ACO_PrefabBuilder
         EditTurret(TurretFlak, ApplyFlakModel);
         EditTurret(TurretCiws, ApplyCiwsModel);
         EditTurret(TurretVls, ApplyVlsModel);
+        EditTurret(TurretVls16, ApplyVls16Model);
         Debug.Log("[ACO] Flak, CIWS, VLS 포대를 새 모델로 바꿨습니다.");
     }
 
@@ -296,6 +302,33 @@ public static partial class ACO_PrefabBuilder
             hatch.localRotation = sx < 0 ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
             hatches[k] = hatch;
         }
+        ACO_MissileLauncher launcher = LancePart(t, "MissileLauncher").GetComponent<ACO_MissileLauncher>();
+        launcher.Hatches = hatches;
+        PrefabUtility.RecordPrefabInstancePropertyModifications(launcher);
+        EditorUtility.SetDirty(launcher);
+    }
+
+    /// 긴 몸체 + 경고띠 + 덮개 16개(덮개 메시는 네 셀 VLS와 같다). 여러 번 불러도 결과가 같다.
+    private static void ApplyVls16Model(GameObject root)
+    {
+        PrepareTurretAssets();
+        Transform t = root.transform;
+        Material steel = LanceSteelMaterial();
+        Material hazard = RailgunMaterial("ACO_RailgunHazard", "ACO_Railgun_Hazard", false, Color.white, 0.2f, 0.3f);
+        Transform model = LancePart(t, "Model");
+        SetHolderModel(model, TurretMesh("Vls16_Body"), steel);
+        SetHolderModel(ModelHolder(model, "Hazard"), TurretMesh("Vls16_Hazard"), hazard);
+        var hatches = new Transform[Vls16Rows * 2];
+        for (int k = 0; k < hatches.Length; k++)
+        {
+            int sx = k % 2 == 0 ? -1 : 1;
+            Transform hatch = ModelHolder(model, "Hatch_" + k);
+            SetHolderModel(hatch, TurretMesh("Vls_Hatch"), steel);
+            hatch.localPosition = new Vector3(sx * VlsHinge, VlsDeck, Vls16RowZ(k / 2));
+            hatch.localRotation = sx < 0 ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
+            hatches[k] = hatch;
+        }
+        SetBox(root.GetComponent<BoxCollider>(), new Vector3(0f, Vls16HitSize.y * 0.5f, 0f), Vls16HitSize);
         ACO_MissileLauncher launcher = LancePart(t, "MissileLauncher").GetComponent<ACO_MissileLauncher>();
         launcher.Hatches = hatches;
         PrefabUtility.RecordPrefabInstancePropertyModifications(launcher);

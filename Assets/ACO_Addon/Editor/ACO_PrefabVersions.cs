@@ -26,7 +26,7 @@ public static class ACO_PrefabVersions
         new Entry { Name = "ACO_HudSettings", Version = 1, Build = ACO_HUDBuilder.CreateHudSettingsPrefab },
         new Entry { Name = "ACO_TacNamePanel", Version = 1, Build = ACO_HUDBuilder.CreateTacNamePanelPrefab },
         new Entry { Name = "ACO_SpectatorPanel", Version = 2, Change = "관전 카메라에 체적 구름을 넣습니다. 고친 뒤 Bake 하세요.", Build = ACO_HUDBuilder.CreateSpectatorPanelPrefab },
-        new Entry { Name = "ACO_DebugPanel", Version = 1, Build = ACO_HUDBuilder.CreateDebugPanelPrefab },
+        new Entry { Name = "ACO_DebugPanel", Version = 2, Change = "페이즈 모듈 줄을 14개에서 18개로 늘렸습니다(육상전함 등 새 모듈의 P1 버튼). 고친 뒤 Bake 하세요.", Build = ACO_HUDBuilder.CreateDebugPanelPrefab },
         new Entry { Name = "ACO_DecalStudio", Version = 1, Build = ACO_HUDBuilder.CreateDecalStudioPrefab },
         new Entry { Name = "ACO_CreditBoard", Version = 1, Build = ACO_HUDBuilder.CreateCreditBoardPrefab },
         new Entry { Name = ACO_InteriorBuilder.PrefabName, Version = 3, Change = "구역, 문 텔레포트, CIC 무전을 넣고, 관전 패널 버튼을 막던 조작대 콜라이더를 줄입니다. 메시와 조명은 그대로라 다시 굽지 않아도 됩니다. 고친 뒤 Bake 하세요.", Build = ACO_InteriorBuilder.UpdateSystems },

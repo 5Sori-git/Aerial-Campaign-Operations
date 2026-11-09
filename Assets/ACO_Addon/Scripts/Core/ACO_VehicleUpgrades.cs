@@ -71,6 +71,18 @@ namespace ACO
         // SaccEntity가 주입한다.
         [System.NonSerialized] public SaccEntity EntityControl;
 
+        [Header("안전지대 보호")]
+        [Tooltip("이 기체의 락온 마커(적이 노리는 'AAMTarget', 아군 항공기 레이어 25 — Bake가 넣는다). 안전지대(Progress.SafeZones — 보급 트리거) 안에 있으면 "
+            + "모든 클라이언트가 이 마커를 끈다: 적 대공포·SAM·전투기가 노리지 않고, 날아오던 적 미사일도 표적을 잃는다. 나오면 다시 켠다")]
+        public GameObject LockTarget;
+        [Tooltip("안전지대 안인지 보는 간격(초)")]
+        public float SafeCheckInterval = 0.5f;
+        private bool _inSafe;
+        private bool _safeLoop;
+
+        /// 이 기체가 지금 안전지대(보급 트리거) 안인가 — 적이 노리지 않는다.
+        public bool IsInSafeZone() { return _inSafe; }
+
         private bool _pilot;
         private bool _exploded;   // 이번 탑승 중 폭발했다(SAV가 폭발 뒤 조종사를 내린다 — 그 내림은 따로 세지 않는다)
         private bool _applied;
@@ -91,6 +103,34 @@ namespace ACO
         void Start()
         {
             ShowConsumables(0);
+            if (LockTarget != null && !_safeLoop)
+            {
+                _safeLoop = true;
+                SendCustomEventDelayedSeconds(nameof(_SafeTick), Random.Range(0.1f, Mathf.Max(SafeCheckInterval, 0.1f)));
+            }
+        }
+
+        /// 모든 클라이언트: 기체가 안전지대 콜라이더(보급 트리거) 안이면 락온 마커를 끈다. 위치는 SAV가 동기화하므로 화면마다 같은 답이 나온다.
+        public void _SafeTick()
+        {
+            SendCustomEventDelayedSeconds(nameof(_SafeTick), Mathf.Max(SafeCheckInterval, 0.1f));
+            if (LockTarget == null) { return; }
+            Vector3 p = EntityControl != null ? EntityControl.transform.position : transform.position;
+            bool inside = false;
+            Collider[] zones = Progress != null ? Progress.SafeZones : null;
+            if (zones != null)
+            {
+                for (int i = 0; i < zones.Length && !inside; i++)
+                {
+                    Collider z = zones[i];
+                    if (z == null || !z.gameObject.activeInHierarchy) { continue; }
+                    // 콜라이더 안이면 가장 가까운 점이 그 점 자신이다(회전한 상자도 맞다)
+                    if ((z.ClosestPoint(p) - p).sqrMagnitude < 0.01f) { inside = true; }
+                }
+            }
+            if (inside == _inSafe && LockTarget.activeSelf == !inside) { return; }
+            _inSafe = inside;
+            LockTarget.SetActive(!inside);
         }
 
         public void SFEXT_O_PilotEnter()

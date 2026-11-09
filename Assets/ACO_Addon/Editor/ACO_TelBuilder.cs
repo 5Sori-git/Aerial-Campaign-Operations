@@ -4,7 +4,7 @@ using UnityEngine;
 using SaccFlightAndVehicles;
 using ACO;
 
-/// TEL NPC_TEL: 시한 표적 전용. 모델은 임시 큐브(차체·운전석·레일·탄도탄). 구조는 ACO_TelUnit 설명 참고 —
+/// TEL NPC_TEL: 시한 표적 전용. 모델은 ACO_TelModel.cs가 넣는다(FBX가 없으면 임시 큐브). 구조는 ACO_TelUnit 설명 참고 —
 /// 루트(SaccTarget·히트박스 둘·락온 마커 둘) / Chassis(발사 자리에 남는다) / Rail(일어난다, 실린 탄도탄) / FlyingMissile(발사 후) / Blast.
 public static partial class ACO_PrefabBuilder
 {
@@ -82,6 +82,7 @@ public static partial class ACO_PrefabBuilder
         tel.ChassisHitbox = chassisBox;
         tel.MissileHitbox = missileBox;
         tel.BlastEffect = blast;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(TelFbx) != null) { ApplyTelModel(root); }
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_TEL.prefab");
     }
 }

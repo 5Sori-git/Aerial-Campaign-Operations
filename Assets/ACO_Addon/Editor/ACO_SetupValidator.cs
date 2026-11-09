@@ -245,22 +245,74 @@ public partial class ACO_SetupValidator : EditorWindow
                 else { Add(g, OK, $"페이즈 모듈 {normal}개, 보너스 모듈 {bonus}개", mgrModules); }
             }
 
-            // 보너스 페이즈(슈퍼에이스)
-            ACO_NPCFighterAI ace = null;
-            if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.SuperAce != null) { ace = f; break; } } }
-            ACO_MissionManager mgr = FindOne<ACO_MissionManager>();
-            if (ace != null) { Add(g, OK, $"슈퍼에이스 '{ace.SuperAce.AceName}' — 5페이즈 보너스 확률 {(mgr != null ? Mathf.RoundToInt(mgr.GetBonusChance(5) * 100f) : 0)}%", ace); }
-            else if (mgr != null && mgr.GetBonusChance(5) > 0f)
+            // 분신 에이스 형제(슈퍼에이스 HEADS·TAILS — 풀에 하나씩)
+            bool hasHeads = false, hasTails = false;
+            string names = "";
+            if (gen.Fighters != null)
+            {
+                foreach (ACO_NPCFighterAI f in gen.Fighters)
+                {
+                    if (f == null || f.SuperAce == null) { continue; }
+                    if (f.SuperAce.AceName == "TAILS") { hasTails = true; } else { hasHeads = true; }
+                    names += (names.Length > 0 ? ", " : "") + f.SuperAce.AceName;
+                }
+            }
+            // SHADE 편대(풀에 4기)
+            int shades = 0;
+            if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.Shade != null) { shades++; } } }
+            if (shades >= ACO_PrefabBuilder.ShadePoolSize) { Add(g, OK, $"SHADE 편대 {shades}기", gen); }
+            else
+            {
+                ACO_MissionGenerator genRef2 = gen;
+                int need = ACO_PrefabBuilder.ShadePoolSize - shades;
+                Add(g, WARN, $"생성기 풀의 SHADE가 {shades}기입니다 — SHADE 편대 페이즈가 {(shades > 0 ? $"{shades}기로" : "나오지 않는다")}{(shades > 0 ? " 나온다" : "")}. [고치기]는 NPC_Shade {need}기를 풀 아래에 놓는다.", gen, () =>
+                {
+                    Transform parent = genRef2.UnitPoolRoot != null ? genRef2.UnitPoolRoot : genRef2.transform;
+                    if (!ACO_PrefabBuilder.Exists(ACO_PrefabBuilder.ShadePrefab)) { ACO_PrefabBuilder.BuildShade(); }
+                    GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf(ACO_PrefabBuilder.ShadePrefab));
+                    if (prefab == null) { return; }
+                    for (int k = 0; k < need; k++)
+                    {
+                        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+                        Undo.RegisterCreatedObjectUndo(go, "ACO shade");
+                    }
+                    Debug.Log($"[ACO] NPC_Shade {need}기를 생성기 풀에 넣었습니다.");
+                    ACO_SceneBaker.BakeNeighbors();
+                });
+            }
+
+            if (hasHeads && hasTails) { Add(g, OK, $"분신 에이스 형제: {names}", gen); }
+            else
             {
                 ACO_MissionGenerator genRef = gen;
-                Add(g, INFO, "생성기 풀에 슈퍼에이스가 없어 보너스 페이즈가 나오지 않습니다(선택) — [고치기]는 NPC_SuperAce를 풀 아래에 놓는다.", gen, () =>
+                bool needHeads = !hasHeads, needTails = !hasTails;
+                Add(g, WARN, $"생성기 풀의 분신 에이스 형제가 모자랍니다({(names.Length > 0 ? names : "없음")}) — 분신 에이스 페이즈가 {(hasHeads || hasTails ? "1기만 나온다" : "나오지 않는다")}. "
+                    + "[고치기]는 빠진 형제(NPC_SuperAce 형 HEADS / NPC_SuperAce_Tails 동생 TAILS)를 풀 아래에 놓는다.", gen, () =>
                 {
-                    if (!ACO_PrefabBuilder.Exists("NPC_SuperAce")) { ACO_PrefabBuilder.BuildSuperAce(); }
-                    GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf("NPC_SuperAce"));
+                    Transform parent = genRef.UnitPoolRoot != null ? genRef.UnitPoolRoot : genRef.transform;
+                    if (needHeads) { PlaceSuperAce(parent, "NPC_SuperAce"); }
+                    if (needTails) { PlaceSuperAce(parent, ACO_PrefabBuilder.SuperAceTailsPrefab); }
+                    ACO_SceneBaker.BakeNeighbors();
+                });
+            }
+        }
+        if (gen != null)
+        {
+            // 레이저 에이스 페이즈
+            ACO_NPCFighterAI laser = null;
+            if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.LaserAce != null) { laser = f; break; } } }
+            if (laser != null) { Add(g, OK, $"레이저 에이스 '{laser.LaserAce.AceName}'", laser); }
+            else if (Object.FindObjectOfType<ACO_PhaseLaserAce>(true) != null)
+            {
+                ACO_MissionGenerator genRef = gen;
+                Add(g, WARN, "생성기 풀에 레이저 에이스가 없어 레이저 에이스 페이즈가 나오지 않습니다 — [고치기]는 NPC_LaserAce를 풀 아래에 놓는다.", gen, () =>
+                {
+                    if (!ACO_PrefabBuilder.Exists(ACO_PrefabBuilder.LaserAcePrefab)) { ACO_PrefabBuilder.BuildLaserAce(); }
+                    GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf(ACO_PrefabBuilder.LaserAcePrefab));
                     if (prefab == null) { return; }
                     Transform parent = genRef.UnitPoolRoot != null ? genRef.UnitPoolRoot : genRef.transform;
                     var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-                    Undo.RegisterCreatedObjectUndo(go, "ACO super ace");
+                    Undo.RegisterCreatedObjectUndo(go, "ACO laser ace");
                     Selection.activeGameObject = go;
                     ACO_SceneBaker.BakeNeighbors();
                 });
@@ -388,12 +440,43 @@ public partial class ACO_SetupValidator : EditorWindow
         }
 
         // 특수무장 카탈로그(무장 정의 프리팹 → 격납고 목록 + 기체 모듈)
+        int slotOverrides = ACO_SpecialWeaponCatalog.CountSceneSlotOverrides();
+        if (slotOverrides > 0)
+        {
+            Add(g, WARN, $"씬의 기체 {slotOverrides}대가 특수무장 슬롯 배열(Modules 등)을 씬에서 덮어쓰고 있습니다 — 프리팹에 새로 넣은 무장이 그 기체엔 안 나옵니다. "
+                + "[고치기]로 프리팹 값으로 되돌리고, 슬롯에서 빠지는 씬 전용 중복 모듈은 끕니다(지우지 않음).", null, ACO_SpecialWeaponCatalog.RevertSceneSlotOverrides);
+        }
+        List<string> newExamples = ACO_SpecialWeaponCatalog.NewExampleIds();
+        if (newExamples.Count > 0)
+        {
+            Add(g, WARN, $"새 특수무장 예제 {string.Join(", ", newExamples)}의 정의 프리팹이 없습니다 — [고치기]로 SpecialWeapons에 만들고 격납고 목록·기체 슬롯에 넣습니다.", null, ACO_SpecialWeaponCatalog.Install);
+        }
         int notInstalled = ACO_SpecialWeaponCatalog.CountNotInstalled();
         if (notInstalled > 0)
         {
             Add(g, WARN, $"특수무장 정의 {notInstalled}개가 격납고 목록이나 기체의 특수무장 슬롯에 없습니다 — [고치기]로 설치합니다.", null, ACO_SpecialWeaponCatalog.Install);
         }
         else if (ACO_SpecialWeaponCatalog.LoadDefs().Count > 0) { Add(g, OK, $"특수무장 카탈로그 {ACO_SpecialWeaponCatalog.LoadDefs().Count}종 설치됨", hangar); }
+        int mmpMissing = ACO_PrefabBuilder.MmpLaunchPointsMissing();
+        if (mmpMissing > 0)
+        {
+            Add(g, WARN, $"MMP 모듈 {mmpMissing}개의 발사 지점이 포드 셀이 아닙니다 — [고치기]로 포드마다 셀 발사 지점 8개를 만들어 넣습니다.", null, ACO_PrefabBuilder.InstallMmpLaunchPoints);
+        }
+        string mmpNoPods = ACO_PrefabBuilder.MmpVehiclesWithoutPods();
+        if (mmpNoPods.Length > 0)
+        {
+            Add(g, INFO, $"MMP 포드 외형이 없는 기체: {mmpNoPods} — 날개 파일런에서 쏩니다. Models/MMP/ACO_MMP.fbx를 파일런 아래 Transform 0으로 놓고 [고치기]하면 셀에서 나갑니다.", null);
+        }
+        int rgpMissing = ACO_PrefabBuilder.RgpLaunchPointsMissing();
+        if (rgpMissing > 0)
+        {
+            Add(g, WARN, $"RGP 모듈 {rgpMissing}개의 포구 발사 지점이나 포드 재질이 비어 있습니다 — [고치기]로 레일건 포드 포구에 발사 지점(발사음·섬광)을 만들고 재질을 넣습니다.", null, ACO_PrefabBuilder.InstallRgpLaunchPoints);
+        }
+        string rgpNoPods = ACO_PrefabBuilder.RgpVehiclesWithoutPods();
+        if (rgpNoPods.Length > 0)
+        {
+            Add(g, INFO, $"RGP 포드 외형이 없는 기체: {rgpNoPods} — 날개 파일런에서 쏩니다. 기체 프리팹의 왼쪽 파일런에 Models/RGP/ACO_RGP_Cap.fbx, 오른쪽 파일런에 ACO_RGP_Rail.fbx를 Transform 0으로 놓고 [고치기]하면 포구에서 나갑니다.", null);
+        }
         foreach (ACO_SpecialWeaponDef d in Object.FindObjectsOfType<ACO_SpecialWeaponDef>(true))
         {
             Add(g, ERROR, $"'{d.name}': 특수무장 정의(ACO_SpecialWeaponDef)가 씬에 있습니다 — 일반 스크립트라 VRChat에 올릴 수 없습니다. 프리팹 파일로만 두고 씬에서는 지우세요.", d);
@@ -620,5 +703,18 @@ public partial class ACO_SetupValidator : EditorWindow
         Undo.RegisterCreatedObjectUndo(go, $"ACO place {name}");
         Selection.activeGameObject = go;
         Debug.Log($"[ACO] '{name}'을(를) 씬에 놓았습니다 — 알맞은 곳으로 옮기세요.", go);
+    }
+
+    /// 분신 에이스 형제 한 기를 생성기 풀 아래에 놓는다(프리팹이 없으면 만든다).
+    private static void PlaceSuperAce(Transform parent, string prefabName)
+    {
+        bool tails = prefabName == ACO_PrefabBuilder.SuperAceTailsPrefab;
+        if (!ACO_PrefabBuilder.Exists(prefabName)) { if (tails) { ACO_PrefabBuilder.BuildSuperAceTails(); } else { ACO_PrefabBuilder.BuildSuperAce(); } }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf(prefabName));
+        if (prefab == null) { return; }
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        Undo.RegisterCreatedObjectUndo(go, "ACO super ace");
+        Selection.activeGameObject = go;
+        Debug.Log($"[ACO] {prefabName}을 생성기 풀에 넣었습니다.", go);
     }
 }

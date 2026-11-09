@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using SaccFlightAndVehicles;
 
 namespace ACO
 {
@@ -39,6 +40,7 @@ namespace ACO
         private const float GOLDEN_ANGLE = 2.3999631f;
 
         private Vector3[] _pos = new Vector3[MAX_BOMBLETS];
+        private SaccTarget[] _hitTarget = new SaccTarget[MAX_BOMBLETS];   // 자탄이 떨어진 콜라이더의 표적(직접 맞은 부위 — 범위 피해 배율을 받지 않는다)
         private float[] _time = new float[MAX_BOMBLETS];
         private bool[] _done = new bool[MAX_BOMBLETS];
         private int _count;
@@ -79,6 +81,7 @@ namespace ACO
                 if (!Physics.Raycast(origin, aim * local.normalized, out hit, MaxReach, GroundLayers, QueryTriggerInteraction.Collide)) { continue; }
                 float t = hit.distance / speed;
                 _pos[_count] = hit.point;
+                _hitTarget[_count] = hit.collider ? hit.collider.GetComponentInParent<SaccTarget>() : null;
                 _time[_count] = now + t;
                 _done[_count] = false;
                 _count++;
@@ -124,7 +127,7 @@ namespace ACO
                     s.Play();
                 }
             }
-            if (Missile) { Missile.SubmunitionHit(p); }
+            if (Missile) { Missile.SubmunitionHit(p, _hitTarget[index]); }
         }
     }
 }

@@ -49,8 +49,104 @@ public partial class ACO_SceneBaker
             if (ace.AI != ai) { ace.AI = ai; MarkChanged(ace); }
             bool pooled = false;
             foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
-            if (!pooled) { Debug.LogWarning($"[ACO] 슈퍼에이스 '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(보너스 페이즈가 안 나온다).", ai); }
+            if (!pooled) { Debug.LogWarning($"[ACO] 슈퍼에이스 '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(분신 에이스 페이즈가 안 나온다).", ai); }
         }
+        // 쌍둥이 규칙·교차 기동: 슈퍼에이스끼리 짝을 잇는다(차례로 둘씩 — 형제 2기면 서로). 남는 하나는 짝 없음.
+        // 교차를 정하는 쪽은 형(TAILS가 아닌 쪽 — 둘 다 아니면 앞의 것)
+        for (int i = 0; i < aces.Count; i++)
+        {
+            ACO_SuperAce want = (i % 2 == 0) ? (i + 1 < aces.Count ? aces[i + 1] : null) : aces[i - 1];
+            if (aces[i].Partner != want) { aces[i].Partner = want; MarkChanged(aces[i]); }
+            bool leader = false;
+            if (want != null)
+            {
+                bool meTails = aces[i].AceName == "TAILS", otherTails = want.AceName == "TAILS";
+                leader = meTails != otherTails ? !meTails : (i % 2 == 0);
+            }
+            LinkCross(aces[i].Cross, want != null ? want.Cross : null, leader, aces[i].GetComponentInParent<ACO_NPCFighterAI>(true));
+        }
+    }
+
+    /// 교차 기동 부품의 짝·정하는 쪽·AI를 넣는다.
+    private static void LinkCross(ACO_CrossManeuver cross, ACO_CrossManeuver partner, bool leader, ACO_NPCFighterAI ai)
+    {
+        if (cross == null) { return; }
+        if (cross.Partner != partner) { cross.Partner = partner; MarkChanged(cross); }
+        if (cross.Leader != leader) { cross.Leader = leader; MarkChanged(cross); }
+        if (ai != null && cross.AI != ai) { cross.AI = ai; MarkChanged(cross); }
+    }
+
+    /// SHADE 편대: AI ↔ SHADE, 풀 순서로 번호 1~(4), 편대 목록, 교차 짝(1·2, 3·4 — 앞 번호가 정한다). 생성기 풀에 없으면 알린다.
+    private static void BakeShades()
+    {
+        var generators = new List<ACO_MissionGenerator>();
+        var shades = new List<ACO_ShadeAce>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
+            shades.AddRange(root.GetComponentsInChildren<ACO_ShadeAce>(true));
+        }
+        ACO_ShadeAce[] squad = shades.ToArray();
+        for (int i = 0; i < shades.Count; i++)
+        {
+            ACO_ShadeAce s = shades[i];
+            ACO_NPCFighterAI ai = s.GetComponentInParent<ACO_NPCFighterAI>(true);
+            if (ai == null) { Debug.LogWarning($"[ACO] SHADE '{s.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", s); continue; }
+            if (ai.Shade != s) { ai.Shade = s; MarkChanged(ai); }
+            if (s.AI != ai) { s.AI = ai; MarkChanged(s); }
+            if (s.Number != i + 1) { s.Number = i + 1; MarkChanged(s); }
+            if (!SameShades(s.Squad, squad)) { s.Squad = squad; MarkChanged(s); }
+            ACO_ShadeAce partner = (i % 2 == 0) ? (i + 1 < shades.Count ? shades[i + 1] : null) : shades[i - 1];
+            LinkCross(s.Cross, partner != null ? partner.Cross : null, i % 2 == 0 && partner != null, ai);
+            bool pooled = false;
+            foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
+            if (!pooled) { Debug.LogWarning($"[ACO] SHADE '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(SHADE 편대 페이즈가 안 나온다).", ai); }
+        }
+    }
+
+    private static bool SameShades(ACO_ShadeAce[] a, ACO_ShadeAce[] b)
+    {
+        if (a == null || a.Length != b.Length) { return false; }
+        for (int i = 0; i < a.Length; i++) { if (a[i] != b[i]) { return false; } }
+        return true;
+    }
+
+    /// 레이저 에이스 ↔ 같은 기체의 AI(AI.LaserAce가 있어야 생성기가 일반 배치에서 뺀다), 페이즈 모듈·무전·내 기체, 사일로 연출 ↔ 모듈·구름.
+    private static void BakeLaserAces()
+    {
+        ACO_PhaseLaserAce phase = Object.FindObjectOfType<ACO_PhaseLaserAce>(true);
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        ACO_CloudField clouds = Object.FindObjectOfType<ACO_CloudField>();
+        var generators = new List<ACO_MissionGenerator>();
+        var aces = new List<ACO_LaserAce>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
+            aces.AddRange(root.GetComponentsInChildren<ACO_LaserAce>(true));
+        }
+        foreach (ACO_LaserAce ace in aces)
+        {
+            ACO_NPCFighterAI ai = ace.GetComponentInParent<ACO_NPCFighterAI>(true);
+            if (ai == null) { Debug.LogWarning($"[ACO] 레이저 에이스 '{ace.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", ace); continue; }
+            if (ai.LaserAce != ace) { ai.LaserAce = ace; MarkChanged(ai); }
+            if (ace.AI != ai || ace.Phase != phase || ace.Chatter != chatter || ace.Contacts != contacts)
+            {
+                ace.AI = ai;
+                ace.Phase = phase;
+                ace.Chatter = chatter;
+                ace.Contacts = contacts;
+                MarkChanged(ace);
+            }
+            bool pooled = false;
+            foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
+            if (!pooled) { Debug.LogWarning($"[ACO] 레이저 에이스 '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(레이저 에이스 페이즈가 안 나온다).", ai); }
+        }
+        if (phase == null) { return; }
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        ACO_IcbmSite site = phase.Site != null ? phase.Site : phase.GetComponentInChildren<ACO_IcbmSite>(true);
+        if (phase.Site != site) { phase.Site = site; MarkChanged(phase); }
+        if (site != null && (site.Phase != phase || site.Clouds != clouds)) { site.Phase = phase; site.Clouds = clouds; MarkChanged(site); }
     }
 
     /// CIWS 미사일 요격: 요격 CIWS 목록(InterceptProtectLayers가 있는 것)을 모든 무장·NPC 런처에 굽는다. 요격 수치는 ACO_PrefabTuning이 프리팹에 넣는다.
@@ -155,6 +251,7 @@ public partial class ACO_SceneBaker
         foreach (ACO_Warship s in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (s.ReservedForFleet) { hasCarrier = true; } }
         if (!hasCarrier) { missing.Add("NPC_Carrier"); }
         if (poolRoot.GetComponentInChildren<ACO_Railgun>(true) == null) { missing.Add("NPC_Railgun"); }
+        if (poolRoot.GetComponentInChildren<ACO_LandShip>(true) == null) { missing.Add(ACO_PrefabBuilder.LandShipPrefab); }
         return missing;
     }
 
@@ -183,6 +280,7 @@ public partial class ACO_SceneBaker
             case "NPC_Flagship": return ACO_PrefabBuilder.BuildFlagship();
             case "NPC_Carrier": return ACO_PrefabBuilder.BuildCarrier();
             case "NPC_Railgun": return ACO_PrefabBuilder.BuildRailgun();
+            case ACO_PrefabBuilder.LandShipPrefab: return ACO_PrefabBuilder.BuildLandShip();
         }
         return null;
     }
@@ -209,6 +307,39 @@ public partial class ACO_SceneBaker
                 MarkChanged(mini);
             }
         }
+    }
+
+    /// 육상전함 ↔ 보스 페이즈(동기화된 항로·단계), 지면 레이어·해수면(생성기 값), 소형 레일건 레이더, 프리팹에 직접 놓은 VLS·CIWS를 부위로.
+    private static void BakeLandShip()
+    {
+        ACO_LandShip ship = Object.FindObjectOfType<ACO_LandShip>(true);
+        ACO_PhaseLandShip phase = Object.FindObjectOfType<ACO_PhaseLandShip>(true);
+        if (ship == null) { return; }
+        if (phase == null) { Debug.LogWarning("[ACO] 육상전함: 페이즈 모듈(ACO_PhaseLandShip)이 없습니다.", ship); return; }
+        if (ship.Phase != phase) { ship.Phase = phase; MarkChanged(ship); }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        int hullBit = 1 << ACO_PrefabBuilder.LayerFortressHull;
+        ACO_MissionGenerator generator = Object.FindObjectOfType<ACO_MissionGenerator>(true);
+        if (generator != null)
+        {
+            if ((generator.GroundLayers.value & hullBit) != 0) { generator.GroundLayers = generator.GroundLayers.value & ~hullBit; MarkChanged(generator); }
+            int ground = generator.GroundLayers.value & ~hullBit;
+            if (ship.GroundLayers.value != ground || !Mathf.Approximately(ship.SeaLevel, generator.SeaLevel))
+            {
+                ship.GroundLayers = ground;
+                ship.SeaLevel = generator.SeaLevel;
+                MarkChanged(ship);
+            }
+        }
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        foreach (ACO_MiniRailgun mini in ship.GetComponentsInChildren<ACO_MiniRailgun>(true))
+        {
+            if (mini.Contacts == contacts) { continue; }
+            mini.Contacts = contacts;
+            MarkChanged(mini);
+        }
+        if (ACO_PrefabBuilder.LinkLandShipWeapons(ship)) { MarkChanged(ship.Warship); }
     }
 
     /// 지상 유닛 숙련도 체력의 기준(BaseHealth, 베테랑)을 SaccTarget 체력으로 맞춘다 — 동기화되는 Health는 게임 중 믿을 수 없다(늦게 들어온 클라이언트에겐 깎인 값).

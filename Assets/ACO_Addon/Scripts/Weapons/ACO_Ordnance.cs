@@ -47,6 +47,8 @@ namespace ACO
         [Range(0f, 1f)] public float MinSplashFraction = 0.25f;
         [Tooltip("SAV 무기 타입(킬 피드). 4 = 폭탄, 5 = 로켓")]
         public byte WeaponType = 4;
+        // 함선 부위도 범위 피해를 그대로 준다(무장 FullPartSplash). 끄면 직접 닿지 않은 부위는 ACO_Warship.PartSplashScale만큼만 받는다.
+        [System.NonSerialized] public bool FullPartSplash;
         [Tooltip("테스트용: 쏜 사람 화면에서 터질 때 무엇에 닿았는지(오브젝트·레이어·지면 위 높이)와 범위 피해 결과(반경·맞은 유닛·피해)를 로그로 남긴다")]
         public bool DebugHitLog = false;
 
@@ -68,8 +70,8 @@ namespace ACO
         [Tooltip("후연 파티클(로켓). 발사 시 방출을 켜고 폭발 시 방출만 끈다. Simulation Space는 World, DisableOnExplode에 넣지 않는다")]
         public ParticleSystem[] TrailParticles;
 
-        [Header("지면·수면 폭발 (선택 — 비우면 위 ExplosionObject·ExplosionSounds)")]
-        [Tooltip("땅·건물(지형)에 부딪혀 터질 때 ExplosionObject 대신 켤 오브젝트(흙먼지 등). 이 탄의 자식으로 두면 위(+Y)가 닿은 면의 법선을 향하게 돌린다. 유닛에 맞거나 공중에서 터지면 ExplosionObject")]
+        [Header("지면·수면 폭발 (선택 — ExplosionObject에 더해 켠다. 소리는 비우면 ExplosionSounds)")]
+        [Tooltip("땅·건물(지형)에 부딪혀 터질 때 ExplosionObject에 더해 켤 오브젝트(흙먼지 등). 이 탄의 자식으로 두면 위(+Y)가 닿은 면의 법선을 향하게 돌린다. 유닛에 맞거나 공중에서 터지면 ExplosionObject")]
         public GameObject GroundExplosionObject;
         [Tooltip("땅에 부딪힐 때 폭발음(비우면 ExplosionSounds)")]
         public AudioSource[] GroundExplosionSounds;
@@ -108,6 +110,7 @@ namespace ACO
         private const int MAX_SPLASH_COLLIDERS = 256;   // 큰 반경이면 함선·지상 그룹 콜라이더가 많다 — 모자라면 일부 유닛이 빠진다
         private Collider[] _hits = new Collider[MAX_SPLASH_COLLIDERS];
         private SaccTarget[] _damaged = new SaccTarget[MAX_SPLASH_HITS];
+        private SaccTarget _directPart;   // 탄이 직접 닿은 표적(부딪힌 콜라이더·유도 근접 표적) — 범위 피해 배율을 받지 않는다
 
         /// 비행 계산 간격(초). 프레임 속도와 상관없이 이 간격으로 계산한다 — CCIP 예측(ACO_DFUNC_Missile)이 같은 간격의 궤적을 수식으로 정확히 구한다.
         public const float FLIGHT_STEP = 0.02f;
@@ -132,6 +135,7 @@ namespace ACO
             _age = 0f;
             _flying = true;
             _exploded = false;
+            _directPart = null;
             _guided = GuideTarget != null && GuideTurnRate > 0f;
             _guideEntity = _guided ? GuideTarget.GetComponentInParent<SaccEntity>() : null;
             HideExplosions();
@@ -189,12 +193,15 @@ namespace ACO
                 if (hitSolid)
                 {
                     if (DebugHitLog && IsShooter) { LogHit(hit); }
+                    // 유닛 히트박스에 닿았을 때만 직접 맞은 표적 — 선체(Environment) 같은 큰 콜라이더는 본체로 이어져 코어가 "직접" 맞은 걸로 잘못 친다
+                    _directPart = hit.collider && hit.collider.gameObject.layer == UNIT_HITBOX_LAYER ? hit.collider.GetComponentInParent<SaccTarget>() : null;
                     Explode(hit.point, SurfaceOf(hit.collider), hit.normal);
                     return;
                 }
                 Vector3 burst;
                 if (_guided && GuideProximity > 0f && NearTarget(from, to, out burst))
                 {
+                    _directPart = GuideTarget.GetComponentInParent<SaccTarget>();
                     Explode(burst, SURFACE_AIR, Vector3.up);
                     return;
                 }
@@ -376,6 +383,15 @@ namespace ACO
                 }
                 float t = Mathf.Clamp01(best / SplashRadius);
                 float dmg = Damage * Mathf.Lerp(1f, MinSplashFraction, t);
+                if (target != _directPart)
+                {
+                    ACO_Warship ship = target.GetComponentInParent<ACO_Warship>();
+                    if (ship != null)
+                    {
+                        if (ship.IsSplashImmune(target)) { continue; }   // 코어는 직접 맞혀야만(예외 무기도)
+                        if (!FullPartSplash) { dmg *= ship.GetSplashScale(target); }
+                    }
+                }
                 // 쏜 사람 화면의 격추 예측이 피해 이벤트를 버려 공격자가 비는 것을 막는다(ACO_Missile.NoteHit 참고)
                 target.LastHitByPlayer = Networking.LocalPlayer;
                 target.LastHitWeaponType = WeaponType;
@@ -406,15 +422,16 @@ namespace ACO
             }
         }
 
-        /// 면에 맞는 폭발 오브젝트를 켠다(비었으면 ExplosionObject). 땅·물 연출은 위(+Y)를 닿은 면의 법선으로 돌린다(물기둥·흙먼지가 똑바로 서게).
+        /// 폭발 오브젝트는 어디서 터지든 켜고, 땅·물이면 그 면의 오브젝트를 더 켠다. 땅·물 연출은 위(+Y)를 닿은 면의 법선으로 돌린다(물기둥·흙먼지가 똑바로 서게).
         private void ShowExplosion(int surface, Vector3 normal)
         {
-            GameObject fx = ExplosionObject;
-            if (surface == SURFACE_GROUND && GroundExplosionObject) { fx = GroundExplosionObject; }
-            else if (surface == SURFACE_WATER && WaterExplosionObject) { fx = WaterExplosionObject; }
-            if (!fx) { return; }
-            if (fx != ExplosionObject) { fx.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal.sqrMagnitude > 0.0001f ? normal : Vector3.up); }
-            fx.SetActive(true);
+            if (ExplosionObject) { ExplosionObject.SetActive(true); }
+            GameObject extra = null;
+            if (surface == SURFACE_GROUND) { extra = GroundExplosionObject; }
+            else if (surface == SURFACE_WATER) { extra = WaterExplosionObject; }
+            if (!extra) { return; }
+            extra.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal.sqrMagnitude > 0.0001f ? normal : Vector3.up);
+            extra.SetActive(true);
         }
 
         private void HideExplosions()

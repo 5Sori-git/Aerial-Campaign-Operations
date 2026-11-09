@@ -84,6 +84,12 @@ namespace ACO
         public GameObject DamageSource;
         [Tooltip("포구 섬광(한 번 Emit)")]
         public ParticleSystem MuzzleFlash;
+        [Tooltip("포구에서 한 번 나오는 거대한 고리")]
+        public ParticleSystem MuzzleRing;
+        [Tooltip("사선을 따라 날아가는 보이지 않는 파티클. 서브 이미터 Rings가 고리를 남긴다")]
+        public ParticleSystem RingCarrier;
+        [Tooltip("고리가 생겨 나가는 속도(m/s). 고리 간격은 Rings의 Rate over Distance, 사거리는 RingCarrier의 수명으로 정한다")]
+        public float RingTravelSpeed = 14000f;
 
         [Header("지평선 섬광 (아군 기지 착탄)")]
         [Tooltip("번쩍이는 흰 빛(한 번 Emit)")]
@@ -91,11 +97,11 @@ namespace ACO
         [Tooltip("남는 주황 빛(한 번 Emit)")]
         public ParticleSystem HorizonGlow;
         [Tooltip("발사 뒤 번쩍이기까지(초)")]
-        public float HorizonDelay = 0.5f;
+        public float HorizonDelay = 2f;
         [Tooltip("사격 방향으로 이 거리(m)의 지평선")]
-        public float HorizonDistance = 15000f;
+        public float HorizonDistance = 50000f;
         [Tooltip("빛 중심 높이(m, 포대 바닥 기준) — 절반쯤 지평선 위로 올라오게")]
-        public float HorizonHeight = 300f;
+        public float HorizonHeight = 1000f;
         [Tooltip("구름·안개 색(Bake가 넣는다) — 하늘 전체가 잠깐 밝아진다")]
         public ACO_CloudField Clouds;
         public float SkyFlash = 0.9f;
@@ -103,21 +109,19 @@ namespace ACO
         public float SkyFlashTime = 1.6f;
         [Tooltip("멀리서 오는 폭음(2D)")]
         public AudioSource HorizonSound;
-        [Tooltip("번쩍임 뒤 폭음까지(초) — 실제 거리보다 줄였다")]
-        public float HorizonSoundDelay = 4f;
+        [Tooltip("번쩍임 뒤 폭음까지(초) — 발사 4.5초 뒤에 들리게 맞췄다(거리와 상관없는 연출)")]
+        public float HorizonSoundDelay = 2.5f;
 
         [Header("소리")]
         [Tooltip("충전음 루프 — 충전에 맞춰 높아진다")]
         public AudioSource ChargeSound;
         public AudioSource FireSound;
         public float ChargeVolume = 0.9f;
-        [Tooltip("음속(m/s) — 발사음이 거리만큼 늦게 온다")]
-        public float SoundSpeed = 340f;
 
         [Header("격파")]
         public ACO_FortressBlast Blast;
-        [Tooltip("코어가 터진 뒤 대폭발까지(초) — 그동안 연쇄 폭발")]
-        public float DeathDelay = 4f;
+        [Tooltip("코어가 터진 뒤 대폭발까지(초) — 그동안 연쇄 폭발. 격파 대사가 끝나고 여유가 있게 14초(모듈 CrashHoldMax 20초 안에 폭발 + CrashClearDelay가 끝나야 한다)")]
+        public float DeathDelay = 14f;
         public float SecondaryInterval = 0.7f;
 
         private bool _initialized;
@@ -179,9 +183,11 @@ namespace ACO
             _beamLeft = 0f;
             if (FireBeam) { FireBeam.enabled = false; }
             if (WarnBeam) { WarnBeam.enabled = false; }
+            // 지난 미션이 코어가 열린 채 끝났으면(격파 없이 실패·교체) 열림 상태가 남는다 — 닫고 시작한다(열려 있어야 하면 동기화된 주기가 곧 다시 연다)
+            SetCore(false);
             if (Warship != null) { transform.SetPositionAndRotation(Warship.GetCruiseCenter(), Quaternion.Euler(0f, Warship.GetCruiseYaw(), 0f)); }
             // 늦게 들어왔으면 이미 지난 발사는 다시 그리지 않는다
-            _firedFor = Phase != null && Phase.IsLive() && Networking.GetServerTimeInMilliseconds() - Phase.GetFireMs() >= 0 ? Phase.GetFireMs() : 0;
+            _firedFor = Phase != null && Phase.IsArmed() && Networking.GetServerTimeInMilliseconds() - Phase.GetFireMs() >= 0 ? Phase.GetFireMs() : 0;
             ApplyStage(CurrentStage());
         }
 
@@ -233,7 +239,7 @@ namespace ACO
             UpdateArmor(dt);
             UpdateWarn(now);
             int fireMs = Phase.GetFireMs();
-            if (now - fireMs >= 0 && _firedFor != fireMs)
+            if (Phase.IsArmed() && now - fireMs >= 0 && _firedFor != fireMs)
             {
                 _firedFor = fireMs;
                 Fire();
@@ -302,13 +308,21 @@ namespace ACO
                 _beamLeft = FireBeamTime;
             }
             if (MuzzleFlash) { MuzzleFlash.Emit(1); }
-            if (FireSound)
+            if (RingCarrier)
             {
-                VRCPlayerApi me = Networking.LocalPlayer;
-                float delay = Utilities.IsValid(me) && SoundSpeed > 0f ? Vector3.Distance(me.GetPosition(), from) / SoundSpeed : 0f;
-                if (delay > 0.02f) { SendCustomEventDelayedSeconds(nameof(_PlayFireSound), delay); }
-                else { FireSound.Play(); }
+                var ring = new ParticleSystem.EmitParams();
+                ring.position = from;
+                ring.velocity = dir * RingTravelSpeed;
+                RingCarrier.Emit(ring, 1);
             }
+            if (MuzzleRing)
+            {
+                var ring = new ParticleSystem.EmitParams();
+                ring.position = from;
+                ring.velocity = dir * 80f;   // 고리 방향은 속도가 정한다 — 0이면 안 된다
+                MuzzleRing.Emit(ring, 1);
+            }
+            if (FireSound) { FireSound.Play(); }   // 연출이라 거리와 상관없이 바로 들린다
             HitLocalVehicle(from, dir);
             // 착탄 자리: 수평으로 지평선까지(포신이 들려 있어도 땅에서 번쩍인다)
             Vector3 flat = dir;
@@ -341,11 +355,6 @@ namespace ACO
             if (_skyLeft <= 0f) { return; }
             _skyLeft -= dt;
             if (Clouds) { Clouds.SetFlash(_skyLeft > 0f ? SkyFlash * _skyLeft / Mathf.Max(SkyFlashTime, 0.01f) : 0f, _horizonPoint); }
-        }
-
-        public void _PlayFireSound()
-        {
-            if (FireSound) { FireSound.Play(); }
         }
 
         /// 사선 안의 내 기체에 피해(맞는 사람이 판정한다 — NPC 무기와 같다).
@@ -402,6 +411,8 @@ namespace ACO
         private void ApplyStage(int stage)
         {
             _appliedStage = stage;
+            // 코어 단계: TGT 마커를 코어 자리에(코어가 닫혀 있는 동안에도 — 열릴 자리를 보여 준다)
+            if (Warship != null) { Warship.MarkerAnchor = stage >= STAGE_CORE ? Core : null; }
             if (Coolers == null) { return; }
             for (int i = 0; i < Coolers.Length; i++) { if (Coolers[i] != null) { Coolers[i].SetExposed(stage >= STAGE_COOLERS); } }
         }
@@ -428,6 +439,16 @@ namespace ACO
         }
 
         public int GetCoolerTotal() { return Coolers != null ? Coolers.Length : 0; }
+
+        /// 방공 부위 + 코어 체력 합 — 페이즈가 대기 중 "공격을 시작했는가"를 이 값이 줄었는지로 본다.
+        public float SumDefenseAndCoreHealth()
+        {
+            Init();
+            float sum = 0f;
+            for (int i = 0; i < _defenseHealth.Length; i++) { if (_defenseHealth[i] != null) { sum += Mathf.Max(_defenseHealth[i].Health, 0f); } }
+            if (TargetHealth != null) { sum += Mathf.Max(TargetHealth.Health, 0f); }
+            return sum;
+        }
 
         public int CountCoolersAlive()
         {

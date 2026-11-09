@@ -10,13 +10,13 @@ from mathutils import Vector
 ROOT = r"C:\Users\KYJ\AppData\Local\VRChatProjects\ACO_Claude\Assets\Pit-bool\FA-18"
 FBX = ROOT + r"\FBX\FA-18E.fbx"
 BODY = ROOT + r"\material\E\F-18.E_Base_color.png"
-OUT = "C:/Users/KYJ/AppData/Local/VRChatProjects/ACO_Claude/Assets/ACO_Addon/Models/WeaponPod"
+OUT = os.environ.get("ACO_POD_OUT", "C:/Users/KYJ/AppData/Local/VRChatProjects/ACO_Claude/Assets/ACO_Addon/Models/WeaponPod")   # 시험용으로 다른 폴더에 만들 수 있다
 os.makedirs(OUT, exist_ok=True)
 
 PAINT = np.array([0.519, 0.549, 0.56], dtype=np.float32)
 SHADE = 0.84
 TEX_W, TEX_H = 2048, 1024
-PPM = 420.0
+PPM = 400.0          # 텍스처 1m당 픽셀 — 둘레(약 2.42m) + 여백 0.1m가 높이 1024px 안에 들어가야 한다(420이면 왼쪽 어깨가 넘쳐 잘리고 반대편이 비쳤다)
 TOP_DROP = -0.23         # 포드 윗면 높이의 음수: 원점은 기존 Tank 메시의 축(파일런 바닥 0.25m 아래)
 MOUNT_Z = 0.28           # 받침 윗면 = 파일런 바닥
 TOOTH_H = 0.135           # 도어 톱니 높이의 절반
@@ -232,6 +232,9 @@ YELLOW = (0.84, 0.68, 0.13)
 ORANGE = (0.9, 0.47, 0.09)
 
 
+BOTTOM_SIDE = os.environ.get("ACO_POD_BOTTOM", "L")   # 아랫면 글자를 뒤집는 방식(시험용으로 바꿀 수 있다)
+
+
 def render_marks(perimeter):
     """글자·기호를 텍스처 좌표에 놓고 한 장으로 렌더한다. 면마다 바깥에서 읽히도록 뒤집어 놓는다."""
     page = bpy.data.scenes.new("page")
@@ -268,7 +271,7 @@ def render_marks(perimeter):
     def place(o, u, v, mirror, color):
         order[0] += 0.001
         o.location = (u + 0.1, v + 0.1, order[0])
-        o.scale = (1, -1, 1) if mirror == 'R' else (-1, 1, 1)
+        o.scale = {'R': (1, -1, 1), 'L': (-1, 1, 1), 'N': (1, 1, 1), 'X': (-1, -1, 1)}[mirror]   # R·L = 거울(면 방향에 맞춰), N = 그대로, X = 180도
         o.data.materials.append(material(color))
         page.collection.objects.link(o)
 
@@ -338,13 +341,12 @@ def render_marks(perimeter):
     side_marks('R', lambda v: v)
     vc = (perimeter[3] + perimeter[4]) * 0.5
     side_marks('L', lambda v: 2 * vc - v)
-    # 아랫면: 방향과 해치 문구
+    # 아랫면: 방향과 해치 문구. 아랫면은 옆면과 뒤집는 방향이 다르다('R'로 그리면 거울 글자가 됐다)
     bottom = vc + 0.11
-    polygon([(0.09, 0), (0, 0.05), (0, 0.022), (-0.1, 0.022), (-0.1, -0.022), (0, -0.022), (0, -0.05)], 1.5, bottom, 'R', INK)
-    # 화살표가 꼬리 쪽이 아니라 기수 쪽을 가리키게 뒤집는다
-    bpy.data.objects[page.collection.objects[-1].name].rotation_euler = (0, 0, math.pi)
-    text("FWD", 1.72, bottom, 'R', 0.05)
-    text("JETTISON HAZARD AREA  STAY CLEAR", 2.75, vc - 0.11, 'R', 0.034)
+    polygon([(0.09, 0), (0, 0.05), (0, 0.022), (-0.1, 0.022), (-0.1, -0.022), (0, -0.022), (0, -0.05)], 1.5, bottom, BOTTOM_SIDE, INK)
+    # 화살표는 그린 그대로 기수 쪽을 가리킨다(아랫면 뒤집기 'L'이 방향까지 맞춘다 — 예전 'R'일 때는 180도 돌렸다)
+    text("FWD", 1.72, bottom, BOTTOM_SIDE, 0.05)
+    text("JETTISON HAZARD AREA  STAY CLEAR", 2.75, vc - 0.11, BOTTOM_SIDE, 0.034)
     bpy.ops.render.render(write_still=True, scene="page")
     img = bpy.data.images.load(os.path.join(OUT, "_marks.png"))
     img.colorspace_settings.name = 'Non-Color'

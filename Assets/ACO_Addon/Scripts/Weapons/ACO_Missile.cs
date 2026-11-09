@@ -45,6 +45,8 @@ namespace ACO
         public float ColdLaunchTurnRate = 0f;
         [Tooltip("콜드 런치 중 중력 배수(1 = Physics.gravity 그대로, 0 = 중력 없음). 사출된 미사일이 솟구쳤다 느려지며 처지는 궤적을 만든다")]
         public float ColdLaunchGravity = 1f;
+        [Tooltip("콜드 런치 사출 속도에 더하는 속도(월드, m/s) — 포드 셀에서 아래로 밀어내기(MMP). 런처가 발사마다 넣는다. 0이면 없음")]
+        public Vector3 ColdLaunchKick = Vector3.zero;
 
         [Header("탑 어택 (상공 진입 후 내리꽂기 — AGM용)")]
         [Tooltip("켜면 먼저 표적 바로 위 TopAttackAltitude 높이 지점을 향해 올라가며 날아가다가, 표적을 내려다보는 각도가 TopAttackDiveAngle 이상이 되면(또는 수평 거리가 TopAttackMinDistance 안) 표적으로 내리꽂는다. "
@@ -127,8 +129,8 @@ namespace ACO
             + "ExplosionDuration을 파티클 수명 이상으로 둔다")]
         public ParticleSystem[] TrailParticles;
 
-        [Header("지면·수면 폭발 (선택 — 비우면 위 ExplosionObject·ExplosionSounds)")]
-        [Tooltip("땅·건물(GroundLayers)에 부딪혀 터질 때 ExplosionObject 대신 켤 오브젝트(흙먼지 등). 이 미사일의 자식으로 두면 위(+Y)가 닿은 면의 법선을 향하게 돌린다. 표적 명중·공중 폭발·요격은 ExplosionObject")]
+        [Header("지면·수면 폭발 (선택 — ExplosionObject에 더해 켠다. 소리는 비우면 ExplosionSounds)")]
+        [Tooltip("땅·건물(GroundLayers)에 부딪혀 터질 때 ExplosionObject에 더해 켤 오브젝트(흙먼지 등). 이 미사일의 자식으로 두면 위(+Y)가 닿은 면의 법선을 향하게 돌린다. 표적 명중·공중 폭발·요격은 ExplosionObject")]
         public GameObject GroundExplosionObject;
         [Tooltip("땅에 부딪힐 때 폭발음(비우면 ExplosionSounds)")]
         public AudioSource[] GroundExplosionSounds;
@@ -162,6 +164,8 @@ namespace ACO
         // 폭발 범위 표시용 반경(모든 화면). 범위 피해(SplashRadius)는 쏜 사람 화면에만 넣으므로 표시는 따로 받는다.
         [System.NonSerialized] public float VisualSplashRadius;
         [System.NonSerialized] public float MinSplashFraction = 0.25f;
+        // 함선 부위도 범위 피해를 그대로 준다(무장 FullPartSplash — LASM). 끄면 부위는 ACO_Warship.PartSplashScale만큼만 받는다.
+        [System.NonSerialized] public bool FullPartSplash;
         // 무전 자막(런처가 넣는다): 내 미사일이 빗나감/플레어에 속음, 나를 노린 미사일 경보.
         [System.NonSerialized] public ACO_Chatter Chatter;
         // RWR(런처가 넣는다): 나를 노린 미사일이면 경고를 켤 때 등록해 방향·거리를 그린다.
@@ -171,6 +175,8 @@ namespace ACO
         //  - ProximityAnyEnemy: 근접 신관이 표적이 아니어도 반경 안을 지나는 적 항공기(레이어 29 마커)에 터진다 — 범위 피해로 맞힌다(ADAM). 표적을 놓친 뒤에도 동작한다.
         //  - RetargetPool: 표적이 격추·소멸하면 이 마커들 중 RetargetRange 안의 가장 가까운 적으로 옮긴다(ADAM). 화면마다 따로 고르지만 피해는 쏜 사람 화면만.
         [System.NonSerialized] public bool IgnoreCountermeasures;
+        //  - SnapAimAtLaunch: 발사 순간 기수를 표적의 예상 자리(지금 속도로 만나는 요격점)로 돌린다(레일건 RGP — 빠른 탄이 곧게 날아가 맞는다).
+        [System.NonSerialized] public bool SnapAimAtLaunch;
         [System.NonSerialized] public bool ProximityAnyEnemy;
         [System.NonSerialized] public GameObject[] RetargetPool;
         [System.NonSerialized] public float RetargetRange;
@@ -220,6 +226,7 @@ namespace ACO
         private const int MAX_SPLASH_COLLIDERS = 256;   // 큰 반경이면 함선·지상 그룹 콜라이더가 많다 — 모자라면 일부 유닛이 빠진다
         private Collider[] _splashHits = new Collider[MAX_SPLASH_COLLIDERS];
         private SaccTarget[] _splashDamaged = new SaccTarget[MAX_SPLASH_HITS];
+        private SaccTarget _directPart;   // 탄이 직접 닿은 표적(락온 표적 명중 또는 부딪힌 콜라이더) — 범위 피해 배율을 받지 않는다
         private bool _targetLost;
         private const float ECM_CHECK = 0.25f;
         private const float ECM_BREAK = 1f;
@@ -243,7 +250,13 @@ namespace ACO
         private ACO_Warship _targetShip;
         private bool _skimTerminal;
         private float _skimFloor;
+        private float _skimWater;
         private float _skimProbeTimer;
+        // 물속 처리: 바다는 트리거 상자라 그 안에서 출발한 미사일은 선분 충돌로 수면을 못 본다 — 겹침으로 따로 본다.
+        private Collider[] _waterHits = new Collider[2];
+        private bool _surfacing;            // 물속에서 출발했다: 수면 위로 솟구칠 때까지 유도하지 않는다
+        private float _waterCheckTimer;
+        private const float WATER_CHECK = 0.1f;
         private const float SKIM_LOOKAHEAD = 600f;       // 이만큼 앞의 목표 고도를 겨눈다(고도 오차가 부드럽게 줄어든다)
         private const float SKIM_MAX_DIVE = 12f;         // 내려갈 때 최대 각도(도) — 해면에 꽂히지 않게
         private const float SKIM_MAX_CLIMB = 30f;        // 지형을 넘을 때 최대 각도(도)
@@ -297,17 +310,19 @@ namespace ACO
             bool cold = ColdLaunchTime > 0f;
             _speed = cold ? ColdLaunchSpeed : LaunchSpeed;
             _speed = Mathf.Max(_speed, LaunchInheritSpeed);
+            if (SnapAimAtLaunch && !cold && _target != null) { AimAtIntercept(_speed); }
             _lifeTimer = MaxLifetime;
             _lockHoldTimer = LockHoldTime;
             _straightTimer = FlyStraightTime;
             _coldTimer = cold ? ColdLaunchTime : 0f;
             // 런처가 EnableWeapon 전에 발사 지점의 자세를 넣어 두므로 지금의 앞쪽이 사출 방향이다.
-            _coldVelocity = transform.forward * _speed;
+            _coldVelocity = transform.forward * _speed + (cold ? ColdLaunchKick : Vector3.zero);
             _seekerUnlimited = cold;
             _acquireTimer = 0f;
             _unlockTimer = 0f;
             _flying = true;
             _exploded = false;
+            _directPart = null;
             _diving = false;
             _targetLost = false;
             _ecmCheck = 0f;
@@ -327,7 +342,10 @@ namespace ACO
             _intercepted = false;
             _skimTerminal = false;
             _skimFloor = -100000f;
+            _skimWater = -100000f;
             _skimProbeTimer = 0f;
+            _waterCheckTimer = 0f;
+            _surfacing = InWater(transform.position);
             _explodeSurface = SURFACE_AIR;
             _explodeNormal = Vector3.up;
 
@@ -347,6 +365,19 @@ namespace ACO
             // 나를 노린 미사일(NPC·SAM 미사일 — 표적 기체를 이 클라이언트가 조종 중)
             _targetIsMe = !ShooterJudgesHit && _targetEntity && _targetEntity.Piloting;
             if (Chatter && _targetIsMe) { Chatter.Report(ACO_Chatter.EV_MISSILE_INCOMING, ""); }
+        }
+
+        /// 발사 순간 기수를 요격점으로 — 표적 속도는 기체가 알려 주는 값(플레이어 SAV·NPC 비행), 모르면 0(지상·함선 — 느려서 보정으로 충분하다).
+        /// 모든 클라이언트가 같은 표적·같은 발사 자세로 계산하므로 탄이 같은 방향으로 나간다(표적 속도는 화면마다 조금 다를 수 있다).
+        private void AimAtIntercept(float speed)
+        {
+            Vector3 v = Vector3.zero;
+            if (_targetSAV != null) { v = _targetSAV.CurrentVel; }
+            else if (_targetNPC != null) { v = _targetNPC.transform.forward * _targetNPC.Speed; }
+            Vector3 d = _target.position - transform.position;
+            float t = InterceptTime(d, v, Mathf.Max(speed, 1f));
+            Vector3 aim = d + v * t;
+            if (aim.sqrMagnitude > 0.01f) { transform.rotation = Quaternion.LookRotation(aim.normalized, transform.up); }
         }
 
         /// 내 미사일의 결과를 무전으로 한 번 알린다(쏜 사람 화면에서만, 락온해 쏜 플레이어 미사일만).
@@ -416,6 +447,35 @@ namespace ACO
             }
 
             if (_straightTimer > 0f) { _straightTimer -= dt; }
+
+            // 물속: 출발한 곳이 물속이면 수면 위로 곧게 솟구친 뒤 유도한다. 날다가 물속에 있으면(트리거 상자 안이라 선분이 못 본 경우) 물에 터진다
+            _waterCheckTimer -= dt;
+            if (_surfacing || _waterCheckTimer <= 0f)
+            {
+                _waterCheckTimer = WATER_CHECK;
+                bool wet = InWater(transform.position);
+                if (_surfacing && !wet) { _surfacing = false; _hasPrevLos = false; }
+                else if (!_surfacing && wet)
+                {
+                    // 물기둥은 수면에서 — 물속 자리에서 위로 수면을 찾는다
+                    RaycastHit top;
+                    Vector3 p = transform.position;
+                    if (Physics.Raycast(p + Vector3.up * 2000f, Vector3.down, out top, 4000f, WaterLayers.value, QueryTriggerInteraction.Collide)) { transform.position = top.point; }
+                    _explodeSurface = SURFACE_WATER;
+                    _explodeNormal = Vector3.up;
+                    Explode(false);
+                    return;
+                }
+            }
+            if (_surfacing)
+            {
+                Quaternion upright = Quaternion.FromToRotation(transform.forward, Vector3.up) * transform.rotation;
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, upright, 360f * dt);
+                _coldTimer = 0f;
+                _speed = Mathf.Min(_speed + Acceleration * dt, MaxSpeed);
+                transform.position += transform.forward * (_speed * dt);
+                return;
+            }
 
             if (_coldTimer > 0f)
             {
@@ -612,14 +672,21 @@ namespace ACO
             {
                 _skimProbeTimer = 0.2f;
                 _skimFloor = -100000f;
+                _skimWater = -100000f;
                 RaycastHit ground;
                 Vector3 ahead = pos + dir * look;
                 if (Physics.Raycast(new Vector3(ahead.x, pos.y + 1000f, ahead.z), Vector3.down, out ground, 4000f, GroundLayers, QueryTriggerInteraction.Ignore))
                 {
                     _skimFloor = ground.point.y + SKIM_TERRAIN_CLEARANCE;
                 }
+                // 해수면은 표적 기준점이 아니라 실제 수면 — 물에 잠겨 가는 함선(육상전함)은 기준점이 수면보다 낮다
+                RaycastHit sea;
+                if (WaterLayers.value != 0 && Physics.Raycast(new Vector3(ahead.x, pos.y + 1000f, ahead.z), Vector3.down, out sea, 4000f, WaterLayers.value, QueryTriggerInteraction.Collide))
+                {
+                    _skimWater = sea.point.y;
+                }
             }
-            float alt = Mathf.Max(_targetShip.transform.position.y + SkimAltitude, _skimFloor);
+            float alt = Mathf.Max(Mathf.Max(_targetShip.transform.position.y, _skimWater) + SkimAltitude, _skimFloor);
             float pitch = Mathf.Atan2(alt - pos.y, look) * Mathf.Rad2Deg;
             pitch = Mathf.Clamp(pitch, -SKIM_MAX_DIVE, SKIM_MAX_CLIMB);
             Vector3 want = Quaternion.AngleAxis(-pitch, Vector3.Cross(Vector3.up, dir).normalized) * dir;
@@ -893,6 +960,13 @@ namespace ACO
             return true;
         }
 
+        /// 이 자리가 바다(WaterLayers — 트리거 상자) 안인가.
+        private bool InWater(Vector3 p)
+        {
+            if (WaterLayers.value == 0) { return false; }
+            return Physics.OverlapSphereNonAlloc(p, 0.25f, _waterHits, WaterLayers.value, QueryTriggerInteraction.Collide) > 0;
+        }
+
         /// 고속 미사일이 타겟을 지나쳐 버리는(터널링) 문제를 막기 위해 이번 프레임 이동 구간과의 최단 거리로 판정한다.
         /// 대응책에 무력화된(타겟을 놓친) 미사일은 근접 신관이 동작하지 않는다 — ProximityAnyEnemy(아무 적 항공기에 반응)만 그때도 동작한다.
         private bool CheckHit(Vector3 from, Vector3 to)
@@ -945,6 +1019,8 @@ namespace ACO
             }
             if (hitGround)
             {
+                // 유닛 히트박스(17)에 닿았을 때만 직접 맞은 표적 — 선체(Environment) 같은 큰 콜라이더는 본체로 이어져 코어가 "직접" 맞은 걸로 잘못 친다
+                _directPart = ground.collider && ground.collider.gameObject.layer == 17 ? ground.collider.GetComponentInParent<SaccTarget>() : null;
                 transform.position = ground.point;
                 _explodeSurface = SURFACE_GROUND;
                 _explodeNormal = ground.normal;
@@ -962,15 +1038,16 @@ namespace ACO
         private int _explodeSurface;
         private Vector3 _explodeNormal = Vector3.up;
 
-        /// 면에 맞는 폭발 오브젝트를 켠다. 땅·물 연출은 위(+Y)를 닿은 면의 법선으로 돌린다(물기둥·흙먼지가 똑바로 서게).
+        /// 폭발 오브젝트는 어디서 터지든 켜고, 땅·물이면 그 면의 오브젝트를 더 켠다. 땅·물 연출은 위(+Y)를 닿은 면의 법선으로 돌린다(물기둥·흙먼지가 똑바로 서게).
         private void ShowExplosion()
         {
-            GameObject fx = ExplosionObject;
-            if (_explodeSurface == SURFACE_GROUND && GroundExplosionObject) { fx = GroundExplosionObject; }
-            else if (_explodeSurface == SURFACE_WATER && WaterExplosionObject) { fx = WaterExplosionObject; }
-            if (!fx) { return; }
-            if (fx != ExplosionObject) { fx.transform.rotation = Quaternion.FromToRotation(Vector3.up, _explodeNormal.sqrMagnitude > 0.0001f ? _explodeNormal : Vector3.up); }
-            fx.SetActive(true);
+            if (ExplosionObject) { ExplosionObject.SetActive(true); }
+            GameObject extra = null;
+            if (_explodeSurface == SURFACE_GROUND) { extra = GroundExplosionObject; }
+            else if (_explodeSurface == SURFACE_WATER) { extra = WaterExplosionObject; }
+            if (!extra) { return; }
+            extra.transform.rotation = Quaternion.FromToRotation(Vector3.up, _explodeNormal.sqrMagnitude > 0.0001f ? _explodeNormal : Vector3.up);
+            extra.SetActive(true);
         }
 
         private void HideExplosions()
@@ -1039,7 +1116,8 @@ namespace ACO
             // 산탄(SCM)은 공중에서 터지므로 여기선 없다 — 자탄이 떨어지는 자리마다 SubmunitionHit으로 들어간다.
             if (SplashRadius > 0f && ShooterJudgesHit && IsShooter && !_intercepted && !_dispensed)
             {
-                ApplySplash(transform.position, hitTarget ? _targetStatic : null);
+                if (hitTarget) { _directPart = _targetStatic; }
+                ApplySplash(transform.position, hitTarget ? _targetStatic : null, _directPart);
             }
 
             for (int i = 0; i < DisableOnExplode.Length; i++)
@@ -1081,9 +1159,9 @@ namespace ACO
         }
 
         /// 자탄 하나가 떨어졌다(ACO_Dispenser): 그 자리에 범위 피해 한 번 — 무장 Damage·SplashRadius(강화 반영), 쏜 사람 화면에서만.
-        public void SubmunitionHit(Vector3 point)
+        public void SubmunitionHit(Vector3 point, SaccTarget direct)
         {
-            if (SplashRadius > 0f && ShooterJudgesHit && IsShooter) { ApplySplash(point, null); }
+            if (SplashRadius > 0f && ShooterJudgesHit && IsShooter) { ApplySplash(point, null, direct); }
         }
 
         /// 폭발 범위 표시: SplashVisual을 반경에 맞춘다(부모 크기를 나눠 월드 반지름 = SplashRadius). GrowTime이 있으면 프레임마다 키운다.
@@ -1115,8 +1193,8 @@ namespace ACO
 
 
         /// ACO_Ordnance와 같은 규칙: 반경 안의 SaccTarget마다 가장 가까운 콜라이더 거리로 한 번, 중심 Damage → 가장자리 MinSplashFraction.
-        /// 쏜 기체와 아군(호위 대상)은 빼고, skip(정통으로 맞은 표적)도 뺀다.
-        private void ApplySplash(Vector3 center, SaccTarget skip)
+        /// 쏜 기체와 아군(호위 대상)은 빼고, skip(정통으로 맞은 표적)도 뺀다. 함선 부위는 direct(직접 닿은 부위)가 아니면 PartSplashScale을 곱한다(FullPartSplash면 그대로).
+        private void ApplySplash(Vector3 center, SaccTarget skip, SaccTarget direct)
         {
             int n = Physics.OverlapSphereNonAlloc(center, SplashRadius, _splashHits, SplashLayers);
             int damagedCount = 0;
@@ -1143,8 +1221,18 @@ namespace ACO
                     if (d < best) { best = d; }
                 }
                 float t = Mathf.Clamp01(best / SplashRadius);
+                float scale = 1f;
+                if (target != direct)
+                {
+                    ACO_Warship ship = target.GetComponentInParent<ACO_Warship>();
+                    if (ship != null)
+                    {
+                        if (ship.IsSplashImmune(target)) { continue; }   // 코어는 직접 맞혀야만(예외 무기도)
+                        if (!FullPartSplash) { scale = ship.GetSplashScale(target); }
+                    }
+                }
                 NoteHit(target);
-                target.WeaponDamageTarget(Damage * Mathf.Lerp(1f, MinSplashFraction, t), gameObject, StaticWeaponType());
+                target.WeaponDamageTarget(Damage * Mathf.Lerp(1f, MinSplashFraction, t) * scale, gameObject, StaticWeaponType());
                 if (damagedCount < MAX_SPLASH_HITS) { _splashDamaged[damagedCount] = target; damagedCount++; }
             }
         }

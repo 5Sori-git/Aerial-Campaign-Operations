@@ -576,7 +576,7 @@ namespace ACO
         private float AccelerateBy(float speed, float accel, float dt)
         {
             speed += accel * dt;
-            if (Flight) { speed = Mathf.Clamp(speed, Flight.MinSpeed, Flight.MaxSpeed); }
+            if (Flight) { speed = Mathf.Clamp(speed, Flight.GetPredictMinSpeed(), Flight.MaxSpeed * Mathf.Max(Flight.MaxBoost, 1f)); }   // 가속 기동 상한까지(오너·원격 같은 값)
             return speed;
         }
 

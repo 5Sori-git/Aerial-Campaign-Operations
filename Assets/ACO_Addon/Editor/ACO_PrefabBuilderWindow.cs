@@ -35,7 +35,7 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "격납고", Description = "ACO_Hangar — 특수무장 선택/해금, 강화 상점(탭), 크레딧·보상, READY/LAUNCH(관전자는 SPECTATE)", PrefabNames = new[] { "ACO_Hangar" } },
         new Entry { Label = "지형 장식 (도시/마을/랜드마크)", Description = "도시 칸 3 + 마을 2 + 항구/비행장/등대/레이더/통신탑/유적 모델(Models/Deco) — ACO_TerrainFeatures가 지형 칸 위에 놓는다", PrefabNames = ACO_DecoBuilder.AllNames() },
         new Entry { Label = "HUD 설정 패널", Description = "ACO_HudSettings — 플레이어별 HUD 조정(점수 패널 위치·크기, 결과·안내 글자 위치·크기, 마커 테두리, 정보 각도, 크로스헤어·RWR 크기·거리), 영구 저장", PrefabNames = new[] { "ACO_HudSettings" } },
-        new Entry { Label = "슈퍼에이스 (보너스 페이즈)", Description = "NPC_SuperAce — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적). 생성기 풀 아래에 하나 두면 보너스 페이즈에만 나온다", PrefabNames = new[] { "NPC_SuperAce" } },
+        new Entry { Label = "분신 에이스 형제 (HEADS·TAILS)", Description = "NPC_SuperAce(형 HEADS) + NPC_SuperAce_Tails(동생 TAILS) — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적) + 쌍둥이 규칙(한 기가 떨어지면 남은 쪽이 분노). 생성기 풀 아래에 하나씩 두면 분신 에이스 페이즈(3~5번째)에 2기 편대로 나온다", PrefabNames = new[] { "NPC_SuperAce", "NPC_SuperAce_Tails" } },
         new Entry { Label = "적 폭격기 (요격 대상)", Description = "NPC_Bomber — 요격 페이즈. 도시 상공까지 항로 비행, 도착해 폭탄을 떨어뜨리면 미션 실패. 풀 아래에 4~6대", PrefabNames = new[] { "NPC_Bomber" } },
         new Entry { Label = "공격 헬리콥터", Description = "NPC_Helicopter — 전차 항로 이동 + 지면·해수면 위 70m(바다·절벽 위로도), 아군 지상·공중 표적에 기관포. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Helicopter" } },
         new Entry { Label = "곡사포 (자주포)", Description = "NPC_Artillery + 포탄 ACO_ArtilleryShell — 호위 항로에서 2.5~4.5km 떨어져 아군 콘보이·함선을 고각 포격. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Artillery", "ACO_ArtilleryShell" } },
@@ -47,13 +47,16 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "비행 HUD (SAV HUD 대신)", Description = "ACO_FlightHud — 기체 앞 고정 HUD: 헤딩 테이프·속도(kt)·스로틀·고도(ft)·피치 래더·속도 벡터·G·상태(GEAR/FLAP/HOOK/AIRBRAKE)·잔탄·HP·장전 막대·조준 표시(기총 피퍼·W·십자). 씬에 하나 두고 Bake하면 SAV HUD를 숨긴다", PrefabNames = new[] { "ACO_FlightHud" } },
         new Entry { Label = "관전 패널 (리플레이식 카메라)", Description = "ACO_SpectatorPanel — 큰 스크린 + POWER / 대상(조종사) < > / 컷 < > (AUTO = 감독). 플레이어 기체를 추적·플라이바이·망원·나란히·조종석·미사일·표적 캠으로 실시간 관전. 로컬 전용, 켜고 끄기는 직접", PrefabNames = new[] { "ACO_SpectatorPanel" } },
         new Entry { Label = "공중 요새 (보스)", Description = "NPC_Fortress — Archangel 모델의 거대 비행 요새(Assets/ARCANGEL 필요): 방공 18곳·엔진 4·코어. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Fortress" } },
-        new Entry { Label = "TEL (시한 표적)", Description = "NPC_TEL — 탄도탄 발사대(임시 큐브 모델). 없으면 Bake가 만들어 유닛 풀에 3대 넣는다", PrefabNames = new[] { "NPC_TEL" } },
+        new Entry { Label = "TEL (시한 표적)", Description = "NPC_TEL — 탄도탄 발사대. 없으면 Bake가 만들어 유닛 풀에 3대 넣는다", PrefabNames = new[] { "NPC_TEL" } },
         new Entry { Label = "아군 기함 (함대전)", Description = "NPC_Flagship — Ticonderoga 모델, 주포·VLS 2·CIWS 2. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Flagship" } },
         new Entry { Label = "적 항모 (함대전)", Description = "NPC_Carrier — Kuznetsov 모델, CIWS 4. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Carrier" } },
         new Entry { Label = "랜스 포대 (보스)", Description = "NPC_Railgun — 지상 보스, 방공 12·냉각기 4·코어. 모델은 Visual_* 자식을 바꿔 끼운다. 없으면 Bake가 만들어 유닛 풀에 넣는다", PrefabNames = new[] { "NPC_Railgun" } },
         new Entry { Label = "함내 격실", Description = "ACO_Interior — 브리핑실, CIC, 복도, 침실. 씬에 놓는 일과 조명은 따로 한다. 다시 만들면 프리팹을 손으로 고친 내용이 사라진다", PrefabNames = new[] { ACO_InteriorBuilder.PrefabName } },
         new Entry { Label = "평면 지도", Description = "ACO_PlanMap — 브리핑실 벽걸이 지도. 지형, 공역, 목표, 적을 보여 준다", PrefabNames = new[] { ACO_RadarBuilder.PlanMapName } },
         new Entry { Label = "하이스코어판", Description = "ACO_HiScoreBoard — 복도 게시 공간. 한 미션 최고 획득 크레딧 순위", PrefabNames = new[] { ACO_HUDBuilder.HiScoreName } },
+        new Entry { Label = "이펙트 미리보기", Description = "ACO_FxPreview — 대폭발(땅·물)·연쇄 폭발·탄환을 에디터에서 재생해 본다. 씬에 넣지 않는다. 덮어써도 된다", PrefabNames = new[] { "ACO_FxPreview" } },
+        new Entry { Label = "유닛 파괴 효과", Description = "ACO_DeathFx_Air/Ground/Ship/Building/Part — 유닛 폭발, 남는 불과 연기, 폭발음. NPC의 ShowOnDeath 오브젝트에 중첩된다. 다시 만들면 손으로 고친 값이 처음 값으로 돌아간다", PrefabNames = ACO_FxBuilder.DeathFxNames },
+        new Entry { Label = "육상전함 (보스)", Description = "NPC_LandShip — Models/LandShip/ACO_LandShip.fbx 모델, 스커트 12·궤도 12·배기구 8·코어, 주포 3(소형 레일건 2연발)·부포 4(Flak). VLS·CIWS는 프리팹에 직접 놓는다. 없으면 Bake가 만들어 유닛 풀에 넣는다. 다시 만들면 직접 놓은 포대가 사라진다", PrefabNames = new[] { ACO_PrefabBuilder.LandShipPrefab } },
     };
 
     private bool[] _selected;
@@ -179,7 +182,7 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[16]) { ACO_HUDBuilder.CreateHangarPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_Hangar")); }
         if (_selected[17]) { foreach (GameObject deco in ACO_DecoBuilder.BuildAll()) { Log(built, deco); } }
         if (_selected[18]) { ACO_HUDBuilder.CreateHudSettingsPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_HudSettings")); }
-        if (_selected[19]) { Log(built, ACO_PrefabBuilder.BuildSuperAce()); }
+        if (_selected[19]) { Log(built, ACO_PrefabBuilder.BuildSuperAce()); Log(built, ACO_PrefabBuilder.BuildSuperAceTails()); }
         if (_selected[20]) { Log(built, ACO_PrefabBuilder.BuildBomber()); }
         if (_selected[21]) { Log(built, ACO_PrefabBuilder.BuildHelicopter()); }
         if (_selected[22]) { Log(built, ACO_PrefabBuilder.BuildArtilleryShell()); Log(built, ACO_PrefabBuilder.BuildArtillery()); }
@@ -198,6 +201,9 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[35]) { Log(built, ACO_InteriorBuilder.Build()); }
         if (_selected[36]) { Log(built, ACO_RadarBuilder.CreatePlanMapPrefab()); }
         if (_selected[37]) { Log(built, ACO_HUDBuilder.CreateHiScorePrefab()); }
+        if (_selected[38]) { Log(built, ACO_FxBuilder.CreatePreviewPrefab()); }
+        if (_selected[39]) { foreach (GameObject fx in ACO_FxBuilder.CreateDeathFxPrefabs()) { Log(built, fx); } }
+        if (_selected[40]) { Log(built, ACO_PrefabBuilder.BuildLandShip()); }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

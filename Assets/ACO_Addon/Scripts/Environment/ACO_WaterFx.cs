@@ -7,7 +7,8 @@ namespace ACO
     ///  - MODE_SPRAY(저공 물보라 — 시스키밍 미사일, 저공비행 기체): 부모(미사일·기체)가 수면 위 MaxHeight 안을 MinSpeed 이상으로 지나면
     ///    바로 아래 수면에 물보라(Particles — 월드 공간, 위로 튀는 원뿔)를 뿌린다. CheckInterval마다 아래로 짧게 Raycast(물 + 지형) — 물이 먼저 맞을 때만.
     ///    세기 = 높이(수면에 가까울수록) × 속력(FullSpeed까지). 방출기는 매 프레임 수면 위 같은 자리(부모 바로 아래)로 옮기고 위를 향하게 세운다.
-    ///  - MODE_WAKE(함선 항적): 파티클은 거리 비례 방출(Rate over Distance, 월드 공간)이라 움직일 때만 생긴다. 이 스크립트는 순간이동(풀 배치·부활·대기 자리 이동)할 때
+    ///  - MODE_WAKE(함선 항적): 물 위에서만 방출한다(공기부양이 뭍에 오르면 끈다).
+    ///    파티클은 거리 비례 방출(Rate over Distance, 월드 공간)이라 움직일 때만 생긴다. 이 스크립트는 순간이동(풀 배치·부활·대기 자리 이동)할 때
     ///    옛 자리에서 새 자리까지 그어지는 줄을 지운다(한 프레임에 JumpDistance보다 멀리 움직이면 Clear).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_WaterFx : UdonSharpBehaviour
@@ -39,6 +40,8 @@ namespace ACO
         [Header("항적")]
         [Tooltip("한 프레임에 이보다 멀리(m) 움직이면 순간이동으로 보고 남은 항적을 지운다")]
         public float JumpDistance = 60f;
+        [Tooltip("물 위인지 확인하는 간격(초)")]
+        public float WakeCheckInterval = 0.4f;
 
         private Vector3 _lastPos;
         private bool _hasLast;
@@ -47,6 +50,7 @@ namespace ACO
         private float _surfaceY;
         private float _speed;
         private float _rate = -1f;
+        private bool _wakeOn = true;
         private Quaternion _upRot;
 
         void OnEnable()
@@ -70,6 +74,13 @@ namespace ACO
                 if (_hasLast && (p - _lastPos).sqrMagnitude > JumpDistance * JumpDistance) { ClearAll(); }
                 _lastPos = p;
                 _hasLast = true;
+                _timer -= dt;
+                if (_timer <= 0f)
+                {
+                    _timer = WakeCheckInterval;
+                    Probe(p);
+                    SetWakeOn(_overWater);
+                }
                 return;
             }
 
@@ -114,6 +125,18 @@ namespace ACO
             bool hitGround = Physics.Raycast(origin, Vector3.down, out ground, reach, GroundLayers.value & ~WaterLayers.value, QueryTriggerInteraction.Ignore);
             _overWater = hitWater && (!hitGround || water.distance <= ground.distance);
             if (_overWater) { _surfaceY = water.point.y; }
+        }
+
+        private void SetWakeOn(bool on)
+        {
+            if (on == _wakeOn || Particles == null) { return; }
+            _wakeOn = on;
+            for (int i = 0; i < Particles.Length; i++)
+            {
+                if (!Particles[i]) { continue; }
+                ParticleSystem.EmissionModule em = Particles[i].emission;
+                em.enabled = on;
+            }
         }
 
         private void SetRate(float rate)

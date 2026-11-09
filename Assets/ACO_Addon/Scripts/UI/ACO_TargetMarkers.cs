@@ -118,6 +118,8 @@ namespace ACO
         public float DiamondStartDistance = 2.5f;
         [Tooltip("락온 중인 표적의 테두리를 다른 마커보다 이 비율만큼 가까이(표시 거리 × 이 값) — 겹친 마커와 그리는 순서가 깜빡이지(z-fighting) 않게. 크기도 같은 비율이라 화면에선 그대로")]
         [Range(0.8f, 1f)] public float LockedFrameNear = 0.97f;
+        [Tooltip("지금 페이즈 목표(빨간 TGT 테두리)도 다른 마커보다 이 비율만큼 가까이 — 보스 부위 마커와 겹쳐도 깜빡이지 않게. 락온 테두리(LockedFrameNear)보다는 뒤")]
+        [Range(0.8f, 1f)] public float ObjectiveFrameNear = 0.985f;
         [Tooltip("락온 마름모·십자는 그보다도 가까이 — 늘 테두리 위에")]
         [Range(0.8f, 1f)] public float LockMarkNear = 0.94f;
         [Tooltip("마름모 크기(마커 크기 배수). 0.71이면 꼭짓점이 테두리 변의 가운데에 닿는다 — 조금 크게 해서 테두리와 겹치게 한다")]
@@ -154,6 +156,7 @@ namespace ACO
 
         // 시작 시 생성기 풀에서 만든 유닛 목록(캐시)
         private Transform[] _unitTransform;
+        private ACO_Warship[] _unitWarship;
         private SaccTarget[] _unitHealth;
         private int[] _unitKind;
         private string[] _unitLabel;
@@ -240,6 +243,7 @@ namespace ACO
             int total = fighters + ground + hvts + parts + escorts + decoys;
 
             _unitTransform = new Transform[total];
+            _unitWarship = new ACO_Warship[total];
             _unitHealth = new SaccTarget[total];
             _unitKind = new int[total];
             _unitLabel = new string[total];
@@ -278,6 +282,7 @@ namespace ACO
                 if (h == null) { continue; }
                 int hvtKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_HVT, i) ? KIND_AIR : KIND_GROUND;
                 AddUnit(h.transform, h.GetComponent<SaccTarget>(), hvtKind, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
+                _unitWarship[_unitCount - 1] = h.GetComponent<ACO_Warship>();   // 보스 코어 단계면 마커를 코어 자리(MarkerAnchor)에
             }
             // 함선 부위(VLS/함포/CIWS)는 각자 따로 표시된다.
             for (int i = 0; i < parts; i++)
@@ -300,6 +305,7 @@ namespace ACO
         private void AddUnit(Transform t, SaccTarget health, int kind, string label, ACO_NPCFighterAI fighter, int category, int index)
         {
             _unitTransform[_unitCount] = t;
+            _unitWarship[_unitCount] = null;
             _unitHealth[_unitCount] = health;
             _unitKind[_unitCount] = kind;
             _unitLabel[_unitCount] = label;
@@ -409,6 +415,8 @@ namespace ACO
                 int lockK = -1;
                 for (int k = 0; k < MAX_LOCKS; k++) { if (_lockUnit[k] == u) { lockK = k; break; } }
                 Vector3 point = t.position;
+                ACO_Warship anchorShip = _unitWarship[u];
+                if (anchorShip != null && anchorShip.MarkerAnchor != null) { point = anchorShip.MarkerAnchor.position; }
                 if (lockK >= 0 && _lockObj[lockK] != null && _lockObj[lockK].activeInHierarchy) { point = _lockObj[lockK].transform.position; }
                 Vector3 d = point - headPos;
                 float sq = d.sqrMagnitude;
@@ -423,7 +431,7 @@ namespace ACO
                 Transform m = Markers[used];
                 if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
                 // 락온 중인 표적은 다른 마커보다 조금 앞(LockedFrameNear)에 — 겹친 마커와 그리는 순서가 깜빡이지 않게(크기는 같은 비율로 줄여 화면 크기는 그대로)
-                float near = lockK >= 0 ? LockedFrameNear : 1f;
+                float near = lockK >= 0 ? LockedFrameNear : (objective ? ObjectiveFrameNear : 1f);
                 m.SetPositionAndRotation(headPos + dir * (DisplayDistance * near), Quaternion.LookRotation(dir, headUp));
                 // 원근감: NearDistance까지 1배, MaxDistance에서 FarScale배, 사이는 log(거리)에 비례.
                 float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
@@ -853,6 +861,8 @@ namespace ACO
             if (fighter != null)
             {
                 if (fighter.SuperAce != null) { return fighter.SuperAce.AceName; }
+                if (fighter.LaserAce != null) { return fighter.LaserAce.AceName; }
+                if (fighter.Shade != null) { return fighter.Shade.AceName(); }
                 return fighter.GetDisplayLabel(fighter.GetSkillTier());   // "FTR ACE", "ATK VET"
             }
             return _unitLabel[u];

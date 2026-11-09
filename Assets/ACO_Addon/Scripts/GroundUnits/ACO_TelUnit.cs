@@ -36,8 +36,15 @@ namespace ACO
         public GameObject AirMarker;
         public Collider ChassisHitbox;
         public Collider MissileHitbox;
+        [Tooltip("유압 실린더: 아랫단(차체 축), 가운데 단, 윗단(이렉터 축). 프리팹 빌더가 넣는다")]
+        public Transform RamCylinder;
+        public Transform RamMiddle;
+        public Transform RamRod;
+        public float RamMiddleLength = 2.4f;
         [Tooltip("파괴 시 켤 폭발")]
         public GameObject BlastEffect;
+        [Tooltip("비행 중 파괴 시 켤 폭발. 위로 날아가는 파편이 있다. BlastEffect는 지상 파괴만 쓴다")]
+        public GameObject AirBlastEffect;
         [Tooltip("폭발을 보여 주는 시간(초)")]
         public float BlastTime = 6f;
 
@@ -96,11 +103,15 @@ namespace ACO
             if (t < LaunchDelay)
             {
                 if (Rail) { Rail.localRotation = Quaternion.Euler(-RailErectAngle * Mathf.Clamp01(t / Mathf.Max(LaunchDelay * 0.8f, 0.01f)), 0f, 0f); }
+                AimRam();
                 return;
             }
             if (!_launched)
             {
                 _launched = true;
+                // 발사 뒤에 들어온 클라이언트는 일어나는 과정을 못 봤다 — 다 선 자세로 맞춘다
+                if (Rail) { Rail.localRotation = Quaternion.Euler(-RailErectAngle, 0f, 0f); }
+                AimRam();
                 ApplyState();
             }
             float k = Mathf.Clamp01((t - LaunchDelay) / Mathf.Max(FlightTime, 0.01f));
@@ -108,6 +119,22 @@ namespace ACO
             transform.position = new Vector3(_launchPos.x, y, _launchPos.z);
             // 차체는 발사 자리에 남는다(자식이라 루트와 함께 올라가지 않게 되돌린다)
             if (Chassis) { Chassis.position = transform.TransformPoint(_chassisLocal) + Vector3.down * (y - _launchPos.y); }
+        }
+
+        /// 유압 실린더 세 단을 두 축 사이에 놓는다. 겹쳐 있던 단이 이렉터가 일어나면서 뽑혀 나온다.
+        private void AimRam()
+        {
+            if (!RamCylinder || !RamMiddle || !RamRod) { return; }
+            Vector3 bottom = RamCylinder.position;
+            Vector3 top = RamRod.position;
+            Vector3 along = top - bottom;
+            if (along.sqrMagnitude < 0.01f) { return; }
+            Vector3 up = transform.up;
+            Quaternion aim = Quaternion.LookRotation(along, up);
+            RamCylinder.rotation = aim;
+            RamMiddle.rotation = aim;
+            RamMiddle.position = (bottom + top) * 0.5f - along.normalized * (RamMiddleLength * 0.5f);
+            RamRod.rotation = Quaternion.LookRotation(-along, up);
         }
 
         private void ApplyState()
@@ -118,7 +145,8 @@ namespace ACO
             SetObject(FlyingMissile, alive && _launched);
             SetObject(GroundMarker, alive && !_launched);
             SetObject(AirMarker, alive && _launched);
-            SetObject(BlastEffect, _dead);
+            SetObject(BlastEffect, _dead && !_launched);
+            SetObject(AirBlastEffect, _dead && _launched);
             if (ChassisHitbox) { ChassisHitbox.enabled = alive && !_launched; }
             if (MissileHitbox) { MissileHitbox.enabled = alive && _launched; }
         }
@@ -139,7 +167,9 @@ namespace ACO
         /// 폭발 연기는 반복 재생이라 BlastTime 뒤에 끈다(파괴된 TEL은 미션이 끝나거나 다시 쓸 때까지 풀에 남는다).
         public void _HideBlast()
         {
-            if (_dead) { SetObject(BlastEffect, false); }
+            if (!_dead) { return; }
+            SetObject(BlastEffect, false);
+            SetObject(AirBlastEffect, false);
         }
 
         // ───────────── 미션 생성기 계약 ─────────────
@@ -150,6 +180,7 @@ namespace ACO
             transform.SetPositionAndRotation(MissionSpawnPosition, MissionSpawnRotation);
             if (Chassis) { Chassis.localPosition = _chassisLocal; }
             if (Rail) { Rail.localRotation = Quaternion.identity; }
+            AimRam();
             _launchPos = MissionSpawnPosition;
             _spawned = true;
             _launched = false;

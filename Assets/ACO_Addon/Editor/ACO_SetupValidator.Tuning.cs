@@ -86,6 +86,14 @@ public partial class ACO_SetupValidator
         {
             Add(g, WARN, "패널 버튼 효과음(ACO_UiSound)이 없습니다.", null, () => { bool created; ACO_HUDBuilder.EnsureUiSound(out created); });
         }
+        if (ACO_PrefabTuning.IsApplied("fx-death-1"))
+        {
+            int noDeath = ACO_FxBuilder.CountMissingDeathFx();
+            if (noDeath > 0)
+            {
+                Add(g, WARN, $"NPC 프리팹 {noDeath}개에 파괴 효과가 없습니다(NPC 프리팹을 다시 만들면 빠집니다).", null, ACO_FxBuilder.ApplyToDeath);
+            }
+        }
         if (ACO_SceneBaker.BulletFlybyMissing())
         {
             Add(g, WARN, "총탄이 스치는 소리(BulletFlyby)가 없습니다.", null, ACO_SceneBaker.InstallBulletFlyby);
@@ -97,6 +105,12 @@ public partial class ACO_SetupValidator
             {
                 foreach (GameObject go in noIgnore) { go.AddUdonSharpComponent<ACO_AirCollisionIgnore>(); }
             });
+        }
+        List<ACO_VehicleDecal> sharedDecals = ACO_SceneBaker.DecalsSharingMaterials();
+        if (sharedDecals.Count > 0)
+        {
+            Add(g, ERROR, $"기체 {sharedDecals.Count}대가 다른 기체와 데칼 머티리얼을 같이 씁니다. 다른 사람의 데칼 이미지가 내 기체에 보입니다(기체 프리팹 안에 데칼이 들어가 있으면 생긴다).",
+                sharedDecals[0], ACO_SceneBaker.SplitDecalMaterials);
         }
         int noColliders = ACO_SceneBaker.DecalSampleMeshesMissing();
         if (noColliders > 0)

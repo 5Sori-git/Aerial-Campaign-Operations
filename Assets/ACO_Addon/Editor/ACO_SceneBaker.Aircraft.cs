@@ -12,6 +12,30 @@ public partial class ACO_SceneBaker
 {
     /// 데칼: 스튜디오(격납고) 미리보기 프로젝터를 샘플 기체 기준점 아래로, 샘플 메시에 콜라이더(데칼 건이 겨눈다 — 없는 것만 MeshCollider),
     /// 플레이어 기체마다 ACO_VehicleDecal(기준점 = SaccEntity 루트 자식 "ACO_Decals" + 프로젝터 2개, 머티리얼은 기체마다 따로) ↔ 스튜디오·기체 강화 확장.
+    /// 플레이어 기체 확장(ACO_VehicleUpgrades)의 안전지대 보호용 락온 마커: SaccEntity 아래 이름이 "AAMTarget"이고 아군 항공기 레이어(25)인 오브젝트.
+    private static void BakeSafeLockTargets()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true))
+            {
+                SaccFlightAndVehicles.SaccEntity e = up.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true);
+                if (e == null) { continue; }
+                GameObject marker = null;
+                foreach (Transform t in e.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.name == "AAMTarget" && t.gameObject.layer == 25) { marker = t.gameObject; break; }
+                }
+                if (marker == null)
+                {
+                    Debug.LogWarning($"[ACO] 안전지대 보호: '{e.name}'에서 락온 마커(AAMTarget, 레이어 25)를 찾지 못했습니다 — 안전지대에서도 적이 노립니다.", e);
+                    continue;
+                }
+                if (up.LockTarget != marker) { up.LockTarget = marker; MarkChanged(up); }
+            }
+        }
+    }
+
     private static void BakeDecals()
     {
         ACO_DecalStudio studio = Object.FindObjectOfType<ACO_DecalStudio>(true);
@@ -660,6 +684,85 @@ public partial class ACO_SceneBaker
         if (studio != null) { vd.DecalKey = studio.DecalKey; }
         MarkChanged(vd);
         Debug.Log($"[ACO] 데칼: '{entity.name}'에 데칼(프로젝터 2개)을 달았습니다.", go);
+    }
+
+    /// 다른 기체와 데칼 머티리얼을 같이 쓰는 기체 데칼. 머티리얼에 이미지·크기·켜짐을 넣으므로, 같이 쓰면 한 기체의 데칼이 다른 기체에도 보인다
+    /// (기체 프리팹 안에 데칼을 넣으면 그 프리팹의 씬 인스턴스가 모두 같은 머티리얼을 가리킨다). 첫 기체는 그대로, 뒤 기체들을 돌려준다.
+    public static List<ACO_VehicleDecal> DecalsSharingMaterials()
+    {
+        var seen = new HashSet<Material>();
+        var shared = new List<ACO_VehicleDecal>();
+        foreach (ACO_VehicleDecal vd in SceneDecals())
+        {
+            bool dup = false;
+            for (int i = 0; i < 2; i++)
+            {
+                Material m = DecalMaterialOf(vd, i);
+                if (m == null) { continue; }
+                if (!seen.Add(m)) { dup = true; }
+            }
+            if (dup) { shared.Add(vd); }
+        }
+        return shared;
+    }
+
+    /// Setup Check: 머티리얼을 같이 쓰는 기체 데칼에 기체마다 따로 머티리얼(Generated/Decals/ACO_Decal_V<n>_<i>)을 준다 — 씬 인스턴스 오버라이드로 넣는다.
+    public static void SplitDecalMaterials()
+    {
+        var used = new HashSet<Material>();
+        foreach (ACO_VehicleDecal vd in SceneDecals())
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                Material m = DecalMaterialOf(vd, i);
+                if (m != null && !used.Contains(m)) { used.Add(m); continue; }
+                // 같이 쓰는(또는 없는) 칸: 아무도 안 쓰는 번호의 머티리얼을 찾거나 만든다
+                Material fresh = null;
+                for (int n = 0; n < 256 && fresh == null; n++)
+                {
+                    Material cand = ACO_HUDBuilder.LoadOrCreateDecalMaterial("ACO_Decal_V" + n + "_" + i);
+                    if (cand != null && !used.Contains(cand)) { fresh = cand; }
+                }
+                if (fresh == null) { continue; }
+                used.Add(fresh);
+                Projector p = vd.Projectors != null && i < vd.Projectors.Length && vd.Projectors[i] != null ? vd.Projectors[i].GetComponent<Projector>() : null;
+                if (p != null)
+                {
+                    Undo.RecordObject(p, "ACO decal material");
+                    p.material = fresh;
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(p);
+                }
+                Undo.RecordObject(vd, "ACO decal material");
+                if (vd.Materials == null || vd.Materials.Length < 2)
+                {
+                    var arr = new Material[2];
+                    if (vd.Materials != null) { for (int k = 0; k < vd.Materials.Length && k < 2; k++) { arr[k] = vd.Materials[k]; } }
+                    vd.Materials = arr;
+                }
+                vd.Materials[i] = fresh;
+                MarkChanged(vd);
+                Debug.Log($"[ACO] 데칼: '{vd.transform.parent?.name}'의 데칼 {i + 1}에 따로 머티리얼 {fresh.name}을 줬습니다.", vd);
+            }
+        }
+    }
+
+    private static List<ACO_VehicleDecal> SceneDecals()
+    {
+        var list = new List<ACO_VehicleDecal>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            list.AddRange(root.GetComponentsInChildren<ACO_VehicleDecal>(true));
+        }
+        return list;
+    }
+
+    /// 데칼 칸 i가 실제로 쓰는 머티리얼: 스크립트가 값을 넣는 Materials[i]. 프로젝터가 다른 걸 가리키면 그것도 같이 본다(둘이 다르면 같이 쓰는 것으로 친다).
+    private static Material DecalMaterialOf(ACO_VehicleDecal vd, int i)
+    {
+        Material m = vd.Materials != null && i < vd.Materials.Length ? vd.Materials[i] : null;
+        Projector p = vd.Projectors != null && i < vd.Projectors.Length && vd.Projectors[i] != null ? vd.Projectors[i].GetComponent<Projector>() : null;
+        if (p != null && p.material != m) { return null; }   // 어긋남 — 아래 고치기에서 새로 준다
+        return m;
     }
 
     /// 샘플 기체에서 데칼 건이 겨눌 콜라이더가 없는 메시 수.

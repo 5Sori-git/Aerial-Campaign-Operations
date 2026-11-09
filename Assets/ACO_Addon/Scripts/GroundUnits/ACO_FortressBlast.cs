@@ -34,11 +34,7 @@ namespace ACO
         [Tooltip("음속(m/s). 0이면 늦추지 않는다")]
         public float SoundSpeed = 340f;
 
-        [Header("한 번에 내보내는 수")]
-        public int FireCount = 60;
-        public int DebrisCount = 120;
-        public int WaterCount = 120;
-        public int MistCount = 40;
+        [Tooltip("낙하 중 연쇄 폭발 한 번에 내보내는 수")]
         public int SecondaryCount = 10;
 
         private float _flashLeft;
@@ -53,22 +49,23 @@ namespace ACO
         }
 
         /// 충돌 폭발. water면 물기둥, 아니면 화염구·파편·연기 기둥. scale = 크기 배율.
+        /// 터지는 양과 순서는 각 파티클의 Burst가 정한다(ACO_FxBuilder.StyleBlast). Fire의 자식(불티·연기 줄기·먼지 고리)도 함께 돈다.
         public void Play(Vector3 point, bool water, float scale)
         {
             transform.SetParent(null);
             transform.SetPositionAndRotation(point, Quaternion.identity);
             transform.localScale = Vector3.one * scale;
-            if (Flash) { Flash.Emit(1); }
-            if (Shock) { Shock.Emit(1); }
+            if (Flash) { Flash.Play(); }
+            if (Shock) { Shock.Play(); }
             if (water)
             {
-                if (WaterColumn) { WaterColumn.Emit(WaterCount); }
-                if (Mist) { Mist.Emit(MistCount); }
+                if (WaterColumn) { WaterColumn.Play(); }
+                if (Mist) { Mist.Play(); }
             }
             else
             {
-                if (Fire) { Fire.Emit(FireCount); }
-                if (Debris) { Debris.Emit(DebrisCount); }
+                if (Fire) { Fire.Play(); }
+                if (Debris) { Debris.Play(); }
                 if (Smoke) { Smoke.Play(); }
             }
             if (FlashLight)

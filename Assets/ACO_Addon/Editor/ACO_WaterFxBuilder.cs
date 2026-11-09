@@ -212,16 +212,23 @@ public static class ACO_WaterFxBuilder
     public static GameObject AddWake(Transform ship)
     {
         Bounds b = LocalColliderBounds(ship);
-        float width = Mathf.Max(b.size.x, 4f);
+        return AddWakeSized(ship, 0f, b.min.z, b.max.z, Mathf.Max(b.size.x, 4f));
+    }
+
+    /// 항적을 정한 크기로 단다: 항적 오브젝트를 로컬 높이 y(수면이 될 높이)에 두고 선미 sternZ·선수 bowZ, 폭 width. 같은 거품·물결.
+    public static GameObject AddWakeSized(Transform ship, float y, float sternZ, float bowZ, float width)
+    {
         var go = new GameObject(WakeName);
         go.transform.SetParent(ship, false);
+        go.transform.localPosition = new Vector3(0f, y, 0f);
         ACO_WaterFx fx = go.AddUdonSharpComponent<ACO_WaterFx>();
         fx.Mode = ACO_WaterFx.MODE_WAKE;
         fx.JumpDistance = 60f;
 
-        ParticleSystem stern = CreateWakeParticles(go.transform, "SternFoam", new Vector3(0f, 0.3f, b.min.z), width * 0.8f, width * 0.9f, 1.2f, 22f, 3.5f, 0.55f);
-        ParticleSystem bow = CreateWakeParticles(go.transform, "BowWave", new Vector3(0f, 0.3f, b.max.z - width * 0.3f), width * 0.9f, width * 0.5f, 0.8f, 7f, 2.5f, 0.45f);
+        ParticleSystem stern = CreateWakeParticles(go.transform, "SternFoam", new Vector3(0f, 0.3f, sternZ), width * 0.8f, width * 0.9f, 1.2f, 22f, 3.5f, 0.55f);
+        ParticleSystem bow = CreateWakeParticles(go.transform, "BowWave", new Vector3(0f, 0.3f, bowZ - width * 0.3f), width * 0.9f, width * 0.5f, 0.8f, 7f, 2.5f, 0.45f);
         fx.Particles = new[] { stern, bow };
+        ACO_FxBuilder.StyleWake(fx);
         return go;
     }
 

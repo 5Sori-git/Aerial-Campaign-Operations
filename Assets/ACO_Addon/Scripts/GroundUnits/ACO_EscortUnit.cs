@@ -430,15 +430,21 @@ namespace ACO
             if (_groundTimer <= 0f)
             {
                 _groundTimer = 0.2f;
-                RaycastHit hit;
-                if (Physics.Raycast(new Vector3(pos.x, pos.y + 500f, pos.z), Vector3.down, out hit, 2000f, GroundLayers, QueryTriggerInteraction.Ignore))
-                {
-                    _groundY = hit.point.y;
-                }
+                float y;
+                if (TerrainHeight(pos, out y)) { _groundY = y; }
                 else if (MoveMode == MOVE_HOVER) { _groundY = HoverSeaLevel; }
                 if (MoveMode == MOVE_HOVER) { _groundY = Mathf.Max(_groundY, HoverSeaLevel); }
             }
             return Mathf.Lerp(transform.position.y, _groundY, 1f - Mathf.Exp(-8f * Time.deltaTime));
+        }
+
+        /// 지형 높이. 구조물은 Environment라 GroundLayers(Default)에 맞지 않는다 — 크레인이나 지붕에 올라가지 않는다.
+        private bool TerrainHeight(Vector3 pos, out float y)
+        {
+            RaycastHit hit;
+            bool found = Physics.Raycast(new Vector3(pos.x, pos.y + 500f, pos.z), Vector3.down, out hit, 2000f, GroundLayers, QueryTriggerInteraction.Ignore);
+            y = found ? hit.point.y : 0f;
+            return found;
         }
 
         /// 방출이 끝난 투하 연출을 월드로 떼어 낸다(기체가 거둬져 꺼져도 낙하산이 남는다).

@@ -878,7 +878,7 @@ public static class ACO_HUDBuilder
 
     /// 디버그 패널 프리팹(ACO_DebugPanel): 1페이즈 강제(페이즈 모듈마다 P1), 에이스·베테랑·보너스 페이즈 확률(−/+), 내 크레딧(−100K/−10K/+10K/+100K).
     /// 판 1.8m x 2.0m(월드 공간 Canvas), 앞면은 루트 +Z 쪽. 모듈 줄은 ModuleRowCount개(남는 줄은 게임 중 숨긴다). 관리자·생성기·진행도는 Bake가 연결한다.
-    public const int DebugModuleRows = 14;
+    public const int DebugModuleRows = 18;
     public static void CreateDebugPanelPrefab()
     {
         EnsureFolder("Assets/ACO_Addon", "Prefabs");
@@ -891,16 +891,18 @@ public static class ACO_HUDBuilder
 
         GameObject root = new GameObject("ACO_DebugPanel");
         ACO_DebugPanel panel = root.AddUdonSharpComponent<ACO_DebugPanel>();
-        RectTransform canvas = MakeUiPanel(root.transform, 1800f, 2400f);
-        MakeUiText(canvas, "Title", new Vector2(0f, 1120f), new Vector2(1700f, 100f), 70f, font, "DEBUG PANEL");
+        // 처음 판(14줄, 높이 2400)보다 줄이 많으면 판을 위아래로 같이 늘린다
+        float grow = Mathf.Max(DebugModuleRows - 14, 0) * 36f;
+        RectTransform canvas = MakeUiPanel(root.transform, 1800f, 2400f + grow * 2f);
+        MakeUiText(canvas, "Title", new Vector2(0f, 1120f + grow), new Vector2(1700f, 100f), 70f, font, "DEBUG PANEL");
 
         // 1페이즈 강제
-        MakeUiLabel(canvas, "WeightHeader", new Vector2(0f, 1040f), new Vector2(1700f, 60f), 40f, font, "FORCE PHASE 1  (P1 = this mission comes first, press again to clear)");
+        MakeUiLabel(canvas, "WeightHeader", new Vector2(0f, 1040f + grow), new Vector2(1700f, 60f), 40f, font, "FORCE PHASE 1  (P1 = this mission comes first, press again to clear)");
         var rows = new GameObject[DebugModuleRows];
         var texts = new TextMeshProUGUI[DebugModuleRows];
         for (int k = 0; k < DebugModuleRows; k++)
         {
-            float y = 970f - k * 72f;
+            float y = 970f + grow - k * 72f;
             var row = new GameObject($"Module_{k}", typeof(RectTransform));
             row.layer = 0;
             RectTransform rr = row.GetComponent<RectTransform>();
@@ -915,7 +917,7 @@ public static class ACO_HUDBuilder
         }
 
         // 출현 확률
-        float y0 = 970f - DebugModuleRows * 72f - 30f;
+        float y0 = 970f + grow - DebugModuleRows * 72f - 30f;
         MakeUiLabel(canvas, "ChanceHeader", new Vector2(0f, y0), new Vector2(1700f, 60f), 40f, font, "SPAWN CHANCES");
         panel.AceText = DebugValueRow(canvas, panel, font, "Ace", y0 - 70f, ACO_DebugPanel.ACT_ACE, 0.05f);
         panel.VeteranText = DebugValueRow(canvas, panel, font, "Veteran", y0 - 140f, ACO_DebugPanel.ACT_VETERAN, 0.05f);
@@ -967,22 +969,24 @@ public static class ACO_HUDBuilder
     }
 
     /// 데칼 프로젝터 하나(직교 정사각, 머티리얼은 프로젝터마다 따로 — 경로가 같으면 다시 쓴다).
-    public static Transform CreateDecalProjector(Transform parent, string name, string materialName, out Material mat)
+    /// 데칼 머티리얼(Generated/Decals/<name>.mat) — 없으면 만든다. 셰이더가 없으면 null.
+    public static Material LoadOrCreateDecalMaterial(string materialName)
     {
         EnsureFolder("Assets/ACO_Addon/Generated", "Decals");
         string path = $"{DecalMaterialDir}/{materialName}.mat";
-        mat = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (mat == null)
-        {
-            Shader sh = Shader.Find("ACO/Decal");
-            if (sh == null) { Debug.LogError("[ACO] 셰이더 ACO/Decal을 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); }
-            else
-            {
-                mat = new Material(sh) { name = materialName };
-                mat.SetFloat("_FrameSize", DecalFrame);
-                AssetDatabase.CreateAsset(mat, path);
-            }
-        }
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat != null) { return mat; }
+        Shader sh = Shader.Find("ACO/Decal");
+        if (sh == null) { Debug.LogError("[ACO] 셰이더 ACO/Decal을 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); return null; }
+        mat = new Material(sh) { name = materialName };
+        mat.SetFloat("_FrameSize", DecalFrame);
+        AssetDatabase.CreateAsset(mat, path);
+        return mat;
+    }
+
+    public static Transform CreateDecalProjector(Transform parent, string name, string materialName, out Material mat)
+    {
+        mat = LoadOrCreateDecalMaterial(materialName);
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         Projector p = go.AddComponent<Projector>();
@@ -2052,7 +2056,7 @@ public static class ACO_HUDBuilder
         cam.targetTexture = rt;
         cam.fieldOfView = 55f;
         cam.nearClipPlane = 0.3f;
-        cam.farClipPlane = 40000f;
+        cam.farClipPlane = 60000f;   // 50km 밖 레일건 착탄 빛까지
         cam.clearFlags = CameraClearFlags.Skybox;
         cam.cullingMask = SpectatorCullingMask();
         cam.depth = -5f;

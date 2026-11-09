@@ -53,6 +53,11 @@ namespace ACO
         [Range(0f, 1f)] public float PartHullDamage = 0.12f;
         [Tooltip("부위 상태를 확인하는 주기(초)")]
         public float PartCheckInterval = 0.25f;
+        [Tooltip("부위(본체 말고 같은 계층의 SaccTarget)가 범위 피해를 받는 배율. 탄이 직접 닿은 부위와 FullPartSplash 무기(LASM)는 그대로 받는다. "
+            + "해상 유닛(함선·육상전함) 0.2, 공중 요새·랜스 포대 1")]
+        [Range(0f, 1f)] public float PartSplashScale = 1f;
+        [Tooltip("켜면 본체(코어, TargetHealth)는 범위 피해를 받지 않는다 — 직접 맞혀야만(코어를 락온해 명중, 폭탄이 코어에 닿음) 깎인다. 예외 무기(FullPartSplash)도 막는다. 보스(공중 요새·랜스 포대·육상전함) 코어")]
+        public bool CoreSplashImmune = false;
 
         [Header("순항")]
         [Tooltip("순항 속도(m/s). 0이면 제자리. 호위함은 기함 속도를 따른다")]
@@ -78,6 +83,8 @@ namespace ACO
         [System.NonSerialized] public Vector3 MissionSpawnPosition;
         [System.NonSerialized] public Quaternion MissionSpawnRotation = Quaternion.identity;
         [System.NonSerialized] public bool MissionRevive;
+        // 표적 마커(TGT)를 그릴 자리 — 보스가 코어 단계에 코어를 넣는다(없으면 이 오브젝트 자리). ACO_TargetMarkers가 읽는다.
+        [System.NonSerialized] public Transform MarkerAnchor;
         /// 호위할 기함과 편대 슬롯(생성기가 MissionSpawn 직전에 넣는다). null/-1이면 스스로 순항.
         [System.NonSerialized] public ACO_Warship MissionLeader;
         /// 함대전 진격(생성기가 MissionSpawn 직전에 넣는다): 스폰 자리에서 방위 쪽으로 Speed로 Advance(m)만큼 곧게 가서 멈춘다. 0이면 평소 순항.
@@ -254,6 +261,18 @@ namespace ACO
             TargetHealth.SendNetworkUpdate();
         }
 
+        /// 범위 피해 배율: 본체는 1, 부위는 PartSplashScale. 무기(ACO_Missile·ACO_Ordnance)가 범위 피해를 넣을 때 묻는다.
+        public float GetSplashScale(SaccTarget target)
+        {
+            return target == null || target == TargetHealth ? 1f : PartSplashScale;
+        }
+
+        /// 이 표적(본체)은 범위 피해를 받지 않는가 — CoreSplashImmune이고 본체일 때. 직접 맞은 표적은 무기가 따로 거른다.
+        public bool IsSplashImmune(SaccTarget target)
+        {
+            return CoreSplashImmune && target != null && target == TargetHealth;
+        }
+
         public bool IsDestroyed()
         {
             return TargetHealth != null && TargetHealth.Health <= 0f;
@@ -346,15 +365,13 @@ namespace ACO
                 part.SendCustomEvent("AttachedSpawn");
                 _partDead[i] = true;
             }
+            // 부활 처리(SetDeathVisuals — DisableCollidersOnDeath를 다시 켠다)를 먼저 하고 보스 스크립트(PoseOwner)에 알린다.
+            // 거꾸로 하면 보스가 단계대로 끈 코어 히트박스를 부활 처리가 다시 켜서, 장갑·덮개가 닫힌 단계에도 코어가 맞았다(육상전함·공중 요새·랜스 포대).
+            if (MissionRevive) { ReviveHull(); }
+            else { SetDeathVisuals(false); }
             if (PoseOwner != null) { PoseOwner.SendCustomEvent("ShipSpawned"); }
-
-            if (MissionRevive)
-            {
-                ReviveHull();
-                return;
-            }
-            SetDeathVisuals(false);
-            if (TargetHealth != null && TargetHealth.Health <= 0f) { Explode(); }
+            // 늦게 들어왔는데 이미 격침됐다: 보스가 단계를 적용한 뒤에 끈다(히트박스까지 꺼진다)
+            if (!MissionRevive && TargetHealth != null && TargetHealth.Health <= 0f) { Explode(); }
         }
 
         /// 이번 미션에 쓰지 않는다. 생성기가 곧 오브젝트를 끈다.

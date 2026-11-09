@@ -34,6 +34,8 @@ namespace ACO
         public float RepairInterval = 40f;
         [Tooltip("한 번에 수리되는 방공 부위 수")]
         public int RepairCount = 3;
+        [Tooltip("이 페이즈 동안 수리로 되살리는 방공 부위의 최대 수(합계). 0이면 끝없이")]
+        public int MaxRepairs = 6;
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초) — 세 단계를 끝낼 시간")]
         public float ExtraTime = 600f;
         [Tooltip("엔진이 모두 부서졌을 때의 궤도 속도 배율 — 코어 단계로 넘어가기 직전 값")]
@@ -143,6 +145,7 @@ namespace ACO
         [UdonSynced] private int _diveMs;
         [UdonSynced] private Vector3 _divePos;
         [UdonSynced] private int _repairs;
+        [UdonSynced] private int _repairedUnits;   // 지금까지 되살린 부위 수(MaxRepairs와 비교 — 새 오너도 이어서 센다)
         [UdonSynced] private int _reinforceMs;     // 증원 대사·출격을 시작하는 서버 시각(0 = 없음)
 
         // 대사(모든 클라이언트 지역 상태)
@@ -201,6 +204,7 @@ namespace ACO
             _baseMs = now;
             _speedScale = 1f;
             _repairs = 0;
+            _repairedUnits = 0;
             _enginesAlive = -1;
             _coreDownMs = 0;
             _cityHitMs = 0;
@@ -343,9 +347,13 @@ namespace ACO
         {
             if (RepairInterval <= 0f || now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
-            if (fort.RepairAirDefense(RepairCount) > 0)
+            int count = MaxRepairs > 0 ? Mathf.Min(RepairCount, MaxRepairs - _repairedUnits) : RepairCount;
+            if (count <= 0) { return; }
+            int done = fort.RepairAirDefense(count);
+            if (done > 0)
             {
                 _repairs++;
+                _repairedUnits += done;
                 SyncNow();
             }
         }

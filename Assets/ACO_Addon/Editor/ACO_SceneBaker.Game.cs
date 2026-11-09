@@ -351,8 +351,9 @@ public partial class ACO_SceneBaker
             }
             foreach (ACO_AAGunSite aa in poolRoot.GetComponentsInChildren<ACO_AAGunSite>(true))
             {
-                // 전차의 포탑도 전차가 데리고 다닌다(전차 자신이 지상 풀에 들어간다).
-                if (aa.GetComponentInParent<ACO_Warship>(true) == null && aa.GetComponentInParent<ACO_MobileUnit>(true) == null && aa.GetComponentInParent<ACO_EscortUnit>(true) == null) { ground.Add(aa); }
+                // 전차의 포탑도 전차가 데리고 다닌다(전차 자신이 지상 풀에 들어간다). 레이저 에이스의 렌즈 포탑도 기체가 데리고 다닌다.
+                if (aa.GetComponentInParent<ACO_Warship>(true) == null && aa.GetComponentInParent<ACO_MobileUnit>(true) == null && aa.GetComponentInParent<ACO_EscortUnit>(true) == null
+                    && aa.GetComponentInParent<ACO_NPCFighterAI>(true) == null) { ground.Add(aa); }
             }
             ground.AddRange(poolRoot.GetComponentsInChildren<ACO_MobileUnit>(true));
             ground.AddRange(poolRoot.GetComponentsInChildren<ACO_TelUnit>(true));   // 전용 풀 — 생성기가 일반 배치에서 뺀다
@@ -369,6 +370,7 @@ public partial class ACO_SceneBaker
             generator.Fortress = poolRoot.GetComponentInChildren<ACO_FlyingFortress>(true);
             generator.Manager = Object.FindObjectOfType<ACO_MissionManager>(true);
             generator.Railgun = poolRoot.GetComponentInChildren<ACO_Railgun>(true);
+            generator.LandShip = poolRoot.GetComponentInChildren<ACO_LandShip>(true);
             generator.Carrier = null;
             foreach (ACO_Warship ship in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (ship.ReservedForFleet) { generator.Carrier = ship; } }
             generator.EscortUnits = poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true);

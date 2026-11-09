@@ -440,6 +440,32 @@ def i_w_adam(c):
     jet(c, 78, 66, 0.2, fill=True)
 
 
+def i_w_mmp(c):
+    # 마이크로미사일 포드: 포드 아래에서 작은 미사일들이 비스듬히 사출돼 부채꼴로 여러 적에게 갈라진다
+    rrect(c, 8, 10, 60, 28, 7)
+    for x in (18, 30, 42, 54):
+        fill_circle(c, x, 28, 3.2)
+    for (x0, y0, ang) in ((16, 38, 80), (30, 42, 62), (44, 44, 44), (58, 42, 26)):
+        dashed(c, (x0 - 6 * math.cos(math.radians(ang)), y0 - 6 * math.sin(math.radians(ang))),
+               (x0 - 2 * math.cos(math.radians(ang)), y0 - 2 * math.sin(math.radians(ang))), 3.0, 3.0, 3.5)
+        missile(c, x0 + 9 * math.cos(math.radians(ang)), y0 + 9 * math.sin(math.radians(ang)), ang, 18, 2.6, 5, 3.5, 5, fill=True)
+    jet(c, 30, 84, 0.16, fill=True)
+    jet(c, 62, 80, 0.16, fill=True)
+    jet(c, 86, 62, 0.16, fill=True)
+
+
+def i_w_rgp(c):
+    # 레일건 포드: 포드(번개 마크) → 가는 배럴(위아래 레일) → 곧은 고속탄 화살표(속도선)
+    rrect(c, 6, 34, 46, 66, 7)
+    fill_poly(c, [(28, 38), (18, 52), (26, 52), (22, 62), (34, 47), (26, 47), (30, 38)])
+    seg(c, (46, 45), (62, 45), 4.5)
+    seg(c, (46, 55), (62, 55), 4.5)
+    seg(c, (68, 50), (86, 50), 5)
+    fill_poly(c, [(84, 43), (96, 50), (84, 57)])
+    for (x, y, l) in ((68, 38, 14), (70, 62, 12)):
+        seg(c, (x, y), (x + l, y), 3)
+
+
 def i_w_none(c):
     circle(c, 50, 50, 38)
     seg(c, (23, 77), (77, 23))
@@ -731,7 +757,7 @@ ICONS = [
     ("weapon_4agm", i_w_4agm), ("weapon_lagm", i_w_lagm), ("weapon_laam", i_w_laam), ("weapon_sasm", i_w_sasm),
     ("weapon_qaam", i_w_qaam), ("weapon_hpaa", i_w_hpaa), ("weapon_hvaa", i_w_hvaa),
     ("weapon_flak", i_w_flak), ("weapon_ccaa", i_w_ccaa), ("weapon_adam", i_w_adam), ("weapon_lasm", i_w_lasm),
-    ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm),
+    ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm), ("weapon_mmp", i_w_mmp), ("weapon_rgp", i_w_rgp),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
     ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),

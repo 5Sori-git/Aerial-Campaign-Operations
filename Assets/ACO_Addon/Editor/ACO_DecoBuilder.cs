@@ -7,7 +7,7 @@ using UnityEngine;
 
 /// 지형 장식 프리팹: 도시 칸 3종, 마을 2종, 항구, 비행장, 등대, 레이더, 통신탑, 유적.
 /// 모델은 Tools/aco_deco_models.py가 만든다: Models/Deco/ACO_Deco.fbx(메시 이름 = "프리팹__재질"), ACO_Deco_Colliders.txt, Textures/Deco.
-/// 프리팹은 재질마다 자식 렌더러 하나(드로우콜 = 재질 수)이고, 충돌은 건물마다 상자 콜라이더다(레이어 Default — 지형 기둥과 같아 SAV 기체가 부딪히면 추락한다).
+/// 프리팹은 재질마다 자식 렌더러 하나(드로우콜 = 재질 수)이고, 충돌은 건물마다 상자 콜라이더다(레이어 Environment — 충돌은 Default와 같아 SAV 기체가 부딪히면 추락하고, 땅을 재는 레이에는 맞지 않는다. 활주로·계류장 판만 땅이라 Default).
 /// 도시 칸의 비탈 큰길은 메시에 들어 있어 코드 처리가 없다. 칸은 0도와 180도로만 돌려야 도로가 이어진다(ACO_TerrainFeatures.AddCity).
 /// 프리팹 경로가 같아 GUID가 유지되므로 씬 참조는 그대로다. 메시·머티리얼 에셋은 Generated/Deco에, 프리팹은 Prefabs에.
 public static class ACO_DecoBuilder
@@ -21,6 +21,9 @@ public static class ACO_DecoBuilder
     public static readonly string[] CityNames = { "ACO_CityBlock_Downtown", "ACO_CityBlock_Residential", "ACO_CityBlock_Industrial" };
     public static readonly string[] VillageNames = { "ACO_Village_A", "ACO_Village_B" };
     public const string PortName = "ACO_Port";
+    private const int StructureLayer = 11;      // Environment
+    private const float SlabMaxHeight = 1f;
+    private const float SlabMinWidth = 20f;
     public const string AirfieldName = "ACO_Airfield";
     public const string LighthouseName = "ACO_Lighthouse";
     public const string RadarName = "ACO_Radar";
@@ -178,6 +181,40 @@ public static class ACO_DecoBuilder
         go.transform.localPosition = box.Center;
         go.transform.localRotation = box.Rotation;
         go.AddComponent<BoxCollider>().size = box.Size;
+        go.layer = ColliderLayer(box.Size);
+    }
+
+    /// 얇고 넓은 판(활주로, 계류장, 유도로)은 전차가 올라서는 땅이고, 나머지는 구조물이다.
+    private static int ColliderLayer(Vector3 size)
+    {
+        bool slab = size.y < SlabMaxHeight && Mathf.Min(size.x, size.z) >= SlabMinWidth;
+        return slab ? 0 : StructureLayer;
+    }
+
+    /// 이미 만든 프리팹의 콜라이더 레이어만 바꾼다. 모델과 손으로 고친 내용은 그대로다.
+    public static void ApplyColliderLayers()
+    {
+        foreach (string name in AllNames())
+        {
+            string path = $"{PrefabDir}/{name}.prefab";
+            if (!File.Exists(path)) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                int changed = 0;
+                foreach (BoxCollider box in root.GetComponentsInChildren<BoxCollider>(true))
+                {
+                    int layer = ColliderLayer(box.size);
+                    if (box.gameObject.layer == layer) { continue; }
+                    box.gameObject.layer = layer;
+                    changed++;
+                }
+                if (changed == 0) { continue; }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[ACO] {name}: 콜라이더 {changed}개의 레이어를 바꿨습니다.");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
     }
 
     /// 줄 형식 두 가지. "프리팹 x y z 크기x 크기y 크기z Y회전", "프리팹 strut 끝점a(xyz) 끝점b(xyz) 단면폭".

@@ -13,6 +13,10 @@ namespace ACO
         public float MaxSpeed = 260f;
         public float MinSpeed = 70f;
         public float Acceleration = 40f;
+        [Tooltip("가속 기동(보스 스크립트의 SpeedBoost) 상한 배율 — 동기화 예측도 최고 속도 × 이 값까지 본다(모든 화면이 같은 값이어야 한다). 1 = 가속 기동 없음")]
+        public float MaxBoost = 1f;
+        [Tooltip("저속 기동(코브라 — 보스 스크립트의 AllowLowSpeed) 하한 속도(m/s). 0 = 저속 기동 없음. 동기화 예측도 이 값까지 본다(모든 화면이 같은 값이어야 한다)")]
+        public float LowSpeedLimit = 0f;
 
         [Header("롤 (선회 시 기울기)")]
         [Tooltip("수평 방향 오차 1도당 목표 뱅크각(도). 값이 크면 조금만 틀어져도 깊게 눕는다")]
@@ -58,6 +62,14 @@ namespace ACO
         public float SinkLeadTime = 0.8f;
 
         [System.NonSerialized] public float Speed;
+        // 가속 기동(오너의 보스 스크립트가 켠다): 최고 속도 × SpeedBoost(MaxBoost까지), 가속도 × AccelBoost
+        [System.NonSerialized] public float SpeedBoost = 1f;
+        [System.NonSerialized] public float AccelBoost = 1f;
+        // 저속 기동(코브라): 켜면 최저 속도가 LowSpeedLimit까지 내려간다
+        [System.NonSerialized] public bool AllowLowSpeed;
+
+        /// 동기화 예측이 쓰는 최저 속도(저속 기동 하한까지 — 오너·원격 같은 값).
+        public float GetPredictMinSpeed() { return LowSpeedLimit > 0f ? Mathf.Min(MinSpeed, LowSpeedLimit) : MinSpeed; }
         [System.NonSerialized] public Vector3 DesiredDirection = Vector3.forward;
         [System.NonSerialized] public float DesiredSpeed;
         // 진단용(AI의 DebugFlight 로그): 지난 프레임의 원하는 상승각과 지면 회피가 허용한 최소 상승각(도)
@@ -252,8 +264,9 @@ namespace ACO
         private void ApplyThrust(float dt)
         {
             float target = DesiredSpeed <= 0f ? CruiseSpeed : DesiredSpeed;
-            target = Mathf.Clamp(target, MinSpeed, MaxSpeed);
-            Speed = Mathf.MoveTowards(Speed, target, Acceleration * dt);
+            float minSpeed = AllowLowSpeed && LowSpeedLimit > 0f ? Mathf.Min(MinSpeed, LowSpeedLimit) : MinSpeed;
+            target = Mathf.Clamp(target, minSpeed, MaxSpeed * Mathf.Clamp(SpeedBoost, 1f, Mathf.Max(MaxBoost, 1f)));
+            Speed = Mathf.MoveTowards(Speed, target, Acceleration * Mathf.Max(AccelBoost, 1f) * dt);
             transform.position += transform.forward * Speed * dt;
         }
     }

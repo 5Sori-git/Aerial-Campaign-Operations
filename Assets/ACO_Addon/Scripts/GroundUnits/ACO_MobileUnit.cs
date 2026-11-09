@@ -78,6 +78,8 @@ namespace ACO
 
         public const int MAX_ROUTE_POINTS = 6;
         private const int SAMPLES_PER_SEGMENT = 8;
+        private const int STRUCTURE_LAYERS = 1 << 11;       // Environment: 구조물(공중 요새 외피도 같은 레이어)
+        private const float STRUCTURE_RAY_HEIGHT = 200f;    // 가장 높은 구조물(통신탑 164m)보다 높게, 요새 고도보다는 한참 낮게
 
         private bool _initialized;
         private bool _active;
@@ -266,15 +268,21 @@ namespace ACO
             return Mathf.Max(y, _groundY + HoverHeight * 0.5f);
         }
 
-        /// 지형 높이(없거나 해수면보다 낮으면 해수면).
+        /// 헬리콥터가 넘어갈 높이: 지형(없거나 해수면보다 낮으면 해수면)과 그 위 구조물 중 높은 쪽.
+        /// 구조물은 GroundLayers에 없다. 지형 바로 위에서만 찾아야 높은 곳의 요새 외피를 맞히지 않는다.
         private float SurfaceY(Vector3 p)
         {
+            float y = SeaLevel;
             RaycastHit hit;
             if (Physics.Raycast(new Vector3(p.x, GroundRayHeight, p.z), Vector3.down, out hit, GroundRayHeight * 2f, GroundLayers, QueryTriggerInteraction.Ignore))
             {
-                return Mathf.Max(hit.point.y, SeaLevel);
+                y = Mathf.Max(hit.point.y, SeaLevel);
             }
-            return SeaLevel;
+            if (Physics.Raycast(new Vector3(p.x, y + STRUCTURE_RAY_HEIGHT, p.z), Vector3.down, out hit, STRUCTURE_RAY_HEIGHT, STRUCTURE_LAYERS, QueryTriggerInteraction.Ignore))
+            {
+                y = hit.point.y;
+            }
+            return y;
         }
 
         /// 항로 끝에 닿아 멈췄는가(매복·곡사포 사격 위치). 순찰 고리는 늘 false.

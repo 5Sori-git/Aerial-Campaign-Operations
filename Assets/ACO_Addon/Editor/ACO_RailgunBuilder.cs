@@ -61,12 +61,13 @@ public static partial class ACO_PrefabBuilder
         return m;
     }
 
-    private static Material RailgunUnlitMaterial(string name, Color color)
+    /// 레이저는 경고라 안개·구름에 가려지면 안 된다(ACO/Laser).
+    private static Material RailgunBeamMaterial(string name, Color color)
     {
         string path = $"{RailgunGeneratedDir}/{name}.mat";
         Material m = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (m != null) { return m; }
-        m = new Material(Shader.Find("Unlit/Color")) { name = name };
+        m = new Material(Shader.Find("ACO/Laser")) { name = name };
         m.SetColor("_Color", color);
         AssetDatabase.CreateAsset(m, path);
         return m;
@@ -148,7 +149,7 @@ public static partial class ACO_PrefabBuilder
         line.useWorldSpace = true;
         line.startWidth = width;
         line.endWidth = width;
-        line.sharedMaterial = RailgunUnlitMaterial(name == "WarnBeam" ? "ACO_RailgunWarn" : "ACO_RailgunBeam", color);
+        line.sharedMaterial = RailgunBeamMaterial(name == "WarnBeam" ? "ACO_RailgunWarn" : "ACO_RailgunBeam", color);
         line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         line.receiveShadows = false;
         line.enabled = false;
@@ -307,6 +308,7 @@ public static partial class ACO_PrefabBuilder
         ship.ScoreValue = 5000;
         ship.HighValue = true;
         ship.PartHullDamage = 0f;
+        ship.CoreSplashImmune = true;   // 보스 코어는 직접 맞혀야만(범위 피해 면역)
         ship.CruiseSpeed = 0f;
         ship.CruiseRadius = 0f;
         ship.BobAngle = 0f;
@@ -338,6 +340,7 @@ public static partial class ACO_PrefabBuilder
         railgun.Blast = CreateFortressBlast(root.transform);
         AddRailgunHorizon(root.transform, railgun);
         AddRailgunMinis(root.transform, railgun, ship);
+        ACO_FxBuilder.StyleRailgun(railgun);
         ApplyLanceModel(root);
 
         return SaveAndCleanup(root, $"{PrefabDir}/NPC_Railgun.prefab");
@@ -446,8 +449,76 @@ public static partial class ACO_PrefabBuilder
         mini.FireSound = CreateRailgunSound(part.transform, "FireSound", "ACO_Railgun_MiniFire", 300f, 7000f, false);
         mini.BurstSound = CreateRailgunSound(part.transform, "BurstSound", "ACO_Explosion_Small", 400f, 6000f, false);
         mini.Laser = CreateMiniLaser(part.transform);
+        AddZoneShells(part.transform, mini);
         ApplyMiniModel(part);
         return SaveAndCleanup(part, PathOf(TurretMini));
+    }
+
+    private const int MiniZoneCount = 6;   // ACO_MiniRailgun.MAX_ZONES와 같다
+    private const string ZoneShellMaterialPath = "Assets/ACO_Addon/Generated/ACO_ZoneShell.mat";
+
+    /// 폭발 지역 껍질 머티리얼(ACO/ZoneShell) — 없으면 만든다. 값은 셰이더 기본값(색·가장자리·일렁임은 머티리얼에서 고친다).
+    private static Material ZoneShellMaterial()
+    {
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(ZoneShellMaterialPath);
+        if (m != null) { return m; }
+        Shader sh = Shader.Find("ACO/ZoneShell");
+        if (sh == null) { throw new System.InvalidOperationException("[ACO] 셰이더 ACO/ZoneShell을 찾지 못했습니다 — 셰이더 컴파일 오류를 확인하세요."); }
+        m = new Material(sh) { name = "ACO_ZoneShell" };
+        AssetDatabase.CreateAsset(m, ZoneShellMaterialPath);
+        return m;
+    }
+
+    /// 소형 레일건에 폭발 지역 껍질(지름 1 구 × 지역 칸 수)을 단다. 이미 있으면 그대로 다시 잇는다(여러 번 불러도 같다).
+    private static bool AddZoneShells(Transform root, ACO_MiniRailgun mini)
+    {
+        Transform holder = root.Find("ZoneShells");
+        bool changed = false;
+        if (holder == null)
+        {
+            holder = new GameObject("ZoneShells").transform;
+            holder.SetParent(root, false);
+            changed = true;
+        }
+        Mesh sphere = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
+        Material mat = ZoneShellMaterial();
+        var shells = new Transform[MiniZoneCount];
+        for (int k = 0; k < MiniZoneCount; k++)
+        {
+            Transform s = holder.Find("Shell_" + k);
+            if (s == null)
+            {
+                s = new GameObject("Shell_" + k).transform;
+                s.SetParent(holder, false);
+                s.gameObject.AddComponent<MeshFilter>();
+                MeshRenderer nr = s.gameObject.AddComponent<MeshRenderer>();
+                nr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                nr.receiveShadows = false;
+                changed = true;
+            }
+            s.GetComponent<MeshFilter>().sharedMesh = sphere;
+            s.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            s.gameObject.SetActive(false);
+            shells[k] = s;
+        }
+        if (mini.ZoneShells == null || mini.ZoneShells.Length != MiniZoneCount || System.Array.IndexOf(mini.ZoneShells, null) >= 0) { changed = true; }
+        mini.ZoneShells = shells;
+        EditorUtility.SetDirty(mini);
+        return changed;
+    }
+
+    /// Setup Check: 소형 레일건 프리팹(NPC_Turret_RailgunMini)에 폭발 지역 껍질을 단다 — 랜스 포대·육상전함 주포는 그 프리팹의 인스턴스라 함께 바뀐다.
+    public static void PlaceMiniZoneShells()
+    {
+        string path = PathOf(TurretMini);
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        EditLancePrefab(path, root =>
+        {
+            ACO_MiniRailgun mini = root.GetComponent<ACO_MiniRailgun>();
+            if (mini == null) { return; }
+            AddZoneShells(root.transform, mini);
+            Debug.Log("[ACO] 소형 레일건: 폭발 지역 껍질 6개를 달았습니다(랜스 포대·육상전함 주포 함께).");
+        });
     }
 
     /// 먼저 만든 소형 레일건 넷을 프리팹 인스턴스로 바꾼다. 자리와 크기는 그대로 둔다.

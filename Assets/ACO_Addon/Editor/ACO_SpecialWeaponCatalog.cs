@@ -10,7 +10,7 @@ using SaccFlightAndVehicles;
 using ACO;
 
 /// 특수무장 카탈로그: 무장 정의 프리팹(ACO_SpecialWeaponDef, Assets/ACO_Addon/SpecialWeapons) → 격납고 목록 + 기체 모듈.
-///  - 예제 17종(4AAM, UGB, LGB, RKT, LGR, 4AGM, LAGM, LASM, SCM, SASM, LAAM, QAAM, HVAA, HPAA, FLAK, CCAA, ADAM —값은 F/A-18 설정 기준, 미사일 모델 포함): 프리팹 생성 창의 "플레이어 특수무장"(폭탄·로켓 탄체와 함께 — 있는 예제도 다시 만든다).
+///  - 예제(4AAM, UGB, LGB, RKT, LGR, 4AGM, LAGM, LASM, SCM, MMP, SASM, LAAM, QAAM, HVAA, HPAA, FLAK, CCAA, ADAM, ECM —값은 F/A-18 설정 기준, 미사일 모델 포함): 프리팹 생성 창의 "플레이어 특수무장"(폭탄·로켓 탄체와 함께 — 있는 예제도 다시 만든다).
 ///    메뉴 ACO → Weapons → Add Missing Special Weapon Examples는 없는 예제만 만든다(손본 예제는 그대로). 기체 셋업은 카탈로그가 비어 있으면 없는 것만 만든다.
 ///  - 격납고 목록: Bake마다 정의를 격납고(ACO_Loadout) 목록에 맞춘다(없는 ID는 끝에 더하고, 이름·설명·가격·아이콘은 정의 값).
 ///  - 기체 모듈: 기체 셋업(ACO_PlayerMissileSetup)과 셋업 검사 [고치기]가 특수무장 슬롯에 같은 ID 모듈이 없으면 정의의 모듈을 복제해 넣고
@@ -55,6 +55,10 @@ public static class ACO_SpecialWeaponCatalog
                 Projectile = null, Desc = "ELECTRONIC WARFARE POD\n5KM JAMMING FOR 10S - BREAKS ENEMY MISSILES AND LOCKS, DISRUPTS AA GUNS" },
             new Example { Id = "SCM", Name = "SCM", Order = 58, Price = 14000, Icon = "weapon_scm", Preset = ApplySCM,
                 Projectile = P + "ACO_Missile_SCM.prefab", Desc = "STAND-OFF CLUSTER MISSILE\nBURSTS ABOVE THE TARGET - SCATTERS BOMBLETS OVER A WIDE AREA" },
+            new Example { Id = "MMP", Name = "MMP", Order = 60, Price = 17000, Icon = "weapon_mmp", Preset = ApplyMMP,
+                Projectile = P + "ACO_Missile_MMP.prefab", Desc = "MICRO-MISSILE POD\nLOCKS UP TO 8 AIR OR GROUND TARGETS - 16 MISSILES SPLIT AMONG THEM" },
+            new Example { Id = "RGP", Name = "RGP", Order = 62, Price = 18000, Icon = "weapon_rgp", Preset = ApplyRGP,
+                Projectile = P + "ACO_Missile_RGP.prefab", Desc = "RAIL GUN POD\nHYPERSONIC SLUG - INSTANT NARROW LOCK AIMS IT, 10 KM, RECHARGES IN 8 S" },
             new Example { Id = "FLAK", Name = "FLAK", Order = 65, Price = 9000, Icon = "weapon_flak", Preset = ApplyFLAK,
                 Projectile = P + "ACO_Rocket.prefab", Desc = "PROXIMITY-FUSED AIR-TO-AIR ROCKETS\nUNGUIDED - BURSTS NEAR ANY ENEMY AIRCRAFT" },
             new Example { Id = "SASM", Name = "SASM", Order = 75, Price = 10000, Icon = "weapon_sasm", Preset = ApplySASM,
@@ -90,6 +94,12 @@ public static class ACO_SpecialWeaponCatalog
     public static void EnsureExamples()
     {
         if (LoadDefs().Count == 0) { CreateExamples(false); return; }
+        CreateExamples(false, KnownLoadoutIds());
+    }
+
+    /// 씬의 격납고 목록에 있는 특수무장 ID 전부.
+    private static HashSet<string> KnownLoadoutIds()
+    {
         var known = new HashSet<string>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
@@ -99,7 +109,23 @@ public static class ACO_SpecialWeaponCatalog
                 foreach (string id in l.SpecialIds) { known.Add(id); }
             }
         }
-        CreateExamples(false, known);
+        return known;
+    }
+
+    /// 셋업 검사용: 코드에 새로 더해져 아직 정의 파일이 없는 예제 ID(정의 파일도 없고 어느 격납고 목록에도 없는 것 — EnsureExamples가 만들 것).
+    /// 카탈로그가 비어 있으면 빈 목록(그땐 기체 셋업이 전부 만든다).
+    public static List<string> NewExampleIds()
+    {
+        var ids = new List<string>();
+        if (LoadDefs().Count == 0) { return ids; }
+        HashSet<string> known = KnownLoadoutIds();
+        foreach (Example e in Examples())
+        {
+            if (known.Contains(e.Id)) { continue; }
+            if (AssetDatabase.LoadAssetAtPath<GameObject>($"{Folder}/ACO_Special_{e.Id}.prefab") != null) { continue; }
+            ids.Add(e.Id);
+        }
+        return ids;
     }
 
     /// 예제 정의를 만든다. overwrite면 있는 예제도 다시 만든다(손본 값 초기화 — 복제해 만든 무장은 건드리지 않는다). skipIds의 예제는 만들지 않는다.
@@ -110,6 +136,8 @@ public static class ACO_SpecialWeaponCatalog
         if (!ACO_PrefabBuilder.Exists("ACO_Bomb")) { ACO_PrefabBuilder.BuildBomb(); }
         if (!ACO_PrefabBuilder.Exists("ACO_Rocket")) { ACO_PrefabBuilder.BuildRocket(); }
         if (!ACO_PrefabBuilder.Exists("ACO_Missile_SCM")) { ACO_PrefabBuilder.BuildScmMissile(); }
+        if (!ACO_PrefabBuilder.Exists("ACO_Missile_MMP")) { ACO_PrefabBuilder.BuildMmpMissile(); }
+        if (!ACO_PrefabBuilder.Exists("ACO_Missile_RGP")) { ACO_PrefabBuilder.BuildRgpSlug(); }
         int made = 0;
         foreach (Example e in Examples())
         {
@@ -125,7 +153,7 @@ public static class ACO_SpecialWeaponCatalog
             def.Price = e.Price;
             def.SortOrder = e.Order;
             def.Icon = ACO_HUDBuilder.LoadIcon(e.Icon);
-            if (e.Id == "ECM") { def.Category = ACO_WeaponCategory.Other; }
+            if (e.Id == "ECM" || e.Id == "MMP" || e.Id == "RGP") { def.Category = ACO_WeaponCategory.Other; }
 
             var modGo = new GameObject("Module");
             modGo.transform.SetParent(root.transform, false);
@@ -233,6 +261,7 @@ public static class ACO_SpecialWeaponCatalog
     {
         Guided(m, true, 1, 2, 12, 10f, 6500f, 30f, 2f, 400f, 900f, 300f, 90f, 6f);
         m.SplashRadius = 10f; m.MinSplashFraction = 0.3f;
+        m.FullPartSplash = true;   // 함선 부위에도 범위 피해를 그대로(다른 무기는 0.2배)
         m.SeaSkim = true;
         m.SkimAltitude = 8f;
         m.SkimTerminalDistance = 500f;
@@ -263,6 +292,114 @@ public static class ACO_SpecialWeaponCatalog
         m.SplashRadius = 30f; m.MinSplashFraction = 0.4f;
         m.SeekerAngle = 180f;
         m.MissileLifetime = 30f;
+    }
+
+    /// MMP(Micro-Missile Pod): 공중·지상 표적을 8개까지 락온(0.8초씩, 3.5km·40도). 쏘면 장전된 16발이 0.07초 간격으로 락온한 표적들에 차례로 나뉘어 나간다
+    /// (8개면 2발씩, 1개면 16발 모두). 미사일은 포드 아랫면 셀에서 아래로 사출(14m/s)돼 0.35초 떨어지며 표적 쪽으로 기수를 돌린 뒤 점화한다.
+    /// 한 발은 작다(피해 60, 범위 8m) — 전투기는 2발, 무리 지은 지상 표적을 한 번에. 16슬롯 / 64발 / 15초. 락온 없이는 쏘지 않는다.
+    /// 강화를 받지 않는다(UpgradeFamily None — 16발이 다 강화되면 너무 세다). 격납고 분류는 OTHER.
+    /// 발사 지점은 포드 외형의 셀(셋업 검사 [고치기]) — 포드가 없으면 날개 파일런에서 나간다.
+    private static void ApplyMMP(ACO_DFUNC_Missile m)
+    {
+        Guided(m, false, 8, 16, 64, 15f, 3500f, 40f, 0.8f, 60f, 800f, 450f, 140f, 8f);
+        m.TargetLayers = (1 << 29) | (1 << 30);
+        m.OneMissilePerTarget = false;
+        m.MissileSplash = true;
+        m.SplashRadius = 8f; m.MinSplashFraction = 0.5f;
+        m.DropTime = 0.35f;
+        m.EjectSpeed = 14f;
+        m.DropTurnRate = 200f;
+        m.SalvoInterval = 0.07f;
+        m.MissileLifetime = 7f;
+        m.NumPreInstantiated = 8;
+        m.UpgradeFamily = ACO_UpgradeFamily.None;
+    }
+
+    /// RGP(레일건 포드): 초고속 단발탄(4000m/s, 10km를 2.5초). 락온은 좁고(2.5도) 즉시 — 락온하면 발사 순간 표적의 예상 자리로 겨눠 쏘고(SnapAimAtLaunch),
+    /// 날아가는 동안은 약하게만 보정한다(6도/초 — 급기동하면 빗나간다). 락온이 없으면 기수 정면으로 곧게. 플레어·채프에 속지 않는다.
+    /// 공중·지상 모두. 한 발 피해 350(전투기는 한 발), 범위는 작다(6m). 16발, 한 발 쏠 때마다 8초 재충전. 강화 없음, 격납고 OTHER.
+    private static void ApplyRGP(ACO_DFUNC_Missile m)
+    {
+        Guided(m, false, 1, 1, 16, 8f, 10000f, 2.5f, 0.05f, 350f, 4000f, 0f, 6f, 6f);
+        m.TargetLayers = (1 << 29) | (1 << 30);
+        m.GuidanceMode = 1;               // 예측 조준(리드)
+        m.AllowUnguidedFire = true;
+        m.IgnoreCountermeasures = true;
+        m.ProximityAnyEnemy = true;       // 락온 없이 쏴도 곁을 지나는 적기에 터진다
+        m.MissileSplash = true;
+        m.SplashRadius = 6f; m.MinSplashFraction = 0.5f;
+        m.SnapAimAtLaunch = true;
+        m.MuzzleSpeed = 4000f;
+        m.InheritVelocity = false;
+        m.MissileLifetime = 3f;
+        m.NumPreInstantiated = 2;
+        m.UpgradeFamily = ACO_UpgradeFamily.None;
+    }
+
+    /// Setup Check(mmp-other-1): 이미 만든 MMP를 격납고 OTHER 분류·강화 없음으로 — 정의 프리팹, 기체 프리팹의 Module_MMP, 씬에서 덮어쓴 값, 격납고 목록.
+    public static void TuneMmpOther()
+    {
+        string defPath = $"{Folder}/ACO_Special_MMP.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(defPath) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(defPath);
+            try
+            {
+                ACO_SpecialWeaponDef def = root.GetComponent<ACO_SpecialWeaponDef>();
+                if (def != null)
+                {
+                    def.Category = ACO_WeaponCategory.Other;
+                    if (def.Module != null) { def.Module.UpgradeFamily = ACO_UpgradeFamily.None; }
+                    PrefabUtility.SaveAsPrefabAsset(root, defPath);
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        var prefabs = new List<string>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(special.gameObject);
+                if (!string.IsNullOrEmpty(path) && !prefabs.Contains(path)) { prefabs.Add(path); }
+            }
+        }
+        foreach (string path in prefabs)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                bool changed = false;
+                foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+                {
+                    ACO_DFUNC_Missile m = SlotModule(special, "MMP");
+                    if (m != null && m.UpgradeFamily != ACO_UpgradeFamily.None) { m.UpgradeFamily = ACO_UpgradeFamily.None; changed = true; }
+                }
+                if (changed) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        // 씬에서 값을 덮어썼거나 프리팹이 아닌 기체
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                ACO_DFUNC_Missile m = SlotModule(special, "MMP");
+                if (m == null || m.UpgradeFamily == ACO_UpgradeFamily.None) { continue; }
+                Undo.RecordObject(m, "ACO MMP other");
+                m.UpgradeFamily = ACO_UpgradeFamily.None;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+                EditorUtility.SetDirty(m);
+            }
+        }
+        SyncLoadouts();
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    private static ACO_DFUNC_Missile SlotModule(ACO_DFUNC_Special special, string id)
+    {
+        int k = special.ModuleIds != null ? System.Array.IndexOf(special.ModuleIds, id) : -1;
+        return k >= 0 && special.Modules != null && k < special.Modules.Length ? special.Modules[k] as ACO_DFUNC_Missile : null;
     }
 
     /// SASM(Short-range Aerial Suppression Missile): 근거리 대공. 근접 신관이 매우 커서(45m) 스치기만 해도 터지고,
@@ -422,6 +559,7 @@ public static class ACO_SpecialWeaponCatalog
         foreach (ACO_DFUNC_Missile m in Object.FindObjectsOfType<ACO_DFUNC_Missile>(true))
         {
             if (!m.EcmMode || m.Missile == null) { continue; }
+            Undo.RecordObject(m, "ACO ECM");
             m.Missile = null;
             PrefabUtility.RecordPrefabInstancePropertyModifications(m);
             EditorUtility.SetDirty(m);
@@ -446,15 +584,24 @@ public static class ACO_SpecialWeaponCatalog
 
 
     /// 씬의 모든 특수무장 슬롯에 없는 모듈을 넣는다(새 예제 정의부터 만든다). 넣은 수.
+    /// 기체가 프리팹이면 기체 프리팹 파일에 넣는다 — 씬의 기체는 프리팹을 따라간다(슬롯 배열을 씬에서 덮어쓴 기체는 되돌린다: SyncSceneSlots).
+    /// 프리팹이 아닌 씬 기체만 씬에 넣는다.
     private static int InstallModules()
     {
         EnsureExamples();
         int modules = 0;
+        var prefabs = new List<string>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
             {
                 SaccEntity entity = special.GetComponentInParent<SaccEntity>(true);
+                string path = entity != null ? PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(entity.gameObject) : null;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (!prefabs.Contains(path)) { prefabs.Add(path); }
+                    continue;
+                }
                 ACO_DFUNC_Missile primary = FindPrimary(entity);
                 if (entity == null || primary == null)
                 {
@@ -464,7 +611,112 @@ public static class ACO_SpecialWeaponCatalog
                 modules += InstallVehicle(entity, special, primary, null);
             }
         }
+        foreach (string path in prefabs)
+        {
+            modules += InstallInPrefab(path);
+            SyncSceneSlots(path);
+        }
         return modules;
+    }
+
+    /// 기체 프리팹 파일 하나의 특수무장 슬롯에 없는 모듈을 넣고 저장한다. 넣은 수.
+    private static int InstallInPrefab(string path)
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            int n = 0;
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                SaccEntity entity = special.GetComponentInParent<SaccEntity>(true);
+                ACO_DFUNC_Missile primary = FindPrimary(entity);
+                if (entity == null || primary == null)
+                {
+                    Debug.LogWarning($"[ACO] {path}의 특수무장 슬롯 '{special.name}': 기체 또는 일반 미사일을 찾지 못해 모듈을 넣지 못했습니다.");
+                    continue;
+                }
+                n += InstallVehicle(entity, special, primary, null);
+            }
+            if (n > 0)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[ACO] 특수무장 모듈 {n}개를 기체 프리팹에 넣었습니다: {path}");
+            }
+            return n;
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    private static readonly string[] SlotArrays = { "Modules", "ModuleIds", "ModuleVisuals", "ModuleHudLabels", "ModuleMfdLabels", "ModuleDialIcons" };
+
+    /// 씬의 이 프리팹 기체들: 특수무장 슬롯 배열을 씬에서 덮어쓴 것(예전에 씬에 설치하던 때 남은 것)은 프리팹 값으로 되돌린다 —
+    /// 그대로 두면 덮어쓴 배열 길이에 막혀 프리팹에 새로 넣은 모듈이 씬 기체에 안 나온다. 되돌려 슬롯에서 빠진 씬 전용 모듈(같은 ID가 프리팹에 있는 중복)은 끈다.
+    public static void SyncSceneSlots(string path)
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                if (PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(special.gameObject) != path) { continue; }
+                var so = new SerializedObject(special);
+                bool reverted = false;
+                foreach (string name in SlotArrays)
+                {
+                    SerializedProperty p = so.FindProperty(name);
+                    if (p == null || !p.prefabOverride) { continue; }
+                    PrefabUtility.RevertPropertyOverride(p, InteractionMode.UserAction);
+                    reverted = true;
+                }
+                if (!reverted) { continue; }
+                SaccEntity entity = special.GetComponentInParent<SaccEntity>(true);
+                Debug.Log($"[ACO] '{(entity != null ? entity.name : special.name)}': 씬에서 덮어쓴 특수무장 슬롯 배열을 프리팹 값으로 되돌렸습니다.", special);
+                foreach (ACO_DFUNC_Missile m in special.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+                {
+                    if (!PrefabUtility.IsAddedGameObjectOverride(m.gameObject) || !m.gameObject.activeSelf) { continue; }
+                    if (special.Modules != null && System.Array.IndexOf(special.Modules, (UdonSharpBehaviour)m) >= 0) { continue; }
+                    Undo.RecordObject(m.gameObject, "ACO special slot sync");
+                    m.gameObject.SetActive(false);
+                    Debug.Log($"[ACO] '{m.name}': 슬롯에 없는 씬 전용 중복 모듈이라 껐습니다(지우지 않음 — 필요 없으면 직접 지우세요).", m);
+                }
+            }
+        }
+    }
+
+    /// 셋업 검사용: 이 씬에서 특수무장 슬롯 배열을 덮어쓴 프리팹 기체 수.
+    public static int CountSceneSlotOverrides()
+    {
+        int n = 0;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                if (!PrefabUtility.IsPartOfPrefabInstance(special)) { continue; }
+                var so = new SerializedObject(special);
+                foreach (string name in SlotArrays)
+                {
+                    SerializedProperty p = so.FindProperty(name);
+                    if (p != null && p.prefabOverride) { n++; break; }
+                }
+            }
+        }
+        return n;
+    }
+
+    /// 셋업 검사 [고치기]: 씬 기체의 슬롯 배열 덮어쓰기를 프리팹 값으로 되돌린다(Bake로 다시 잇는다).
+    public static void RevertSceneSlotOverrides()
+    {
+        var paths = new List<string>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(special.gameObject);
+                if (!string.IsNullOrEmpty(path) && !paths.Contains(path)) { paths.Add(path); }
+            }
+        }
+        foreach (string path in paths) { SyncSceneSlots(path); }
+        ACO_SceneBaker.BakeNeighbors();
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
     }
 
     /// Bake가 부른다: 씬의 격납고 목록을 정의에 맞춘다(바뀐 게 있을 때만 기록). 정의가 없으면 아무것도 안 한다.

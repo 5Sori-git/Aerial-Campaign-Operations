@@ -48,7 +48,10 @@ Shader "ACO/HexTrees"
         LOD 200
 
         CGPROGRAM
-        #pragma surface surf Lambert vertex:vert noforwardadd nolightmap nodynlightmap nodirlightmap nometa
+        // addshadow: 정점 셰이더로 세운 나무 모양 그대로 깊이 텍스처(그림자 패스)에 그린다. 없으면 깊이 텍스처에 나무가 없어
+        // 체적 구름층(깊이로 시선이 멈추는 곳을 잰다)이 수평선 위로 보이는 나무 윗부분을 구름으로 덮어 나무가 잘려 보였다.
+        // 그림자는 렌더러에서 꺼 두므로 그림자 비용은 없다(깊이 텍스처를 그릴 때만 한 번 더 그린다).
+        #pragma surface surf Lambert vertex:vert addshadow noforwardadd nolightmap nodynlightmap nodirlightmap nometa
         #pragma target 3.0
         #pragma instancing_options assumeuniformscaling
 

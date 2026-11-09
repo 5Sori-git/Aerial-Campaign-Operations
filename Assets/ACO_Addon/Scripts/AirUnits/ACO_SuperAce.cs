@@ -7,7 +7,7 @@ using SaccFlightAndVehicles;
 namespace ACO
 {
     /// 슈퍼에이스(NPC_SuperAce 안의 자식 오브젝트). 기체·비행·AI·동기화는 일반 NPC 전투기(ACO_NPCFighterAI) 그대로 쓰고, 이 스크립트가 특수무장과 무전을 더한다.
-    /// 미션 생성기는 슈퍼에이스를 일반 배치에 쓰지 않는다 — 미션 관리자의 보너스 페이즈만 내보낸다(OBJ_SUPER_ACE).
+    /// 미션 생성기는 슈퍼에이스를 일반 배치에 쓰지 않는다 — 분신 에이스 형제 페이즈(ACO_PhaseSuperAce)만 내보낸다(OBJ_SUPER_ACE — 형 HEADS·동생 TAILS 2기 편대).
     ///
     /// - 다연장(Salvo): SalvoCooldown마다 SalvoRange 안의 플레이어를 가까운 순으로 SalvoMaxTargets명까지 골라 SalvoWarnTime 동안 락온 경보를 보낸 뒤
     ///   모두에게 동시에 쏜다(전용 런처 SalvoLauncher — 연사 간격 0, 자체 탄수/재장전). 판단은 AI 오너만 한다(발사는 런처가 모두에게 알린다).
@@ -15,13 +15,17 @@ namespace ACO
     ///   기만체는 플레이어 락온 레이어(29)의 빈 오브젝트로, 시작할 때 기체에서 떼어 낸 뒤 편대처럼 기체 옆(DecoyOffsets, 기체 기준)에 붙어
     ///   기체의 기동을 그대로 따라 난다(DecoySpreadTime 동안 기체 자리에서 벌어지고, DecoySway만큼 살짝 흔들린다). 각 클라이언트가 자기 화면의 기체 위치로
     ///   계산하므로 위치 동기화가 없다. HUD 마커는 진짜와 똑같이(이름·목표 색·체력 바) 그려지고, 락온해 쏜 미사일은 기만체 근처에서 터진다(피해 없음).
-    /// - 무전: 등장·다연장·기만체·체력 절반·격추 때 Chatter.Say로 자막(모든 클라이언트가 각자 본다).
+    /// - 쌍둥이 규칙: 같이 출격한 짝(Partner — Bake가 잇는다)이 이번 출격에서 살아 있다가 격추되면, 남은 쪽이 분노한다(모든 화면이 각자 — 체력 동기화로 같은 순간을 본다):
+    ///   다연장 간격 × EnragedSalvoFactor, 기만체 횟수를 다시 채우고 간격 × EnragedDecoyCooldownFactor, 대사 LinePartnerDown. 다음 출격에서 풀린다.
+    /// - 교차 기동(형제 — 짝이 살아 있는 동안): 공통 부품 ACO_CrossManeuver(Cross — 형이 정한다)가 맡는다. 시작하면 교차 대사(OnCrossStart),
+    ///   엇갈리는 순간 기만체를 뿌린다(OnCrossPass — 횟수를 쓰지 않는다, 플레어는 FlareWithDecoys로 같이). 분노하면 교차하지 않는다(Cross.Allowed).
+    /// - 무전: 등장·다연장·기만체·체력 절반·교차·짝 격추·격추 때 Chatter.Say로 자막(모든 클라이언트가 각자 본다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_SuperAce : UdonSharpBehaviour
     {
         [Header("이름 / 무전")]
         [Tooltip("HUD 마커·페이즈 배너·무전에 쓰는 이름(영문 대문자)")]
-        public string AceName = "REAPER";
+        public string AceName = "HEADS";
         [Tooltip("자막의 이름 색")]
         public Color SpeakerColor = new Color(1f, 0.35f, 0.3f, 1f);
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다")]
@@ -32,12 +36,17 @@ namespace ACO
         public string LineDecoy = "Which one of me are you aiming at?";
         public string LineHalf = "Not bad... Now I'm getting serious.";
         public string LineDown = "Impossible... Who ARE you people?";
+        [Tooltip("짝이 격추됐을 때(쌍둥이 규칙 — 분노)")]
+        public string LinePartnerDown = "";
+        [Tooltip("교차 기동을 시작할 때")]
+        public string LineCross = "";
         [Header("음성 (선택 — 위 대사와 짝, 비우면 자막만)")]
         public AudioClip ClipSpawn;
         public AudioClip ClipSalvo;
         public AudioClip ClipDecoy;
         public AudioClip ClipHalf;
         public AudioClip ClipDown;
+        public AudioClip ClipPartnerDown;
         [Tooltip("음성 대사가 무전 줄에서 이보다 오래(초) 밀리면 버린다")]
         public float VoiceQueueDelay = 8f;
 
@@ -45,6 +54,18 @@ namespace ACO
         public ACO_NPCFighterAI AI;
         public SaccTarget TargetHealth;
         public ACO_NPCFlightController Flight;
+
+        [Header("쌍둥이 규칙")]
+        [Tooltip("같이 출격하는 짝(Bake가 넣는다 — 풀의 슈퍼에이스끼리). 비우면 분노하지 않는다")]
+        public ACO_SuperAce Partner;
+        [Tooltip("분노하면 다연장 간격에 곱한다")]
+        public float EnragedSalvoFactor = 0.5f;
+        [Tooltip("분노하면 기만체 간격에 곱한다(횟수는 다시 채운다)")]
+        public float EnragedDecoyCooldownFactor = 0.5f;
+
+        [Header("교차 기동 (형제)")]
+        [Tooltip("교차 기동 부품(같은 기체 — 프리팹 빌더가 붙이고 Bake가 짝을 잇는다). 비우면 교차하지 않는다")]
+        public ACO_CrossManeuver Cross;
 
         [Header("다연장")]
         [Tooltip("다연장 전용 런처(연사 간격 0). 비우면 다연장을 쓰지 않는다")]
@@ -77,6 +98,8 @@ namespace ACO
         public int DecoyCharges = 4;
         [Tooltip("나를 노린 미사일이 이 거리(m) 안이면 뿌린다")]
         public float DecoyReactDistance = 2500f;
+        [Tooltip("기만체를 뿌리는 순간 플레어도 같이 뿌린다(평소 기만체·교차 기동 모두 — 플레어 횟수 제한·확률과 무관)")]
+        public bool FlareWithDecoys = true;
 
         private bool _started;
         private bool _wasAlive;
@@ -93,6 +116,8 @@ namespace ACO
         private float _decoyUntil;
         private bool _decoysOut;
         private float _decoyStart;
+        private bool _partnerSeen;      // 이번 출격에서 짝이 살아 있는 걸 봤다
+        private bool _enraged;
 
         void Start()
         {
@@ -134,6 +159,8 @@ namespace ACO
             _wasAlive = alive;
             if (!alive) { return; }
 
+            TwinTick();
+
             if (!_halfSaid && TargetHealth != null && TargetHealth.FullHealth > 0f && TargetHealth.Health <= TargetHealth.FullHealth * 0.5f)
             {
                 _halfSaid = true;
@@ -155,8 +182,39 @@ namespace ACO
             _nextSalvo = Time.time + SalvoFirstDelay;
             _nextDecoy = Time.time;
             _decoysLeft = DecoyCharges;
+            _partnerSeen = false;
+            _enraged = false;
+            if (Cross != null) { Cross.Allowed = true; }
             HideDecoys();
             Say(LineSpawn, ClipSpawn);
+        }
+
+        /// 살아 있는가(등장·격추 판정과 같은 값 — 짝이 본다).
+        public bool IsAceAlive() { return _wasAlive; }
+
+        public bool IsEnraged() { return _enraged; }
+
+        // ───────────── 교차 기동 (ACO_CrossManeuver가 부른다 — 모든 화면) ─────────────
+
+        public void OnCrossStart() { Say(LineCross, null); }
+
+        /// 엇갈리는 순간 기만체(+ 플레어)를 뿌린다 — 기만체 횟수를 쓰지 않는다.
+        public void OnCrossPass() { DeployDecoys(false); }
+
+        // ───────────── 쌍둥이 규칙 (모든 화면) ─────────────
+
+        private void TwinTick()
+        {
+            if (Partner == null || _enraged) { return; }
+            if (Partner.IsAceAlive()) { _partnerSeen = true; return; }
+            if (!_partnerSeen) { return; }
+            _enraged = true;
+            if (Cross != null) { Cross.Allowed = false; }
+            _decoysLeft = DecoyCharges;
+            _nextDecoy = Time.time;
+            float cd = SalvoCooldown * EnragedSalvoFactor;
+            if (_salvoState == 0 && _nextSalvo > Time.time + cd) { _nextSalvo = Time.time + cd; }
+            Say(LinePartnerDown, ClipPartnerDown);
         }
 
         // ───────────── 다연장 (오너) ─────────────
@@ -191,7 +249,7 @@ namespace ACO
                     for (int m = 0; m < Mathf.Max(SalvoMissilesPerTarget, 1); m++) { SalvoLauncher.FireAt(_salvoTargets[k]); }
                 }
                 _salvoState = 0;
-                _nextSalvo = Time.time + SalvoCooldown;
+                _nextSalvo = Time.time + SalvoCooldown * (_enraged ? EnragedSalvoFactor : 1f);
             }
         }
 
@@ -236,12 +294,14 @@ namespace ACO
             if (Decoys == null || Decoys.Length == 0 || _decoysLeft <= 0 || _decoysOut || Time.time < _nextDecoy) { return; }
             if (AI.Flares == null || !AI.Flares.HasIncomingWithin(DecoyReactDistance)) { return; }
             _decoysLeft--;
-            _nextDecoy = Time.time + DecoyCooldown;
+            _nextDecoy = Time.time + DecoyCooldown * (_enraged ? EnragedDecoyCooldownFactor : 1f);
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetDeployDecoys));
         }
 
         /// 모든 클라이언트: 기만체를 기체 자리에서 켠다 — 이후 MoveDecoys가 편대 자리로 벌리며 기체를 따라 붙인다.
-        public void NetDeployDecoys()
+        public void NetDeployDecoys() { DeployDecoys(true); }
+
+        private void DeployDecoys(bool say)
         {
             if (!_started) { Start(); }
             if (Decoys == null) { return; }
@@ -256,7 +316,9 @@ namespace ACO
             _decoysOut = true;
             _decoyStart = Time.time;
             _decoyUntil = Time.time + DecoyLifetime;
-            Say(LineDecoy, ClipDecoy);
+            // 플레어도 같이(모든 화면이 이 자리에서 같이 부른다 — 플레어 장치의 NetFlare는 모든 화면용 연출·활성 시간 시작)
+            if (FlareWithDecoys && AI != null && AI.Flares != null) { AI.Flares.NetFlare(); }
+            if (say) { Say(LineDecoy, ClipDecoy); }
         }
 
         /// 기체 기준 편대 자리(DecoyOffsets)에 붙인다. 처음 DecoySpreadTime 동안은 기체 자리에서 부드럽게 벌어지고, 자리마다 다른 박자로 살짝 흔들린다.

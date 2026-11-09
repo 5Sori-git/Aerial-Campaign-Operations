@@ -448,6 +448,7 @@ public static partial class ACO_PrefabBuilder
 
         blast.Boom = CreateBlastSound(root.transform, "Boom", "Assets/ACO_Addon/Audio/Generated/ACO_Explosion_Big.wav", 3000f, 40000f);
         blast.SecondarySound = CreateBlastSound(root.transform, "SecondarySound", "Assets/ACO_Addon/Audio/Generated/ACO_Explosion_Small.wav", 300f, 8000f);
+        ACO_FxBuilder.StyleBlast(blast);
         return blast;
     }
 
@@ -609,6 +610,7 @@ public static partial class ACO_PrefabBuilder
         ship.ScoreValue = 5000;
         ship.HighValue = true;
         ship.PartHullDamage = 0f;
+        ship.CoreSplashImmune = true;   // 보스 코어는 직접 맞혀야만(범위 피해 면역)
         ship.CruiseSpeed = 0f;
         ship.BobAngle = 0f;
         ship.ExternalPose = true;

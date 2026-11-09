@@ -167,6 +167,7 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeTimeSensitive();
         BakeFleet();
         BakeRailgun();
+        BakeLandShip();
         BakeTierHealth();
         BakeTacticalMaps();
         BakeHiScoreBoard();
@@ -188,12 +189,15 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeSeatRecenter();
         BakeUiSound();
         BakeSuperAces();
+        BakeShades();
+        BakeLaserAces();
         BakeSky();
         BakeTargetAnimators();
         BakeFxLayer();
         BakeSpectators();
         BakeFlightHud();
         BakeDecals();
+        BakeSafeLockTargets();
     }
 
     private static bool SameRefs(Object[] a, Object[] b)

@@ -362,6 +362,12 @@ namespace ACO
         public ACO_FlyingFortress Fortress;
         [Tooltip("랜스 포대(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
         public ACO_Railgun Railgun;
+        [Tooltip("육상전함(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
+        public ACO_LandShip LandShip;
+        [Tooltip("육상전함이 멈추는 자리: 도시 가장자리에서 이만큼(m) 바깥")]
+        public float LandShipStopMargin = 900f;
+        [Tooltip("육상전함 항로 경유점의 옆 흩뜨림(항로 길이 비율) — 작을수록 크게 돈다")]
+        public float LandShipLateral = 0.08f;
         [Tooltip("랜스 포대를 놓을 자리의 기초 안 높이 차 한도(m) — 기초는 가장 높은 땅에 얹히고, 낮은 쪽은 기초 옆면이 가린다")]
         public float RailgunMaxRelief = 80f;
         [Tooltip("높이를 확인하는 기초 반경(m)")]
@@ -506,6 +512,12 @@ namespace ACO
         public const int OBJ_RAILGUN = 11;
         /// 공중 요새 측면 해치 출격: focus = 해치 자리, minDist = 나가는 방위각(도).
         public const int OBJ_HATCH_FLIGHT = 12;
+        /// 육상전함(태그) — focus = 항로 출발점, tier = 방위각(도). 보스 페이즈(ACO_PhaseLandShip)만 쓴다.
+        public const int OBJ_LANDSHIP = 13;
+        /// 레이저 에이스 1기(태그, 호위 없음), focus 쪽으로 진입 — 레이저 에이스 페이즈(ACO_PhaseLaserAce)만 쓴다.
+        public const int OBJ_LASER_ACE = 14;
+        /// SHADE 편대 count기(모두 태그), focus 쪽으로 편대 진입 — SHADE 편대 페이즈(ACO_PhaseShade)만 쓴다.
+        public const int OBJ_SHADE = 15;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -1086,7 +1098,7 @@ namespace ACO
                 for (int i = 0; i < _fighterUsed.Length; i++)
                 {
                     ACO_NPCFighterAI fighter = Fighters[i];
-                    if (fighter == null || fighter.SuperAce != null || fighter.GroundAttacker) { continue; }
+                    if (fighter == null || IsReservedAce(fighter) || fighter.GroundAttacker) { continue; }
                     if (IsProtected(_fighterTag, i)) { continue; }
                     bool candidate = pass == 0 ? (_fighterUsed[i] && IsDestroyed(fighter.TargetHealth)) : !_fighterUsed[i];
                     if (candidate) { outList[n] = i; n++; }
@@ -3160,10 +3172,13 @@ namespace ACO
             else if (kind == OBJ_FORTRESS) { placed = DeployFortress(tag, tier, focus, now); label = "목표 배치(공중 요새)"; }
             else if (kind == OBJ_TEL) { placed = DeployTel(tag, focus, minDist, maxDist, now); label = "목표 배치(TEL)"; }
             else if (kind == OBJ_RAILGUN) { placed = DeployRailgun(tag, tier, focus, now); label = "목표 배치(랜스 포대)"; }
+            else if (kind == OBJ_LANDSHIP) { placed = DeployLandShip(tag, tier, focus, now); label = "목표 배치(육상전함)"; }
             else if (kind == OBJ_SITE) { placed = DeploySite(tag, count, focus, minDist, maxDist, now); label = "목표 배치(방공 시설)"; }
             else if (kind == OBJ_GROUND) { placed = DeploySingles(tag, count, focus, minDist, maxDist, now); label = "목표 배치(시한 표적)"; }
             else if (kind == OBJ_HUNT) { placed = DeployHunt(tag, count, focus, minDist, maxDist, now); label = "목표 배치(사냥터)"; }
             else if (kind == OBJ_SUPER_ACE) { placed = DeploySuperAce(tag, count, focus, minDist, maxDist, now); label = "목표 배치(슈퍼에이스)"; }
+            else if (kind == OBJ_LASER_ACE) { placed = DeployAce(FreeLaserAce(), tag, 0, focus, minDist, maxDist, now); label = "목표 배치(레이저 에이스)"; }
+            else if (kind == OBJ_SHADE) { placed = DeployShade(tag, count, focus, minDist, maxDist, now); label = "목표 배치(SHADE 편대)"; }
             else if (kind == OBJ_ATTACK) { placed = DeployFlight(tag, count, tier, focus, minDist, maxDist, now, true); label = "공격기 배치"; }
             else if (kind == OBJ_HATCH_FLIGHT) { placed = DeployHatchLaunch(tag, count, tier, focus, minDist, now); label = "요새 해치 출격"; }
             else if (kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK) { placed = DeployCarrierLaunch(tag, count, tier, focus, now, kind == OBJ_CARRIER_ATTACK); label = "함재기 발진"; }
@@ -3179,8 +3194,8 @@ namespace ACO
         /// 목표 종류(OBJ_*)가 놓이는 분류(CAT_*).
         private int ObjectiveCategory(int kind)
         {
-            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN) { return CAT_HVT; }
-            if (kind == OBJ_FLIGHT || kind == OBJ_SUPER_ACE || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT) { return CAT_FIGHTER; }
+            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LANDSHIP) { return CAT_HVT; }
+            if (kind == OBJ_FLIGHT || kind == OBJ_SUPER_ACE || kind == OBJ_LASER_ACE || kind == OBJ_SHADE || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT) { return CAT_FIGHTER; }
             return CAT_GROUND;
         }
 
@@ -3264,7 +3279,7 @@ namespace ACO
                 for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
                 {
                     ACO_NPCFighterAI fighter = Fighters[i];
-                    if (fighter == null || fighter.SuperAce != null || fighter.GroundAttacker != attackers) { continue; }
+                    if (fighter == null || IsReservedAce(fighter) || fighter.GroundAttacker != attackers) { continue; }
                     bool candidate = pass == 0 ? !_fighterUsed[i] : (_fighterUsed[i] && IsDestroyed(fighter.TargetHealth));
                     if (candidate) { outList[n] = i; n++; }
                 }
@@ -3418,7 +3433,12 @@ namespace ACO
 
         private bool IsReservedHvt(UdonSharpBehaviour unit)
         {
-            return IsFortressUnit(unit) || IsRailgunUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
+            return IsFortressUnit(unit) || IsRailgunUnit(unit) || IsLandShipUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
+        }
+
+        private bool IsLandShipUnit(UdonSharpBehaviour unit)
+        {
+            return LandShip != null && unit != null && unit == (UdonSharpBehaviour)LandShip.Warship;
         }
 
         private bool IsRailgunUnit(UdonSharpBehaviour unit)
@@ -3478,6 +3498,40 @@ namespace ACO
         }
 
         public Vector3 GetRailgunSite() { return _railgunSite; }
+
+        private Vector3 _padSite;
+
+        /// 작은 받침(사일로 등) 자리: focus에서 minDist~maxDist, 반지름 radius 안팎 9곳의 땅 높이 차가 maxRelief 이하인 뭍. 받침은 가장 높은 곳에 얹는다(묻히지 않게).
+        /// 찾으면 GetPadSite. 작전 지역 밖·안전지대·건물 위·물은 뺀다(SampleGround).
+        public bool FindPadSite(Vector3 focus, float minDist, float maxDist, float radius, float maxRelief)
+        {
+            for (int attempt = 0; attempt < MaxPlacementAttempts * 2; attempt++)
+            {
+                float a = Random.Range(0f, Mathf.PI * 2f);
+                float d = Random.Range(minDist, maxDist);
+                float x = focus.x + Mathf.Cos(a) * d;
+                float z = focus.z + Mathf.Sin(a) * d;
+                if (!SampleGround(x, z)) { continue; }
+                float low = _sampleY;
+                float high = _sampleY;
+                bool ok = true;
+                for (int k = 0; k < 8 && ok; k++)
+                {
+                    float b = k * Mathf.PI * 0.25f;
+                    ok = SampleGround(x + Mathf.Cos(b) * radius, z + Mathf.Sin(b) * radius);
+                    if (!ok) { continue; }
+                    low = Mathf.Min(low, _sampleY);
+                    high = Mathf.Max(high, _sampleY);
+                    ok = high - low <= maxRelief;
+                }
+                if (!ok) { continue; }
+                _padSite = new Vector3(x, high, z);
+                return true;
+            }
+            return false;
+        }
+
+        public Vector3 GetPadSite() { return _padSite; }
 
         private int DeployRailgun(int tag, int yaw, Vector3 site, int now)
         {
@@ -3778,6 +3832,142 @@ namespace ACO
             return 1;
         }
 
+        // ───────────── 육상전함 ─────────────
+
+        private int LandShipIndex()
+        {
+            if (LandShip == null || HighValueTargets == null) { return -1; }
+            for (int i = 0; i < HighValueTargets.Length; i++) { if (IsLandShipUnit(HighValueTargets[i])) { return i; } }
+            return -1;
+        }
+
+        /// 육상전함을 쓸 수 있는가(풀에 있고, 이미 살아서 움직이고 있지 않다).
+        public bool CanDeployLandShip()
+        {
+            EnsureArrays();
+            int i = LandShipIndex();
+            return i >= 0 && i < _hvtUsed.Length && (!_hvtUsed[i] || IsDestroyed(HighValueTargets[i].GetComponent<SaccTarget>()));
+        }
+
+        /// 육상전함 배치: 항로 출발점, 방위 = 첫 구간 방향(정수 + 0.5도). 항로 자체는 모듈이 동기화한다.
+        private int DeployLandShip(int tag, int yaw, Vector3 start, int now)
+        {
+            if (!CanDeployLandShip()) { return 0; }
+            _markTag = tag;
+            MarkHvt(LandShipIndex(), true, start, Quaternion.Euler(0f, yaw + 0.5f, 0f), now);
+            return 1;
+        }
+
+        private Vector3[] _lsRoute;
+        private int _lsCount;
+        private int _lsSite = -1;
+
+        public int GetLandShipRouteCount() { return _lsCount; }
+        public Vector3 GetLandShipRoutePoint(int i) { return _lsRoute != null && i >= 0 && i < _lsCount ? _lsRoute[i] : Vector3.zero; }
+        public int GetLandShipRouteSite() { return _lsSite; }
+
+        /// 육상전함 항로: 콘보이처럼 목적지(도시 가장자리 LandShipStopMargin 바깥)에서 거꾸로 만들고, 콘보이와 같은 경사 확인을 한다(CheckLandShipCurve).
+        /// 물은 지나가도 된다(수륙양용). 안 나오면 상륙전처럼 바다에서 도시 근처 해안으로 들어오는 항로를 쓴다. 결과는 GetLandShipRoute*.
+        public bool FindLandShipRoute(float length)
+        {
+            if (LandShip == null) { return false; }
+            if (_lsRoute == null) { _lsRoute = new Vector3[ACO_EscortUnit.MAX_ROUTE_POINTS]; }
+            _lsCount = 0;
+            _lsSite = -1;
+            _routeHostile = true;   // 목적지 = 도시만
+            int cities = CollectDestinations();
+            _routeHostile = false;
+            if (cities == 0) { return false; }
+            int count = 4;
+            float spread = Mathf.Min(EscortRouteLateral, length * Mathf.Max(LandShipLateral, 0f));
+            for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
+            {
+                int site = _destList[Random.Range(0, cities)];
+                Vector3 c = Features.GetSitePosition(site);
+                float ea = Random.Range(0f, Mathf.PI * 2f);
+                float er = Features.GetSiteRadius(site) + LandShipStopMargin;
+                Vector3 end = new Vector3(c.x + Mathf.Cos(ea) * er, 0f, c.z + Mathf.Sin(ea) * er);
+                float heading = ea + Mathf.PI + Random.Range(-35f, 35f) * Mathf.Deg2Rad;
+                Vector3 dir = new Vector3(Mathf.Cos(heading), 0f, Mathf.Sin(heading));
+                Vector3 side = new Vector3(-dir.z, 0f, dir.x);
+                bool ok = true;
+                for (int k = 0; k < count && ok; k++)
+                {
+                    float f = k / (float)(count - 1);
+                    float lateral = (k == 0 || k == count - 1) ? 0f : Random.Range(-spread, spread);
+                    Vector3 pt = end - dir * (length * (1f - f)) + side * lateral;
+                    if (!LandShipHeight(pt.x, pt.z)) { ok = false; break; }
+                    pt.y = _sampleY;
+                    _lsRoute[k] = pt;
+                    // 이전 경유점과의 사이도 빠르게 확인한다(세밀한 확인 전에 일찍 버리려고 — 콘보이와 같다)
+                    if (k > 0)
+                    {
+                        Vector3 prev = _lsRoute[k - 1];
+                        for (int j = 1; j < 4 && ok; j++)
+                        {
+                            Vector3 mid = Vector3.Lerp(prev, pt, j / 4f);
+                            if (!LandShipHeight(mid.x, mid.z)) { ok = false; }
+                        }
+                    }
+                }
+                if (ok) { ok = CheckLandShipCurve(_lsRoute, count); }
+                if (!ok) { continue; }
+                _lsCount = count;
+                _lsSite = site;
+                return true;
+            }
+            // 상륙: 바다 항로(항구 → 도시 근처 해안 → 해변) + 해변 안쪽 한 점
+            int sea = Mathf.Clamp(EscortRoutePoints, 2, ACO_EscortUnit.MAX_ROUTE_POINTS - 1);
+            if (!BuildAmphibiousRoute(length, sea, _lsRoute, 0)) { return false; }
+            Vector3 beach = _amphPort - _amphSeaDir * (LcacBeachInland + LandShip.HalfLength);
+            beach.y = GroundHeightAt(beach.x, beach.z);
+            _lsRoute[sea] = beach;
+            _lsCount = sea + 1;
+            _lsSite = _routeDestSite;
+            return true;
+        }
+
+        /// 육상전함이 지날 수 있는 한 점이면 true, 높이는 _sampleY. 공역 안·안전지대 밖·건물 자리 밖. 물은 해수면.
+        private bool LandShipHeight(float x, float z)
+        {
+            if (x < AreaMin.x || x > AreaMax.x || z < AreaMin.y || z > AreaMax.y) { return false; }
+            if (InSafeZone(x, z)) { return false; }
+            if (Features != null && Features.IsBlocked(x, z)) { return false; }
+            _sampleY = GroundHeightAt(x, z);
+            return true;
+        }
+
+        /// 콘보이와 같은 확인: 곡선을 RouteCheckSpacing마다 재서, 이웃한 두 점의 경사가 MaxRouteGrade 이하여야 한다.
+        /// 선체 길이 안의 굴곡은 보지 않는다 — 움직일 때 선체가 가장 높은 접지점에 얹혀(ACO_LandShip.SampleGround) 묻히지 않고 조금 뜬다.
+        /// 물은 해수면 높이로 잰다(수륙양용).
+        private bool CheckLandShipCurve(Vector3[] pts, int count)
+        {
+            float spacing = Mathf.Max(RouteCheckSpacing, 10f);
+            float maxGrade = Mathf.Tan(Mathf.Clamp(MaxRouteGrade, 1f, 89f) * Mathf.Deg2Rad);
+            bool hasPrev = false;
+            Vector3 prev = Vector3.zero;
+            for (int k = 0; k < count - 1; k++)
+            {
+                Vector3 a = pts[k];
+                Vector3 b = pts[k + 1];
+                int steps = Mathf.Max(Mathf.CeilToInt(new Vector2(b.x - a.x, b.z - a.z).magnitude / spacing), 1);
+                for (int j = (k == 0 ? 0 : 1); j <= steps; j++)
+                {
+                    Vector3 c = RouteCurvePoint(pts, 0, count, k, j / (float)steps);
+                    if (!LandShipHeight(c.x, c.z)) { return false; }
+                    Vector3 here = new Vector3(c.x, _sampleY, c.z);
+                    if (hasPrev)
+                    {
+                        float d = new Vector2(here.x - prev.x, here.z - prev.z).magnitude;
+                        if (d > 0.5f && Mathf.Abs(here.y - prev.y) / d > maxGrade) { return false; }
+                    }
+                    prev = here;
+                    hasPrev = true;
+                }
+            }
+            return true;
+        }
+
         private int DeploySite(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
         {
             _groundOrder = new int[_groundUsed.Length];
@@ -3835,10 +4025,56 @@ namespace ACO
             return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].SuperAce != null;
         }
 
-        /// 일반 배치에 쓰지 않는 전투기(슈퍼에이스 = 보너스 페이즈, 공격기 = 지상·해상 호위 페이즈).
+        private bool IsLaserAceSlot(int i)
+        {
+            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].LaserAce != null;
+        }
+
+        private bool IsShadeSlot(int i)
+        {
+            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].Shade != null;
+        }
+
+        /// 보스 페이즈 전용 에이스(슈퍼에이스·레이저 에이스·SHADE) — 일반 배치·증원·호위에 쓰지 않는다.
+        private bool IsReservedAce(ACO_NPCFighterAI f)
+        {
+            return f.SuperAce != null || f.LaserAce != null || f.Shade != null;
+        }
+
+        /// 일반 배치에 쓰지 않는 전투기(슈퍼에이스 = 보너스 페이즈, 레이저 에이스 = 레이저 에이스 페이즈, 공격기 = 지상·해상 호위 페이즈).
         private bool IsReservedFighterSlot(int i)
         {
-            return IsSuperAceSlot(i) || (Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].GroundAttacker);
+            return IsSuperAceSlot(i) || IsLaserAceSlot(i) || IsShadeSlot(i) || (Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].GroundAttacker);
+        }
+
+        /// 내보낼 수 있는 레이저 에이스 번호(쓰지 않거나 격추된 것), 없으면 -1.
+        private int FreeLaserAce()
+        {
+            if (Fighters == null) { return -1; }
+            for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
+            {
+                if (!IsLaserAceSlot(i)) { continue; }
+                if (!_fighterUsed[i] || IsDestroyed(Fighters[i].TargetHealth)) { return i; }
+            }
+            return -1;
+        }
+
+        /// 레이저 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 레이저 에이스가 있다).
+        public bool CanDeployLaserAce()
+        {
+            EnsureArrays();
+            return FreeLaserAce() >= 0;
+        }
+
+        /// 풀의 레이저 에이스(첫 번째). 모든 클라이언트가 같은 것을 본다(풀 순서). 없으면 null.
+        public ACO_LaserAce GetLaserAce()
+        {
+            if (Fighters == null) { return null; }
+            for (int i = 0; i < Fighters.Length; i++)
+            {
+                if (Fighters[i] != null && Fighters[i].LaserAce != null) { return Fighters[i].LaserAce; }
+            }
+            return null;
         }
 
         /// 내보낼 수 있는 공격기 수(쓰지 않거나 격추된 것). 호위 페이즈가 몇 기 부를지 정할 때 본다.
@@ -3849,39 +4085,75 @@ namespace ACO
             return CollectFreeFighters(cands, true);
         }
 
+        private const int ACE_KIND_SUPER = 1;
+        private const int ACE_KIND_SHADE = 2;
+
         /// 내보낼 수 있는 슈퍼에이스 번호(쓰지 않거나 격추된 것), 없으면 -1.
-        private int FreeSuperAce()
+        private int FreeSuperAce() { return FreeAceOfKind(ACE_KIND_SUPER, null, 0); }
+
+        /// 내보낼 수 있는 kind 에이스 번호(쓰지 않거나 격추된 것), skip의 앞 skipCount개는 뺀다(편대를 고를 때 — 막 고른 기체는 풀에서 갓 꺼내 체력이 아직 0일 수 있어 직접 뺀다).
+        private int FreeAceOfKind(int kind, int[] skip, int skipCount)
         {
             if (Fighters == null) { return -1; }
             for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
             {
-                if (!IsSuperAceSlot(i)) { continue; }
+                if (kind == ACE_KIND_SUPER ? !IsSuperAceSlot(i) : !IsShadeSlot(i)) { continue; }
+                bool taken = false;
+                for (int k = 0; k < skipCount; k++) { if (skip[k] == i) { taken = true; break; } }
+                if (taken) { continue; }
                 if (!_fighterUsed[i] || IsDestroyed(Fighters[i].TargetHealth)) { return i; }
             }
             return -1;
         }
 
-        /// 보너스 페이즈를 열 수 있는가(풀에 쉬고 있는 슈퍼에이스가 있다). 미션 관리자 오너가 굴리기 전에 본다.
+        /// SHADE 편대를 열 수 있는가(풀에 쉬고 있는 SHADE가 있다).
+        public bool CanDeployShade() { return FreeAceOfKind(ACE_KIND_SHADE, null, 0) >= 0; }
+
+        /// SHADE 편대 count기(모두 태그) — 첫 기체를 DeployAce로, 나머지는 편대 자리에.
+        private int DeployShade(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
+        {
+            _extraAceKind = ACE_KIND_SHADE;
+            _extraAces = Mathf.Max(count - 1, 0);
+            int placed = DeployAce(FreeAceOfKind(ACE_KIND_SHADE, null, 0), tag, 0, focus, minDist, maxDist, now);
+            _extraAces = 0;
+            return placed;
+        }
+
+        /// 분신 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 슈퍼에이스가 있다).
         public bool CanDeploySuperAce()
         {
             return FreeSuperAce() >= 0;
         }
 
-        /// 슈퍼에이스 이름(풀의 첫 슈퍼에이스). 없으면 "ACE".
+        /// 슈퍼에이스 이름(풀의 슈퍼에이스 모두 — 형제면 "HEADS & TAILS"). 없으면 "ACE".
         public string GetSuperAceName()
         {
             if (Fighters == null) { return "ACE"; }
+            string names = "";
             for (int i = 0; i < Fighters.Length; i++)
             {
-                if (Fighters[i] != null && Fighters[i].SuperAce != null) { return Fighters[i].SuperAce.AceName; }
+                if (Fighters[i] == null || Fighters[i].SuperAce == null) { continue; }
+                names = names.Length == 0 ? Fighters[i].SuperAce.AceName : names + " & " + Fighters[i].SuperAce.AceName;
             }
-            return "ACE";
+            return names.Length > 0 ? names : "ACE";
         }
 
-        /// 슈퍼에이스(태그) + 호위 에이스 escorts기(태그 없음 — 목표는 슈퍼에이스 하나). focus에서 minDist~maxDist 떨어진 곳에서 focus 상공으로 진입.
-        private int DeploySuperAce(int tag, int escorts, Vector3 focus, float minDist, float maxDist, int now)
+        private int _extraAces;      // DeployAce가 첫 기체 옆 편대 자리에 함께 내보낼 같은 종류 에이스 수(형제·SHADE 편대 — 모두 같은 태그)
+        private int _extraAceKind;
+
+        /// 슈퍼에이스 count기(모두 태그 — 형제 편대, 풀에 있는 만큼). focus에서 minDist~maxDist 떨어진 곳에서 편대로 focus 상공에 진입.
+        private int DeploySuperAce(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
         {
-            int ace = FreeSuperAce();
+            _extraAceKind = ACE_KIND_SUPER;
+            _extraAces = Mathf.Max(count - 1, 0);
+            int placed = DeployAce(FreeSuperAce(), tag, 0, focus, minDist, maxDist, now);
+            _extraAces = 0;
+            return placed;
+        }
+
+        /// 에이스 한 기(풀 번호 ace — 태그) + 호위 에이스 escorts기(태그 없음). focus에서 minDist~maxDist 떨어진 곳에서 focus 상공으로 진입.
+        private int DeployAce(int ace, int tag, int escorts, Vector3 focus, float minDist, float maxDist, int now)
+        {
             if (ace < 0) { return 0; }
             Vector3 spawn;
             if (maxDist > 0f)
@@ -3902,6 +4174,22 @@ namespace ACO
             _markTag = tag;
             MarkFighter(ace, true, spawn, heading, task, ACO_NPCFighterAI.SKILL_ACE, now);
             int placed = 1;
+            // 편대(형제·SHADE): 남은 같은 종류 에이스를 첫 기체 옆 편대 자리에(같은 태그)
+            if (_extraAces > 0)
+            {
+                int[] chosen = new int[_extraAces + 1];
+                chosen[0] = ace;
+                int nChosen = 1;
+                for (int k = 0; k < _extraAces; k++)
+                {
+                    int next = FreeAceOfKind(_extraAceKind, chosen, nChosen);
+                    if (next < 0) { break; }
+                    MarkFighter(next, true, spawn + heading * FormationOffset(k + 1), heading, task, ACO_NPCFighterAI.SKILL_ACE, now);
+                    chosen[nChosen] = next;
+                    nChosen++;
+                    placed++;
+                }
+            }
             _markTag = 0;
             int[] cands = new int[_fighterUsed.Length];
             int candCount = CollectFreeFighters(cands);
@@ -4140,8 +4428,8 @@ namespace ACO
             UdonSharpBehaviour ship = UnitAt(PartOwnerCategory(i), h);
             if (ship == null) { return false; }
             if (IsDestroyed(ship.GetComponent<SaccTarget>())) { return true; }
-            // 공중 요새의 엔진·랜스 포대의 냉각기는 드러나기 전엔 표시하지 않는다
-            if (!IsFortressUnit(ship) && !IsRailgunUnit(ship)) { return false; }
+            // 공중 요새의 엔진·랜스 포대의 냉각기·육상전함의 궤도·배기구는 드러나기 전엔 표시하지 않는다
+            if (!IsFortressUnit(ship) && !IsRailgunUnit(ship) && !IsLandShipUnit(ship)) { return false; }
             UdonSharpBehaviour part = UnitAt(CAT_PART, i);
             ACO_FortressPart fp = part != null ? part.GetComponent<ACO_FortressPart>() : null;
             return fp != null && !fp.Exposed;

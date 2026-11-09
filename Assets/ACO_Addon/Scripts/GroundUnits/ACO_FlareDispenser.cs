@@ -212,11 +212,7 @@ namespace ACO
         {
             if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
             if (_salvosLeft > 0) { _salvosLeft--; }
-            _flareStart = Time.time;
-            // 플레어는 기체 속도 일부를 이어받고 뒤로 사출된다(연출 파티클: 속도 상속 0.8, 사출 15~35m/s).
-            _flarePos = FlareParticles ? FlareParticles.transform.position : transform.position;
-            float speed = Flight != null ? Flight.Speed : (Unit != null ? Unit.Speed : 0f);
-            _flareVel = transform.forward * Mathf.Max(speed * 0.8f - 25f, 0f);
+            StartLure();
             StartVisual();
             if (FlareSound && FlareSound.clip) { FlareSound.PlayOneShot(FlareSound.clip); }
             if (Chatter)
@@ -224,6 +220,22 @@ namespace ACO
                 int ev = Friendly ? (SmokeMode ? ACO_Chatter.EV_ALLY_SMOKE : ACO_Chatter.EV_ALLY_FLARE) : ACO_Chatter.EV_ENEMY_FLARE;
                 Chatter.ReportNear(ev, transform.position, "");
             }
+        }
+
+        /// 모든 클라이언트: 플레어와 같은 효과만 켠다(FlareActiveTime 동안 나를 쫓는 미사일이 끌려간다) — 연출·소리·무전·횟수 없음(SHADE 코브라).
+        public void BeginLure()
+        {
+            if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
+            StartLure();
+        }
+
+        // 플레어는 기체 속도 일부를 이어받고 뒤로 사출된다(연출 파티클: 속도 상속 0.8, 사출 15~35m/s). 미사일은 이 점을 쫓는다.
+        private void StartLure()
+        {
+            _flareStart = Time.time;
+            _flarePos = FlareParticles ? FlareParticles.transform.position : transform.position;
+            float speed = Flight != null ? Flight.Speed : (Unit != null ? Unit.Speed : 0f);
+            _flareVel = transform.forward * Mathf.Max(speed * 0.8f - 25f, 0f);
         }
 
         private void StartVisual()

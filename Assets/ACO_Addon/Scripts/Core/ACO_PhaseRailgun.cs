@@ -5,7 +5,8 @@ using VRC.SDKBase;
 namespace ACO
 {
     /// 랜스 포대 페이즈(지상 보스) — 초대형 포 한 문이 지평선 너머 아군 기지를 포격한다. 공대지 무장이 주인공이다.
-    /// 포격 주기: 충전(ChargeTime) → 발사(아군 기지 내구도 1칸) → 재장전(ReloadTime)을 처음부터 끝까지 되풀이한다.
+    /// 포격 주기: 충전(ChargeTime) → 발사(아군 기지 내구도 1칸) → 재장전(ReloadTime)을 되풀이한다. 처음엔 대기(STANDBY) — 우리 쪽이 공격을 시작하면
+    /// (방공 부위·코어가 처음 피해를 입으면) 첫 충전을 건다. ArmMaxWait초가 지나도 공격이 없으면 그때 건다(0 = 기다리기만).
     ///  1) 방공망: 대공포·CIWS·VLS·소형 레일건을 모두 부순다. 코어 장갑은 닫혀 있다. 소형 레일건은 몇 초 뒤 자리를 예측해 쏜다 — 직진하면 폭발 속으로 들어간다(ACO_MiniRailgun).
     ///  2) 냉각기: 냉각기를 모두 부순다. 하나 부술 때마다 이번·다음 충전이 CoolerDelay만큼 느려진다. 방공망 일부가 RepairInterval마다 수리된다.
     ///  3) 코어: 충전 마지막 CoreOpenBefore초 + 발사 뒤 재장전 동안만 장갑이 열린다(위쪽도 열려 탑어택 무장이 내리꽂을 수 있다). 코어를 부수면 성공.
@@ -31,7 +32,9 @@ namespace ACO
         [Tooltip("냉각기 하나를 부술 때마다 충전이 늘어나는 시간(초)")]
         public float CoolerDelay = 15f;
         [Tooltip("발사 몇 초 전부터 코어 장갑이 열리는가")]
-        public float CoreOpenBefore = 25f;
+        public float CoreOpenBefore = 30f;
+        [Tooltip("공격이 없어도 페이즈 시작 뒤 이 시간(초)이 지나면 첫 충전을 건다. 0 = 공격할 때까지 기다린다")]
+        public float ArmMaxWait = 180f;
         [Tooltip("발사 몇 초 전부터 붉은 레이저로 사선을 보여 주는가")]
         public float WarnTime = 5f;
         [Tooltip("아군 기지가 이만큼 맞으면 미션 실패")]
@@ -42,7 +45,9 @@ namespace ACO
         public int ReinforceFighters = 4;
         [Tooltip("방공망 수리 간격(초) — 냉각기·코어 단계")]
         public float RepairInterval = 40f;
-        public int RepairCount = 2;
+        public int RepairCount = 3;
+        [Tooltip("이 페이즈 동안 수리로 되살리는 방공 부위의 최대 수(합계). 0이면 끝없이")]
+        public int MaxRepairs = 6;
 
         [Header("끝맺음")]
         [Tooltip("코어가 터진 뒤 성공으로 넘어가기까지(초)")]
@@ -152,6 +157,8 @@ namespace ACO
         [UdonSynced] private int _hits;         // 아군 기지가 맞은 수
         [UdonSynced] private int _hitCycleMs;   // 마지막으로 친 주기(같은 주기를 두 번 세지 않게)
         [UdonSynced] private int _repairs;
+        [UdonSynced] private int _repairedUnits;   // 지금까지 되살린 부위 수(MaxRepairs와 비교 — 새 오너도 이어서 센다)
+        [UdonSynced] private bool _armed;          // 첫 충전을 걸었다(그 전엔 대기 — 충전·발사·경고·장갑 열림 없음)
 
         // 오너 지역 상태
         private Vector3 _planPos;
@@ -160,6 +167,7 @@ namespace ACO
         private int _coolersAlive = -1;
         private int _coreDownMs;
         private int _lostMs;
+        private float _armBaseline = -1f;   // 대기 중 공격 감지 기준(방공 부위 + 코어 체력 합)
 
         // 대사(모든 클라이언트 지역 상태)
         private int _lineStamp;
@@ -207,11 +215,32 @@ namespace ACO
             _hits = 0;
             _hitCycleMs = 0;
             _repairs = 0;
+            _repairedUnits = 0;
             _coolersAlive = -1;
             _coreDownMs = 0;
             _lostMs = 0;
+            _armed = false;
+            _armBaseline = -1f;
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
             SyncNow();
+        }
+
+        /// 대기 중: 방공 부위·코어 체력 합이 처음 잰 값보다 줄면(공격 시작) 또는 ArmMaxWait가 지나면 첫 충전을 건다.
+        /// 기준은 배치 확인 시간이 지난 뒤 처음 잰다(풀에서 막 꺼낸 부위의 체력 0이 부활로 채워진 뒤).
+        private void TickArm(int now, ACO_Railgun gun)
+        {
+            float sum = gun.SumDefenseAndCoreHealth();
+            bool attacked = false;
+            if (_armBaseline < 0f) { _armBaseline = sum; }
+            else if (sum < _armBaseline - 0.5f) { attacked = true; }
+            else if (sum > _armBaseline) { _armBaseline = sum; }   // 늦게 채워진 체력(숙련도 등)은 기준을 올린다
+            bool timeout = ArmMaxWait > 0f && now - Manager.GetPhaseStartMs() >= Mathf.RoundToInt(ArmMaxWait * 1000f);
+            if (!attacked && !timeout) { return; }
+            _armed = true;
+            _cycleMs = now;
+            _charge = ChargeTime;
+            SyncNow();
+            Debug.Log("[ACO] 랜스 포대: " + (attacked ? "공격 감지" : "대기 시간 초과") + " — 첫 충전 시작");
         }
 
         public override int Tick(int now)
@@ -247,7 +276,8 @@ namespace ACO
             }
             if (now - Manager.GetPhaseStartMs() < Mathf.RoundToInt(Manager.GetObjectiveSettleTime() * 1000f)) { return RESULT_RUNNING; }
 
-            TickCycle(now, gun);
+            if (!_armed) { TickArm(now, gun); }
+            else { TickCycle(now, gun); }
             if (_lostMs != 0) { return RESULT_RUNNING; }
 
             if (_stage == ACO_Railgun.STAGE_AIR_DEFENSE)
@@ -267,7 +297,7 @@ namespace ACO
                 if (_coolersAlive >= 0 && alive < _coolersAlive)
                 {
                     // 부술 때마다 충전이 늦어진다 — 이미 발사했으면 다음 충전부터
-                    if (now - GetFireMs() < 0) { _charge += CoolerDelay * (_coolersAlive - alive); SyncNow(); }
+                    if (_armed && now - GetFireMs() < 0) { _charge += CoolerDelay * (_coolersAlive - alive); SyncNow(); }
                 }
                 _coolersAlive = alive;
                 if (alive == 0) { NextStage(now, gun, ACO_Railgun.STAGE_CORE); }
@@ -312,9 +342,13 @@ namespace ACO
         {
             if (RepairInterval <= 0f || now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
-            if (gun.RepairAirDefense(RepairCount) > 0)
+            int count = MaxRepairs > 0 ? Mathf.Min(RepairCount, MaxRepairs - _repairedUnits) : RepairCount;
+            if (count <= 0) { return; }
+            int done = gun.RepairAirDefense(count);
+            if (done > 0)
             {
                 _repairs++;
+                _repairedUnits += done;
                 SyncNow();
             }
         }
@@ -338,7 +372,7 @@ namespace ACO
             int coolers = gun.CountCoolersAlive();
             float core = gun.GetCoreHealthRatio();
             bool aaHalf = gun.CountAirDefenseAlive() * 2 <= gun.GetAirDefenseTotal();
-            bool soon = GetFireMs() - now <= Mathf.RoundToInt(FireWarnLine * 1000f);
+            bool soon = _armed && GetFireMs() - now <= Mathf.RoundToInt(FireWarnLine * 1000f);
             bool open = IsCoreOpen(now);
             if (_lineStamp != _stamp)
             {
@@ -436,11 +470,14 @@ namespace ACO
         public bool IsLive() { return Manager != null && _stamp != 0 && _stamp == CurrentStamp(); }
         public int GetStage() { return _stage; }
         public int GetFireMs() { return _cycleMs + Mathf.RoundToInt(_charge * 1000f); }
+        /// 첫 충전을 걸었는가(그 전엔 대기 — 충전·발사·경고·장갑 열림 없음).
+        public bool IsArmed() { return IsLive() && _armed; }
         public int GetCycleMs() { return _cycleMs; }
 
         /// 포의 충전 정도(0~1). 발사 뒤 재장전 동안 내려온다 — 포신 각도·빛·소리.
         public float GetChargeRatio(int now)
         {
+            if (!_armed) { return 0f; }
             float t = (now - _cycleMs) * 0.001f;
             if (t < _charge) { return Mathf.Clamp01(t / Mathf.Max(_charge, 0.1f)); }
             return Mathf.Clamp01(1f - (t - _charge) / Mathf.Max(ReloadTime, 0.1f));
@@ -449,6 +486,7 @@ namespace ACO
         /// 발사 임박: 사선 레이저를 켠다.
         public bool IsWarning(int now)
         {
+            if (!_armed) { return false; }
             int left = GetFireMs() - now;
             return left > 0 && left <= Mathf.RoundToInt(WarnTime * 1000f);
         }
@@ -456,7 +494,7 @@ namespace ACO
         /// 코어 장갑이 열려 있는가(코어 단계, 충전 끝자락 + 재장전).
         public bool IsCoreOpen(int now)
         {
-            if (_stage < ACO_Railgun.STAGE_CORE) { return false; }
+            if (_stage < ACO_Railgun.STAGE_CORE || !_armed) { return false; }
             return GetFireMs() - now <= Mathf.RoundToInt(CoreOpenBefore * 1000f);
         }
 
@@ -479,6 +517,7 @@ namespace ACO
             else if (_stage == ACO_Railgun.STAGE_COOLERS) { s = "CLR " + gun.CountCoolersAlive() + "/" + gun.GetCoolerTotal(); }
             else { s = "CORE " + Mathf.RoundToInt(gun.GetCoreHealthRatio() * 100f) + "%"; }
             s += "  BASE " + Mathf.Max(BaseHits - _hits, 0) + "/" + BaseHits;
+            if (!_armed) { return s + "  STANDBY"; }
             int left = GetFireMs() - now;
             if (left <= 0) { return s + "  RELOAD"; }
             int sec = Mathf.CeilToInt(left * 0.001f);

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """랜스 포대와 포대(Flak, CIWS, VLS) 모델·텍스처 생성기. ACO_Lance.fbx, ACO_Turrets.fbx, ACO_Lance_*.png를 만든다.
-실행: blender --background --factory-startup --python Tools/aco_lance_model.py
+실행: blender --background --factory-startup --python Tools/aco_lance_model.py   (ACO_TURRETS_ONLY=1이면 ACO_Turrets.fbx만)
 좌표는 Unity 축(부위 로컬, 단위 m)으로 적고, 저장할 때 FBX 축으로 바꾼다. 원점은 프리팹의 회전축과 같다.
 모델을 고치면 다시 실행하고 Setup Check에 새 ID를 더한다(ACO_PrefabTuning.Entries)."""
 import math
@@ -922,6 +922,53 @@ def vls_hazard():
     return s.mesh("Vls_Hazard")
 
 
+# ── VLS16: 2열 8행 긴 발사 상자(육상전함 측면). 셀 크기·높이·덮개는 네 셀 VLS와 같고 길이만 늘렸다 ──
+VLS16_ROWS = 8
+VLS16_PITCH = 2.4                                   # 행 간격(네 셀 VLS의 셀 중심 ±1.2와 같은 간격)
+VLS16_HALF = VLS16_ROWS * VLS16_PITCH / 2 + 0.15    # 벽 바깥 반길이 9.75
+
+
+def vls16_rows():
+    return [(k - (VLS16_ROWS - 1) / 2) * VLS16_PITCH for k in range(VLS16_ROWS)]
+
+
+def vls16_body():
+    """원점 = 바닥. 윗면 y 1.2에 구멍 16개(x ±1.2, z는 vls16_rows)."""
+    s = Solid()
+    lo = VLS16_HALF * 2 + 0.5
+    wl = VLS16_HALF * 2
+    s.loft([[(x, y, z) for x, z in rect8(5.5, lo, 0.55)] for y in (-1.2, 0.2)])     # 바닥 아래는 갑판 틈을 메운다
+    s.loft([[(x, 0.2, z) for x, z in rect8(5.5, lo, 0.55)], [(x, 0.34, z) for x, z in rect8(5.0, wl, 0.4)], [(x, 0.75, z) for x, z in rect8(5.0, wl, 0.4)]])
+    # 셀 격자: 긴 테두리, 끝 테두리, 행 사이 칸막이, 가운데 등뼈
+    edge = VLS16_ROWS * VLS16_PITCH / 2 - 0.25      # 마지막 셀 바깥 모서리(셀 구멍 1.9 + 칸막이 0.5)
+    for sign in (1, -1):
+        s.box((sign * 2.325, 0.975, 0), (0.35, 0.45, wl))
+        s.box((0, 0.975, sign * (edge + 0.2)), (4.3, 0.45, 0.4))     # 벽 끝(VLS16_HALF)까지
+    for k in range(1, VLS16_ROWS):
+        s.box((0, 0.975, (k - VLS16_ROWS / 2) * VLS16_PITCH), (4.3, 0.45, 0.5))
+    s.box((0, 0.975, 0), (0.5, 0.45, edge * 2))
+    for z in vls16_rows():
+        for sx in (1, -1):
+            s.loft([ring(0.72, 0.75, 12, sx * CELL, z), ring(0.72, 0.9, 12, sx * CELL, z), ring(0.3, 1.1, 12, sx * CELL, z)])
+    # 옆면: 환기 살 줄과 끝면 배기 덕트
+    vents = 26
+    for sign in (1, -1):
+        for k in range(vents):
+            s.box((sign * 2.53, 0.42, (k - (vents - 1) / 2) * 0.68), (0.08, 0.5, 0.4))
+        s.box((0, 0.55, sign * (VLS16_HALF - 0.19 + 0.25)), (3.6, 0.55, 0.14))
+        s.box((sign * 1.2, 0.55, sign * (VLS16_HALF - 0.07 + 0.25)), (0.5, 0.35, 0.1))
+    return s.mesh("Vls16_Body")
+
+
+def vls16_hazard():
+    """윗면 둘레 경고띠."""
+    s = Solid()
+    for sign in (1, -1):
+        s.box((sign * 2.375, 1.21, 0), (0.25, 0.02, VLS16_HALF * 2))
+        s.box((0, 1.21, sign * (VLS16_HALF - 0.125)), (4.49, 0.02, 0.25))
+    return s.mesh("Vls16_Hazard")
+
+
 # ── 공중 요새 코어: 세워 둔 원자로. 원점 = 코어 가운데, 단위 m. 격납고 바닥에서 천장까지 37m ──
 def fort_core():
     """빛나는 노심. 위아래가 평평한 원통."""
@@ -1007,6 +1054,7 @@ def export_turrets():
         "Flak_Base": (flak_base(), TURRET_TILE), "Flak_House": (flak_house(), TURRET_TILE), "Flak_Guns": (flak_guns(), TURRET_TILE),
         "Ciws_Base": (ciws_base(), TURRET_TILE), "Ciws_Mount": (ciws_mount(), TURRET_TILE), "Ciws_Gun": (ciws_gun(), TURRET_TILE),
         "Vls_Body": (vls_body(), 10.0), "Vls_Hatch": (vls_hatch(), 10.0), "Vls_Hazard": (vls_hazard(), 4.0),
+        "Vls16_Body": (vls16_body(), 10.0), "Vls16_Hazard": (vls16_hazard(), 4.0),
         "Fort_Core": (fort_core(), TILE), "Fort_CoreFrame": (fort_core_frame(), TILE),
     }
     turn = Matrix.Rotation(math.pi, 4, 'Z')
@@ -1022,8 +1070,9 @@ def export_turrets():
 
 os.makedirs(OUT, exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
-make_steel()
-make_armor()
-export()
+if os.environ.get("ACO_TURRETS_ONLY") != "1":     # 1이면 포대 FBX만 다시 만든다(랜스 본체·텍스처는 그대로)
+    make_steel()
+    make_armor()
+    export()
 export_turrets()
 print("DONE")

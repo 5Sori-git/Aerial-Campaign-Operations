@@ -225,8 +225,14 @@ def build(deployed=False):
     # 시커 창: 턱 아래 어두운 다면
     s.loft([[(x, y, z + bottom(y) + 0.006) for x, z in ((-w, -0.01), (w, -0.01), (w, 0.01), (-w, 0.01))] for y, w in ((1.72, 0.045), (1.40, 0.10))], 2)
     # 파일런 걸이: 받침 위 고리. 구멍은 좌우로 뚫려 있고 파일런 갈고리가 걸린다
+    # 받침 아래는 몸통 윗면(기수 쪽으로 내려간다)까지 내려 박는다 — 앞 걸이 자리는 윗면이 TOP보다 1cm 넘게 낮아 받침이 떠 보였다
     for y in LUGS:
-        s.box((0, y, TOP + 0.006), (0.075, 0.14, 0.02))
+        rings = []
+        for yy in (y - 0.07, y + 0.07):
+            w, h, c, zc = hull(yy)
+            zb = zc + h * 0.5 - 0.008
+            rings.append([(-0.0375, yy, zb), (0.0375, yy, zb), (0.0375, yy, TOP + 0.016), (-0.0375, yy, TOP + 0.016)])
+        s.loft(rings)
         cz = TOP + 0.026
         steps = 9
         for k in range(steps):

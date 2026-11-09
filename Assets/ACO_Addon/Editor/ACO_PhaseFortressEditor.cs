@@ -28,6 +28,12 @@ public class ACO_PhaseFortressEditor : Editor
     {
         "양 함대 교전 시작", "적 함재기 출격", "기함 체력 절반", "기함 위험", "적 항모 체력 절반",
     };
+    // ACO_PhaseLandShip.SIT_* 순서
+    private static readonly string[] LandShipSituations =
+    {
+        "등장", "첫 스커트 파괴", "궤도 절반 파괴 ({left} = 남은 수)", "첫 배기구 노출", "배기구 절반 파괴", "코어 셔터 열림",
+        "코어 체력 절반", "도시 접근 (먼 거리)", "도시 접근 (가까운 거리)", "도시 접근 (마지막)", "코어 파괴", "도시 도착", "방공 수리",
+    };
     private static readonly string[] Speakers = { "적", "AWACS" };
     private static readonly string[] FleetSpeakers = { "적", "AWACS", "함대장" };
     private bool _showLines = true;
@@ -62,7 +68,7 @@ public class ACO_PhaseFortressEditor : Editor
                     {
                         SerializedProperty sit = events.GetArrayElementAtIndex(i);
                         SerializedProperty who = speakers.GetArrayElementAtIndex(i);
-                        sit.intValue = EditorGUILayout.Popup(sit.intValue, target is ACO_PhaseFleet ? FleetSituations : (target is ACO_PhaseRailgun ? RailgunSituations : Situations));
+                        sit.intValue = EditorGUILayout.Popup(sit.intValue, target is ACO_PhaseFleet ? FleetSituations : (target is ACO_PhaseRailgun ? RailgunSituations : (target is ACO_PhaseLandShip ? LandShipSituations : Situations)));
                         who.intValue = EditorGUILayout.Popup(who.intValue, target is ACO_PhaseFleet ? FleetSpeakers : Speakers, GUILayout.Width(76f));
                         using (new EditorGUI.DisabledScope(i == 0))
                         {

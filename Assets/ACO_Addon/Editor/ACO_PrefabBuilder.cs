@@ -83,6 +83,7 @@ public static partial class ACO_PrefabBuilder
 
         ACO_Ordnance o = root.AddUdonSharpComponent<ACO_Ordnance>();
         o.ExplosionObject = explosion;
+        ACO_FxBuilder.StyleWeapon(o.gameObject);
         o.DisableOnExplode = new GameObject[] { model };
         return root;
     }
@@ -94,13 +95,181 @@ public static partial class ACO_PrefabBuilder
         return BuildFighterPrefab(LoadOrBuildMissile());
     }
 
-    /// 슈퍼에이스: 일반 NPC 전투기 + 체력 6배·플레어 12번 + 자식 ACO_SuperAce(다연장 런처 8발·기만체 3개). 미션 생성기 풀(UnitPoolRoot) 아래에 하나 둔다 —
-    /// 일반 배치에는 안 쓰이고 보너스 페이즈에만 나온다. 모델은 일반 전투기와 같은 상자(빨간색) — 직접 만든 모델로 바꿔 끼운다.
-    public static GameObject BuildSuperAce()
+    public const string SuperAceTailsPrefab = "NPC_SuperAce_Tails";
+    public const string ShadePrefab = "NPC_Shade";
+    public const int ShadePoolSize = 4;
+
+    /// SHADE 편대 에이스: 일반 NPC 전투기 + 체력 300(배율 없음)·플레어 12번 + 전방위 미사일(AI 발사 원뿔 180도, 미사일은 SHADE 전용 콜드런치 탄
+    /// ACO_Missile_SHADE — 튀어나온 뒤 빠르게 표적 쪽으로 돌아 점화하므로 옆·뒤 표적에도 간다)
+    /// + 코브라(ACO_ShadeAce — 모델만 기수를 들고 실제 감속, 비행 저속 하한 50m/s) + 교차 플레어(ACO_CrossManeuver). 생성기 풀 아래에 4기(번호·편대·짝은 Bake).
+    /// 모델은 일반 전투기 상자(짙은 보라 회색) — 직접 만든 모델로 바꿔 끼운다.
+    public const string ShadeMissilePrefab = "ACO_Missile_SHADE";
+
+    private static GameObject LoadOrBuildShadeMissile()
+    {
+        GameObject m = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/{ShadeMissilePrefab}.prefab");
+        return m != null ? m : BuildShadeMissile();
+    }
+
+    /// SHADE 전방위 미사일: 함선 VLS 콜드런치 탄(ACO_Missile_VLS_COLD — 손으로 맞춘 연출)의 프리팹 변형. 연출은 원본을 따라가고 기동 값만 따로 —
+    /// 짧게 튀어나와(0.5초) 그동안 빠르게 돌아(400도/초 — 바로 뒤 표적도 점화 전에 돈다) 중력은 조금만(0.3) 받은 뒤 점화. 원본이 없으면 ACO_Missile_VLS를 바탕으로.
+    public static GameObject BuildShadeMissile()
+    {
+        EnsurePrefabFolder();
+        GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/ACO_Missile_VLS_COLD.prefab");
+        if (source == null)
+        {
+            source = AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/ACO_Missile_VLS.prefab");
+            if (source == null) { source = BuildVlsMissilePrefab(); }
+            Debug.LogWarning("[ACO] ACO_Missile_VLS_COLD 프리팹이 없어 SHADE 미사일을 ACO_Missile_VLS 바탕으로 만듭니다.");
+        }
+        if (source == null) { return null; }
+        var instance = (GameObject)PrefabUtility.InstantiatePrefab(source);
+        try
+        {
+            instance.name = ShadeMissilePrefab;
+            ACO_Missile missile = instance.GetComponent<ACO_Missile>();
+            if (missile != null)
+            {
+                missile.ColdLaunchTime = 0.5f;
+                missile.ColdLaunchTurnRate = 400f;
+                missile.ColdLaunchGravity = 0.3f;
+                missile.MaxLifetime = 25f;
+                EditorUtility.SetDirty(missile);
+            }
+            return PrefabUtility.SaveAsPrefabAsset(instance, $"{PrefabDir}/{ShadeMissilePrefab}.prefab");
+        }
+        finally { Object.DestroyImmediate(instance); }
+    }
+
+    public static GameObject BuildShade()
     {
         EnsurePrefabFolder();
         GameObject missile = LoadOrBuildMissile();
-        GameObject root = CreateFighterObject("NPC_SuperAce", missile);
+        GameObject shadeMissile = LoadOrBuildShadeMissile();
+        if (shadeMissile != null) { missile = shadeMissile; }
+        GameObject root = CreateFighterObject(ShadePrefab, missile);
+        ACO_NPCFighterAI ai = root.GetComponent<ACO_NPCFighterAI>();
+        SaccTarget health = root.GetComponent<SaccTarget>();
+        health.Health = 300f;
+        ai.BaseHealth = 300f;   // 배율을 받지 않는다(편대 4기)
+        ai.Flares.FlareSalvos = 12;
+        ai.AceFlareChance = 1f;
+        ai.MissileFireConeAngle = 180f;   // 전방위 — 옆·뒤 표적에도 쏜다
+        ai.Flight.LowSpeedLimit = 50f;    // 코브라 감속 하한(동기화 예측도 이 값까지)
+
+        Transform model = root.transform.Find("Model");
+        if (model != null)
+        {
+            string matPath = "Assets/ACO_Addon/Generated/ACO_ShadeBody.mat";
+            Material saved = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (saved == null)
+            {
+                saved = new Material(Shader.Find("Standard")) { color = new Color(0.2f, 0.17f, 0.26f) };
+                AssetDatabase.CreateAsset(saved, matPath);
+            }
+            model.GetComponent<MeshRenderer>().sharedMaterial = saved;
+        }
+
+        var aceGo = new GameObject("ACO_ShadeAce");
+        aceGo.transform.SetParent(root.transform, false);
+        ACO_ShadeAce shade = aceGo.AddUdonSharpComponent<ACO_ShadeAce>();
+        shade.AI = ai;
+        shade.Model = model;
+        shade.Hitbox = root.GetComponent<BoxCollider>();
+        ai.Shade = shade;
+
+        var crossGo = new GameObject("CrossManeuver");
+        crossGo.transform.SetParent(aceGo.transform, false);
+        ACO_CrossManeuver cross = crossGo.AddUdonSharpComponent<ACO_CrossManeuver>();
+        cross.AI = ai;
+        cross.Listener = shade;
+        cross.FlareOnPass = true;
+        cross.Interval = 40f;
+        cross.FirstDelay = 15f;
+        shade.Cross = cross;
+
+        return SaveAndCleanup(root, $"{PrefabDir}/{ShadePrefab}.prefab");
+    }
+
+    /// 슈퍼에이스(분신 에이스 형제): 일반 NPC 전투기 + 체력 6배·플레어 12번 + 자식 ACO_SuperAce(다연장 런처 8발·기만체 3개). 형 HEADS(NPC_SuperAce)와
+    /// 동생 TAILS(NPC_SuperAce_Tails)를 미션 생성기 풀(UnitPoolRoot) 아래에 하나씩 둔다 — 일반 배치에는 안 쓰이고 분신 에이스 페이즈에만 2기 편대로 나온다.
+    /// 이름·대사·색은 ApplyTwinPreset이 정한다. 모델은 일반 전투기와 같은 상자(형 금빛 빨강, 동생 짙은 파랑) — 직접 만든 모델로 바꿔 끼운다.
+    public static GameObject BuildSuperAce() { return BuildSuperAceNamed("NPC_SuperAce", false); }
+
+    public static GameObject BuildSuperAceTails() { return BuildSuperAceNamed(SuperAceTailsPrefab, true); }
+
+    /// 형제 이름·대사·자막 색(형 HEADS — 침착, 동생 TAILS — 들뜬). 생성기와 Setup Check(superace-twins-1)가 같이 쓴다.
+    public static void ApplyTwinPreset(ACO_SuperAce ace, bool tails)
+    {
+        if (!tails)
+        {
+            ace.AceName = "HEADS";
+            ace.SpeakerColor = new Color(1f, 0.78f, 0.3f, 1f);
+            ace.LineSpawn = "Heads and Tails, on station. Let's see which side you land on.";
+            ace.LineSalvo = "One toss for each of you. Heads, I win.";
+            ace.LineDecoy = "Every coin has two faces. You picked the wrong one.";
+            ace.LineHalf = "You've earned my full attention. You won't enjoy it.";
+            ace.LineDown = "Tails... finish the toss... without me...";
+            ace.LinePartnerDown = "Tails...? You took my little brother. The game is over. Now I just win.";
+            ace.LineCross = "Tails. Flip.";
+        }
+        else
+        {
+            ace.AceName = "TAILS";
+            ace.SpeakerColor = new Color(0.6f, 0.8f, 1f, 1f);
+            ace.LineSpawn = "Brother, save a few for me this time!";
+            ace.LineSalvo = "Catch! ...Oh, can't catch them all? Shame!";
+            ace.LineDecoy = "Guess which one's me! Go on, flip for it!";
+            ace.LineHalf = "Hey! That actually hurt!";
+            ace.LineDown = "Heads... I called it wrong...";
+            ace.LinePartnerDown = "You shot down my brother?! No more coin tosses... I'm taking every one of you down!";
+            ace.LineCross = "Call it, pilots!";
+        }
+        ace.EnragedSalvoFactor = 0.5f;
+        ace.EnragedDecoyCooldownFactor = 0.5f;
+        EditorUtility.SetDirty(ace);
+    }
+
+    /// 형제 교차 기동 부품(ACO_CrossManeuver — 엇갈릴 때 기만체, 플레어는 기만체와 같이 나오므로 부품 플레어는 끈다). 없으면 붙인다. 짝·정하는 쪽은 Bake.
+    public static void EnsureTwinCross(ACO_SuperAce ace)
+    {
+        if (ace.Cross != null) { return; }
+        var go = new GameObject("CrossManeuver");
+        go.transform.SetParent(ace.transform, false);
+        ACO_CrossManeuver cross = go.AddUdonSharpComponent<ACO_CrossManeuver>();
+        cross.AI = ace.AI != null ? ace.AI : ace.GetComponentInParent<ACO_NPCFighterAI>();
+        cross.Listener = ace;
+        cross.FlareOnPass = false;
+        ace.Cross = cross;
+        EditorUtility.SetDirty(ace);
+    }
+
+    /// Setup Check superace-twins-1: 이미 있는 NPC_SuperAce(예전 REAPER)에 형 HEADS 이름·대사를 넣는다(다시 만들지 않는다 — 씬 참조 유지).
+    public static void ApplyHeadsPreset()
+    {
+        string path = PathOf("NPC_SuperAce");
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            ACO_SuperAce ace = root.GetComponentInChildren<ACO_SuperAce>(true);
+            if (ace != null)
+            {
+                ApplyTwinPreset(ace, false);
+                EnsureTwinCross(ace);
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log("[ACO] NPC_SuperAce를 형 HEADS로 바꿨습니다(이름·대사·쌍둥이 규칙).");
+            }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    private static GameObject BuildSuperAceNamed(string prefabName, bool tails)
+    {
+        EnsurePrefabFolder();
+        GameObject missile = LoadOrBuildMissile();
+        GameObject root = CreateFighterObject(prefabName, missile);
         ACO_NPCFighterAI ai = root.GetComponent<ACO_NPCFighterAI>();
         SaccTarget health = root.GetComponent<SaccTarget>();
         ACO_NPCFlightController flight = root.GetComponent<ACO_NPCFlightController>();
@@ -110,13 +279,13 @@ public static partial class ACO_PrefabBuilder
         ai.Flares.FlareSalvos = 12;
         ai.AceFlareChance = 1f;
 
-        // 모델을 빨갛게(일반 전투기와 구분)
+        // 모델 색(일반 전투기와 구분 — 형 빨강, 동생 짙은 파랑)
         Transform model = root.transform.Find("Model");
         if (model != null)
         {
-            var mat = new Material(Shader.Find("Standard")) { color = new Color(0.75f, 0.12f, 0.1f) };
+            var mat = new Material(Shader.Find("Standard")) { color = tails ? new Color(0.15f, 0.25f, 0.55f) : new Color(0.75f, 0.12f, 0.1f) };
             if (!AssetDatabase.IsValidFolder("Assets/ACO_Addon/Generated")) { AssetDatabase.CreateFolder("Assets/ACO_Addon", "Generated"); }
-            string matPath = "Assets/ACO_Addon/Generated/ACO_SuperAceBody.mat";
+            string matPath = tails ? "Assets/ACO_Addon/Generated/ACO_SuperAceTailsBody.mat" : "Assets/ACO_Addon/Generated/ACO_SuperAceBody.mat";
             Material saved = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (saved == null) { AssetDatabase.CreateAsset(mat, matPath); saved = mat; }
             model.GetComponent<MeshRenderer>().sharedMaterial = saved;
@@ -129,6 +298,8 @@ public static partial class ACO_PrefabBuilder
         ace.TargetHealth = health;
         ace.Flight = flight;
         ai.SuperAce = ace;
+        ApplyTwinPreset(ace, tails);
+        EnsureTwinCross(ace);
 
         // 다연장 런처: 날개 아래 4곳, 연사 간격 0, 8발, 다 쓰면 40초 재장전. 락온 경보는 슈퍼에이스가 직접 보낸다.
         var salvoGo = new GameObject("SalvoLauncher");
@@ -163,7 +334,7 @@ public static partial class ACO_PrefabBuilder
         }
         ace.Decoys = decoys;
 
-        return SaveAndCleanup(root, $"{PrefabDir}/NPC_SuperAce.prefab");
+        return SaveAndCleanup(root, $"{PrefabDir}/{prefabName}.prefab");
     }
 
     /// 공격기: 일반 NPC 전투기 기반 — 아군 지상(26: 콘보이 차량·LCAC·호위함)만 노리고 대지 미사일(ACO_Missile_AGM, 없으면 AAM)과 기총으로 치고 빠진다.
@@ -1211,6 +1382,7 @@ public static partial class ACO_PrefabBuilder
 
         ACO_Missile missile = root.AddUdonSharpComponent<ACO_Missile>();
         missile.ExplosionObject = explosion;
+        ACO_FxBuilder.StyleWeapon(missile.gameObject);
         missile.DisableOnExplode = new GameObject[] { model };
         ACO_WaterFxBuilder.AddMissileSpray(root.transform);   // 수면 가까이(시스키밍) 물보라
         ACO_MissileFlybySetup.AddTo(missile);                 // 적 미사일이 스쳐 지나가는 소리
@@ -1305,6 +1477,7 @@ public static partial class ACO_PrefabBuilder
         gun.ShooterFlight = flight;
         // 파티클은 기총의 탄도 값으로 만들어야 보이는 탄과 명중 계산이 일치한다.
         gun.VisualParticle = CreateTracerParticle(gunObj.transform, gun.MuzzleVelocity, gun.MaxRange, gun.Spread);
+        ACO_FxBuilder.StyleTracer(gun.VisualParticle, ACO_FxBuilder.IsFriendly(gun));
         ai.TargetLayers = 1 << LayerFriendlyAir;
         // SAV 사망 애니메이션은 루트의 MeshRenderer/MeshCollider만 끄므로 자식 모델과 BoxCollider는 직접 처리한다.
         ai.HideOnDeath = new GameObject[] { model };
@@ -1604,6 +1777,7 @@ public static partial class ACO_PrefabBuilder
         gun.MaxDamageInterval = spec.MaxDamageInterval;
         gun.Spread = spec.Spread;
         gun.VisualParticle = CreateTracerParticle(gunObj.transform, gun.MuzzleVelocity, gun.MaxRange, gun.Spread, spec.TracerRate);
+        ACO_FxBuilder.StyleTracer(gun.VisualParticle, ACO_FxBuilder.IsFriendly(gun));
 
         aa.EntityControl = entity;
         aa.TargetHealth = targetHealth;
@@ -1729,6 +1903,9 @@ public static partial class ACO_PrefabBuilder
 
     /// 함선 프리팹. 루트 = 해수면, 본체 콜라이더/SaccTarget/Animator는 루트(SaccTarget 규칙).
     /// 모델과 부위는 "Body" 아래 — 격침 애니메이션은 Body를 움직이면 선체와 부위가 같이 가라앉는다(루트는 스크립트가 순항시키므로 애니메이션으로 건드리지 않는다).
+    /// 해상 유닛(함선·육상전함) 부위가 범위 피해를 받는 배율(ACO_Warship.PartSplashScale). 직접 맞은 부위와 LASM은 그대로.
+    public const float SeaPartSplash = 0.2f;
+
     private static GameObject BuildShipPrefab(ShipSpec spec, GameObject vlsMissile)
     {
         GameObject root = new GameObject(spec.PrefabName);
@@ -1801,6 +1978,7 @@ public static partial class ACO_PrefabBuilder
 
         ship.TargetHealth = hull;
         ship.Parts = parts;
+        ship.PartSplashScale = SeaPartSplash;   // 해상 유닛: 직접 맞지 않은 부위는 범위 피해를 0.2배만
         ship.TargetName = spec.TargetName;
         ship.MarkerLabel = spec.Label;
         ship.ScoreValue = spec.Score;

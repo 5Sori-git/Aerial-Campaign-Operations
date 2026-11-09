@@ -89,8 +89,8 @@ namespace ACO
         public float CrashPitchRate = 3f;
         [Tooltip("동체 연쇄 폭발 간격(초)")]
         public float SecondaryInterval = 2.5f;
-        [Tooltip("충돌로 치는 층: 지형·건물(Default, Environment) + 수면(Water — 트리거)")]
-        public LayerMask ImpactLayers = 2065;
+        [Tooltip("충돌로 치는 층: 지형(Default) + 수면(Water — 트리거). Environment(11)는 넣지 않는다 — 요새 선체 Hull이 그 층이라 떨어지자마자 자기 몸에 맞아 터진다(건물도 그 층이지만 바로 아래 땅에서 터진다)")]
+        public LayerMask ImpactLayers = 17;
         [Tooltip("중심이 지면에서 이만큼(m) 떨어졌을 때 충돌로 친다 — 동체 두께")]
         public float ImpactClearance = 40f;
 
@@ -460,6 +460,8 @@ namespace ACO
             if (CoreHitbox) { CoreHitbox.enabled = core; }
             SetAll(CoreMarkers, core);
             SetAll(CoreShutters, !core);
+            // 코어 단계: TGT 마커를 코어 자리(코어 락온 마커)에
+            if (Warship != null) { Warship.MarkerAnchor = core && CoreMarkers != null && CoreMarkers.Length > 0 && CoreMarkers[0] != null ? CoreMarkers[0].transform : null; }
             if (HatchBlockers != null)
             {
                 for (int i = 0; i < HatchBlockers.Length; i++) { if (HatchBlockers[i]) { HatchBlockers[i].enabled = !core; } }

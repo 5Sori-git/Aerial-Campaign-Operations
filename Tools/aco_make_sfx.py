@@ -331,6 +331,7 @@ def ecm_loop():
 
 # Audio/SFX/Explode_small.ogg(로켓·SRAAM이 쓰는 실제 폭발음 0.39초)를 디코딩한 것
 EXPLODE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'aco_explode_small_src.wav')
+THUNDER_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Assets', 'ACO_Addon', 'Audio', 'Generated', 'ACO_Thunder_Near_1.wav')   # 소형 레일건에 섞는다
 
 
 def ring(x, freq):
@@ -371,25 +372,46 @@ def railgun_fire():
     save('ACO_Railgun_Fire', fade(level(normalize(x, 1.0), 0.35)[:int(6.0 * SR)], 0.001, 1.5), 0.89)
 
 
+def crack(seed, sec=0.09, tau=0.022, thump=0.6):
+    """파열음: 아주 빠르게 솟는 광대역 '딱' + 낮게 꺼지는 '쿵'(공기가 찢어지는 첫 충격)."""
+    n = biquad(biquad(noise(sec, seed), 'hp', 350), 'lp', 7000)
+    x = mul(n, env_exp(len(n), 0.0004, tau))
+    body = sweep(150, 45, 0.16)
+    mix(x, mul(body, env_exp(len(body), 0.001, 0.05)), 0.0, thump)
+    return x
+
+
 def railgun_mini_fire():
-    # 소형 레일건 발사: 같은 폭발음을 짧게, 전기음을 더 앞에
+    # 소형 레일건 발사: 맨 앞에 짧은 파열음(딱·쿵), 그 위에 가까운 천둥의 찢어지는 첫 소리를 겹쳐 뒤에 우르릉이 남게 한다.
+    # 폭발음을 낮춰 무게를 싣고, 전기음은 줄여 레이저 느낌을 뺐다
     src = read_wav(EXPLODE_SRC)[0]
     x = silence(0.0)
-    mix(x, respeed(src, 0.85), 0.0, 1.0)
-    mix(x, ring(src, 900.0), 0.0, 0.6)
+    mix(x, crack(31, 0.12, 0.03, 0.8), 0.0, 2.2)   # 몸통보다 15ms 먼저 — 따로 들리게
+    mix(x, respeed(src, 0.85), 0.015, 0.9)
+    mix(x, biquad(respeed(src, 0.55), 'lp', 1600), 0.02, 0.7)
+    mix(x, ring(src, 900.0), 0.02, 0.35)
     zap = sweep(5200, 500, 0.28)
-    mix(x, mul(zap, env_exp(len(zap), 0.001, 0.07)), 0.0, 0.32)
+    mix(x, mul(zap, env_exp(len(zap), 0.001, 0.07)), 0.02, 0.16)
     hum = biquad(tone(240, 0.5, 'saw'), 'lp', 1400)
     mix(x, mul(hum, env_exp(len(hum), 0.005, 0.1)), 0.01, 0.16)
     wet = biquad(respeed(src, 0.6), 'lp', 1200)
     echoes(x, wet, ((0.09, 0.3), (0.2, 0.2), (0.36, 0.12)))
-    save('ACO_Railgun_MiniFire', fade(level(normalize(x, 1.0), 0.6), 0.001, 0.4), 0.89)
+    # 천둥(ACO_Thunder_Near_1 — aco_make_thunder.py): 0.12초부터(찢어지는 첫 소리를 파열음 바로 뒤에) 2.3초, 고역을 깎아 무겁게
+    th = read_wav(THUNDER_SRC)[0][int(0.12 * SR):int(2.42 * SR)]
+    th = biquad(th, 'lp', 3200)
+    mix(x, mul(th, env_exp(len(th), 0.003, 0.9)), 0.008, 3.0)
+    save('ACO_Railgun_MiniFire', fade(level(normalize(x, 1.0), 0.6)[:int(2.2 * SR)], 0.001, 0.9), 0.89)
 
 
+# ACO_SFX_ONLY=이름,이름 이면 그 함수만 만든다(손으로 바꾼 소리를 덮어쓰지 않게 — 예: 거대 레일건 발사음은 사용자가 바꿨다)
+ONLY = [s.strip() for s in os.environ.get('ACO_SFX_ONLY', '').split(',') if s.strip()]
 for fn in (ptt_start, ptt_end, roger_beep, radio_static_loop,
            lock_searching_loop, lock_on_loop, missile_alert_loop, caution_alarm_loop, target_destroyed,
            phase_start, phase_complete, phase_failed, mission_complete, mission_failed, ui_click, ui_select,
-           wind_loop, distant_boom, explosion_small, explosion_big, decal_spray, railgun_charge_loop, railgun_fire, railgun_mini_fire, ecm_loop):
+           wind_loop, distant_boom, explosion_small, explosion_big, decal_spray, railgun_charge_loop, railgun_mini_fire, ecm_loop):
+    # railgun_fire(거대 레일건 발사음)는 목록에서 뺐다 — 사용자가 직접 만든 소리로 바꿨다. 다시 만들려면 목록에 다시 넣는다
+    if ONLY and fn.__name__ not in ONLY:
+        continue
     random.seed(1)
     fn()
     print('made', made[-1][0], '%.2fs' % made[-1][1])
