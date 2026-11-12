@@ -1,0 +1,1249 @@
+{
+  "model": "eleven_v3",
+  "voices": {
+    "awacs": {
+      "id": "9iTPwdOjb8Cuo7KWrqa3",
+      "name": "Chatter",
+      "model": "eleven_v4",
+      "settings": {
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": true,
+        "speed": 1.0
+      }
+    },
+    "enemy": {
+      "id": "bOgATmJRmsYXdBkNvpYE",
+      "name": "uktovanian",
+      "settings": {
+        "stability": 0.5
+      }
+    },
+    "ally": {
+      "id": "hofyoPepRaCYEzToHedQ",
+      "name": "captain",
+      "settings": {
+        "stability": 0.5
+      }
+    },
+    "betty": {
+      "id": "N06kq0AB9NaDyfgAAiF9",
+      "name": "betty1",
+      "model": "eleven_v3",
+      "settings": {
+        "stability": 1.0,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": true,
+        "speed": 1.0
+      }
+    },
+    "luna": {
+      "id": "N06kq0AB9NaDyfgAAiF9",
+      "name": "betty1 (LUNA — emotional)",
+      "model": "eleven_v3",
+      "settings": {
+        "stability": 0.0,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "use_speaker_boost": true,
+        "speed": 1.0
+      }
+    },
+    "crew": {
+      "id": "TX3LPaxmHKxFdv7VOQHJ",
+      "name": "Liam (LandShip crew)",
+      "settings": {
+        "stability": 0.0
+      },
+      "radio": {
+        "grit": 4.0,
+        "hiss": 0.04
+      }
+    },
+    "system": {
+      "id": "SAz9YHcvj6GT2YYXdXww",
+      "name": "River (LandShip auto fire control)",
+      "settings": {
+        "stability": 0.5
+      },
+      "radio": {
+        "grit": 4.0,
+        "hiss": 0.04
+      }
+    }
+  },
+  "lines": [
+    {
+      "id": "landship_start",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_Start.mp3",
+      "text": "[serious] An enemy land battleship is advancing on the city. [urgent] Strip its armor, cut its tracks and kill the reactor before it arrives!"
+    },
+    {
+      "id": "landship_clear",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_Clear.mp3",
+      "text": "[excited] Reactor destroyed! The land battleship is finished. [proud] Outstanding work, all aircraft!"
+    },
+    {
+      "id": "landship_fail",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_Fail.mp3",
+      "text": "[grimly] The city has fallen... [sighs] All units, withdraw."
+    },
+    {
+      "id": "landship_l01",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L01.mp3",
+      "text": "[commanding, arrogant] All batteries, open fire. [cold] Grind a path to the city.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l02",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L02.mp3",
+      "text": "[urgent] A land battleship is moving on the city! Strip its armor plates, then go for the tracks!"
+    },
+    {
+      "id": "landship_l03",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L03.mp3",
+      "text": "[focused] Armor plate down! The track behind it is exposed!"
+    },
+    {
+      "id": "landship_l04",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L04.mp3",
+      "text": "[angry, shouting] Half our tracks are gone! Keep moving, full power to the rest!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l05",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L05.mp3",
+      "text": "[encouraging] Half its tracks are destroyed! It is losing speed!"
+    },
+    {
+      "id": "landship_l06",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L06.mp3",
+      "text": "[alarmed] Exhaust ducts exposed! [shouting] Seal them, now!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l07",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L07.mp3",
+      "text": "[focused] Those glowing vents behind the tracks are its weak point. Destroy them!"
+    },
+    {
+      "id": "landship_l08",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L08.mp3",
+      "text": "[encouraging] Half its exhaust vents are gone! Keep at it!"
+    },
+    {
+      "id": "landship_l09",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L09.mp3",
+      "text": "[panicked] Reactor overheating! [shouting] Open the core shutters!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l10",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L10.mp3",
+      "text": "[excited, urgent] The shutters on top are open! The core is exposed, hit it with everything you have!"
+    },
+    {
+      "id": "landship_l11",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L11.mp3",
+      "text": "[strained, through gritted teeth] Core integrity at fifty percent! Hold together!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l12",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L12.mp3",
+      "text": "[excited] The core is failing! Keep hitting it!"
+    },
+    {
+      "id": "landship_l13",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L13.mp3",
+      "text": "[urgent] Three kilometers to the city!"
+    },
+    {
+      "id": "landship_l14",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L14.mp3",
+      "text": "[very urgent] It is almost at the city limits! Stop it now!"
+    },
+    {
+      "id": "landship_l15",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L15.mp3",
+      "text": "[laughs menacingly] Nothing can stop us now!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l16",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L16.mp3",
+      "text": "[desperate, shouting] Five hundred meters! Bring it down!"
+    },
+    {
+      "id": "landship_l17",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L17.mp3",
+      "text": "[terrified] The reactor... [gasps] it is going critical!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l18",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L18.mp3",
+      "text": "[triumphant] Core destroyed! The battleship is going up!"
+    },
+    {
+      "id": "landship_l19",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L19.mp3",
+      "text": "[cold, satisfied] We have reached the city. [cruel] Commence bombardment.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l20",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L20.mp3",
+      "text": "[horrified] It is inside the city... [shaken] It is shelling the city!"
+    },
+    {
+      "id": "landship_l21",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_L21.mp3",
+      "text": "[barking orders] Damage control, bring the batteries back online!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_l22",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_L22.mp3",
+      "text": "[warning] Some of its guns are back online. Watch yourselves!"
+    },
+    {
+      "id": "laserace_start",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_Start.mp3",
+      "text": "All aircraft. A single enemy ace is inbound. [uneasy] Something about that aircraft is not right. [cautious] Engage with caution."
+    },
+    {
+      "id": "laserace_clear",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_Clear.mp3",
+      "text": "[relieved] The ace is down and the missile is gone. [proud] Outstanding work, all aircraft!"
+    },
+    {
+      "id": "laserace_fail",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_Fail.mp3",
+      "text": "[devastated, quietly] The missile hit the base... [sighs] All units, withdraw."
+    },
+    {
+      "id": "laserace_l01",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L01.mp3",
+      "text": "[alert] Single bogey, closing fast. It is carrying a directed-energy weapon. [urgent] Do not sit in front of its nose!"
+    },
+    {
+      "id": "laserace_l02",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L02.mp3",
+      "text": "[calm, reverent] Launch authority confirmed. [softly] One warhead ends this war... and every border with it.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_l03",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L03.mp3",
+      "text": "[alarmed] Ground launch detected! A ballistic missile is climbing out of a silo. [urgent] Its target is our base!"
+    },
+    {
+      "id": "laserace_l04",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L04.mp3",
+      "text": "[focused, urgent] The warhead is slaved to that ace's fire control. Shoot the ace down and the missile dies with it!"
+    },
+    {
+      "id": "laserace_l05",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L05.mp3",
+      "text": "[strained] Heavy jamming! You can only get a lock from its front. [warning] Go head-on, and watch that laser!"
+    },
+    {
+      "id": "laserace_l06",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L06.mp3",
+      "text": "[quietly mocking] Come at me head-on, [pause] if you still think your flag is worth dying for.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_l07",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L07.mp3",
+      "text": "[urgent] Two minutes to impact!"
+    },
+    {
+      "id": "laserace_l08",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L08.mp3",
+      "text": "[calm, almost gentle] Two minutes. After that, there will be no nations left to fight over.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_l09",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L09.mp3",
+      "text": "[urgent, shouting] One minute! Bring that ace down!"
+    },
+    {
+      "id": "laserace_l10",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L10.mp3",
+      "text": "[weary, sincere] Why keep fighting? In one minute, this war ends whether you win or not.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_l11",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L11.mp3",
+      "text": "[desperate] Thirty seconds! It is now or never!"
+    },
+    {
+      "id": "laserace_l12",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L12.mp3",
+      "text": "[whispers, melancholic] Thirty seconds. Take one last look at the world they taught you to divide.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_l13",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L13.mp3",
+      "text": "[triumphant, relieved] The ace is down! The missile lost guidance... it detonated in the upper atmosphere!"
+    },
+    {
+      "id": "laserace_l14",
+      "speaker": "awacs",
+      "path": "Borderless/Borderless_L14.mp3",
+      "text": "[stunned, quietly] Impact... [devastated] The base is gone."
+    },
+    {
+      "id": "laserace_l15",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_L15.mp3",
+      "text": "[serene, quietly] It's done. [sighs] No more borders... no more war.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_spawn",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_Spawn.mp3",
+      "text": "[calm, solemn] Every border down there was drawn by a war. [quiet conviction] I'm here to fire the shot that erases them all.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_escape",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_Escape.mp3",
+      "text": "[amused, taunting softly] Catch me if you can still find a border to stand on.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_down",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_Down.mp3",
+      "text": "[pained, fading] You'll just draw the lines again... [sad] and fight over them... [whispers] forever...",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "twins_start",
+      "speaker": "awacs",
+      "path": "Twins/Twins_Start.mp3",
+      "text": "[alert] Two bogeys in tight formation... [intrigued] They're aces, and they fly like brothers. [warning] Expect decoys. Make sure you're locking the real one!"
+    },
+    {
+      "id": "twins_clear",
+      "speaker": "awacs",
+      "path": "Twins/Twins_Clear.mp3",
+      "text": "[excited] Both aces are down! [lighthearted] Heads or tails, it doesn't matter now. Good work!"
+    },
+    {
+      "id": "heads_spawn",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Spawn.mp3",
+      "text": "[confident, smooth] Heads and Tails, on station. [smirking] Let's see which side you land on.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_salvo",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Salvo.mp3",
+      "text": "[cool, playful] One toss for each of you. [smug] Heads, I win.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_decoy",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Decoy.mp3",
+      "text": "[dry humor] Every coin has two faces. [condescending] You picked the wrong one.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_half",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Half.mp3",
+      "text": "[cold, serious] You've earned my full attention. [menacing] You won't enjoy it.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_down",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Down.mp3",
+      "text": "[pained, struggling] Tails... finish the toss... [fading] without me...",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_partnerdown",
+      "speaker": "enemy",
+      "path": "Twins/Heads_PartnerDown.mp3",
+      "text": "[shocked] Tails...? [cold fury] You took my little brother. [quiet rage] The game is over. Now I just win.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "heads_cross",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Cross.mp3",
+      "text": "[calm, commanding] Tails. Flip.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_spawn",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Spawn.mp3",
+      "text": "[excited, playful] Brother, save a few for me this time!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_salvo",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Salvo.mp3",
+      "text": "[teasing] Catch! [laughs] ...Oh, can't catch them all? [mockingly] Shame!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_decoy",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Decoy.mp3",
+      "text": "[mischievously] Guess which one's me! [giggles] Go on, flip for it!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_half",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Half.mp3",
+      "text": "[surprised, annoyed] Hey! That actually hurt!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_down",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Down.mp3",
+      "text": "[shocked, fading] Heads... [sad] I called it wrong...",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_partnerdown",
+      "speaker": "enemy",
+      "path": "Twins/Tails_PartnerDown.mp3",
+      "text": "[screaming, furious] You shot down my brother?! [crying, angry] No more coin tosses... [shouting] I'm taking every one of you down!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_cross",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Cross.mp3",
+      "text": "[gleeful] Call it, pilots!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_start",
+      "speaker": "awacs",
+      "path": "Shade/Shade_Start.mp3",
+      "text": "[alert] Four bandits, tight diamond. [tense] Shade squadron... [warning] They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!"
+    },
+    {
+      "id": "shade_clear",
+      "speaker": "awacs",
+      "path": "Shade/Shade_Clear.mp3",
+      "text": "[triumphant] Shade squadron is wiped out! [proud] Outstanding flying, all aircraft!"
+    },
+    {
+      "id": "shade_checkin",
+      "speaker": "enemy",
+      "path": "Shade/Shade_CheckIn.mp3",
+      "text": "[cold, calm] Shade flight, engage. [quietly, menacing] Let them chase shadows.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_reply2",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Reply2.mp3",
+      "text": "[flat, crisp] Two."
+    },
+    {
+      "id": "shade_reply3",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Reply3.mp3",
+      "text": "[flat, crisp] Three."
+    },
+    {
+      "id": "shade_reply4",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Reply4.mp3",
+      "text": "[flat, crisp] Four."
+    },
+    {
+      "id": "shade_cobra",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Cobra.mp3",
+      "text": "[cold, smug] Overshoot. [quietly] Your mistake.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_cross",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Cross.mp3",
+      "text": "[sharp command] Shades, break and cross!"
+    },
+    {
+      "id": "shade_memberdown1",
+      "speaker": "enemy",
+      "path": "Shade/Shade_MemberDown1.mp3",
+      "text": "[tense, controlled] Shade One is down. [cold] Close it up.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_memberdown2",
+      "speaker": "enemy",
+      "path": "Shade/Shade_MemberDown2.mp3",
+      "text": "[tense, controlled] Shade Two is down. [cold] Close it up.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_memberdown3",
+      "speaker": "enemy",
+      "path": "Shade/Shade_MemberDown3.mp3",
+      "text": "[tense, controlled] Shade Three is down. [cold] Close it up.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_memberdown4",
+      "speaker": "enemy",
+      "path": "Shade/Shade_MemberDown4.mp3",
+      "text": "[tense, controlled] Shade Four is down. [cold] Close it up.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_down1",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Down1.mp3",
+      "text": "[calm, fading] Shade One... [whispers] going dark.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_down2",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Down2.mp3",
+      "text": "[calm, fading] Shade Two... [whispers] going dark.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_down3",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Down3.mp3",
+      "text": "[calm, fading] Shade Three... [whispers] going dark.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_down4",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Down4.mp3",
+      "text": "[calm, fading] Shade Four... [whispers] going dark.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "warn_pullup",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_PullUp.wav",
+      "text": "Pull up. Pull up."
+    },
+    {
+      "id": "warn_altitude",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Altitude.wav",
+      "text": "Altitude. Altitude."
+    },
+    {
+      "id": "warn_railgun",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Railgun.wav",
+      "text": "Railgun warning."
+    },
+    {
+      "id": "warn_laser",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Laser.wav",
+      "text": "Laser warning."
+    },
+    {
+      "id": "warn_damage",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Damage.wav",
+      "text": "Damage critical."
+    },
+    {
+      "id": "warn_stall",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Stall.wav",
+      "text": "Stall. Stall."
+    },
+    {
+      "id": "warn_flares",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Flares.wav",
+      "text": "Flares empty."
+    },
+    {
+      "id": "warn_bingo",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Bingo.wav",
+      "text": "Bingo fuel."
+    },
+    {
+      "id": "warn_ammo",
+      "speaker": "betty",
+      "base": "Generated",
+      "path": "ACO_Voice_Ammo.wav",
+      "text": "Ammunition zero."
+    },
+    {
+      "id": "luna_start",
+      "speaker": "awacs",
+      "path": "Luna/Luna_Start.mp3",
+      "text": "[alert] All aircraft. An enemy ace is circling over the city, [tense] and she is painting it with a laser. [urgent] Something is coming down from orbit. Stop her!"
+    },
+    {
+      "id": "luna_clear",
+      "speaker": "awacs",
+      "path": "Luna/Luna_Clear.mp3",
+      "text": "[relieved] The strike missed the city! [proud] Outstanding work, all aircraft!"
+    },
+    {
+      "id": "luna_fail",
+      "speaker": "awacs",
+      "path": "Luna/Luna_Fail.mp3",
+      "text": "[devastated, quietly] The city has been hit... [sighs] All units, withdraw."
+    },
+    {
+      "id": "luna_l02",
+      "speaker": "luna",
+      "path": "Luna/Luna_L02.mp3",
+      "text": "[calm, almost tender] The city is lit. [soft, cold] All that is left... is for the sky to fall."
+    },
+    {
+      "id": "luna_l03",
+      "speaker": "luna",
+      "path": "Luna/Luna_L03.mp3",
+      "text": "[serene, commanding] Little moons... rise. [cold, protective] Keep them away from me."
+    },
+    {
+      "id": "luna_l04",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L04.mp3",
+      "text": "[alarmed] She has launched interceptor drones! They will shoot down missiles near her. [focused] Kill the drones first, or fire everything at once!"
+    },
+    {
+      "id": "luna_l05",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L05.mp3",
+      "text": "[excited] All drones are down! She is wide open, [shouting] hit her now!"
+    },
+    {
+      "id": "luna_l06",
+      "speaker": "luna",
+      "path": "Luna/Luna_L06.mp3",
+      "text": "[irritated sigh] Again, little moons. [softly, firm] Rise."
+    },
+    {
+      "id": "luna_l07",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L07.mp3",
+      "text": "[warning] She is launching a second wave of drones!"
+    },
+    {
+      "id": "luna_l08",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L08.mp3",
+      "text": "[urgent] Two minutes until the strike!"
+    },
+    {
+      "id": "luna_l09",
+      "speaker": "luna",
+      "path": "Luna/Luna_L09.mp3",
+      "text": "[amused, condescending] Two minutes. [leaning in, intimate] Look up... [cold] and remember how small you are."
+    },
+    {
+      "id": "luna_l10",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L10.mp3",
+      "text": "[urgent, shouting] One minute! Bring her down!"
+    },
+    {
+      "id": "luna_l11",
+      "speaker": "luna",
+      "path": "Luna/Luna_L11.mp3",
+      "text": "[serene, smiling] One minute. [quiet confidence] The light never misses."
+    },
+    {
+      "id": "luna_l12",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L12.mp3",
+      "text": "[desperate] Thirty seconds! Do it now!"
+    },
+    {
+      "id": "luna_l13",
+      "speaker": "luna",
+      "path": "Luna/Luna_L13.mp3",
+      "text": "[whispering, gentle] Thirty seconds. [tender, cold] Close your eyes."
+    },
+    {
+      "id": "luna_l14",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L14.mp3",
+      "text": "[triumphant, relieved] LUNA is down! The beam is gone... the strike has lost its target!"
+    },
+    {
+      "id": "luna_l15",
+      "speaker": "awacs",
+      "path": "Luna/Luna_L15.mp3",
+      "text": "[stunned, quietly] Impact on the city... [devastated] It is gone."
+    },
+    {
+      "id": "luna_l16",
+      "speaker": "luna",
+      "path": "Luna/Luna_L16.mp3",
+      "text": "[melancholic, softly] And the night... [sighs] falls quiet."
+    },
+    {
+      "id": "luna_spawn",
+      "speaker": "luna",
+      "path": "Luna/Luna_Spawn.mp3",
+      "text": "[dreamy, almost tender] The city is so bright tonight... [soft laugh] [cold, whispering] Let me make it brighter."
+    },
+    {
+      "id": "luna_down",
+      "speaker": "luna",
+      "path": "Luna/Luna_Down.mp3",
+      "text": "[gasps, shocked] No... [trembling, fading] So this... [sad, quietly] is what falling feels like..."
+    },
+    {
+      "id": "luna_snipe",
+      "speaker": "luna",
+      "path": "Luna/Luna_Snipe.mp3",
+      "text": "[softly, almost sweet] Stay right there... [cold, whispering] I'll make it quick... and beautiful."
+    },
+    {
+      "id": "luna_flare",
+      "speaker": "luna",
+      "path": "Luna/Luna_Flare.mp3",
+      "text": "[playful, teasing] Not yet... [cold] You don't get to touch me."
+    },
+    {
+      "id": "support_strike_call",
+      "speaker": "awacs",
+      "path": "Support/Support_StrikeCall.mp3",
+      "text": "[calm, professional] Copy your mark. Bomber inbound."
+    },
+    {
+      "id": "support_strike_release",
+      "speaker": "awacs",
+      "path": "Support/Support_StrikeRelease.mp3",
+      "text": "[focused] Bomb away."
+    },
+    {
+      "id": "support_strike_impact",
+      "speaker": "awacs",
+      "path": "Support/Support_StrikeImpact.mp3",
+      "text": "[satisfied] Impact. Good effect on target."
+    },
+    {
+      "id": "support_tanker_call",
+      "speaker": "awacs",
+      "path": "Support/Support_TankerCall.mp3",
+      "text": "[calm] Tanker drone en route. Hold steady."
+    },
+    {
+      "id": "support_tanker_contact",
+      "speaker": "awacs",
+      "path": "Support/Support_TankerContact.mp3",
+      "text": "[calm] Contact."
+    },
+    {
+      "id": "support_tanker_done",
+      "speaker": "awacs",
+      "path": "Support/Support_TankerDone.mp3",
+      "text": "[relaxed] Transfer complete. Clear to break."
+    },
+    {
+      "id": "support_tanker_break",
+      "speaker": "awacs",
+      "path": "Support/Support_TankerBreak.mp3",
+      "text": "[urgent] Breakaway, breakaway! Tanker is returning."
+    },
+    {
+      "id": "support_guardian_call",
+      "speaker": "awacs",
+      "path": "Support/Support_GuardianCall.mp3",
+      "text": "[calm, confident] Guardian drone on station. Missile defense active."
+    },
+    {
+      "id": "support_guardian_end",
+      "speaker": "awacs",
+      "path": "Support/Support_GuardianEnd.mp3",
+      "text": "[calm] Guardian drone returning to base."
+    },
+    {
+      "id": "launch_foxtwo",
+      "speaker": "awacs",
+      "path": "Launch/Launch_FoxTwo.mp3",
+      "text": "[crisp, calm] Fox two."
+    },
+    {
+      "id": "launch_foxthree",
+      "speaker": "awacs",
+      "path": "Launch/Launch_FoxThree.mp3",
+      "text": "[crisp, calm] Fox three."
+    },
+    {
+      "id": "launch_rifle",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Rifle.mp3",
+      "text": "[crisp, calm] Rifle."
+    },
+    {
+      "id": "launch_magnum",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Magnum.mp3",
+      "text": "[crisp, calm] Magnum."
+    },
+    {
+      "id": "launch_greyhound",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Greyhound.mp3",
+      "text": "[crisp, calm] Greyhound."
+    },
+    {
+      "id": "launch_bruiser",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Bruiser.mp3",
+      "text": "[crisp, calm] Bruiser."
+    },
+    {
+      "id": "launch_pickle",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Pickle.mp3",
+      "text": "[crisp, calm] Pickle."
+    },
+    {
+      "id": "launch_rockets",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Rockets.mp3",
+      "text": "[crisp, calm] Rockets away."
+    },
+    {
+      "id": "launch_music",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Music.mp3",
+      "text": "[crisp, calm] Music on."
+    },
+    {
+      "id": "launch_spear",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Spear.mp3",
+      "text": "[crisp, calm] Spear."
+    },
+    {
+      "id": "launch_drive",
+      "speaker": "awacs",
+      "path": "Launch/Launch_Drive.mp3",
+      "text": "[crisp, calm] Drive, drive."
+    },
+    {
+      "id": "heads_flare",
+      "speaker": "enemy",
+      "path": "Twins/Heads_Flare.mp3",
+      "text": "[smooth, amused] Coin's still in the air.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "tails_flare",
+      "speaker": "enemy",
+      "path": "Twins/Tails_Flare.mp3",
+      "text": "[excited, teasing] Ooh, shiny! [giggles] Your missile likes those better!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "laserace_flare",
+      "speaker": "enemy",
+      "path": "Borderless/Borderless_Flare.mp3",
+      "text": "[calm, quietly amused] You're aiming at a line that isn't there.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "shade_flare",
+      "speaker": "enemy",
+      "path": "Shade/Shade_Flare.mp3",
+      "text": "[cold, calm] You locked a shadow.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n01",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N01.mp3",
+      "text": "[calm, professional] All batteries, open fire. We reach the city by nightfall.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n04",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_N04.mp3",
+      "text": "[focused, urgent] Exhaust vents exposed! They're tucked inside the track wells, glowing blue. Destroy them and cripple that thing!"
+    },
+    {
+      "id": "landship_n05",
+      "speaker": "crew",
+      "path": "LandShip/LandShip_N05.wav",
+      "text": "[panicked, coughing] Captain, it's sixty degrees down here!"
+    },
+    {
+      "id": "landship_n06",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N06.mp3",
+      "text": "[cold, clipped] Then sweat. Divert all coolant to the reactor.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n07",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_N07.mp3",
+      "text": "[excited, urgent] The core is exposed! Hit it with everything you have!"
+    },
+    {
+      "id": "landship_n08",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N08.mp3",
+      "text": "[flat, eerily calm] Seal the bulkheads. [pause] With them inside.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n09",
+      "speaker": "crew",
+      "path": "LandShip/LandShip_N09.wav",
+      "text": "[banging on metal, screaming] Open the door! Please, we're burning!"
+    },
+    {
+      "id": "landship_n10",
+      "speaker": "system",
+      "path": "LandShip/LandShip_N10.wav",
+      "text": "[synthetic, monotone] Crew unresponsive. Automated fire control engaged."
+    },
+    {
+      "id": "landship_n11",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_N11.mp3",
+      "text": "[alarmed] Every gun is back on automatic! Stay on the core!"
+    },
+    {
+      "id": "landship_n13",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N13.mp3",
+      "text": "[strained, voice cracking] Override the safeties! We are NOT stopping!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n17",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N17.mp3",
+      "text": "[calm, almost peaceful] Reactor critical. [pause] All hands... [breaking] all hands, keep moving forward-",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n19",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N19.mp3",
+      "text": "[exhausted, hollow] We made it. It cost everything. [cold] Commence bombardment.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n22",
+      "speaker": "system",
+      "path": "LandShip/LandShip_N22.wav",
+      "text": "[synthetic] Battery restored."
+    },
+    {
+      "id": "landship_n23",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N23.mp3",
+      "text": "[commanding, urgent] Reroute reactor power to the batteries. [shouting] All of them. Now!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n24",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N24.mp3",
+      "text": "[shouting, desperate] Keep firing! Keep fir—",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "landship_n25",
+      "speaker": "awacs",
+      "path": "LandShip/LandShip_N25.mp3",
+      "text": "[alarmed, urgent] It's feeding reactor power to its guns! Every battery is back! Stay on the core!"
+    },
+    {
+      "id": "landship_n24s",
+      "speaker": "enemy",
+      "path": "LandShip/LandShip_N24_Scream.mp3",
+      "text": "[screaming in agony] AAAAAAHHHH!",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_start",
+      "speaker": "awacs",
+      "path": "MrS/MrS_Start.mp3",
+      "text": "[alert] New contact, single bandit, unknown type! [tense] He's coming out of the sun. [urgent] Watch your missiles!"
+    },
+    {
+      "id": "mrs_clear",
+      "speaker": "awacs",
+      "path": "MrS/MrS_Clear.mp3",
+      "text": "[triumphant] The enemy ace is down! [proud] Outstanding flying, all aircraft!"
+    },
+    {
+      "id": "mrs_spawn",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Spawn.mp3",
+      "text": "[old, aristocratic, slow and measured] You trespass on land my family has held for three centuries. [calm, dignified resolve] I shall see you off it myself.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_sunmissile",
+      "speaker": "enemy",
+      "path": "MrS/MrS_SunMissile.mp3",
+      "text": "[old gentleman, amused, unhurried] Follow me into the light... [quietly] if you dare.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_sunlure",
+      "speaker": "enemy",
+      "path": "MrS/MrS_SunLure.mp3",
+      "text": "[old aristocrat, warm pride] The sun has always favoured my house.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_glare",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Glare.mp3",
+      "text": "[old, softly amused] Your missile bows to the sun. [dignified] As it should.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_reverse",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Reverse.mp3",
+      "text": "[old gentleman, mild reproach] Manners, young one. [calm, firm] One does not shoot a gentleman in the back.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_flare",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Flare.mp3",
+      "text": "[old, polite, dry] Too slow, I'm afraid.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_awacshalf",
+      "speaker": "awacs",
+      "path": "MrS/MrS_AwacsHalf.mp3",
+      "text": "[confused, then amazed] He's hit, but nothing vital! [disbelief] He keeps turning his engines and cockpit away from our fire. [stunned] He's doing damage control by flying!"
+    },
+    {
+      "id": "mrs_half",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Half.mp3",
+      "text": "[old, deep, weary pride] There are pilots like you in every generation. [slow, cold certainty] And I've felled every last one of them.",
+      "settings": {
+        "stability": 0.0
+      }
+    },
+    {
+      "id": "mrs_awacsrail",
+      "speaker": "awacs",
+      "path": "MrS/MrS_AwacsRail.mp3",
+      "text": "[shocked, shouting] He turned on a dime! [urgent warning] Don't chase him into the sun!"
+    },
+    {
+      "id": "mrs_down",
+      "speaker": "enemy",
+      "path": "MrS/MrS_Down.mp3",
+      "text": "[old, strained, then peaceful] Ah... [quiet, accepting] it seems the time has come... [softly] to pass it on to the next generation.",
+      "settings": {
+        "stability": 0.0
+      }
+    }
+  ]
+}

@@ -5,6 +5,8 @@
 //  - 부드러운 경계: 깊이 텍스처로 판 바로 뒤 물체(지형·뭉게구름·함선 등)까지 거리를 재서, _SoftDistance보다 가까우면 판을 투명하게 한다
 //    — 판이 물체를 자르는 선이 안개 속으로 스며들 듯 흐려진다. 깊이 텍스처는 VRChat에서 실시간 그림자 태양이 있어야 생긴다:
 //    없으면(그림자를 끈 플레이어) 예전처럼 딱딱한 경계. 깊이 텍스처에 안 그려지는 것(그림자 패스가 없는 나무·바다)은 흐려지지 않는다.
+//  - 카메라 페이드: 카메라 가까운 곳(_CameraFadeNear → _CameraFadeFar m)은 판 무늬가 지금 안개색으로 녹아든다. 층을 지날 때 또렷한 판이 코앞으로 다가오지 않고
+//    안개 속으로 들어가듯 보인다. 알파가 아니라 색만 바꾼다 — 판은 깊이를 쓰므로 투명하게 하면 뒤에 그리는 바다가 가려져 구멍이 뚫린다.
 //  - 큐 Transparent-499: 불투명·뭉게구름·스카이박스를 다 그린 뒤(투명한 경계로 그 뒤가 비친다), 하늘 안개 돔·바다 전.
 //  - _Fade(스크립트): 날씨가 바뀔 때 디더링으로 나타나고 사라진다(디더라 사라진 자리는 깊이도 안 써 바다가 그대로 보인다).
 //  - 폭풍(스크립트): _Darken = 더 어두운 천장, _Flash·_FlashPos = 번개 — 번개 자리 둘레가 안쪽에서 빛나듯 밝아진다(조명을 켜지 않는다 — 값 하나).
@@ -20,6 +22,8 @@ Shader "ACO/CloudLayer"
         _WindDir ("Drift direction (deg)", Range(0, 360)) = 25
         _WindSpeed ("Drift speed (m/s)", Float) = 6
         _DetailFade ("Blotches fade out by (m)", Float) = 25000
+        _CameraFadeNear ("Fog color until (m from camera)", Float) = 120
+        _CameraFadeFar ("Normal look from (m from camera)", Float) = 1800
         _Fade ("Fade (script)", Range(0, 1)) = 1
         _Darken ("Storm darken (script)", Range(0, 1)) = 0
         _Flash ("Lightning flash (script)", Range(0, 2)) = 0
@@ -47,6 +51,7 @@ Shader "ACO/CloudLayer"
 
             fixed4 _Color, _ShadeColor;
             float _NoiseScale, _Contrast, _WindDir, _WindSpeed, _DetailFade, _Fade, _SoftDistance, _SoftRayDistance;            float _Darken, _Flash, _FlashRadius;
+            float _CameraFadeNear, _CameraFadeFar;
             float4 _FlashPos;
             fixed4 _FlashColor;
             UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
@@ -116,7 +121,7 @@ Shader "ACO/CloudLayer"
             fixed4 frag(v2f i) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-                clip(_Fade - Dither(i.pos.xy) - 0.001);
+                clip(_Fade - Dither(i.pos.xy) * 0.998 - 0.001);   // 0.998: _Fade = 1이면 어떤 픽셀도 지우지 않는다(디더 값이 1에 가까운 픽셀이 화면에 고정된 점으로 뚫린다)
                 float2 wind = float2(cos(radians(_WindDir)), sin(radians(_WindDir)));
                 float2 uv = (i.worldPos.xz - wind * _WindSpeed * _Time.y) / max(_NoiseScale, 1);
                 float n = Fbm(uv);
@@ -125,6 +130,7 @@ Shader "ACO/CloudLayer"
                 fixed4 col = fixed4(lerp(_Color.rgb, _ShadeColor.rgb, saturate((n - 0.3) * 1.8) * amount), 1);
                 // 폭풍: 더 어둡게. 번개: 번개 자리 둘레(_FlashRadius)가 안쪽에서 빛나듯 밝아지고(얼룩 따라 고르지 않게) 판 전체도 조금
                 col.rgb *= 1 - 0.45 * _Darken;
+                col.rgb = lerp(unity_FogColor.rgb, col.rgb, smoothstep(_CameraFadeNear, max(_CameraFadeFar, _CameraFadeNear + 1), dist));
                 float2 fd = i.worldPos.xz - _FlashPos.xz;
                 float glow = exp(-dot(fd, fd) / max(_FlashRadius * _FlashRadius, 1)) * (0.6 + 0.8 * n) + 0.25;
                 col.rgb += _FlashColor.rgb * (_Flash * glow);

@@ -52,6 +52,48 @@ namespace ACO
         private float _timer;
         private float _wakeUntil;
 
+        [Header("전자전 (플레이어 ECM)")]
+        [Tooltip("빌드 시 ACO_SceneBaker가 넣는다 — 기체마다 있는 ECM 모듈")]
+        public ACO_DFUNC_Missile[] EcmPods;
+        [Tooltip("재밍 구역 반경(m)")]
+        public float EcmRange = 5000f;
+        [Tooltip("내 기체가 재밍 구역 안에 있는 동안 나오는 소리(Bake가 만든다)")]
+        public AudioSource EcmSound;
+        /// 내 기체가 재밍 구역 안인가 — 비행 HUD의 ECM SUPPORT 표시.
+        [System.NonSerialized] public bool LocalJammed;
+        private int _ecmUntilMs;
+        private bool _ecmOn;
+
+        /// ECM이 켜졌다(모든 클라이언트) — 켜진 동안만 거리를 잰다.
+        public void NotifyEcm(int untilMs)
+        {
+            if (!_ecmOn || untilMs - _ecmUntilMs > 0) { _ecmUntilMs = untilMs; }
+            _ecmOn = true;
+        }
+
+        /// 켜진 ECM이 있는가 — 지도가 구역 원을 그릴지 정한다.
+        public bool IsEcmOn() { return _ecmOn; }
+
+        /// 이 자리가 재밍 구역 안인가. 아무도 안 켰으면 바로 false.
+        public bool IsJammed(Vector3 pos)
+        {
+            if (!_ecmOn) { return false; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            if (now - _ecmUntilMs >= 0)
+            {
+                _ecmOn = false;
+                return false;
+            }
+            if (EcmPods == null) { return false; }
+            float rangeSq = EcmRange * EcmRange;
+            for (int i = 0; i < EcmPods.Length; i++)
+            {
+                ACO_DFUNC_Missile pod = EcmPods[i];
+                if (pod != null && pod.IsEcmActive(now) && (pod.transform.position - pos).sqrMagnitude <= rangeSq) { return true; }
+            }
+            return false;
+        }
+
         void Start() { Build(); }
 
         /// 그리는 쪽이 미리보기 등으로 기체 밖에서도 seconds 동안 목록을 갱신하게 한다.
@@ -108,7 +150,7 @@ namespace ACO
             for (int i = 0; i < hvts; i++)
             {
                 UdonSharpBehaviour h = Generator.HighValueTargets[i];
-                if (h) { Add(SRC_HVT, i, h.transform, false, h.GetComponent<SaccTarget>()); }
+                if (h) { Add(SRC_HVT, i, h.transform, Generator.IsFortressTarget(ACO_MissionGenerator.CAT_HVT, i), h.GetComponent<SaccTarget>()); }
             }
             for (int i = 0; i < escorts; i++)
             {
@@ -137,6 +179,16 @@ namespace ACO
             _timer = RefreshInterval;
             Build();
             LocalVehicle = FindLocalVehicle();
+            bool jammed = LocalVehicle != null && IsJammed(LocalVehicle.transform.position);
+            if (jammed != LocalJammed)
+            {
+                LocalJammed = jammed;
+                if (EcmSound)
+                {
+                    if (jammed) { EcmSound.Play(); }
+                    else { EcmSound.Stop(); }
+                }
+            }
             if (LocalVehicle == null && Time.time > _wakeUntil) { return; }
             for (int k = 0; k < Count; k++) { RefreshContact(k); }
             PruneMissiles();
@@ -170,6 +222,7 @@ namespace ACO
             Visible[k] = true;
             bool friendly = src == SRC_ESCORT && !Generator.EscortUnits[_index[k]].Hostile;
             bool objective = !friendly && Generator.GetUnitTag(cat, _index[k]) != 0;
+            if (_source[k] == SRC_GROUND && Generator.IsTelUnit(_index[k])) { _air[k] = Generator.IsTelAirborne(_index[k]); }   // 탄도탄이 뜨면 공중
             if (friendly) { Kinds[k] = _air[k] ? KIND_FRIENDLY_AIR : KIND_FRIENDLY_GROUND; }
             else if (objective) { Kinds[k] = _air[k] ? KIND_OBJECTIVE_AIR : KIND_OBJECTIVE_GROUND; }
             else { Kinds[k] = _air[k] ? KIND_ENEMY_AIR : KIND_ENEMY_GROUND; }

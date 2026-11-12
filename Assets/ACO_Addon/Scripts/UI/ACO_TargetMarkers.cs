@@ -10,6 +10,7 @@ namespace ACO
     ///  - 항공기 = 사각형, 지상 유닛 = 육각형, 지금 페이즈 목표 = 빨간 테두리 + "TGT", 호위 대상(아군) = 파란 테두리 + 이름(VIP)
     ///    (목표와 아군은 ObjectiveMaxDistance까지 보인다)
     ///  - MaxDistance(10km) 안의 유닛만, 거리와 무관하게 항상 같은 화면 크기로, 지형/구름 뒤에서도 보이게 그린다
+    ///  - 지원 호출 유닛(지원 폭격기·급유 드론·가디언 드론 — ACO_SupportManager 풀)도 나와 있는 동안 아군 테두리 + 이름(SupportMinDistance보다 가까우면 그리지 않는다 — 급유·호위 중 시야를 가리지 않게)
     ///  - 호위 페이즈(공중/지상)에는 호위 대상 항로의 남은 경유점(옅은 파란 마름모 + WP 번호)과 목적지(큰 마름모 + DEST + 거리)를 그린다
     ///  - 시선 방향(머리 정면)에서 LookAngle 안에 있는 유닛 중 가장 가운데 것 하나에 종류와 거리를 띄운다
     ///    (전투기: 종류 + 숙련도 "FTR ACE"·"ATK VET" 등, 지상: SAM/AAG, 고가치 표적: FAC/BNK 등 — 각 유닛의 MarkerLabel)
@@ -28,6 +29,8 @@ namespace ACO
         public ACO_MissionGenerator Generator;
         [Tooltip("빌드 시 ACO_SceneBaker가 넣는다. 있으면 지금 페이즈 목표(태그)만 빨간 TGT로, 없으면 고가치 표적을 목표로 표시")]
         public ACO_MissionManager Manager;
+        [Tooltip("함내 구역. Bake가 넣는다. 안에 있으면 마커와 크로스헤어를 그리지 않는다(벽 너머로 비치지 않게)")]
+        public ACO_InteriorZone Interior;
 
         [Header("표시")]
         [Tooltip("이 거리(m) 안의 유닛만 표시한다")]
@@ -80,6 +83,16 @@ namespace ACO
         [Tooltip("TAC 네임(콜사인) — Bake가 씬의 ACO_TacName을 넣는다. 아군기 테두리 위에 조종사 콜사인(없으면 WingmanLabel + 칸 번호)")]
         public ACO_TacName TacNames;
 
+        [Header("지원 유닛 (아군)")]
+        [Tooltip("Bake가 씬의 ACO_SupportManager를 넣는다 — 지원 폭격기·급유 드론·가디언 드론에 아군 테두리")]
+        public ACO_SupportManager Support;
+        public bool ShowSupport = true;
+        [Tooltip("이 거리(m)보다 가까운 지원 유닛은 그리지 않는다(급유 중인 드론·옆에 붙은 가디언 드론이 시야를 가리지 않게)")]
+        public float SupportMinDistance = 150f;
+        public string SupportBomberLabel = "SUPPORT BOMBER";
+        public string SupportTankerLabel = "TANKER DRONE";
+        public string SupportGuardianLabel = "GUARDIAN DRONE";
+
         [Header("호위 항로")]
         [Tooltip("호위 페이즈에 호위 대상의 남은 경유점과 목적지를 표시한다")]
         public bool ShowEscortRoute = true;
@@ -116,6 +129,8 @@ namespace ACO
         public float DiamondStartDistance = 2.5f;
         [Tooltip("락온 중인 표적의 테두리를 다른 마커보다 이 비율만큼 가까이(표시 거리 × 이 값) — 겹친 마커와 그리는 순서가 깜빡이지(z-fighting) 않게. 크기도 같은 비율이라 화면에선 그대로")]
         [Range(0.8f, 1f)] public float LockedFrameNear = 0.97f;
+        [Tooltip("지금 페이즈 목표(빨간 TGT 테두리)도 다른 마커보다 이 비율만큼 가까이 — 보스 부위 마커와 겹쳐도 깜빡이지 않게. 락온 테두리(LockedFrameNear)보다는 뒤")]
+        [Range(0.8f, 1f)] public float ObjectiveFrameNear = 0.985f;
         [Tooltip("락온 마름모·십자는 그보다도 가까이 — 늘 테두리 위에")]
         [Range(0.8f, 1f)] public float LockMarkNear = 0.94f;
         [Tooltip("마름모 크기(마커 크기 배수). 0.71이면 꼭짓점이 테두리 변의 가운데에 닿는다 — 조금 크게 해서 테두리와 겹치게 한다")]
@@ -152,6 +167,7 @@ namespace ACO
 
         // 시작 시 생성기 풀에서 만든 유닛 목록(캐시)
         private Transform[] _unitTransform;
+        private ACO_Warship[] _unitWarship;
         private SaccTarget[] _unitHealth;
         private int[] _unitKind;
         private string[] _unitLabel;
@@ -171,6 +187,8 @@ namespace ACO
         private bool[] _markerBarOn;
         private int[] _markerBarLevel;
         private int _usedLastFrame;
+        private bool _inInterior;
+        private bool _clearedInside;
         private string[] _markerText;    // 위 글자 캐시(같은 글이면 TMP를 건드리지 않는다)
         private ACO_EscortUnit _routeUnit;
         private float _routeTimer;
@@ -226,16 +244,19 @@ namespace ACO
             int hvts = (Generator != null && Generator.HighValueTargets != null) ? Generator.HighValueTargets.Length : 0;
             int parts = Generator != null ? Generator.GetUnitCount(ACO_MissionGenerator.CAT_PART) : 0;
             int escorts = (Generator != null && Generator.EscortUnits != null) ? Generator.EscortUnits.Length : 0;
-            // 슈퍼에이스 기만체: 진짜와 같은 마커(이름·목표 색·체력 바)로 그린다 — 기만체가 떠 있을 때만 보인다.
+            // 보스 에이스의 딸린 표적(ACO_AceBase.GetSubUnits — 형제 분신, LUNA UAV): 켜져 있을 때만 보인다.
             int decoys = 0;
             for (int i = 0; i < fighters; i++)
             {
                 ACO_NPCFighterAI f = Generator.Fighters[i];
-                if (f != null && f.SuperAce != null && f.SuperAce.Decoys != null) { decoys += f.SuperAce.Decoys.Length; }
+                if (f == null || f.Ace == null) { continue; }
+                Transform[] subs = f.Ace.GetSubUnits();
+                if (subs != null) { decoys += subs.Length; }
             }
             int total = fighters + ground + hvts + parts + escorts + decoys;
 
             _unitTransform = new Transform[total];
+            _unitWarship = new ACO_Warship[total];
             _unitHealth = new SaccTarget[total];
             _unitKind = new int[total];
             _unitLabel = new string[total];
@@ -252,11 +273,16 @@ namespace ACO
                 ACO_NPCFighterAI f = Generator.Fighters[i];
                 if (f == null) { continue; }
                 AddUnit(f.transform, f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i);
-                if (f.SuperAce == null || f.SuperAce.Decoys == null) { continue; }
-                for (int k = 0; k < f.SuperAce.Decoys.Length; k++)
+                if (f.Ace == null) { continue; }
+                Transform[] subs = f.Ace.GetSubUnits();
+                if (subs == null) { continue; }
+                for (int k = 0; k < subs.Length; k++)
                 {
-                    Transform d = f.SuperAce.Decoys[k];
-                    if (d != null) { AddUnit(d, f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i); }
+                    if (subs[k] == null) { continue; }
+                    // 체력이 따로 있으면(UAV) 자기 체력·이름으로, 없으면(분신) 본체와 같은 마커로 — 목표 색은 본체(같은 태그)를 따른다
+                    SaccTarget subHealth = f.Ace.GetSubUnitHealth(k);
+                    if (subHealth != null) { AddUnit(subs[k], subHealth, KIND_AIR, f.Ace.GetSubUnitLabel(), null, ACO_MissionGenerator.CAT_FIGHTER, i); }
+                    else { AddUnit(subs[k], f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i); }
                 }
             }
             for (int i = 0; i < ground; i++)
@@ -272,14 +298,17 @@ namespace ACO
             {
                 UdonSharpBehaviour h = Generator.HighValueTargets[i];
                 if (h == null) { continue; }
-                AddUnit(h.transform, h.GetComponent<SaccTarget>(), KIND_GROUND, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
+                int hvtKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_HVT, i) ? KIND_AIR : KIND_GROUND;
+                AddUnit(h.transform, h.GetComponent<SaccTarget>(), hvtKind, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
+                _unitWarship[_unitCount - 1] = h.GetComponent<ACO_Warship>();   // 보스 코어 단계면 마커를 코어 자리(MarkerAnchor)에
             }
             // 함선 부위(VLS/함포/CIWS)는 각자 따로 표시된다.
             for (int i = 0; i < parts; i++)
             {
                 UdonSharpBehaviour pt = Generator.GetUnitBehaviour(ACO_MissionGenerator.CAT_PART, i);
                 if (pt == null) { continue; }
-                AddUnit(pt.transform, pt.GetComponent<SaccTarget>(), KIND_GROUND, ReadLabel(pt, "PRT"), null, ACO_MissionGenerator.CAT_PART, i);
+                int partKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_PART, i) ? KIND_AIR : KIND_GROUND;
+                AddUnit(pt.transform, pt.GetComponent<SaccTarget>(), partKind, ReadLabel(pt, "PRT"), null, ACO_MissionGenerator.CAT_PART, i);
             }
             for (int i = 0; i < escorts; i++)
             {
@@ -294,6 +323,7 @@ namespace ACO
         private void AddUnit(Transform t, SaccTarget health, int kind, string label, ACO_NPCFighterAI fighter, int category, int index)
         {
             _unitTransform[_unitCount] = t;
+            _unitWarship[_unitCount] = null;
             _unitHealth[_unitCount] = health;
             _unitKind[_unitCount] = kind;
             _unitLabel[_unitCount] = label;
@@ -310,6 +340,14 @@ namespace ACO
             for (int u = 0; u < _unitCount; u++)
             {
                 _unitHidden[u] = _unitCat[u] == ACO_MissionGenerator.CAT_PART && Generator.IsUnitSuppressed(_unitCat[u], _unitIdx[u]);
+                // TEL: 탄도탄이 뜨면 공중 표적으로 그린다
+                if (_unitCat[u] == ACO_MissionGenerator.CAT_GROUND && Generator.IsTelUnit(_unitIdx[u]))
+                {
+                    bool airborne = Generator.IsTelAirborne(_unitIdx[u]);
+                    _unitKind[u] = airborne ? KIND_AIR : KIND_GROUND;
+                    ACO_TelUnit tel = Generator.GroundUnits[_unitIdx[u]].GetComponent<ACO_TelUnit>();
+                    if (tel != null) { _unitLabel[u] = airborne ? tel.MissileLabel : tel.MarkerLabel; }
+                }
                 if (_unitFriendly[u]) { _unitObjective[u] = false; }
                 else if (Manager == null) { _unitObjective[u] = _unitCat[u] == ACO_MissionGenerator.CAT_HVT; }
                 else { _unitObjective[u] = tag != 0 && Generator.GetUnitTag(_unitCat[u], _unitIdx[u]) == tag; }
@@ -334,12 +372,20 @@ namespace ACO
             VRCPlayerApi local = Networking.LocalPlayer;
             if (local == null) { return; }
             VRCPlayerApi.TrackingData head = local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
+            _inInterior = Interior != null && Interior.Contains(head.position);
             UpdateCrosshair(head.position, head.rotation);
             if (Markers == null) { return; }
 
             Vector3 headPos = head.position;
             Vector3 headFwd = head.rotation * Vector3.forward;
             Vector3 headUp = head.rotation * Vector3.up;
+
+            if (_inInterior)
+            {
+                if (!_clearedInside) { ClearForInterior(headPos, headUp); }
+                return;
+            }
+            _clearedInside = false;
 
             _objectiveTimer -= Time.deltaTime;
             if (_objectiveTimer <= 0f && Generator != null)
@@ -387,6 +433,8 @@ namespace ACO
                 int lockK = -1;
                 for (int k = 0; k < MAX_LOCKS; k++) { if (_lockUnit[k] == u) { lockK = k; break; } }
                 Vector3 point = t.position;
+                ACO_Warship anchorShip = _unitWarship[u];
+                if (anchorShip != null && anchorShip.MarkerAnchor != null) { point = anchorShip.MarkerAnchor.position; }
                 if (lockK >= 0 && _lockObj[lockK] != null && _lockObj[lockK].activeInHierarchy) { point = _lockObj[lockK].transform.position; }
                 Vector3 d = point - headPos;
                 float sq = d.sqrMagnitude;
@@ -401,7 +449,7 @@ namespace ACO
                 Transform m = Markers[used];
                 if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
                 // 락온 중인 표적은 다른 마커보다 조금 앞(LockedFrameNear)에 — 겹친 마커와 그리는 순서가 깜빡이지 않게(크기는 같은 비율로 줄여 화면 크기는 그대로)
-                float near = lockK >= 0 ? LockedFrameNear : 1f;
+                float near = lockK >= 0 ? LockedFrameNear : (objective ? ObjectiveFrameNear : 1f);
                 m.SetPositionAndRotation(headPos + dir * (DisplayDistance * near), Quaternion.LookRotation(dir, headUp));
                 // 원근감: NearDistance까지 1배, MaxDistance에서 FarScale배, 사이는 log(거리)에 비례.
                 float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
@@ -459,6 +507,36 @@ namespace ACO
                 }
             }
 
+            // 지원 유닛: 나와 있는 폭격기·급유 드론·가디언 드론 — 아군 테두리 + 이름
+            if (ShowSupport && Support != null)
+            {
+                float minSq = SupportMinDistance * SupportMinDistance;
+                Transform[] bombers = Support.Bombers;
+                if (bombers != null)
+                {
+                    for (int k = 0; k < bombers.Length && used < Markers.Length; k++)
+                    {
+                        if (bombers[k] && bombers[k].gameObject.activeInHierarchy) { used = DrawSupport(used, bombers[k].position, SupportBomberLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+                ACO_TankerDrone[] drones = Support.Drones;
+                if (drones != null)
+                {
+                    for (int k = 0; k < drones.Length && used < Markers.Length; k++)
+                    {
+                        if (drones[k] && drones[k].gameObject.activeInHierarchy) { used = DrawSupport(used, drones[k].transform.position, SupportTankerLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+                ACO_AAGunSite[] guardians = Support.Guardians;
+                if (guardians != null)
+                {
+                    for (int k = 0; k < guardians.Length && used < Markers.Length; k++)
+                    {
+                        if (guardians[k] && guardians[k].gameObject.activeInHierarchy) { used = DrawSupport(used, guardians[k].transform.position, SupportGuardianLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+            }
+
             // 호위 항로: 남은 경유점 + 목적지
             if (ShowEscortRoute && Manager != null)
             {
@@ -500,6 +578,41 @@ namespace ACO
                 _infoDistFor[m] = _lockDist[k];
             }
             UpdateInfo(focusMarker, focusUnit);
+            UpdateDiamonds(headPos, headUp);
+        }
+
+        /// 지원 유닛 하나: 아군기처럼 파란 사각 테두리 + 이름(같은 화면 크기, 원근 축소). 그렸으면 used + 1.
+        private int DrawSupport(int used, Vector3 pos, string label, Vector3 headPos, Vector3 headUp, float baseSize, float nearDist, float logRange, float maxSq, float minSq)
+        {
+            Vector3 d = pos - headPos;
+            float sq = d.sqrMagnitude;
+            if (sq > maxSq || sq < minSq || sq < 1f) { return used; }
+            float dist = Mathf.Sqrt(sq);
+            Vector3 dir = d / dist;
+            Transform m = Markers[used];
+            if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
+            m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+            float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
+            float size = baseSize * Mathf.Lerp(1f, FarScale, farT);
+            m.localScale = new Vector3(size, size, size);
+            if (_markerKind[used] != KIND_FRIENDLY_AIR) { SetMarkerKind(used, KIND_FRIENDLY_AIR); }
+            SetTopText(used, label);
+            return used + 1;
+        }
+
+        /// 격실에 들어온 순간 한 번: 켜진 마커, 이름표, 락온 표시를 모두 끈다. 나가면 다음 프레임에 다시 그린다.
+        private void ClearForInterior(Vector3 headPos, Vector3 headUp)
+        {
+            _clearedInside = true;
+            for (int i = 0; i < _usedLastFrame; i++)
+            {
+                if (_markerOn[i]) { Markers[i].gameObject.SetActive(false); _markerOn[i] = false; }
+            }
+            _usedLastFrame = 0;
+            ReadLockState(null);
+            for (int k = 0; k < MAX_LOCKS; k++) { _lockMarker[k] = -1; }
+            for (int i = 0; i < _infoUnitFor.Length; i++) { _infoUnitFor[i] = -1; }
+            UpdateInfo(-1, -1);
             UpdateDiamonds(headPos, headUp);
         }
 
@@ -545,17 +658,25 @@ namespace ACO
             return null;
         }
 
-        /// 락온 마커가 속한 유닛 번호. 표적이 바뀔 때만 찾는다.
+        /// 락온 마커가 속한 유닛 번호. 표적이 바뀔 때만 찾는다. 부위는 함선·요새의 자식이기도 하므로 가장 가까운 조상을 고른다 —
+        /// 안 그러면 본체 마커가 락온한 부위 자리로 옮겨 가고 부위 마커는 락온 표시가 안 된다.
         private int FindUnitOf(GameObject marker)
         {
             if (marker == null) { return -1; }
             Transform t = marker.transform;
+            int best = -1;
+            Transform bestRoot = null;
             for (int u = 0; u < _unitCount; u++)
             {
                 Transform root = _unitTransform[u];
-                if (root != null && t.IsChildOf(root)) { return u; }
+                if (root == null || !t.IsChildOf(root)) { continue; }
+                if (bestRoot == null || root.IsChildOf(bestRoot))
+                {
+                    best = u;
+                    bestRoot = root;
+                }
             }
-            return -1;
+            return best;
         }
 
         /// 락온 대상 테두리: 락온을 시도하는 동안 일정한 속도로 깜빡이고, 락온되면 빨간색으로 켜진다. k = 락온 칸.
@@ -698,6 +819,46 @@ namespace ACO
         }
 
         /// 마커 모양/색/TGT 표시를 종류에 맞게 바꾼다(종류가 바뀔 때만).
+        private bool _tintInit;
+        private Color _airBase;
+        private Color _groundBase;
+        private Color _infoBase;
+        private Material _crossMat;
+        private Color _crossBase;
+
+        /// HUD 설정 패널이 부른다: 적 마커(공중·지상 테두리)·정보 글자·조준 고리를 이 색으로(알파는 그대로). 목표·아군·경유점은 그대로.
+        /// 공용 재질은 처음에 이 화면 전용 사본으로 바꿔 쓴다(렌더러 .material — 에디터 재생에서 에셋이 바뀌지 않게).
+        public void SetHudColor(Color c)
+        {
+            if (!_tintInit)
+            {
+                _tintInit = true;
+                if (FrameRenderers != null && FrameRenderers.Length > 1 && FrameRenderers[0] && FrameRenderers[1])
+                {
+                    if (AirMaterial) { FrameRenderers[0].sharedMaterial = AirMaterial; AirMaterial = FrameRenderers[0].material; }
+                    if (GroundMaterial) { FrameRenderers[1].sharedMaterial = GroundMaterial; GroundMaterial = FrameRenderers[1].material; }
+                }
+                _airBase = AirMaterial ? AirMaterial.GetColor("_Color") : c;
+                _groundBase = GroundMaterial ? GroundMaterial.GetColor("_Color") : c;
+                _infoBase = InfoLabels != null && InfoLabels.Length > 0 && InfoLabels[0] ? InfoLabels[0].color : c;
+                if (Crosshair)
+                {
+                    MeshRenderer r = Crosshair.GetComponent<MeshRenderer>();
+                    if (r) { _crossMat = r.material; _crossBase = _crossMat.GetColor("_Color"); }
+                }
+                // 사본을 만든 두 칸은 다음에 그릴 때 종류에 맞는 재질을 다시 넣는다
+                if (_markerKind != null && _markerKind.Length > 1) { _markerKind[0] = -1; _markerKind[1] = -1; }
+            }
+            if (AirMaterial) { AirMaterial.SetColor("_Color", new Color(c.r, c.g, c.b, _airBase.a)); }
+            if (GroundMaterial) { GroundMaterial.SetColor("_Color", new Color(c.r, c.g, c.b, _groundBase.a)); }
+            if (_crossMat) { _crossMat.SetColor("_Color", new Color(c.r, c.g, c.b, _crossBase.a)); }
+            if (InfoLabels != null)
+            {
+                Color ic = new Color(c.r, c.g, c.b, _infoBase.a);
+                for (int i = 0; i < InfoLabels.Length; i++) { if (InfoLabels[i]) { InfoLabels[i].color = ic; } }
+            }
+        }
+
         private void SetMarkerKind(int i, int kind)
         {
             _markerKind[i] = kind;
@@ -737,7 +898,7 @@ namespace ACO
         private void UpdateCrosshair(Vector3 headPos, Quaternion headRot)
         {
             if (!Crosshair) { return; }
-            bool show = ShowCrosshair && ((Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING) || Time.time < _previewUntil);
+            bool show = !_inInterior && ShowCrosshair && ((Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING) || Time.time < _previewUntil);
             if (Crosshair.gameObject.activeSelf != show) { Crosshair.gameObject.SetActive(show); }
             if (!show) { return; }
             float d = Mathf.Max(CrosshairDistance, 0.1f);
@@ -806,7 +967,7 @@ namespace ACO
             ACO_NPCFighterAI fighter = _unitFighter[u];
             if (fighter != null)
             {
-                if (fighter.SuperAce != null) { return fighter.SuperAce.AceName; }
+                if (fighter.Ace != null) { return fighter.Ace.GetAceName(); }
                 return fighter.GetDisplayLabel(fighter.GetSkillTier());   // "FTR ACE", "ATK VET"
             }
             return _unitLabel[u];

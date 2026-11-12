@@ -7,7 +7,8 @@ namespace ACO
     /// 비(로컬 연출, 동기화 없음). 빗방울 메시(셰이더 ACO/Rain)가 셰이더 안에서 카메라 둘레에 끝없이 반복되고,
     /// 이 스크립트는 프레임마다 머리 위치로 따라가며 머리의 속도(= 탄 기체 속도)를 머티리얼에 넘긴다 — 빗줄기가 상대 바람 방향으로 늘어난다.
     ///  - Intensity(0~1)로 켜고 끈다(FadeTime 동안 서서히). 0이면 렌더러·소리를 끄고 아무것도 안 한다.
-    ///  - 지붕 아래(ShelterBoxes — 격납고 등)와 MaxAltitude 위(구름 위)에서는 내리지 않는다.
+    ///  - 지붕 아래와 MaxAltitude 위(구름 위)에서는 내리지 않는다. 지붕 = 머리 위로 쏜 선이 ShelterLayers(Default·Environment)에 닿음(0.2초마다),
+    ///    또는 ShelterBoxes(손으로 놓은 상자) 안. 기체 콜라이더는 레이어 17·31이라 조종석 안에서는 걸리지 않는다.
     ///  - 캐노피 빗방울(CanopyRenderer, 셰이더 ACO/CanopyRain): 기체를 조종·탑승 중일 때(Contacts.LocalVehicle) 머리를 감싸는 구를 기체 자세로 돌려
     ///    방울이 캐노피에 붙어 흐르게 한다 — 느리면 맺혀 흘러내리고 빠르면 위로 길게 넘어간다. 비가 안 오는 곳(지붕 아래·구름층 위)에 가면 CanopyDryTime 동안 마른다.
     ///  - 날씨 비 세기를 VRChat 셰이더 전역으로 넘긴다(내가 지붕 아래·구름 위여도 날씨 값 — 바다·땅은 비를 맞고 있다):
@@ -25,6 +26,17 @@ namespace ACO
         public float MaxAltitude = 1500f;
         [Tooltip("지붕 아래 상자 — 이 트랜스폼의 단위 상자(위치·회전·크기 = 상자) 안에서는 비가 안 온다(격납고 등). 콜라이더가 아니라 물리에 영향 없음")]
         public Transform[] ShelterBoxes;
+        [Tooltip("함내 구역. Bake가 넣는다. 격실 안은 지붕 아래로 친다")]
+        public ACO_InteriorZone Interior;
+        [Tooltip("머리 위로 선을 쏴 이 레이어(기본 Default·Environment)에 닿으면 지붕 아래 — 격납고·다리·공중 요새 밑. 0이면 안 쏜다(상자만)")]
+        public LayerMask ShelterLayers = 2049;
+        [Tooltip("지붕을 찾는 높이(m)")]
+        public float ShelterRayLength = 200f;
+        [Tooltip("지붕 확인 간격(초) — 사이에는 앞 결과를 쓴다(그 사이 2m 넘게 움직이면 다시 쏜다)")]
+        public float ShelterCheckInterval = 0.2f;
+        private Vector3 _roofPos;
+        private float _roofAt = -100f;
+        private bool _roof;
 
         [Header("소리 (선택)")]
         [Tooltip("빗소리 루프(2D 권장). 세기에 맞춰 볼륨이 바뀐다")]
@@ -164,8 +176,10 @@ namespace ACO
             VRCShader.SetGlobalFloat(_idWet, _wet);
         }
 
-        private bool InShelter(Vector3 p)
+        public bool InShelter(Vector3 p)
         {
+            if (Interior != null && Interior.Contains(p)) { return true; }
+            if (RoofAbove(p)) { return true; }
             if (ShelterBoxes == null) { return false; }
             for (int i = 0; i < ShelterBoxes.Length; i++)
             {
@@ -175,6 +189,17 @@ namespace ACO
                 if (Mathf.Abs(l.x) <= 0.5f && Mathf.Abs(l.y) <= 0.5f && Mathf.Abs(l.z) <= 0.5f) { return true; }
             }
             return false;
+        }
+
+        /// 머리 위에 지붕(ShelterLayers)이 있는가. 같은 자리 근처면 ShelterCheckInterval 동안 앞 결과를 쓴다(관전 카메라와 번갈아 물어도 한 프레임 두 번이 고작).
+        private bool RoofAbove(Vector3 p)
+        {
+            if (ShelterLayers.value == 0) { return false; }
+            if (Time.time - _roofAt < ShelterCheckInterval && (p - _roofPos).sqrMagnitude < 4f) { return _roof; }
+            _roofAt = Time.time;
+            _roofPos = p;
+            _roof = Physics.Raycast(p + Vector3.up * 0.3f, Vector3.up, ShelterRayLength, ShelterLayers.value, QueryTriggerInteraction.Ignore);
+            return _roof;
         }
 
         // ───────────── 날씨가 쓸 API ─────────────

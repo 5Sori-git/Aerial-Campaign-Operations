@@ -49,10 +49,12 @@ MonoBehaviour:
   DisplayName: RKT
   Description: 'ROCKET LAUNCHER
 
-    UNGUIDED ROCKETS FOR GROUND TARGETS'
+    UNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP
+    MAGAZINE, QUICK RELOAD.'
   Price: 8000
   Icon: {fileID: 21300000, guid: 361736467909399438cb9a9cdce66f2f, type: 3}
   SortOrder: 30
+  Category: 0
   Module: {fileID: 6606775130717059990}
 --- !u!1 &3799829043215552776
 GameObject:
@@ -120,11 +122,16 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6000
   LockAngle: 15
+  LockFromCcip: 1
   LockTime: 1
   MaxLockTargets: 1
+  CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 8
   MaxAmmo: 72
@@ -140,10 +147,35 @@ MonoBehaviour:
   SplashRadius: 12
   MinSplashFraction: 0.3
   MissileSplash: 0
-  Radio: {fileID: 0}
+  FullPartSplash: 0
+  Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
+  InterceptSites: []
   CrossLockIndicator: 0
+  IgnoreCountermeasures: 0
+  ProximityAnyEnemy: 0
+  AutoTargetNearest: 0
+  DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
+  SeekerAngle: 0
+  LockHoldTime: 0
+  MissileLifetime: 0
+  SeaSkim: 0
+  SkimAltitude: 8
+  SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 3
+  TakesExtraAmmo: 0
+  LaunchCall: 8
   HoldToFire: 1
   FireInterval: 0.08
   Missile: {fileID: 2429952938445961008, guid: ca1ec8c1c9c91424fb1fd39eb742c7ce, type: 3}
@@ -162,6 +194,8 @@ MonoBehaviour:
   CcipInterval: 0.05
   CcipMaxTime: 40
   TargetIndicator: {fileID: 0}
+  SelectedObjects: []
+  SlotBarsOnlyWhenSelected: 1
   SlotBarTemplate: {fileID: 0}
   SlotBarSpacing: {x: 0.02, y: 0, z: 0}
   SlotBarVertical: 1

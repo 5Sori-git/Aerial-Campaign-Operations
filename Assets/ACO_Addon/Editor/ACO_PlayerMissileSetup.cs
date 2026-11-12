@@ -99,6 +99,8 @@ public static class ACO_PlayerMissileSetup
         if (special != null && ACO_SpecialWeaponCatalog.InstallVehicle(entity, special, primary, fallbackAmmo) > 0) { changed = true; }
         // 6) 키보드
         if (FixKeyboardBindings(entity) > 0) { changed = true; }
+        // 7) 기체 표시, 데칼, 기총 강화
+        if (ACO_SceneBaker.InstallVehicleParts(entity)) { changed = true; }
         return changed;
     }
 
@@ -292,7 +294,10 @@ public static class ACO_PlayerMissileSetup
 
     /// 데스크톱 키 SpecialKey(숫자 3)로 특수무장 슬롯을 고르게 한다(SAV_KeyboardControls). 슬롯을 가리키는 칸이 있으면 그 칸의 키를 바꾸고,
     /// 없으면 빈 칸(오른쪽부터)에 넣는다. 다른 기능이 같은 키를 쓰고 있으면 겹치지 않게 그 키를 비운다(로그로 알린다).
-    private static void BindSpecialKey(SaccEntity entity, ACO_DFUNC_Special special)
+    private static void BindSpecialKey(SaccEntity entity, ACO_DFUNC_Special special) { BindDialKey(entity, special, SpecialKey); }
+
+    /// 데스크톱 키로 다이얼 기능을 고르게 한다(SAV_KeyboardControls) — 특수무장 슬롯(3)·SUPPORT 다이얼(4)이 쓴다.
+    public static void BindDialKey(SaccEntity entity, UdonSharpBehaviour special, KeyCode SpecialKey)
     {
         SAV_KeyboardControls[] all = entity.GetComponentsInChildren<SAV_KeyboardControls>(true);
         if (all.Length == 0)

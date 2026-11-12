@@ -9,6 +9,8 @@ namespace ACO
     ///  - 풀스로틀 사출: 캐터펄트에 걸린 채 스로틀을 FullThrottleThreshold(0.95) 이상으로 FullThrottleHoldTime(초) 동안 유지하면 사출한다.
     ///    중간에 스로틀을 내리면 다시 센다. SAV는 ThrottleInput == 1(정확히)만 봐서 키보드·VR 스로틀이 1에 못 닿으면 안 나갔다.
     ///  - 트리거 사출도 함께(AllowTriggerLaunch — 다이얼에서 선택 후 트리거, 데스크톱 키). SAV의 AutoLaunch는 트리거를 끈다.
+    ///  - 갑판 요원(ACO_CatapultCrew): 내 화면에 요원이 켜져 있으면 절차가 끝나야 사출한다(풀스로틀 유지·트리거 사출은 쉰다).
+    ///    요원을 끄면 위의 방식으로 돌아간다.
     ///  - 표시: 걸려 있는 동안 AttachedObjects, 풀스로틀을 유지하는 동안 HoldObjects를 켜고, HoldFill의 X 스케일 = 진행도(0 → 1).
     /// 위치(이 오브젝트 = 기체에서 캐터펄트에 물리는 지점)·BoxCollider(트리거)·레이어는 SAV와 같다. 기체의 DFUNC_Catapult를 이걸로 바꾸려면
     /// 메뉴 ACO → Player Vehicle → Replace Catapult on Selected Vehicles(값 복사 + 다이얼·확장 목록 교체).
@@ -43,6 +45,10 @@ namespace ACO
         [Tooltip("다이얼에서 선택 후 트리거(데스크톱 키)로도 사출")]
         public bool AllowTriggerLaunch = true;
 
+        [Header("갑판 요원 (Bake가 채운다)")]
+        [Tooltip("씬의 모든 요원 — 물린 캐터펄트의 요원을 고른다")]
+        public ACO_CatapultCrew[] Crews;
+
         [Header("표시 (선택, 조종사 화면)")]
         [Tooltip("캐터펄트에 걸려 있는 동안 켠다(HUD 안내 등)")]
         public GameObject[] AttachedObjects;
@@ -56,6 +62,8 @@ namespace ACO
         [System.NonSerializedAttribute] public SaccEntity EntityControl;
         [System.NonSerializedAttribute] public bool OnCatapult;
         [System.NonSerializedAttribute] public bool Launching = false;
+        // 사출이 시작됐다(모든 클라이언트) — Launching은 오너 쪽에만 있다
+        [System.NonSerializedAttribute] public bool LaunchStarted = false;
         [System.NonSerializedAttribute] public Transform CatapultTransform;
 
         private bool TriggerLastFrame;
@@ -78,6 +86,7 @@ namespace ACO
         private float HoldStart = -1f;
         private float HoldFillScale = 1f;
         private bool enabledToFindAnimator;
+        private ACO_CatapultCrew _crew;
 
         public void SFEXT_L_EntityStart()
         {
@@ -231,6 +240,7 @@ namespace ACO
                 if (Vector3.Angle(VehicleTransform.forward, CatapultTransform.forward) >= MaxAttachAngle) { return; }
                 OnCatapult = true;
                 HoldStart = -1f;
+                _crew = FindCrew();
                 CatapultPosLastFrame = CatapultTransform.position;
                 // 캐터펄트에 묶는다(캐터펄트 방향이 어떻든). 피치는 기체 그대로(앞뒤 바퀴 길이가 다른 기체가 있다)
                 if (AlignToCatapult)
@@ -287,8 +297,18 @@ namespace ACO
 
             if (!Launching)
             {
+                bool crewLaunch = CrewControlsLaunch();
+                if (crewLaunch)
+                {
+                    if (HoldStart >= 0f)
+                    {
+                        HoldStart = -1f;
+                        ShowHold(false, 0f);
+                    }
+                    if (_crew.LaunchApproved(this)) { CatapultLaunchNow(); }
+                }
                 // 풀스로틀 유지 사출
-                if (FullThrottleLaunch && SAVControl)
+                else if (FullThrottleLaunch && SAVControl)
                 {
                     float throttle = (float)SAVControl.GetProgramVariable("ThrottleInput");
                     if (throttle >= FullThrottleThreshold)
@@ -305,7 +325,7 @@ namespace ACO
                     }
                 }
                 // 트리거 사출
-                if (!Launching && AllowTriggerLaunch && Selected)
+                if (!Launching && !crewLaunch && AllowTriggerLaunch && Selected)
                 {
                     float trigger = LeftDial ? Input.GetAxisRaw("Oculus_CrossPlatform_PrimaryIndexTrigger") : Input.GetAxisRaw("Oculus_CrossPlatform_SecondaryIndexTrigger");
                     if (trigger > 0.75f)
@@ -384,7 +404,19 @@ namespace ACO
 
         public void KeyboardInput()
         {
-            if (AllowTriggerLaunch) { CatapultLaunchNow(); }
+            if (AllowTriggerLaunch && !CrewControlsLaunch()) { CatapultLaunchNow(); }
+        }
+
+        private bool CrewControlsLaunch() { return _crew != null && _crew.IsShown(); }
+
+        private ACO_CatapultCrew FindCrew()
+        {
+            if (Crews == null) { return null; }
+            for (int i = 0; i < Crews.Length; i++)
+            {
+                if (Crews[i] != null && Crews[i].Trigger == CatapultTransform) { return Crews[i]; }
+            }
+            return null;
         }
 
         public void CatapultLaunchNow()
@@ -402,6 +434,7 @@ namespace ACO
 
         public void LaunchCatapult()
         {
+            LaunchStarted = true;
             if (VehicleAnimator) { VehicleAnimator.SetTrigger(AnimTriggerLaunchName); }
             if (Utilities.IsValid(CatapultAnimator)) { CatapultAnimator.SetTrigger("launch"); }
             CatapultAnimator = null;
@@ -412,6 +445,7 @@ namespace ACO
 
         public void CatapultLockIn()
         {
+            LaunchStarted = false;
             if (!IsOwner)
             {
                 EnableToFindAnimator();
@@ -428,6 +462,7 @@ namespace ACO
         public void CatapultLockOff()
         {
             OnCatapult = false;
+            LaunchStarted = false;
             if (VehicleAnimator) { VehicleAnimator.SetBool("oncatapult", false); }
             ShowAttached(false);
             ShowHold(false, 0f);

@@ -9,6 +9,7 @@ namespace ACO
     /// 구름 속 안개는 그 위에 덮인다), 비 세기(ACO_Rain.SetIntensity), 태양 세기(Sun.intensity × 배율), 구름층(SetLayer — 비 = 비구름층, 안개 = 낮은 안개층).
     /// 폭풍(WX_STORM) = 더 어두운 비구름층 + 센 비 + 번개(ACO_Lightning.SetStorm — 섬광·낙뢰 줄기·천둥). 바뀔 때 TransitionTime 동안 서서히(처음엔 바로).
     /// 게임 진행이 작전 카드·명단 글자에 날씨 이름을 띄운다(GetWeatherName).
+    /// 비와 폭풍에는 건물 창문 불빛을 켠다(WindowGlow). 창문 머티리얼 에셋의 _EmissionColor를 직접 바꾸므로 모든 건물이 함께 바뀐다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Weather : UdonSharpBehaviour
     {
@@ -54,6 +55,14 @@ namespace ACO
         public int[] CloudLayer = new int[] { 0, 0, 2, 1, 1 };
         [Tooltip("번개(0~1) — 폭풍만")]
         public float[] LightningAmount = new float[] { 0f, 0f, 0f, 0f, 1f };
+        [Tooltip("창문 불빛 세기(0 = 꺼짐, 비·폭풍에 켠다)")]
+        public float[] WindowGlow = new float[] { 0f, 0f, 0f, 1f, 1.3f };
+
+        [Header("창문 불빛")]
+        [Tooltip("건물 창문 머티리얼(Bake가 넣는다). 이미션 마스크의 켜진 창에 불이 들어온다")]
+        public Material[] WindowMaterials;
+        [Tooltip("불빛 세기 1일 때의 색")]
+        public Color WindowGlowColor = Color.white;
 
         private int _weather = -1;
         private int _seenSeed = int.MinValue;
@@ -64,7 +73,7 @@ namespace ACO
         private Color _baseColor;
         private float _baseSun = 1f;
         // 전환 시작·끝 값
-        private float _fromDensity, _toDensity, _fromDark, _toDark, _fromSun, _toSun;
+        private float _fromDensity, _toDensity, _fromDark, _toDark, _fromSun, _toSun, _fromGlow, _toGlow;
         private Color _fromColor, _toColor;
 
         void Start()
@@ -130,11 +139,13 @@ namespace ACO
             _fromColor = CurrentColor();
             _fromDark = _toDark;
             _fromSun = _toSun;
+            _fromGlow = _toGlow;
             _toDensity = _baseDensity * Value(FogDensityScale, w, 1f);
             Color tint = FogTint != null && w < FogTint.Length ? FogTint[w] : Color.white;
             _toColor = new Color(_baseColor.r * tint.r, _baseColor.g * tint.g, _baseColor.b * tint.b, _baseColor.a);
             _toDark = Value(CloudDarkness, w, 0f);
             _toSun = Value(SunScale, w, 1f);
+            _toGlow = Value(WindowGlow, w, 0f);
 
             if (Clouds)
             {
@@ -163,6 +174,7 @@ namespace ACO
             {
                 Clouds.SetBaseFog(_curDensity, _curColor);
                 Clouds.SetDarkness(Mathf.Lerp(_fromDark, _toDark, k));
+                Clouds.SetSunScale(Mathf.Lerp(_fromSun, _toSun, k));
             }
             else
             {
@@ -170,6 +182,17 @@ namespace ACO
                 RenderSettings.fogColor = _curColor;
             }
             if (Sun) { Sun.intensity = _baseSun * Mathf.Lerp(_fromSun, _toSun, k); }
+            SetWindowGlow(Mathf.Lerp(_fromGlow, _toGlow, k));
+        }
+
+        private void SetWindowGlow(float glow)
+        {
+            if (WindowMaterials == null) { return; }
+            Color c = WindowGlowColor * glow;
+            for (int i = 0; i < WindowMaterials.Length; i++)
+            {
+                if (WindowMaterials[i]) { WindowMaterials[i].SetColor("_EmissionColor", c); }
+            }
         }
 
         private float Value(float[] a, int i, float fallback) { return a != null && i >= 0 && i < a.Length ? a[i] : fallback; }

@@ -33,6 +33,16 @@ namespace ACO
         [Tooltip("네트워크가 밀리면(Networking.IsClogged) 위 기준들을 최대 이 배수까지 자동으로 늘린다")]
         public float MaxCongestionScale = 4f;
 
+        [Header("먼 적 — 가장 가까운 다른 플레이어가 FarDistance 밖")]
+        [Tooltip("가장 가까운 다른 플레이어가 이 거리(m) 밖이면 아래 배수로 전송을 크게 줄인다(혼자일 때도)")]
+        public float FarDistance = 10000f;
+        [Tooltip("먼 적의 위치·기수 방향 오차 기준 배수(위치 54m → 162m, 방향 5° → 15°)")]
+        public float FarErrorScale = 3f;
+        [Tooltip("먼 적의 하트비트 간격 배수(4초 → 10초)")]
+        public float FarHeartbeatScale = 2.5f;
+        [Tooltip("먼 적의 전송 최소 간격 배수(0.3초 → 0.9초)")]
+        public float FarMinIntervalScale = 3f;
+
         [Header("교전 상대에게 소유권 넘기기")]
         [Tooltip("교전 중인 플레이어에게 이 NPC의 소유권을 넘긴다. 그 플레이어 화면에서는 동기화 없이 직접 계산되므로 리드 사격과 미사일 예측이 정확해진다")]
         public bool HandoffToEngagedPlayer = true;
@@ -105,6 +115,7 @@ namespace ACO
         private float _viewerTimer;
         private float _ownerCheckTimer;
         private float _viewerDistance = MAX_VIEWER_DISTANCE;
+        private bool _viewerFar = true;   // 가장 가까운 다른 플레이어가 FarDistance 밖
         private VRCPlayerApi[] _players = new VRCPlayerApi[100];
 
         // 원격: 예측 상태 + 화면 보정 오프셋(표시 위치 = 예측 + 오프셋, 표시 방향 = 오프셋 회전 · 예측 방향)
@@ -236,14 +247,16 @@ namespace ACO
             if (Networking.IsClogged) { _congestion = Mathf.Min(_congestion + dt * 2f, Mathf.Max(MaxCongestionScale, 1f)); }
             else { _congestion = Mathf.Max(_congestion - dt * 0.5f, 1f); }
 
-            if (_sinceSend < MinSendInterval * _congestion) { return; }
+            float farError = _viewerFar ? Mathf.Max(FarErrorScale, 1f) : 1f;
+            if (_sinceSend < MinSendInterval * _congestion * (_viewerFar ? Mathf.Max(FarMinIntervalScale, 1f) : 1f)) { return; }
 
-            float posThreshold = (PositionErrorThreshold + ThresholdPerKm * _viewerDistance * 0.001f) * _congestion;
-            float dirThreshold = DirectionErrorThreshold * _congestion;
+            float posThreshold = (PositionErrorThreshold + ThresholdPerKm * _viewerDistance * 0.001f) * _congestion * farError;
+            float dirThreshold = DirectionErrorThreshold * _congestion * farError;
+            float heartbeat = HeartbeatInterval * _congestion * (_viewerFar ? Mathf.Max(FarHeartbeatScale, 1f) : 1f);
             float posError = _hasGhost ? Vector3.Distance(transform.position, _ghostPos) : 0f;
             float dirError = _hasGhost ? Vector3.Angle(transform.forward, _ghostFwd) : 0f;
 
-            bool send = _stateDirty || !_hasGhost || _sinceSend >= HeartbeatInterval * _congestion
+            bool send = _stateDirty || !_hasGhost || _sinceSend >= heartbeat
                 || posError > posThreshold || dirError > dirThreshold;
             if (!send) { return; }
 
@@ -254,7 +267,7 @@ namespace ACO
                     + " posErr=" + posError.ToString("F1") + "/" + posThreshold.ToString("F1")
                     + " dirErr=" + dirError.ToString("F1") + "/" + dirThreshold.ToString("F1")
                     + " cong=" + _congestion.ToString("F2")
-                    + " viewer=" + _viewerDistance.ToString("F0")
+                    + " viewer=" + _viewerDistance.ToString("F0") + (_viewerFar ? "(far)" : "")
                     + " dt=" + Time.deltaTime.ToString("F3")
                     + " spd=" + (Flight != null ? Flight.Speed : 0f).ToString("F0")
                     + " w=" + (_angVel.magnitude * Mathf.Rad2Deg).ToString("F0")
@@ -289,7 +302,7 @@ namespace ACO
             _players = VRCPlayerApi.GetPlayers(_players);
 
             Vector3 myPos = transform.position;
-            float best = MAX_VIEWER_DISTANCE;
+            float best = float.MaxValue;
             for (int i = 0; i < count && i < _players.Length; i++)
             {
                 VRCPlayerApi p = _players[i];
@@ -297,7 +310,8 @@ namespace ACO
                 float d = Vector3.Distance(myPos, p.GetPosition());
                 if (d < best) { best = d; }
             }
-            _viewerDistance = best;
+            _viewerFar = best >= FarDistance;
+            _viewerDistance = Mathf.Min(best, MAX_VIEWER_DISTANCE);
         }
 
         public void SendState()
@@ -576,7 +590,7 @@ namespace ACO
         private float AccelerateBy(float speed, float accel, float dt)
         {
             speed += accel * dt;
-            if (Flight) { speed = Mathf.Clamp(speed, Flight.MinSpeed, Flight.MaxSpeed); }
+            if (Flight) { speed = Mathf.Clamp(speed, Flight.GetPredictMinSpeed(), Flight.MaxSpeed * Mathf.Max(Flight.MaxBoost, 1f)); }   // 가속 기동 상한까지(오너·원격 같은 값)
             return speed;
         }
 

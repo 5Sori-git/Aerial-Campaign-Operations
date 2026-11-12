@@ -1,0 +1,467 @@
+key	ko	en	ja
+# 설정 패널 (ACO_HudSettings) — 키 규칙: 패널.분류.이름. 한 번 쓴 키는 이름을 바꾸지 않는다(라벨 오브젝트 이름 = 키)
+set.title	설정	SETTINGS	設定
+set.cat.score	점수 패널	SCORE PANEL	スコアパネル
+set.cat.flighthud	비행 HUD	FLIGHT HUD	飛行HUD
+set.cat.color	HUD 색	HUD COLOR	HUDカラー
+set.cat.result	결과 · 안내 글자	RESULT / NOTICE TEXT	結果・通知テキスト
+set.cat.subtitle	무전 자막	RADIO SUBTITLES	無線字幕
+set.cat.markers	표적 마커	TARGET MARKERS	ターゲットマーカー
+set.cat.crosshair	크로스헤어	CROSSHAIR	クロスヘア
+set.cat.rwr	RWR	RWR	RWR
+set.cat.radar	레이더	RADAR	レーダー
+set.cat.crew	갑판 요원	DECK CREW	甲板要員
+set.cat.graphics	그래픽	GRAPHICS	グラフィック
+set.cat.language	LANGUAGE · 언어 · 言語	LANGUAGE · 언어 · 言語	LANGUAGE · 언어 · 言語
+set.row.leftright	좌우	LEFT / RIGHT	左右
+set.row.updown	상하	UP / DOWN	上下
+set.row.distance	거리	DISTANCE	距離
+set.row.size	크기	SIZE	サイズ
+set.row.follow	따라오는 지연	FOLLOW DELAY	追従の遅れ
+set.row.show	표시	SHOW	表示
+set.row.brightness	밝기	BRIGHTNESS	明るさ
+set.row.unit	거리 단위	DISTANCE UNIT	距離の単位
+set.row.color	색	COLOR	色
+set.row.shadow	글자 그림자	TEXT SHADOW	文字の影
+set.row.framesize	테두리 크기	FRAME SIZE	枠のサイズ
+set.row.infoangle	정보 표시 각도	INFO VIEW ANGLE	情報表示の角度
+set.row.chdistance	거리 (+RWR)	DISTANCE (+RWR)	距離 (+RWR)
+set.row.ringsize	링 크기	RING SIZE	リングのサイズ
+set.row.missilemark	미사일 표시 크기	MISSILE MARK SIZE	ミサイル表示サイズ
+set.row.lockarc	락온 호 크기	LOCK ARC SIZE	ロック弧のサイズ
+set.row.opacity	불투명도	OPACITY	不透明度
+set.row.range	표시 거리	RANGE	表示範囲
+set.row.blip	점 크기	BLIP SIZE	点のサイズ
+set.row.cloud	구름 품질	CLOUD QUALITY	雲の品質
+set.row.language	언어	LANGUAGE	言語
+set.reset	모두 초기화	RESET ALL	すべてリセット
+set.hint	자동으로 저장됩니다\n바꾸는 동안 HUD가 미리 보입니다	SAVED AUTOMATICALLY\nYOUR HUD PREVIEWS WHILE ADJUSTING	自動で保存されます\n調整中はHUDをプレビューします
+set.on	켜짐	ON	オン
+set.off	꺼짐	OFF	オフ
+set.high	높음	HIGH	高
+set.low	낮음	LOW	低
+set.unit.sec	{0}초	{0} S	{0}秒
+set.unit.deg	{0}도	{0} DEG	{0}度
+set.color.0	초록	GREEN	グリーン
+set.color.1	노랑	YELLOW	イエロー
+set.color.2	하늘색	CYAN	シアン
+set.color.3	흰색	WHITE	ホワイト
+set.color.4	주황	ORANGE	オレンジ
+set.color.5	분홍	PINK	ピンク
+set.lang.auto	자동	AUTO	自動
+# 로드아웃 패널 — 진행도 이름(prog.*: 강화 · 장비 · 지원 호출권, 키 끝 = 저장 ID), 상점(shop.*), 무장 목록(load.*), 무장 설명(wpn.<무장 ID> — 첫 줄 = 부제)
+prog.up.hull	기체 장갑	HULL ARMOR	機体装甲
+prog.updesc.hull	기체를 보강합니다. 더 많이 맞아도 버팁니다.	REINFORCED AIRFRAME. TAKES MORE HITS BEFORE GOING DOWN.	機体を補強し、より多くの被弾に耐えます。
+prog.up.mobility	기동성	MOBILITY	機動性
+prog.updesc.mobility	조종 반응이 빨라져 더 작게 선회하고 빠르게 롤합니다.	SHARPER CONTROL RESPONSE FOR TIGHTER TURNS AND FASTER ROLLS.	操縦の反応が鋭くなり、小さく旋回し素早くロールします。
+prog.up.engine	엔진	ENGINE	エンジン
+prog.updesc.engine	추력이 늘어 더 빠르게 상승하고 가속합니다.	MORE THRUST FOR FASTER CLIMBS AND ACCELERATION.	推力が増し、上昇と加速が速くなります。
+prog.up.fuel	연비	FUEL EFFICIENCY	燃費
+prog.updesc.fuel	연료를 덜 써서 더 오래 싸웁니다.	LOWER FUEL BURN. STAY IN THE FIGHT LONGER.	燃料消費が減り、長く戦えます。
+prog.up.countermeasure	플레어	COUNTERMEASURES	フレア
+prog.updesc.countermeasure	플레어를 더 싣습니다.	EXTRA FLARE CARTRIDGES IN THE DISPENSER.	フレアの搭載数が増えます。
+prog.up.gun_damage	기관포 피해	GUN DAMAGE	機関砲ダメージ
+prog.updesc.gun_damage	기관포 탄의 위력이 커집니다.	HEAVIER CANNON ROUNDS.	機関砲弾の威力が上がります。
+prog.up.msl_damage	피해	DAMAGE	ダメージ
+prog.updesc.msl_damage	일반 미사일의 탄두가 강해집니다.	BIGGER WARHEADS ON STANDARD MISSILES.	通常ミサイルの弾頭が強化されます。
+prog.up.msl_ammo	탑재량	CAPACITY	搭載数
+prog.updesc.msl_ammo	출격마다 일반 미사일을 더 싣습니다.	MORE STANDARD MISSILES PER SORTIE.	出撃ごとの通常ミサイルの数が増えます。
+prog.up.msl_turn	선회력	TURN RATE	旋回性能
+prog.updesc.msl_turn	일반 미사일이 선회하는 표적을 더 잘 따라갑니다.	YOUR STANDARD MISSILES PULL HARDER TO STAY ON A TURNING TARGET.	通常ミサイルが旋回する目標をよく追います。
+prog.up.msl_lock_speed	락온 속도	LOCK SPEED	ロック速度
+prog.updesc.msl_lock_speed	더 빨리 락온합니다.	THE SEEKER LOCKS ON FASTER.	ロックオンが速くなります。
+prog.up.msl_lock_range	락온 거리	LOCK RANGE	ロック距離
+prog.updesc.msl_lock_range	더 먼 표적을 락온합니다.	LOCK TARGETS FROM FARTHER OUT.	より遠くの目標をロックできます。
+prog.up.msl_seeker	시커 범위	SEEKER CONE	シーカー範囲
+prog.updesc.msl_seeker	일반 미사일이 더 넓은 각도에서도 추적합니다.	YOUR STANDARD MISSILES KEEP TRACKING AT WIDER ANGLES.	通常ミサイルがより広い角度で追尾します。
+prog.up.msl_reload	재장전 속도	RELOAD SPEED	装填速度
+prog.updesc.msl_reload	발사 뒤 재장전이 빨라집니다.	RAILS RELOAD FASTER BETWEEN SHOTS.	発射後の再装填が速くなります。
+prog.up.aam_damage	피해	DAMAGE	ダメージ
+prog.updesc.aam_damage	특수 대공 무장의 탄두가 강해집니다.	BIGGER WARHEADS ON SPECIAL AIR-TO-AIR WEAPONS.	特殊対空兵装の弾頭が強化されます。
+prog.up.aam_ammo	탑재량	CAPACITY	搭載数
+prog.updesc.aam_ammo	출격마다 특수 대공 무장을 더 싣습니다.	MORE SPECIAL AIR-TO-AIR WEAPONS PER SORTIE.	出撃ごとの特殊対空兵装の数が増えます。
+prog.up.aam_turn	선회력	TURN RATE	旋回性能
+prog.updesc.aam_turn	특수 대공 무장이 선회하는 표적을 더 잘 따라갑니다.	SPECIAL AIR-TO-AIR WEAPONS PULL HARDER TO STAY ON A TURNING TARGET.	特殊対空兵装が旋回する目標をよく追います。
+prog.up.aam_lock_speed	락온 속도	LOCK SPEED	ロック速度
+prog.updesc.aam_lock_speed	더 빨리 락온합니다.	THE SEEKER LOCKS ON FASTER.	ロックオンが速くなります。
+prog.up.aam_lock_range	락온 거리	LOCK RANGE	ロック距離
+prog.updesc.aam_lock_range	더 먼 표적을 락온합니다.	LOCK TARGETS FROM FARTHER OUT.	より遠くの目標をロックできます。
+prog.up.aam_seeker	시커 범위	SEEKER CONE	シーカー範囲
+prog.updesc.aam_seeker	특수 대공 무장이 더 넓은 각도에서도 추적합니다.	SPECIAL AIR-TO-AIR WEAPONS KEEP TRACKING AT WIDER ANGLES.	特殊対空兵装がより広い角度で追尾します。
+prog.up.aam_reload	재장전 속도	RELOAD SPEED	装填速度
+prog.updesc.aam_reload	발사 뒤 재장전이 빨라집니다.	RAILS RELOAD FASTER BETWEEN SHOTS.	発射後の再装填が速くなります。
+prog.up.agm_damage	피해	DAMAGE	ダメージ
+prog.updesc.agm_damage	특수 대지 무장의 탄두가 강해집니다.	BIGGER WARHEADS ON SPECIAL AIR-TO-GROUND WEAPONS.	特殊対地兵装の弾頭が強化されます。
+prog.up.agm_ammo	탑재량	CAPACITY	搭載数
+prog.updesc.agm_ammo	출격마다 특수 대지 무장을 더 싣습니다.	MORE SPECIAL AIR-TO-GROUND WEAPONS PER SORTIE.	出撃ごとの特殊対地兵装の数が増えます。
+prog.up.agm_blast	폭발 반경	BLAST RADIUS	爆発半径
+prog.updesc.agm_blast	폭발 범위가 넓어집니다.	WIDER BLAST FROM EACH HIT.	爆発範囲が広がります。
+prog.up.agm_lock_speed	락온 속도	LOCK SPEED	ロック速度
+prog.updesc.agm_lock_speed	더 빨리 락온합니다.	THE SEEKER LOCKS ON FASTER.	ロックオンが速くなります。
+prog.up.agm_lock_range	락온 거리	LOCK RANGE	ロック距離
+prog.updesc.agm_lock_range	더 먼 표적을 락온합니다.	LOCK TARGETS FROM FARTHER OUT.	より遠くの目標をロックできます。
+prog.up.agm_reload	재장전 속도	RELOAD SPEED	装填速度
+prog.updesc.agm_reload	발사 뒤 재장전이 빨라집니다.	RAILS RELOAD FASTER BETWEEN SHOTS.	発射後の再装填が速くなります。
+prog.up.bomb_damage	피해	DAMAGE	ダメージ
+prog.updesc.bomb_damage	폭탄과 로켓의 탄두가 강해집니다.	BIGGER WARHEADS ON BOMBS AND ROCKETS.	爆弾とロケットの弾頭が強化されます。
+prog.up.bomb_ammo	탑재량	CAPACITY	搭載数
+prog.updesc.bomb_ammo	출격마다 폭탄과 로켓을 더 싣습니다.	MORE BOMBS AND ROCKETS PER SORTIE.	出撃ごとの爆弾とロケットの数が増えます。
+prog.up.bomb_blast	폭발 반경	BLAST RADIUS	爆発半径
+prog.updesc.bomb_blast	폭발 범위가 넓어집니다.	WIDER BLAST FROM EACH HIT.	爆発範囲が広がります。
+prog.up.bomb_reload	재장전 속도	RELOAD SPEED	装填速度
+prog.updesc.bomb_reload	발사 뒤 재장전이 빨라집니다.	RAILS RELOAD FASTER BETWEEN SHOTS.	発射後の再装填が速くなります。
+prog.cat.airframe	기체	AIRFRAME	機体
+prog.cat.missile	미사일	MISSILE	ミサイル
+prog.cat.aam	특수 대공	SP. AAM	特殊対空
+prog.cat.agm	특수 대지	SP. AGM	特殊対地
+prog.cat.bomb	특수 폭탄	SP. BOMB	特殊爆弾
+prog.cat.support	지원	SUPPORT	支援
+shop.tab.equipment	장비	EQUIPMENT	装備
+shop.tabinfo.airframe	내 기체: 장갑, 조종성, 엔진, 연료, 플레어, 기관포	YOUR AIRCRAFT: HULL, HANDLING, ENGINE, FUEL, FLARES AND GUN	自機：装甲、操縦性、エンジン、燃料、フレア、機関砲
+shop.tabinfo.missile	모든 기체가 싣는 일반 미사일	THE STANDARD MISSILES EVERY AIRCRAFT CARRIES	全機が搭載する通常ミサイル
+shop.tabinfo.aam	모든 특수 대공 무장에 적용됩니다	APPLIES TO ALL SPECIAL AIR-TO-AIR WEAPONS	すべての特殊対空兵装に適用されます
+shop.tabinfo.agm	모든 특수 대지 무장에 적용됩니다	APPLIES TO ALL SPECIAL AIR-TO-GROUND WEAPONS	すべての特殊対地兵装に適用されます
+shop.tabinfo.bomb	모든 폭탄과 로켓에 적용됩니다	APPLIES TO ALL BOMBS AND ROCKETS	すべての爆弾とロケットに適用されます
+shop.tabinfo.support	호출권은 쓸 때까지 남습니다. 출격에 가져갈 지원은 왼쪽 지원 줄에서 고르세요	CALLS ARE KEPT UNTIL USED. TAKE ONE ON A SORTIE UNDER SUPPORT (LEFT)	支援要請券は使うまで残ります。出撃に持っていく支援は左の支援欄で選びます
+shop.tabinfo.equipment	미션 1회 동안 장착합니다. 미션이 끝나면 사라집니다	FITTED FOR ONE MISSION. USED UP WHEN THE MISSION ENDS	1回のミッションのあいだ装備します。ミッション終了で消費されます
+prog.eq.armor	장갑판	ARMOR PLATE	装甲板
+prog.eq.countermeasure	플레어 포드	CM POD	フレアポッド
+prog.eq.ammo	탄약 증량	EXTRA AMMO	弾薬増量
+prog.eq.fuel_tank	연료 탱크	FUEL TANK	増槽
+prog.eqfx.armor	내구 +25%	HULL +25%	耐久 +25%
+prog.eqfx.countermeasure	플레어 +50%	FLARES +50%	フレア +50%
+prog.eqfx.ammo	특수무장 탄수 +50%	SP. AMMO +50%	特殊兵装の弾数 +50%
+prog.eqfx.fuel_tank	연료 +50%	FUEL +50%	燃料 +50%
+prog.eqdesc.armor	미션 1회 동안 덧대는 장갑.	BOLT-ON ARMOR FOR ONE MISSION.	1回のミッション用の追加装甲。
+prog.eqdesc.countermeasure	미션 1회 동안 다는 추가 플레어 포드.	AN EXTRA FLARE POD FOR ONE MISSION.	1回のミッション用の追加フレアポッド。
+prog.eqdesc.ammo	미션 1회 동안 특수무장을 더 싣습니다.	EXTRA SPECIAL WEAPON LOAD FOR ONE MISSION.	1回のミッションで特殊兵装を多く搭載します。
+prog.eqdesc.fuel_tank	미션 1회 동안 다는 외부 연료 탱크.	AN EXTERNAL TANK FOR ONE MISSION.	1回のミッション用の増槽。
+prog.call.strike	벙커버스터	BUNKER BUSTER	バンカーバスター
+prog.call.tanker	급유 드론	TANKER DRONE	給油ドローン
+prog.call.guardian	가디언 드론	GUARDIAN DRONE	ガーディアンドローン
+prog.callfx.strike	레이저 유도 폭격 500M	LASER STRIKE 500M	レーザー誘導爆撃 500M
+prog.callfx.tanker	완전 보급	FULL RESUPPLY	完全補給
+prog.callfx.guardian	미사일 방어 90초	MISSILE DEFENSE 90s	ミサイル防御 90秒
+prog.calldesc.strike	폭격기가 지정한 곳에 유도 폭탄을 떨어뜨립니다.	A BOMBER DROPS A GUIDED BOMB ON THE SPOT YOU MARK.	爆撃機が指定地点に誘導爆弾を投下します。
+prog.calldesc.tanker	드론이 날아와 연료, 탄약, 플레어를 채워 줍니다.	A DRONE FLIES TO YOU AND REFILLS FUEL, AMMO AND FLARES.	ドローンが飛来し、燃料・弾薬・フレアを補給します。
+prog.calldesc.guardian	드론이 곁에서 호위하며 나를 노린 미사일을 격추합니다.	A DRONE FLIES ESCORT AND SHOOTS DOWN MISSILES AIMED AT YOU.	ドローンが護衛し、自機を狙うミサイルを撃墜します。
+prog.callnote.strike	부를 때 지정한 곳에 떨어지고 도착까지 시간이 걸립니다. 움직이는 표적은 그 사이 떠날 수 있습니다.	THE BOMB HITS THE SPOT MARKED WHEN YOU CALL IT AND TAKES TIME TO ARRIVE. MOVING TARGETS MAY BE GONE BY THEN.	要請時に指定した地点に着弾し、到着まで時間がかかります。移動目標はその間に離れることがあります。
+prog.callnote.tanker	호스가 연결될 때까지 일정한 속도로 수평 직진하세요. 급선회하거나 너무 느리면 연결이 끊깁니다.	FLY STRAIGHT AND LEVEL AT A STEADY SPEED UNTIL THE HOSE CONNECTS. HARD TURNS OR FLYING TOO SLOW BREAK CONTACT.	ホースが接続されるまで一定速度で水平直進してください。急旋回や低速すぎると接続が切れます。
+prog.callnote.guardian	나만 지키고 편대원은 지키지 않으며, 얼마 뒤 돌아갑니다.	IT ONLY PROTECTS YOU, NOT YOUR WINGMEN, AND LEAVES AFTER A WHILE.	守るのは自機だけで僚機は守らず、しばらくすると帰還します。
+prog.reward.nosortie	보상 0 CR  (출격 안 함)	REWARD 0 CR  (NO SORTIE)	報酬 0 CR  (出撃なし)
+prog.reward.base	보상 +{0} CR  (팀 {1} + 나 {2})	REWARD +{0} CR  (TEAM {1} + YOU {2})	報酬 +{0} CR  (チーム {1} + 自分 {2})
+prog.reward.shotdown	격추당함 {0}	SHOT DOWN {0}	被撃墜 {0}
+common.loadingsave	저장 데이터를 불러오는 중...	LOADING SAVE DATA...	セーブデータを読み込み中...
+common.loading	불러오는 중...	LOADING...	読み込み中...
+common.nocredits	크레딧이 부족합니다	NOT ENOUGH CREDITS	クレジットが足りません
+shop.detail.empty	항목을 고르면 자세한 내용이 나옵니다	SELECT AN ITEM TO SEE DETAILS	項目を選ぶと詳細が表示されます
+shop.detail.level	LV {0}/{1}	LV {0}/{1}	LV {0}/{1}
+shop.detail.nownext	현재 {0}   >   다음 {1}	NOW {0}   >   NEXT {1}	現在 {0}   >   次 {1}
+shop.detail.maxed	최대 단계   {0}	MAX LEVEL   {0}	最大レベル   {0}
+shop.detail.need	{0} CR 부족	NEED {0} MORE CR	あと {0} CR 必要
+shop.detail.equipped	다음 미션에 장착됨	EQUIPPED FOR THE NEXT MISSION	次のミッションで装備
+shop.msg.select	먼저 항목을 고르세요	SELECT AN ITEM FIRST	先に項目を選んでください
+shop.msg.lock.upgrades	모두 준비 완료 - 강화 잠김	ALL READY - UPGRADES LOCKED	全員準備完了 - 強化はロック中
+shop.msg.lock.support	모두 준비 완료 - 지원 잠김	ALL READY - SUPPORT LOCKED	全員準備完了 - 支援はロック中
+shop.msg.lock.equipment	모두 준비 완료 - 장비 잠김	ALL READY - EQUIPMENT LOCKED	全員準備完了 - 装備はロック中
+shop.msg.maxlevel	이미 최대 단계입니다	ALREADY AT MAX LEVEL	すでに最大レベルです
+shop.msg.upgraded	{0} LV{1} - 다음 출격부터 적용	{0} LV{1} - APPLIED ON NEXT SORTIE	{0} LV{1} - 次の出撃から適用
+shop.msg.nocredits	크레딧이 부족합니다 ({0} CR)	NOT ENOUGH CREDITS ({0} CR)	クレジットが足りません ({0} CR)
+shop.msg.callbought	{0} x{1} - 왼쪽 지원 줄에서 고르세요	{0} x{1} - PICK IT UNDER SUPPORT (LEFT)	{0} x{1} - 左の支援欄で選んでください
+shop.msg.callfull	{0} 가득 참 (최대 {1})	{0} FULL (MAX {1})	{0} は上限です (最大 {1})
+shop.msg.equipbought	{0} 장착 - 다음 미션이 끝나면 사라집니다	{0} READY - USED UP WHEN YOUR NEXT MISSION ENDS	{0} 装備完了 - 次のミッション終了で消費されます
+shop.msg.equiploaded	{0} 이미 장착됨	{0} ALREADY LOADED	{0} は装備済みです
+shop.row.equipped	장착됨	EQUIPPED	装備中
+shop.row.max	최대	MAX	最大
+shop.buy.select	항목을 고르세요	SELECT AN ITEM	項目を選択
+shop.buy.full	{0} 가득 참	{0} FULL	{0} 上限
+shop.buy.item	{0} 구매   {1} CR	BUY {0}   {1} CR	{0} を購入   {1} CR
+shop.buy.loaded	{0} 장착됨	{0} LOADED	{0} 装備済み
+shop.buy.maxlevel	{0} 최대 단계	{0} MAX LEVEL	{0} 最大レベル
+shop.buy.upgrade	{0} LV{1} 구매   {2} CR	BUY {0} LV{1}   {2} CR	{0} LV{1} を購入   {2} CR
+shop.lastmission	지난 미션: {0}	LAST MISSION: {0}	前回のミッション：{0}
+shop.hint	강화를 고르고 구매를 누르세요	SELECT AN UPGRADE, THEN PRESS BUY	強化を選んで購入を押してください
+load.title	로드아웃	LOADOUT	ロードアウト
+load.hdr.special	특수무장	SPECIAL WEAPON	特殊兵装
+load.hdr.upgrades	강화	UPGRADES	強化
+load.empty	이 분류에는 아직 무장이 없습니다	NO WEAPONS IN THIS CATEGORY YET	この分類にはまだ兵装がありません
+load.cat.0	공대공	AIR-TO-AIR	空対空
+load.cat.1	공대지	AIR-TO-GROUND	空対地
+load.cat.2	폭탄 / 로켓	BOMBS / ROCKETS	爆弾 / ロケット
+load.cat.3	기타	OTHER	その他
+load.none	없음	NONE	なし
+load.support	지원	SUPPORT	支援
+load.support.zero	x0 - 상점 지원 탭에서 구매	x0 - BUY IN THE SUPPORT TAB	x0 - 支援タブで購入
+load.msg.locked	모두 준비 완료 - 로드아웃 잠김	ALL READY - LOADOUT LOCKED	全員準備完了 - ロードアウトはロック中
+load.locked	잠김: {0}	LOCKED: {0}	ロック中：{0}
+load.special	특수무장: {0}	SPECIAL WEAPON: {0}	特殊兵装：{0}
+load.price	가격 {0} CR	PRICE {0} CR	価格 {0} CR
+load.noequip	장착한 특수무장이 없습니다	NO SPECIAL WEAPON EQUIPPED	特殊兵装が未装備です
+load.buy	구매 {0} CR	BUY {0} CR	購入 {0} CR
+load.owned	보유	OWNED	所持
+wpn.4AAM	다중 목표 공대공 미사일\n최대 네 대를 한 번에 락온하고 한 발씩 쏩니다. 락온 거리가 짧습니다.	MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. SHORT LOCK RANGE.	多目標空対空ミサイル\n最大4機を同時にロックし、1発ずつ発射します。ロック距離は短めです。
+wpn.UGB	무유도 폭탄\n자유 낙하 폭탄입니다. CCIP 조준점으로 겨누세요.	UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER.	無誘導爆弾\n自由落下爆弾です。CCIP照準で狙います。
+wpn.RKT	로켓 발사기\n지상 표적용 무유도 로켓 연사. 탄창이 크고 재장전이 빠릅니다.	ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD.	ロケットランチャー\n地上目標向けの無誘導ロケット連射。弾数が多く装填も速めです。
+wpn.LGB	레이저 유도 폭탄\n지상 표적을 락온하고 투하하면 폭탄이 스스로 날아갑니다. 폭발이 넓습니다.	LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE. THE BOMB STEERS ITSELF ONTO IT WITH A WIDE BLAST.	レーザー誘導爆弾\n地上目標をロックして投下すると自ら誘導します。爆発範囲が広めです。
+wpn.LGR	레이저 유도 로켓\n락온한 로켓이 비행 중 방향을 고치고 일반 로켓보다 강합니다. 재장전이 느립니다.	LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT AND HIT HARDER THAN PLAIN ROCKETS. SLOWER TO RELOAD.	レーザー誘導ロケット\nロックしたロケットが飛行中に修正し、通常ロケットより強力です。装填は遅めです。
+wpn.4AGM	다중 목표 공대지 미사일\n지상 표적 네 개를 락온하고 한 발씩 쏩니다.	MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH.	多目標空対地ミサイル\n地上目標を最大4つロックし、1発ずつ発射します。
+wpn.LAGM	장거리 공대지 미사일\n대공 사거리 밖에서 지상 표적을 치는 무거운 미사일. 락온 범위가 좁고 느립니다.	LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK.	長距離空対地ミサイル\n対空射程の外から地上目標を叩く重ミサイル。ロック範囲が狭く遅めです。
+wpn.LASM	장거리 대함 미사일\n해면을 스치듯 날아 고속으로 함선을 칩니다. 탄두가 무겁고 함선 CIWS가 막지 못합니다.	LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT.	長距離対艦ミサイル\n海面すれすれを高速で飛び艦船を撃ちます。弾頭が重く、艦のCIWSでは防げません。
+wpn.SCM	원거리 확산 미사일\n표적 위에서 열려 넓은 범위에 자탄을 뿌립니다. 탄수가 적고 재장전이 깁니다.	STAND-OFF CLUSTER MISSILE\nOPENS ABOVE THE TARGET AND SCATTERS BOMBLETS OVER A WIDE AREA. FEW ROUNDS, LONG RELOAD.	スタンドオフ・クラスターミサイル\n目標の上空で開き、広範囲に子弾をばらまきます。弾数が少なく装填が長めです。
+wpn.FLAK	근접 신관 로켓\n누르고 있는 동안 무유도 로켓을 쏘고, 적기 근처에서 터집니다.	PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT.	近接信管ロケット\n押している間、敵機の近くで炸裂する無誘導ロケットを発射します。
+wpn.LAAM	장거리 공대공 미사일\n시야 밖의 적기도 락온합니다. 락온 범위가 좁고 느립니다.	LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK.	長距離空対空ミサイル\n視界外の敵機もロックできます。ロック範囲が狭く遅めです。
+wpn.SASM	공중 제압 미사일\n큰 근접 폭발로 주변 적기까지 휘말리게 합니다. 락온 거리가 짧습니다.	AERIAL SUPPRESSION AAM\nLARGE PROXIMITY BLAST THAT ALSO CATCHES NEARBY AIRCRAFT. SHORT LOCK RANGE.	空中制圧ミサイル\n大きな近接爆発で周囲の敵機も巻き込みます。ロック距離は短めです。
+wpn.QAAM	고기동 공대공 미사일\n넓고 빠른 락온과 뛰어난 선회력으로 근접전에 강합니다. 사거리가 짧습니다.	QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE.	高機動空対空ミサイル\n広く速いロックと高い旋回性能で格闘戦に強いミサイル。射程は短めです。
+wpn.ECM	전자전 포드\n잠시 주변을 교란합니다. 적의 락온과 미사일을 끊고 대공포 조준을 흐트러뜨립니다.	ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS.	電子戦ポッド\n一時的に周囲を妨害します。敵のロックとミサイルを外し、対空砲の照準を乱します。
+wpn.HVAA	고속 공대공 미사일\n매우 빨라 피하기 어렵지만 크게 선회합니다.	HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE.	高速空対空ミサイル\n非常に速く振り切りにくいが、旋回は大回りです。
+wpn.CCAA	대응책 무시 공대공 미사일\n플레어를 무시합니다. 빠르고 강하지만 사거리가 짧고 락온이 느리며 크게 선회합니다.	COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. FAST AND HARD-HITTING, BUT SHORT-RANGED, SLOW TO LOCK AND TURNS WIDE.	対抗手段無効空対空ミサイル\nフレアを無視します。速く強力ですが、射程が短くロックが遅く旋回は大回りです。
+wpn.HPAA	고위력 공대공 미사일\n큰 탄두와 넓은 근접 신관.	HIGH-POWER AAM\nOVERSIZED WARHEAD WITH A WIDE PROXIMITY FUSE.	高威力空対空ミサイル\n大型弾頭と広い近接信管。
+wpn.ADAM	지역 제압 공중 탄약\n투하된 뒤 가장 가까운 적기를 쫓습니다. 폭발이 크고 탄수가 적습니다.	AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS.	広域制圧空中弾\n投下後、最も近い敵機を追います。爆発が大きく弾数は少なめです。
+wpn.MMP	마이크로 미사일 포드\n공중·지상 표적을 최대 여덟 개 락온하고 마이크로 미사일 16발을 나눠 쏩니다. 탄두가 가볍고 사거리가 짧습니다.	MICRO-MISSILE POD\nLOCKS UP TO EIGHT AIR OR GROUND TARGETS AND SPLITS 16 MICRO-MISSILES BETWEEN THEM. LIGHT WARHEADS, SHORT REACH.	マイクロミサイルポッド\n空中・地上目標を最大8つロックし、16発のマイクロミサイルを分けて撃ちます。弾頭は軽く射程は短めです。
+wpn.RGP	레일건 포드\n극초음속 탄으로 아주 먼 거리에서도 강하게 칩니다. 좁고 즉각적인 락온으로 겨누며, 발사 사이 충전이 깁니다.	RAIL GUN POD\nHYPERSONIC SLUG THAT HITS HARD AT VERY LONG RANGE. A NARROW INSTANT LOCK AIMS IT. LONG CHARGE BETWEEN SHOTS.	レールガンポッド\n極超音速弾で非常に遠距離でも強力に撃ち抜きます。狭く即時のロックで狙い、発射間の充電が長めです。
+# 브리핑 작전 콘솔 · 출격 명단 · 진행 버튼(flow.*) — ACO_GameFlow. 지형 이름 flow.terrain.<프리셋 번호>, 난이도 flow.level.<페이즈 수 - 1>, 날씨 flow.wx.<WX_*>
+flow.msg.notonroster	명단에 없습니다	YOU ARE NOT ON THE ROSTER	名簿に入っていません
+flow.msg.ffowner	자유 비행 모드는 인스턴스 주인만 바꿀 수 있습니다	ONLY THE INSTANCE OWNER CAN CHANGE FREE FLIGHT MODE	自由飛行モードはインスタンスのオーナーだけが変更できます
+flow.msg.inprogress	미션 진행 중	MISSION IN PROGRESS	ミッション進行中
+flow.msg.cancelreadyfirst	모두 준비 완료 - 먼저 준비를 취소하세요	ALL READY - CANCEL READY FIRST	全員準備完了 - 先に準備を取り消してください
+flow.msg.ffwait	{0}초 뒤에 자유 비행을 바꿀 수 있습니다	FREE FLIGHT CAN BE CHANGED IN {0}s	自由飛行は{0}秒後に変更できます
+flow.msg.minphase	최소 1페이즈	MINIMUM 1 PHASE	最小1フェーズ
+flow.msg.maxphase	최대 5페이즈	MAXIMUM 5 PHASES	最大5フェーズ
+flow.msg.yourslot	내 자리입니다 - 명단에서 빠지려면 나가기를 누르세요	THIS IS YOUR SLOT - PRESS LEAVE TO EXIT THE ROSTER	自分の枠です - 名簿から抜けるには離脱を押してください
+flow.msg.slottaken	이미 찬 자리 - 빈 자리를 고르세요	SLOT TAKEN - PICK AN OPEN SLOT	使用中の枠 - 空き枠を選んでください
+flow.msg.rosterlocked	모두 준비 완료 - 출격 카운트다운 중, 명단 잠김	ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED	全員準備完了 - 出撃カウントダウン中、名簿はロック中
+flow.msg.thatinuse	그 기체는 아직 사용 중입니다	THAT AIRCRAFT IS STILL IN USE	その機体はまだ使用中です
+flow.msg.slotslocked	미션 진행 중 - 자리 잠김	MISSION IN PROGRESS - SLOTS LOCKED	ミッション進行中 - 枠はロック中
+flow.msg.landtochange	자리를 바꾸려면 착륙해서 내리세요	LAND AND EXIT BEFORE CHANGING SLOTS	枠を変えるには着陸して降りてください
+flow.msg.landtoleave	명단에서 빠지려면 착륙해서 내리세요	LAND AND EXIT BEFORE LEAVING THE ROSTER	名簿から抜けるには着陸して降りてください
+flow.msg.fullspectate	명단이 가득 찼습니다 - 관전할 수 있습니다	ROSTER FULL - YOU CAN SPECTATE	名簿が満員です - 観戦できます
+flow.msg.joinfirst	먼저 명단에 참가하세요	JOIN THE ROSTER FIRST	先に名簿に参加してください
+flow.msg.ffnomission	자유 비행 모드 - 미션 없음, 출격을 누르세요	FREE FLIGHT MODE - NO MISSIONS, PRESS LAUNCH	自由飛行モード - ミッションなし、出撃を押してください
+flow.msg.starting	미션 시작 중...	MISSION STARTING...	ミッション開始中...
+flow.msg.uselaunch	미션 진행 중 - 출격을 누르세요	MISSION IN PROGRESS - USE LAUNCH	ミッション進行中 - 出撃を押してください
+flow.msg.waitland	모든 기체가 착륙할 때까지 기다리세요	WAIT UNTIL ALL AIRCRAFT HAVE LANDED	全機が着陸するまでお待ちください
+flow.msg.readylocked	모두 준비 완료 - 출격 카운트다운 중, 준비 잠김	ALL READY - LAUNCH COUNTDOWN, READY LOCKED	全員準備完了 - 出撃カウントダウン中、準備はロック中
+flow.msg.preparingwait	지형과 적 전력을 준비하는 중 - 잠시 기다리세요	PREPARING TERRAIN AND ENEMY FORCES - PLEASE WAIT	地形と敵戦力を準備中 - しばらくお待ちください
+flow.msg.terrainlocked	모두 준비 완료 - 지형 잠김(바꾸려면 준비 취소)	ALL READY - TERRAIN LOCKED (CANCEL READY TO CHANGE)	全員準備完了 - 地形はロック中（変えるには準備を取り消し）
+flow.msg.generatingwait	지형 생성 중 - 잠시 기다리세요	TERRAIN GENERATING - PLEASE WAIT	地形生成中 - しばらくお待ちください
+flow.msg.rerollwait	{0}초 뒤에 새 지형을 만들 수 있습니다	NEW TERRAIN AVAILABLE IN {0}s	{0}秒後に新しい地形を作れます
+flow.msg.notstarted	미션이 시작되지 않았습니다 - 준비를 누르세요	MISSION NOT STARTED - PRESS READY	ミッション未開始 - 準備を押してください
+flow.msg.phaseslocked	모두 준비 완료 - 페이즈 잠김(바꾸려면 준비 취소)	ALL READY - PHASES LOCKED (CANCEL READY TO CHANGE)	全員準備完了 - フェーズはロック中（変えるには準備を取り消し）
+flow.msg.inflight	이미 비행 중입니다	ALREADY IN FLIGHT	すでに飛行中です
+flow.msg.respawning	기체 재배치 중 - 잠시 뒤 다시 시도하세요	AIRCRAFT RESPAWNING - TRY AGAIN SHORTLY	機体を再配置中 - 少し後でもう一度お試しください
+flow.msg.inuse	기체 사용 중	AIRCRAFT IN USE	機体使用中
+flow.msg.nodeck	{0}번 자리의 갑판 위치가 없습니다	NO DECK POINT FOR SLOT {0}	枠{0}の甲板位置がありません
+flow.msg.launchfailed	출격 실패 - 다시 시도하세요	LAUNCH FAILED - TRY AGAIN	出撃失敗 - もう一度お試しください
+flow.btn.join	참가	JOIN	参加
+flow.btn.leave	나가기	LEAVE	離脱
+flow.btn.locked	잠김	LOCKED	ロック中
+flow.btn.rosterfull	명단 가득	ROSTER FULL	名簿満員
+flow.btn.cancelready	준비 취소	CANCEL READY	準備取消
+flow.btn.preparing	준비 중...	PREPARING...	準備中...
+flow.btn.ready	준비	READY	準備
+flow.btn.launching	출격 중...	LAUNCHING...	出撃中...
+flow.btn.launch	출격	LAUNCH	出撃
+flow.btn.spectate	관전	SPECTATE	観戦
+flow.btn.inflight	비행 중	IN FLIGHT	飛行中
+flow.btn.respawning	재배치 중	RESPAWNING	再配置中
+flow.btn.inuse	사용 중	IN USE	使用中
+flow.btn.newterrain	새 지형	NEW TERRAIN	新しい地形
+flow.btn.newterrainwait	새 지형 ({0}초)	NEW TERRAIN ({0}s)	新しい地形 ({0}秒)
+flow.btn.terrainlocked	지형 잠김	TERRAIN LOCKED	地形ロック中
+flow.btn.generating	생성 중...	GENERATING...	生成中...
+flow.btn.starting	시작 중...	STARTING...	開始中...
+flow.btn.ffon	자유 비행: 켜짐	FREE FLIGHT: ON	自由飛行：オン
+flow.btn.ffoff	자유 비행: 꺼짐	FREE FLIGHT: OFF	自由飛行：オフ
+flow.btn.ffwait	{0} ({1}초)	{0} ({1}s)	{0} ({1}秒)
+flow.roster.head	출격 명단	SORTIE ROSTER	出撃名簿
+flow.roster.mission1	미션: 1페이즈	MISSION: 1 PHASE	ミッション：1フェーズ
+flow.roster.mission	미션: {0}페이즈	MISSION: {0} PHASES	ミッション：{0}フェーズ
+flow.roster.terrain	지형: {0}	TERRAIN: {0}	地形：{0}
+flow.roster.weather	날씨: {0}	WEATHER: {0}	天候：{0}
+flow.roster.open	- 빈 자리 -	- OPEN -	- 空き -
+flow.state.airborne	비행 중	AIRBORNE	飛行中
+flow.state.ready	준비 완료	READY	準備完了
+flow.state.standby	대기	STANDBY	待機
+flow.state.ondeck	갑판 대기	ON DECK	甲板待機
+flow.state.arming	무장 중	ARMING	武装中
+flow.ffmode	자유 비행 모드	FREE FLIGHT MODE	自由飛行モード
+flow.foot.ff	적 없음, 미션 없음	NO ENEMIES, NO MISSIONS	敵なし、ミッションなし
+flow.foot.running	미션 진행 중 - 빈 자리에 참가하고 출격을 누르세요	MISSION IN PROGRESS - JOIN AN OPEN SLOT AND PRESS LAUNCH	ミッション進行中 - 空き枠に参加して出撃を押してください
+flow.foot.launchin	모두 준비 완료 - {0}초 뒤 출격	ALL READY - LAUNCH IN {0}s	全員準備完了 - {0}秒後に出撃
+flow.lockedall	명단 · 준비 · 로드아웃 · 강화 잠김	ROSTER, READY, LOADOUT AND UPGRADES LOCKED	名簿・準備・ロードアウト・強化はロック中
+flow.autostart	{0}초 뒤 자동 시작	AUTO START IN {0}s	{0}秒後に自動開始
+flow.notreadyspectate	준비하지 않은 플레이어는 관전자가 됩니다	PLAYERS NOT READY WILL BECOME SPECTATORS	準備していないプレイヤーは観戦者になります
+flow.preparing	지형과 적 전력을 준비하는 중...	PREPARING TERRAIN AND ENEMY FORCES...	地形と敵戦力を準備中...
+flow.foot.idle	참가하고 로드아웃을 고른 뒤(원하면 새 지형) 준비를 누르세요 - 모두 준비되면 10초 뒤 출격	JOIN, PICK YOUR LOADOUT (NEW TERRAIN IF YOU LIKE), THEN PRESS READY - LAUNCH 10s AFTER ALL ARE READY	参加してロードアウトを選び（必要なら新しい地形）、準備を押してください - 全員準備完了の10秒後に出撃
+flow.ban.ff.pilot	적 없음 - 출격을 누르거나 아무 기체에나 타세요	NO ENEMIES - PRESS LAUNCH OR BOARD ANY AIRCRAFT	敵なし - 出撃を押すか、好きな機体に搭乗してください
+flow.ban.ff.guest	적 없음 - 빈 자리를 누르거나 아무 기체에나 타세요	NO ENEMIES - TAP AN OPEN SLOT, OR BOARD ANY AIRCRAFT	敵なし - 空き枠を押すか、好きな機体に搭乗してください
+flow.ban.starting	미션 시작	MISSION STARTING	ミッション開始
+flow.ban.standby	대기 - 모든 조종사를 출격시키는 중	STAND BY - LAUNCHING ALL PILOTS	待機 - 全パイロットを出撃中
+flow.ban.goodhunting	건투를 빈다 - 비행 중	GOOD HUNTING - YOU ARE IN FLIGHT	健闘を祈る - 飛行中
+flow.ban.myrespawn	내 기체를 재배치하는 중...	YOUR AIRCRAFT IS RESPAWNING...	自機を再配置中...
+flow.ban.presslaunch	다음: 출격을 누르세요	NEXT: PRESS LAUNCH TO SORTIE	次：出撃を押してください
+flow.ban.tapjoinlaunch	다음: 빈 자리를 눌러 참가한 뒤 출격	NEXT: TAP AN OPEN SLOT TO JOIN, THEN LAUNCH	次：空き枠を押して参加し、出撃
+flow.ban.fullspectate	명단 가득 - 관전을 누르면 갑판에서 봅니다	ROSTER FULL - PRESS SPECTATE TO WATCH FROM THE DECK	名簿満員 - 観戦を押すと甲板から見られます
+flow.ban.launchin	모두 준비 완료 - 출격까지 {0}	ALL READY - LAUNCH IN {0}	全員準備完了 - 出撃まで {0}
+flow.ban.briefing	브리핑	BRIEFING	ブリーフィング
+flow.ban.readycount	준비 {0} / {1}	{0} / {1} READY	準備 {0} / {1}
+flow.ban.nopilots	아직 조종사 없음	NO PILOTS YET	パイロットなし
+flow.ban.tapsignup	다음: 빈 자리(또는 참가)를 눌러 등록하세요	NEXT: TAP AN OPEN SLOT (OR JOIN) TO SIGN UP	次：空き枠（または参加）を押して登録
+flow.ban.waitslot	명단 가득 - 빈 자리를 기다리세요	ROSTER FULL - WAIT FOR AN OPEN SLOT	名簿満員 - 空き枠をお待ちください
+flow.ban.pickloadout	다음: 로드아웃 패널(오른쪽 벽)에서 무장을 고른 뒤 준비를 누르세요	NEXT: PICK A LOADOUT (RIGHT WALL), THEN PRESS READY	次：ロードアウトパネル（右の壁）で兵装を選び、準備を押してください
+flow.ban.waiting1	준비 완료 - 조종사 1명을 기다리는 중	READY - WAITING FOR 1 MORE PILOT	準備完了 - あと1人を待っています
+flow.ban.waiting	준비 완료 - 조종사 {0}명을 기다리는 중	READY - WAITING FOR {0} MORE PILOTS	準備完了 - あと{0}人を待っています
+flow.ban.autostart	자동 시작까지 {0}	AUTO START IN {0}	自動開始まで {0}
+flow.ban.pressreadynow	지금 준비를 누르세요 - 아니면 관전자가 됩니다	PRESS READY NOW - OR YOU BECOME A SPECTATOR	今すぐ準備を押してください - 押さないと観戦者になります
+flow.ban.notreadyspectate	준비하지 않은 조종사는 관전자가 됩니다	PILOTS NOT READY BECOME SPECTATORS	準備していないパイロットは観戦者になります
+flow.title.operation	작전 - 편대 공용 설정	OPERATION - SHARED BY THE SQUAD	作戦 - 編隊共通設定
+flow.title.phases	페이즈	PHASES	フェーズ
+flow.title.terrain	지형	TERRAIN	地形
+flow.title.roster	명단 - 빈 자리를 눌러 참가	ROSTER - TAP AN OPEN SLOT TO JOIN	名簿 - 空き枠を押して参加
+flow.card.about	약 {0}분 - 뒤 페이즈일수록 점수가 높습니다	ABOUT {0} MIN - LATER PHASES SCORE HIGHER	約{0}分 - 後半のフェーズほど高得点
+flow.card.setby	{0} 님이 정함	SET BY {0}	{0} が設定
+flow.card.tapchange	- / +를 눌러 바꾸세요	TAP - / + TO CHANGE	- / + で変更
+flow.card.terrainby	{0} 님이 만든 새 지형	NEW TERRAIN BY {0}	{0} による新しい地形
+flow.card.seetable	작전 테이블을 보세요	SEE THE OPS TABLE	作戦テーブルを参照
+flow.slot.fallback	{0}번 자리	SLOT {0}	枠{0}
+flow.slot.openlocked	빈 자리 - 잠김	OPEN - LOCKED	空き - ロック中
+flow.slot.openinuse	빈 자리 - 기체 사용 중	OPEN - AIRCRAFT IN USE	空き - 機体使用中
+flow.slot.opentap	+ 빈 자리 - 눌러서 참가	+ OPEN - TAP TO JOIN	+ 空き - タップで参加
+flow.slot.you	{0} (나)	{0} (YOU)	{0}（自分）
+flow.slot.special	특수무장  {0}	SP  {0}	特殊兵装  {0}
+flow.slot.support	지원  {0}	SUPPORT  {0}	支援  {0}
+flow.cd.launchin	모두 준비 완료 - 출격까지	ALL READY - LAUNCH IN	全員準備完了 - 出撃まで
+flow.cd.locked	로드아웃 · 강화 잠김	LOADOUT AND UPGRADES LOCKED	ロードアウト・強化はロック中
+flow.notice.pressready	준비를 누르세요 - 아니면 관전자가 됩니다	PRESS READY OR BECOME A SPECTATOR	準備を押さないと観戦者になります
+flow.terrain.0	큰 섬	BIG ISLAND	大きな島
+flow.terrain.1	군도	ARCHIPELAGO	群島
+flow.terrain.2	쌍둥이 섬	TWIN ISLANDS	双子島
+flow.terrain.3	환초	ATOLL	環礁
+flow.terrain.4	열도	ISLAND CHAIN	列島
+flow.terrain.5	고원	PLATEAU	高原
+flow.terrain.6	산맥	MOUNTAIN RANGE	山脈
+flow.terrain.7	협곡	CANYON	峡谷
+flow.terrain.8	해안선	COASTLINE	海岸線
+flow.terrain.9	화산	VOLCANO	火山
+flow.terrain.10	산호섬	REEF ISLANDS	サンゴ礁の島々
+flow.terrain.11	분지	BASIN	盆地
+flow.level.0	쉬움	EASY	イージー
+flow.level.1	보통	NORMAL	ノーマル
+flow.level.2	어려움	HARD	ハード
+flow.level.3	매우 어려움	VERY HARD	ベリーハード
+flow.level.4	에이스	ACE	エース
+flow.wx.0	맑음	CLEAR	晴れ
+flow.wx.1	흐림	CLOUDY	曇り
+flow.wx.2	안개	FOG	霧
+flow.wx.3	비	RAIN	雨
+flow.wx.4	폭풍	STORM	嵐
+# 2단계 — 작전판 · 하이스코어(log.*), BGM(bgm.*), TAC 네임 · 헐넘버(tac.*), 데칼 스튜디오(decal.*), 관전 패널(spec.*), 크레딧(credits.*)
+log.title	작전 기록	OPERATION LOG	作戦記録
+log.awaiting	미션 대기 중	AWAITING MISSION	ミッション待機中
+log.phase	페이즈 {0}	PHASE {0}	フェーズ {0}
+log.elapsed	경과 {0}	ELAPSED {0}	経過 {0}
+log.score	점수 {0}	SCORE {0}	スコア {0}
+log.kills	전투기 {0}   지상 {1}	FTR {0}   GND {1}	戦闘機 {0}   地上 {1}
+log.wave	웨이브 {0}	WAVE {0}	ウェーブ {0}
+log.complete	미션 성공	MISSION COMPLETE	ミッション成功
+log.failed	미션 실패	MISSION FAILED	ミッション失敗
+log.debrief	디브리핑	DEBRIEFING	デブリーフィング
+log.rank	등급 {0}	RANK {0}	ランク {0}
+log.breakdown	(격추 {0} + 페이즈 {1} + 클리어 {2} + 시간 {3})	(KILLS {0} + PHASE {1} + CLEAR {2} + TIME {3})	（撃墜 {0} + フェーズ {1} + クリア {2} + タイム {3}）
+log.time	시간 {0}	TIME {0}	タイム {0}
+log.col	시간<pos=13%>격자<pos=27%>조종사<pos=62%>표적<pos=90%>점수	TIME<pos=13%>GRID<pos=27%>PILOT<pos=62%>TARGET<pos=90%>PTS	時間<pos=13%>グリッド<pos=27%>パイロット<pos=62%>目標<pos=90%>点
+log.newer	^ 새 기록 {0}개  (최신으로)	^ {0} NEWER  (LATEST)	^ 新しい記録 {0}件  （最新へ）
+log.earlier	v 이전 기록 {0}개	v {0} EARLIER	v 以前の記録 {0}件
+log.notkept	({0}개는 보관 안 됨)	({0} NOT KEPT)	（{0}件は未保存）
+log.nokills	아직 격추 없음	NO KILLS YET	まだ撃墜なし
+log.pilotcol	조종사<pos=58%>격추<pos=78%>점수	PILOT<pos=58%>KILLS<pos=78%>SCORE	パイロット<pos=58%>撃墜<pos=78%>スコア
+log.phasecomplete	페이즈 {0} 완료	PHASE {0} COMPLETE	フェーズ{0} 完了
+log.phasefailed	페이즈 {0} 실패	PHASE {0} FAILED	フェーズ{0} 失敗
+log.ally	아군 유닛	ALLY UNIT	友軍ユニット
+log.unknown	알 수 없음	UNKNOWN	不明
+log.bestcol	조종사<pos=62%>최고 CR	PILOT<pos=62%>BEST CR	パイロット<pos=62%>最高 CR
+log.norecords	아직 기록 없음	NO RECORDS YET	まだ記録なし
+log.myresult	격추<pos=45%>{0}\n크레딧<pos=45%>{1}	KILLS<pos=45%>{0}\nCREDITS<pos=45%>{1}	撃墜<pos=45%>{0}\nクレジット<pos=45%>{1}
+log.scoretitle	점수	SCORE	スコア
+log.mytitle	내 미션	MY MISSION	自分のミッション
+log.hiscore	최고 기록	HIGH SCORE	ハイスコア
+bgm.title	BGM	BGM	BGM
+bgm.hint	이 설정은 나에게만 들립니다	ONLY YOU HEAR THESE SETTINGS	この設定は自分にだけ適用されます
+bgm.playing	재생 중\n{0}	NOW PLAYING\n{0}	再生中\n{0}
+bgm.loading	불러오는 중\n{0}	LOADING\n{0}	読み込み中\n{0}
+bgm.none	음악 없음	NO MUSIC	音楽なし
+bgm.off	BGM 꺼짐	BGM OFF	BGM オフ
+bgm.volume	음량  {0}%	VOLUME  {0}%	音量  {0}%
+bgm.dyn.on	상황별 BGM  켜짐	DYNAMIC BGM  ON	ダイナミックBGM  オン
+bgm.dyn.off	상황별 BGM  꺼짐	DYNAMIC BGM  OFF	ダイナミックBGM  オフ
+tac.title	TAC 네임 (콜사인)	TAC NAME (CALLSIGN)	TACネーム（コールサイン）
+tac.hint	다른 조종사에게 내 기체 위에 보입니다  -  A-Z 0-9 공백 -  (최대 12자)	SHOWN ABOVE YOUR AIRCRAFT TO OTHER PILOTS  -  A-Z 0-9 SPACE -  (MAX 12)	他のパイロットに自機の上に表示されます  -  A-Z 0-9 スペース -  （最大12文字）
+tac.set	설정	SET	設定
+tac.clear	지우기	CLEAR	消去
+tac.hull.title	기체 번호	HULL NUMBER	機体番号
+tac.msg.set	콜사인 설정됨	CALLSIGN SET	コールサインを設定しました
+tac.msg.cleared	콜사인 지움	CALLSIGN CLEARED	コールサインを消去しました
+tac.current	내 콜사인: {0}	YOUR CALLSIGN: {0}	自分のコールサイン：{0}
+tac.none.wingman	(없음 - WINGMAN n)	(NONE - WINGMAN n)	（なし - WINGMAN n）
+tac.shownas	({0}(으)로 표시 - 같은 이름 사용 중)	(SHOWN AS {0} - SAME NAME IN USE)	（{0} と表示 - 同じ名前が使用中）
+tac.hull	내 기체 번호: {0}	YOUR HULL NUMBER: {0}	自機の機体番号：{0}
+tac.none	(없음)	(NONE)	（なし）
+decal.title	데칼 스튜디오	DECAL STUDIO	デカールスタジオ
+decal.hint	이미지 URL(PNG/JPG, 최대 2048)  /  데칼 건을 잡고 샘플 기체를 겨눠 방아쇠	IMAGE URL (PNG/JPG, MAX 2048)  /  GRAB THE DECAL GUN, AIM AT THE SAMPLE AIRCRAFT, PULL TRIGGER	画像URL（PNG/JPG、最大2048）  /  デカールガンを持ち、サンプル機を狙って引き金
+decal.btn.load	불러오기	LOAD	読み込み
+decal.btn.select	데칼 1 / 2	DECAL 1 / 2	デカール 1 / 2
+decal.btn.resetgun	건 되돌리기	RESET GUN	ガンを戻す
+decal.btn.sizedown	크기 -	SIZE -	サイズ -
+decal.btn.sizeup	크기 +	SIZE +	サイズ +
+decal.btn.rotl	회전 <	ROT <	回転 <
+decal.btn.rotr	회전 >	ROT >	回転 >
+decal.btn.flip	뒤집기	FLIP	反転
+decal.btn.mirror	대칭 1 > 2	MIRROR 1 > 2	ミラー 1 > 2
+decal.btn.clear	지우기	CLEAR	消去
+decal.btn.hide	남의 데칼 숨기기	HIDE OTHERS	他人のデカール非表示
+decal.loadedtitle	불러온 이미지	LOADED IMAGE	読み込んだ画像
+decal.noimage	이미지 없음	NO IMAGE	画像なし
+decal.editing	편집 중: 데칼 {0}	EDITING: DECAL {0}	編集中：デカール {0}
+decal.notplaced	(아직 안 붙임)	(NOT PLACED)	（未配置）
+decal.size	크기 {0} m	SIZE {0} m	サイズ {0} m
+decal.sizenone	크기 -	SIZE -	サイズ -
+decal.flipped	뒤집힘	FLIPPED	反転
+decal.others	남의 데칼: {0}	OTHERS' DECALS: {0}	他人のデカール：{0}
+decal.hidden	숨김	HIDDEN	非表示
+decal.shown	보임	SHOWN	表示
+decal.msg.start	데칼 1 또는 2를 고르고 이미지 URL을 붙여 넣은 뒤 불러오기를 누르세요	PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD	デカール1か2を選び、画像URLを貼り付けて読み込みを押してください
+decal.msg.restored	저장된 이미지를 되살렸습니다 - 불러오는 중...	SAVED IMAGES RESTORED - LOADING...	保存した画像を復元しました - 読み込み中...
+decal.msg.nourl	URL이 없습니다	NO URL	URLがありません
+decal.msg.gunreturned	데칼 건을 되돌렸습니다	DECAL GUN RETURNED	デカールガンを戻しました
+decal.msg.cleared	데칼 {0} 지움	DECAL {0} CLEARED	デカール{0}を消去しました
+decal.msg.place1first	먼저 데칼 1을 붙이세요	PLACE DECAL 1 FIRST	先にデカール1を配置してください
+decal.msg.mirrored	데칼 1을 데칼 2로 대칭 복사했습니다	DECAL 1 MIRRORED TO DECAL 2	デカール1をデカール2にミラーしました
+decal.msg.placefirst	먼저 데칼 {0}을(를) 붙이세요(데칼 건을 겨누고 방아쇠)	PLACE DECAL {0} FIRST (AIM THE DECAL GUN, PULL TRIGGER)	先にデカール{0}を配置してください（デカールガンで狙って引き金）
+decal.msg.placed	데칼 {0} 붙임(저장됨)	DECAL {0} PLACED (SAVED)	デカール{0}を配置（保存済み）
+decal.msg.placedunsaved	데칼 {0} 붙임(저장 안 됨 — 데이터 불러오는 중)	DECAL {0} PLACED (NOT SAVED — DATA LOADING)	デカール{0}を配置（未保存 — データ読み込み中）
+decal.msg.loaded	데칼 {0} 이미지 불러옴 - 데칼 건으로 샘플 기체를 겨누세요	DECAL {0} IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT	デカール{0}の画像を読み込みました - デカールガンでサンプル機を狙ってください
+decal.msg.loadingwait	이미지 불러오는 중... (VRChat은 5초에 한 장만 받습니다)	LOADING IMAGE... (VRCHAT ALLOWS ONE IMAGE EVERY 5 SECONDS)	画像を読み込み中...（VRChatは5秒に1枚まで）
+decal.msg.loading	이미지 불러오는 중...	LOADING IMAGE...	画像を読み込み中...
+decal.msg.downloading	이미지 받는 중...	DOWNLOADING IMAGE...	画像をダウンロード中...
+decal.msg.retrying	이미지 다시 받는 중...	RETRYING IMAGE...	画像を再試行中...
+decal.msg.failed	이미지 실패: {0} - 불러오기를 눌러 다시 시도하세요(허용 호스트: IMGUR, GITHUB… 또는 신뢰하지 않는 URL 허용을 켜세요)	IMAGE FAILED: {0} - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)	画像の読み込み失敗：{0} - 読み込みを押して再試行（許可ホスト：IMGUR、GITHUB… または信頼されていないURLを許可）
+decal.timeout	시간 초과	TIMED OUT	タイムアウト
+spec.power	전원	POWER	電源
+spec.target	대상 (자리)	TARGET (SLOT)	対象（枠）
+spec.shot	촬영	SHOT	ショット
+spec.auto	자동  {0}	AUTO  {0}	自動  {0}
+spec.status.off	관전 카메라 꺼짐	SPECTATOR CAMERA OFF	観戦カメラ オフ
+spec.status.nopilots	비행 중인 조종사 없음	NO PILOTS IN THE AIR	飛行中のパイロットなし
+spec.status.waitpilot	조종사를 기다리는 중	WAITING FOR PILOT	パイロット待機中
+spec.status.waitmissile	미사일을 기다리는 중 (추적)	WAITING FOR A MISSILE (CHASE)	ミサイル待機中（チェイス）
+spec.status.live	생중계	LIVE	ライブ
+credits.title	크레딧	CREDITS	クレジット
+spec.shot.0	추적	CHASE	チェイス
+spec.shot.1	플라이바이	FLYBY	フライバイ
+spec.shot.2	망원	TELEPHOTO	望遠
+spec.shot.3	측면	SIDE	サイド
+spec.shot.4	편대기	WINGMAN	僚機
+spec.shot.5	조종석	COCKPIT	コックピット
+spec.shot.6	조종사	PILOT	パイロット
+spec.shot.7	미사일	MISSILE	ミサイル
+spec.shot.8	표적	TARGET	ターゲット

@@ -8,7 +8,7 @@ using VRC.Udon.Common.Interfaces;
 namespace ACO
 {
     /// 디버그 패널(테스트용 — 공개 월드에 올릴 땐 AllowedPlayers에 이름을 넣거나 패널을 끈다).
-    ///  - 미션 가중치: 페이즈 모듈(미션 관리자 Modules)마다 Weight를 ±. 0이면 그 종류가 안 나온다. 보너스 전용 모듈은 보너스 페이즈끼리 비율.
+    ///  - 1페이즈 강제: 페이즈 모듈(미션 관리자 Modules)마다 P1 버튼 — 다음 미션부터 첫 페이즈가 그 모듈이다(가중치 무시, 다시 누르면 해제). 가중치는 에디터 표(ACO → Missions → Phase Weights)에서 정한다.
     ///  - 출현 확률: 전투기 에이스(생성기 AceChance)·베테랑(VeteranChance), 보너스 페이즈(슈퍼에이스 등 — 관리자 BonusPhaseChance).
     ///    페이즈를 고르고 적기를 놓는 건 관리자·생성기 오너라서 값은 네트워크 이벤트로 모든 클라이언트에 넣는다(늦게 들어온 사람은 인스펙터 값 — 디버그용).
     ///  - 날씨: AUTO(씨앗으로) / 맑음 / 구름 / 안개 / 비 / 폭풍 — 날씨 ForcedWeather를 모든 클라이언트에(늦게 들어온 사람은 AUTO — 화면 연출뿐).
@@ -19,7 +19,7 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_DebugPanel : UdonSharpBehaviour
     {
-        public const int ACT_WEIGHT = 0;
+        public const int ACT_FIRST_PHASE = 0;
         public const int ACT_ACE = 1;
         public const int ACT_VETERAN = 2;
         public const int ACT_BONUS = 3;
@@ -71,17 +71,18 @@ namespace ACO
         public int Press(int action, int index, float amount)
         {
             if (!Allowed()) { SetMessage("<color=#FF5544>NOT ALLOWED</color>"); return ACO_UiSound.KIND_DENY; }
-            if (action == ACT_WEIGHT)
+            if (action == ACT_FIRST_PHASE)
             {
                 ACO_PhaseModule m = ModuleAt(index);
                 if (m == null) { return ACO_UiSound.KIND_DENY; }
-                float w = Mathf.Clamp(Mathf.Round((m.Weight + amount) * 10f) / 10f, 0f, 20f);
-                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSetWeight), index, w);
-                SetMessage(m.PhaseName + " WEIGHT " + w.ToString("0.0"));
+                int next = Manager.DebugFirstModule == index ? -1 : index;
+                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSetFirstModule), next);
+                SetMessage(next >= 0 ? "PHASE 1 FORCED: " + m.PhaseName : "PHASE 1: RANDOM");
             }
             else if (action == ACT_ACE || action == ACT_VETERAN)
             {
                 if (!Generator) { return ACO_UiSound.KIND_DENY; }
+                // 표(페이즈별)를 쓰는 동안 지금 값은 AceChance·VeteranChance가 아니지만, 누르면 이 값에서 시작해 고정한다
                 float now = action == ACT_ACE ? Generator.AceChance : Generator.VeteranChance;
                 float v = Mathf.Clamp01(Mathf.Round((now + amount) * 100f) / 100f);
                 SendCustomNetworkEvent(NetworkEventTarget.All, action == ACT_ACE ? nameof(NetSetAce) : nameof(NetSetVeteran), v);
@@ -90,7 +91,7 @@ namespace ACO
             else if (action == ACT_BONUS)
             {
                 if (!Manager) { return ACO_UiSound.KIND_DENY; }
-                float v = Mathf.Clamp01(Mathf.Round((Manager.BonusPhaseChance + amount) * 100f) / 100f);
+                float v = Mathf.Clamp01(Mathf.Round((Manager.GetBonusChance(5) + amount) * 100f) / 100f);
                 SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSetBonus), v);
                 SetMessage("BONUS PHASE CHANCE " + Mathf.RoundToInt(v * 100f) + "%");
             }
@@ -135,31 +136,44 @@ namespace ACO
         }
 
         [NetworkCallable]
-        public void NetSetWeight(int index, float weight)
+        public void NetSetFirstModule(int index)
         {
-            ACO_PhaseModule m = ModuleAt(index);
-            if (m != null) { m.Weight = weight; }
+            if (Manager) { Manager.DebugFirstModule = index; }
             _timer = 0f;
+        }
+
+        /// 패널에서 고정한 값은 %, 아니면 페이즈별 표를 쓴다.
+        private string ChanceText(bool fixedValue, float chance)
+        {
+            return fixedValue ? Mathf.RoundToInt(chance * 100f) + "%" : "BY PHASE";
         }
 
         [NetworkCallable]
         public void NetSetAce(float chance)
         {
-            if (Generator) { Generator.AceChance = chance; }
+            if (Generator)
+            {
+                Generator.AceChance = chance;
+                Generator.DebugFixedChance = true;
+            }
             _timer = 0f;
         }
 
         [NetworkCallable]
         public void NetSetVeteran(float chance)
         {
-            if (Generator) { Generator.VeteranChance = chance; }
+            if (Generator)
+            {
+                Generator.VeteranChance = chance;
+                Generator.DebugFixedChance = true;
+            }
             _timer = 0f;
         }
 
         [NetworkCallable]
         public void NetSetBonus(float chance)
         {
-            if (Manager) { Manager.BonusPhaseChance = chance; }
+            if (Manager) { Manager.DebugBonusChance = chance; }
             _timer = 0f;
         }
 
@@ -215,19 +229,10 @@ namespace ACO
             if (MessageText) { MessageText.text = s; }
         }
 
-        /// 모듈 줄: "이름 [BONUS] [OFF]   W 1.0   25%"(비율 = 같은 무리 — 일반·보너스 — 안에서 켜진 모듈 가중치 합에 대한 몫).
+        /// 모듈 줄: "이름 [BONUS] [OFF]   PHASE 1"(지금 첫 페이즈로 강제한 모듈).
         private void Refresh()
         {
             int n = Manager != null && Manager.Modules != null ? Manager.Modules.Length : 0;
-            float mainTotal = 0f;
-            float bonusTotal = 0f;
-            for (int i = 0; i < n; i++)
-            {
-                ACO_PhaseModule m = Manager.Modules[i];
-                if (m == null || !m.Enabled) { continue; }
-                if (m.BonusOnly) { bonusTotal += Mathf.Max(m.Weight, 0f); }
-                else { mainTotal += Mathf.Max(m.Weight, 0f); }
-            }
             int rows = ModuleRows != null ? ModuleRows.Length : 0;
             for (int r = 0; r < rows; r++)
             {
@@ -235,14 +240,12 @@ namespace ACO
                 if (ModuleRows[r] && ModuleRows[r].activeSelf != used) { ModuleRows[r].SetActive(used); }
                 if (!used || ModuleTexts == null || r >= ModuleTexts.Length || !ModuleTexts[r]) { continue; }
                 ACO_PhaseModule m = Manager.Modules[r];
-                float total = m.BonusOnly ? bonusTotal : mainTotal;
-                int share = m.Enabled && total > 0f ? Mathf.RoundToInt(Mathf.Max(m.Weight, 0f) / total * 100f) : 0;
                 string name = m.PhaseName + (m.BonusOnly ? " <color=#FFD24D>[BONUS]</color>" : "") + (m.Enabled ? "" : " <color=#FF5544>[OFF]</color>");
-                ModuleTexts[r].text = name + "<pos=62%>W " + m.Weight.ToString("0.0") + "<pos=80%>" + share + "%";
+                ModuleTexts[r].text = name + (Manager.DebugFirstModule == r ? "<pos=62%><color=#FFD24D>PHASE 1</color>" : "");
             }
-            if (AceText) { AceText.text = "ACE CHANCE<pos=62%>" + (Generator ? Mathf.RoundToInt(Generator.AceChance * 100f) + "%" : "-"); }
-            if (VeteranText) { VeteranText.text = "VETERAN CHANCE<pos=62%>" + (Generator ? Mathf.RoundToInt(Generator.VeteranChance * 100f) + "%" : "-"); }
-            if (BonusText) { BonusText.text = "BONUS PHASE CHANCE<pos=62%>" + (Manager ? Mathf.RoundToInt(Manager.BonusPhaseChance * 100f) + "%" : "-"); }
+            if (AceText) { AceText.text = "ACE CHANCE<pos=62%>" + ChanceText(Generator != null && Generator.DebugFixedChance, Generator ? Generator.AceChance : 0f); }
+            if (VeteranText) { VeteranText.text = "VETERAN CHANCE<pos=62%>" + ChanceText(Generator != null && Generator.DebugFixedChance, Generator ? Generator.VeteranChance : 0f); }
+            if (BonusText) { BonusText.text = "BONUS PHASE CHANCE<pos=62%>" + ChanceText(Manager != null && Manager.DebugBonusChance >= 0f, Manager ? Manager.DebugBonusChance : 0f); }
             if (WeatherText)
             {
                 string now = Weather ? Weather.GetWeatherName() : "-";

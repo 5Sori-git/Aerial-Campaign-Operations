@@ -37,8 +37,11 @@ namespace ACO
     /// 무장이 어느 계열인지는 무장 모듈 인스펙터의 ACO_DFUNC_Missile.UpgradeFamily(드롭다운). GetFamilyUpgradeId(계열, STAT_*)로 항목 번호를 얻는다.
     /// 특수무장 해금: 무장 ID별(aco_unlock_ + ID). 가격이 0인 무장은 처음부터 해금.
     /// 저장은 항목 번호가 아니라 고정 ID로 한다(강화: aco_up_ + _upgradeKeys) — 항목을 더하거나 순서를 바꿔도 기존 기록이 틀어지지 않는다.
-    /// 소모품(상점 SUPPLY 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
+    /// 소모품(상점 ITEMS 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
     /// 산 소모품은 탑승할 때마다 적용되고(ACO_VehicleUpgrades), 출격한 미션이 끝나 보상을 받을 때 모두 쓴 것으로 사라진다(재출격해도 그 미션 동안은 유지).
+    /// 지원 호출권(6-142, 상점 ITEMS 탭 아래 줄): 벙커버스터 폭격/급유 드론 — 산 만큼 쌓이고(종류마다 CallMaxCount장) 미션이 끝나도 남는다(aco_call_ + _callKeys, 장수 int).
+    /// 격납고에서 이번 출격에 가져갈 지원을 하나 고르고(aco_call_pick: 0 없음 / 1 폭격 / 2 급유) 조종석 SUPPORT 다이얼(ACO_DFUNC_Support)로 부른다.
+    /// 쿨타임은 플레이어마다(CallCooldowns초 — 기체를 바꿔 타도 이어진다, 저장하지 않는다). 작전이 시작되면 모두 지운다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PlayerProgress : UdonSharpBehaviour
     {
@@ -47,7 +50,7 @@ namespace ACO
         public const int UP_MOBILITY = 1;      // 기동성(피치/요/롤)
         public const int UP_ENGINE = 2;        // 추력
         public const int UP_FUEL = 3;          // 연료 효율(소모량 ÷ 배수 — 오래 난다)
-        public const int UP_STABILITY = 4;     // 안정성(양력 — 저속에서도 버틴다)
+        public const int UP_COUNTERMEASURE = 4; // 대응탄 수(플레어 최대 수 — 단계마다 CountermeasurePerLevel발. 예전 안정성 자리, 새 저장 키 "countermeasure")
         public const int UP_GUN = 5;           // 기총 피해(SAV 기총 탄에 덤 피해 — ACO_GunDamageBonus)
 
         // 무장 계열(ACO_UpgradeFamily와 같은 값). 이 밖의 값(None 등)은 강화 없음.
@@ -67,12 +70,13 @@ namespace ACO
         public const int STAT_RELOAD = 7;      // 재장전 속도(슬롯 장전 시간 ÷ 배수, 모든 계열)
 
         // 분류(상점 탭) — 항목 번호는 이 순서로 이어진다
-        public const int CAT_AIRFRAME = 0;     // 0~5
+        public const int CAT_AIRFRAME = 0;     // 0~5(기총 포함 — 예전 OTHER 탭에서 돌아왔다, 6-142)
         public const int CAT_MISSILE = 1;      // 6~12
         public const int CAT_SP_AAM = 2;       // 13~19
         public const int CAT_SP_AGM = 3;       // 20~25
         public const int CAT_SP_BOMB = 4;      // 26~29
-        public const int CATEGORY_COUNT = 5;
+        public const int CAT_SUPPORT = 5;      // 지원 호출권 탭(강화 항목 없음 — 상점이 호출권 줄을 그린다. 예전 OTHER 탭 자리)
+        public const int CATEGORY_COUNT = 6;
         public const int UPGRADE_COUNT = 30;
         public const int MAX_CATEGORY_LENGTH = 7;   // 상점 줄 수(가장 긴 탭)
 
@@ -80,10 +84,16 @@ namespace ACO
         private const string KEY_VERSION = "aco_ver";       // 저장 형식 버전(나중에 형식을 바꿀 때 한 번만 옮기는 데 쓴다)
         private const int DATA_VERSION = 1;
         private const string KEY_CREDITS = "aco_credits";
+        /// 한 미션 최고 격추수(int) — 다른 사람 화면의 킬마크도 읽는다. 절대 바꾸지 않는다.
+        public const string KEY_BEST_KILLS = "aco_best_kills";
+        /// 한 미션 최고 획득 크레딧(int) — 작전판의 순위가 같은 인스턴스 사람들 것을 읽는다. 절대 바꾸지 않는다.
+        public const string KEY_BEST_REWARD = "aco_best_reward";
         private const string KEY_UPGRADE = "aco_up_";        // + 강화 ID → 산 단계(int)
         private const string KEY_UNLOCK = "aco_unlock_";     // + 무장 ID(격납고 SpecialIds) → 해금(bool)
         private const string KEY_SPECIAL = "aco_special_id"; // 마지막으로 고른 무장 ID(string)
         private const string KEY_CONSUMABLE = "aco_cons_";   // + 소모품 ID → 보유(int 1/0)
+        private const string KEY_CALL = "aco_call_";         // + 호출권 ID → 장수(int)
+        private const string KEY_CALL_PICK = "aco_call_pick"; // 격납고에서 고른 지원(int: 0 없음, 1 + CALL_*)
 
         // 소모품(CONS_* 순서). 저장 ID는 절대 바꾸거나 재사용하지 않는다(인스펙터에 두지 않는다).
         public const int CONS_ARMOR = 0;      // 장갑판: 체력 배수
@@ -93,11 +103,19 @@ namespace ACO
         public const int CONSUMABLE_COUNT = 4;
         private string[] _consumableKeys = new string[] { "armor", "countermeasure", "ammo", "fuel_tank" };
 
+        // 지원 호출권(CALL_* 순서). 저장 ID는 절대 바꾸거나 재사용하지 않는다.
+        public const int CALL_NONE = -1;
+        public const int CALL_STRIKE = 0;     // 벙커버스터 폭격(타게팅 포드 레이저로 지역 지정)
+        public const int CALL_TANKER = 1;     // 급유 드론(연결 3초 뒤 연료·체력·무장 가득)
+        public const int CALL_GUARDIAN = 2;   // 가디언 드론(옆에 붙어 나를 노린 미사일 요격 — 6-143)
+        public const int CALL_COUNT = 3;
+        private string[] _callKeys = new string[] { "strike", "tanker", "guardian" };
+
         // 강화 저장 ID(항목 번호 순 — UpgradeNames/Steps/BaseCosts와 같은 자리). 인스펙터에 두지 않는다(실수로 바뀌지 않게).
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 다른 항목에 재사용하지 않는다. 새 항목은 아무 자리에나 넣고 새 ID를 준다.
         // 항목을 빼면 ID도 빼면 된다(저장된 값은 쓰이지 않고 남을 뿐). 효과 수치·가격·표시 이름은 언제든 바꿔도 된다.
         private string[] _upgradeKeys = new string[] {
-            "hull", "mobility", "engine", "fuel", "stability", "gun_damage",
+            "hull", "mobility", "engine", "fuel", "countermeasure", "gun_damage",   // 4: 예전 "stability"(기동성에 합쳤다 — 그 키는 다시 쓰지 않는다)
             "msl_damage", "msl_ammo", "msl_turn", "msl_lock_speed", "msl_lock_range", "msl_seeker", "msl_reload",
             "aam_damage", "aam_ammo", "aam_turn", "aam_lock_speed", "aam_lock_range", "aam_seeker", "aam_reload",
             "agm_damage", "agm_ammo", "agm_blast", "agm_lock_speed", "agm_lock_range", "agm_reload",
@@ -106,6 +124,8 @@ namespace ACO
         [Header("참조")]
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미션 관리자를 넣는다")]
         public ACO_MissionManager Manager;
+        [Tooltip("번역 장치(6-166). Bake가 넣는다. 이름 · 효과 · 보상 요약을 지금 언어로 돌려준다(비면 영어 — 아래 이름 배열)")]
+        public ACO_Localization Loc;
 
         [Header("보상")]
         [Tooltip("팀 점수 중 받는 비율")]
@@ -131,12 +151,12 @@ namespace ACO
         [Tooltip("이 콜라이더들의 영역(바운딩 박스 — 축에 맞춘 상자) 안에서 내리면 격추로 치지 않는다(항모 갑판, 기지 등). "
             + "밖에서 미션 중에 내리면 격추로 센다. 비우면 어디서 내려도 페널티 없음")]
         public Collider[] SafeZones;
+        [Tooltip("함내 구역. Bake가 넣는다. 격실 안도 안전지대다")]
+        public ACO_InteriorZone Interior;
 
-        [Header("강화 (항목 번호 순: 기체 6 / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
-        [Tooltip("상점 탭 이름(CAT_* 순서)")]
-        public string[] CategoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB" };
+        [Header("강화 (항목 번호 순: 기체 6(기총 포함) / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
         public string[] UpgradeNames = new string[] {
-            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "STABILITY", "GUN DAMAGE",
+            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "COUNTERMEASURES", "GUN DAMAGE",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "BLAST RADIUS", "LOCK SPEED", "LOCK RANGE", "RELOAD SPEED",
@@ -144,8 +164,8 @@ namespace ACO
         [Tooltip("단계마다 늘어나는 배수(0.1 = 단계당 +10%, 10단계 ×2). 락온 속도·재장전 속도는 시간이 그만큼 짧아진다(1 + 배수로 나눔). "
             + "SEEKER CONE = 미사일 시커 범위(추적 각도) — 락온 각도가 아니다")]
         public float[] UpgradeSteps = new float[] {
-            // 체력 ×4, 기동 ×1.3, 추력 ×2, 연료 효율 ×2.5, 안정성 ×1.5, 기총 ×2.5
-            0.30f, 0.03f, 0.10f, 0.15f, 0.05f, 0.15f,
+            // 체력 ×4, 기동 ×1.3, 추력 ×2, 연료 효율 ×2.5, 대응탄 수(배수 아님 — CountermeasurePerLevel발씩), 기총 ×2.5
+            0.30f, 0.03f, 0.10f, 0.15f, 0f, 0.15f,
             // 피해 ×2.5, 탄수 ×2, 선회 ×1.5, 락온 속도 ×1.5, 락온 거리 ×2.5, 시커 범위 ×1.5, 재장전 ×2
             0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
             0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
@@ -155,7 +175,7 @@ namespace ACO
             0.15f, 0.10f, 0.15f, 0.10f };
         [Tooltip("1단계 가격. n단계 가격 = 이 값 × LevelCostScale[n-1]. 성능에 민감한 항목(기동·선회·락온 속도·시커 범위)은 1단계부터 비싸다")]
         public int[] UpgradeBaseCosts = new int[] {
-            1500, 2500, 2000, 1000, 2000, 1500,
+            1500, 2500, 2000, 1000, 1500, 1500,
             1500, 1500, 2500, 2000, 1200, 2500, 2000,
             2000, 2000, 3000, 2500, 1500, 3000, 2500,
             2000, 2000, 2000, 2500, 1500, 2500,
@@ -163,7 +183,7 @@ namespace ACO
         [Tooltip("단계별 가격 배수. 길이 = 최대 단계(10). 뒤로 갈수록 가파르게 오른다")]
         public float[] LevelCostScale = new float[] { 1f, 1.4f, 1.9f, 2.6f, 3.5f, 4.6f, 6f, 7.8f, 10f, 13f };
 
-        [Header("소모품 (상점 SUPPLY 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
+        [Header("소모품 장비 (상점 EQUIPMENT 탭 — CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크)")]
         public string[] ConsumableNames = new string[] { "ARMOR PLATE", "CM POD", "EXTRA AMMO", "FUEL TANK" };
         [Tooltip("상점에 보일 효과 한 줄")]
         public string[] ConsumableEffects = new string[] { "HULL +25%", "FLARES +50%", "SP. AMMO +50%", "FUEL +50%" };
@@ -171,8 +191,21 @@ namespace ACO
         public float[] ConsumableFactors = new float[] { 1.25f, 1.5f, 1.5f, 1.5f };
         public int[] ConsumablePrices = new int[] { 1500, 800, 1200, 600 };
 
+        [Header("지원 호출권 (상점 SUPPORT 탭 — CALL_* 순서: 벙커버스터, 급유 드론, 가디언 드론)")]
+        public string[] CallNames = new string[] { "BUNKER BUSTER", "TANKER DRONE", "GUARDIAN DRONE" };
+        [Tooltip("상점에 보일 효과 한 줄")]
+        public string[] CallEffects = new string[] { "LASER STRIKE 500M", "FULL RESUPPLY", "MISSILE DEFENSE 90s" };
+        public int[] CallPrices = new int[] { 10000, 4800, 8000 };
+        [Tooltip("다시 부를 수 있기까지(초). 급유 드론은 돌아가기만 해도(호출권은 그대로), 가디언은 돌아간 뒤부터 쿨타임이 돈다")]
+        public float[] CallCooldowns = new float[] { 120f, 180f, 150f };
+        [Tooltip("종류마다 가질 수 있는 최대 장수")]
+        public int CallMaxCount = 9;
+
         private bool _restored;
         private bool[] _consumables = new bool[CONSUMABLE_COUNT];
+        private int[] _calls = new int[CALL_COUNT];
+        private float[] _callReadyAt = new float[CALL_COUNT];
+        private int _callPick = CALL_NONE;
         private int _credits;
         private int _pendingCredits;   // 불러오기 전에 받은 보상
         private int[] _levels = new int[UPGRADE_COUNT];
@@ -186,7 +219,12 @@ namespace ACO
         private bool _sortied;
         private bool _piloting;
         private int _deaths;
+        /// 자유 비행 모드(게임 진행이 넣는다): 내려도 기체 사양을 되돌리지 않는다.
+        [System.NonSerialized] public bool FreeFlight;
         private int _personalScore;
+        private int _missionKills;
+        private int _bestKills;
+        private int _bestReward;
         private bool _rewarded;
         private float _rewardAt = -1f;
         private float _pollTimer;
@@ -213,6 +251,13 @@ namespace ACO
             }
             int v;
             _credits = PlayerData.TryGetInt(player, KEY_CREDITS, out v) ? v : StartingCredits;
+            int savedKills = PlayerData.TryGetInt(player, KEY_BEST_KILLS, out v) ? v : 0;
+            // 불러오기 전에 끝난 미션의 기록이 더 크면 지금 저장한다
+            if (_bestKills > savedKills) { PlayerData.SetInt(KEY_BEST_KILLS, _bestKills); }
+            else { _bestKills = savedKills; }
+            int savedReward = PlayerData.TryGetInt(player, KEY_BEST_REWARD, out v) ? v : 0;
+            if (_bestReward > savedReward) { PlayerData.SetInt(KEY_BEST_REWARD, _bestReward); }
+            else { _bestReward = savedReward; }
             for (int i = 0; i < UPGRADE_COUNT; i++)
             {
                 string key = UpgradeKey(i);
@@ -222,6 +267,11 @@ namespace ACO
             {
                 _consumables[c] = c < _consumableKeys.Length && PlayerData.TryGetInt(player, KEY_CONSUMABLE + _consumableKeys[c], out v) && v > 0;
             }
+            for (int c = 0; c < CALL_COUNT; c++)
+            {
+                _calls[c] = c < _callKeys.Length && PlayerData.TryGetInt(player, KEY_CALL + _callKeys[c], out v) ? Mathf.Clamp(v, 0, 99) : 0;
+            }
+            _callPick = PlayerData.TryGetInt(player, KEY_CALL_PICK, out v) && v >= 1 && v <= CALL_COUNT ? v - 1 : CALL_NONE;
             string s;
             _savedSpecial = PlayerData.TryGetString(player, KEY_SPECIAL, out s) ? s : "";
             if (!PlayerData.TryGetInt(player, KEY_VERSION, out v)) { PlayerData.SetInt(KEY_VERSION, DATA_VERSION); }
@@ -257,11 +307,55 @@ namespace ACO
             return KEY_UPGRADE + _upgradeKeys[id];
         }
         public int GetLevel(int id) { return id >= 0 && id < UPGRADE_COUNT ? _levels[id] : 0; }
-        public string GetUpgradeName(int id) { return UpgradeNames != null && id >= 0 && id < UpgradeNames.Length ? UpgradeNames[id] : ""; }
+        public string GetUpgradeName(int id)
+        {
+            string en = UpgradeNames != null && id >= 0 && id < UpgradeNames.Length ? UpgradeNames[id] : "";
+            string sid = GetUpgradeSaveId(id);
+            return sid != "" ? T("prog.up." + sid, en) : en;
+        }
+
+        /// 강화 항목의 저장 ID("hull" 등 — 번역 키 끝에도 쓴다). 없으면 "".
+        public string GetUpgradeSaveId(int id) { return _upgradeKeys.Length == UPGRADE_COUNT && id >= 0 && id < _upgradeKeys.Length ? _upgradeKeys[id] : ""; }
+        public string GetConsumableSaveId(int c) { return c >= 0 && c < _consumableKeys.Length ? _consumableKeys[c] : ""; }
+        public string GetCallSaveId(int c) { return c >= 0 && c < _callKeys.Length ? _callKeys[c] : ""; }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english). 6-166
+        public string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+
+        /// 번역 장치가 언어를 바꾸면 부른다 — 이 스크립트는 그릴 글자가 없다(상점 · 로드아웃이 다시 그린다).
+        public void LocalizationChanged() { }
         public float GetUpgradeStep(int id) { return UpgradeSteps != null && id >= 0 && id < UpgradeSteps.Length ? UpgradeSteps[id] : 0f; }
 
         /// 효과 배수 = 1 + 단계당 배수 × 단계. 항목 번호가 -1이면 1.
         public float GetUpgradeFactor(int id) { return id < 0 ? 1f : 1f + GetUpgradeStep(id) * GetLevel(id); }
+
+        [Tooltip("대응탄 수 강화: 단계마다 늘어나는 플레어 수(발) — 배수가 아니라 더한다")]
+        public int CountermeasurePerLevel = 1;
+
+        /// 대응탄 수 강화로 더하는 플레어 수(발).
+        public int GetCountermeasureBonus() { return GetLevel(UP_COUNTERMEASURE) * Mathf.Max(CountermeasurePerLevel, 0); }
+
+        /// level 단계일 때의 효과 글자(상세 칸의 NOW/NEXT): 대응탄 수는 "+3"(발), 나머지는 "+20%".
+        public string GetUpgradeEffectAt(int id, int level)
+        {
+            if (id == UP_COUNTERMEASURE) { return "+" + (level * Mathf.Max(CountermeasurePerLevel, 0)); }
+            return "+" + Mathf.RoundToInt(GetUpgradeStep(id) * level * 100f) + "%";
+        }
+
+        /// 호출권의 쿨타임(초, 다시 부를 수 있기까지 — 남은 시간이 아니라 정해진 값).
+        public float GetCallCooldownTotal(int c) { return CallCooldowns != null && c >= 0 && c < CallCooldowns.Length ? CallCooldowns[c] : 0f; }
+
+        /// 상점 효과 글자: 대응탄 수는 "+3"(발), 나머지는 "+20%".
+        public string GetUpgradeEffectText(int id)
+        {
+            if (id == UP_COUNTERMEASURE) { return "+" + GetCountermeasureBonus(); }
+            return "+" + Mathf.RoundToInt(GetUpgradeStep(id) * GetLevel(id) * 100f) + "%";
+        }
 
         /// 계열(FAMILY_*)의 능력치(STAT_*) 강화 항목 번호. 그 계열에 없는 능력치면 -1(대공 계열엔 폭발 반경, 대지 계열엔 선회·락온이 없다).
         /// 탭 안 순서: 대공 계열 = 피해·탄수·선회·락온 속도·거리·범위·재장전, 특수 대지 = 피해·탄수·폭발 반경·락온 속도·거리·재장전, 특수 폭탄 = 피해·탄수·폭발 반경·재장전.
@@ -297,25 +391,25 @@ namespace ACO
         /// 계열의 능력치 배수(그 계열에 없으면 1).
         public float GetFamilyFactor(int family, int stat) { return GetUpgradeFactor(GetFamilyUpgradeId(family, stat)); }
 
+        // 상점 탭(CAT_* 순서): 이름, 첫 항목 번호, 항목 수
+        private string[] _categoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB", "SUPPORT" };
+        private int[] _categoryStarts = new int[] { 0, 6, 13, 20, 26, UPGRADE_COUNT };
+        // 기체 탭 0~5: 체력·기동성·추력·연료 효율·대응탄 수(4 — 예전 안정성 자리)·기총(5 — OTHER 탭에서 돌아왔다). SUPPORT 탭은 강화 항목이 없다(호출권)
+        private int[] _categoryLengths = new int[] { 6, 7, 7, 6, 4, 0 };
+
         /// 분류(CAT_*)의 첫 항목 번호와 항목 수(상점 탭).
-        public int GetCategoryStart(int cat)
-        {
-            int start = 0;
-            for (int c = 0; c < cat && c < CATEGORY_COUNT; c++) { start += GetCategoryLength(c); }
-            return start;
-        }
-        public int GetCategoryLength(int cat)
-        {
-            if (cat == CAT_MISSILE || cat == CAT_SP_AAM) { return 7; }
-            if (cat == CAT_AIRFRAME || cat == CAT_SP_AGM) { return 6; }
-            return cat >= 0 && cat < CATEGORY_COUNT ? 4 : 0;
-        }
+        public int GetCategoryStart(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryStarts[cat] : 0; }
+        public int GetCategoryLength(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryLengths[cat] : 0; }
         public int GetUpgradeCategory(int id)
         {
-            for (int cat = CATEGORY_COUNT - 1; cat > 0; cat--) { if (id >= GetCategoryStart(cat)) { return cat; } }
+            for (int cat = 0; cat < CATEGORY_COUNT; cat++)
+            {
+                if (id >= _categoryStarts[cat] && id < _categoryStarts[cat] + _categoryLengths[cat]) { return cat; }
+            }
             return CAT_AIRFRAME;
         }
-        public string GetCategoryName(int cat) { return CategoryNames != null && cat >= 0 && cat < CategoryNames.Length ? CategoryNames[cat] : ""; }
+        private string[] _categoryLocKeys = new string[] { "prog.cat.airframe", "prog.cat.missile", "prog.cat.aam", "prog.cat.agm", "prog.cat.bomb", "prog.cat.support" };
+        public string GetCategoryName(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? T(_categoryLocKeys[cat], _categoryNames[cat]) : ""; }
 
         /// 다음 단계 가격. 이미 최대 단계면 -1.
         public int GetUpgradeCost(int id)
@@ -362,8 +456,8 @@ namespace ACO
         // ───────────── 소모품 ─────────────
 
         public bool HasConsumable(int c) { return _restored && c >= 0 && c < CONSUMABLE_COUNT && _consumables[c]; }
-        public string GetConsumableName(int c) { return ConsumableNames != null && c >= 0 && c < ConsumableNames.Length ? ConsumableNames[c] : ""; }
-        public string GetConsumableEffect(int c) { return ConsumableEffects != null && c >= 0 && c < ConsumableEffects.Length ? ConsumableEffects[c] : ""; }
+        public string GetConsumableName(int c) { return ConsumableNames != null && c >= 0 && c < ConsumableNames.Length ? T("prog.eq." + GetConsumableSaveId(c), ConsumableNames[c]) : ""; }
+        public string GetConsumableEffect(int c) { return ConsumableEffects != null && c >= 0 && c < ConsumableEffects.Length ? T("prog.eqfx." + GetConsumableSaveId(c), ConsumableEffects[c]) : ""; }
         public int GetConsumablePrice(int c) { return ConsumablePrices != null && c >= 0 && c < ConsumablePrices.Length ? ConsumablePrices[c] : 0; }
 
         /// 지금 적용할 배수: 사 둔 소모품이면 효과 배수, 아니면 1.
@@ -401,6 +495,78 @@ namespace ACO
                 if (_restored) { PlayerData.SetInt(KEY_CONSUMABLE + _consumableKeys[c], 0); }
             }
             if (any) { _version++; }
+        }
+
+        // ───────────── 지원 호출권 ─────────────
+
+        public int GetCallCount(int c) { return _restored && c >= 0 && c < CALL_COUNT ? _calls[c] : 0; }
+        public string GetCallName(int c) { return CallNames != null && c >= 0 && c < CallNames.Length ? T("prog.call." + GetCallSaveId(c), CallNames[c]) : ""; }
+        public string GetCallEffect(int c) { return CallEffects != null && c >= 0 && c < CallEffects.Length ? T("prog.callfx." + GetCallSaveId(c), CallEffects[c]) : ""; }
+        public int GetCallPrice(int c) { return CallPrices != null && c >= 0 && c < CallPrices.Length ? CallPrices[c] : 0; }
+        public int GetCallMax() { return Mathf.Max(CallMaxCount, 1); }
+
+        /// 호출권을 한 장 산다. 1 = 샀다, 0 = 크레딧 부족, -1 = 최대 장수, -2 = 불러오는 중.
+        public int BuyCall(int c)
+        {
+            if (!_restored) { return -2; }
+            if (c < 0 || c >= CALL_COUNT) { return 0; }
+            if (_calls[c] >= GetCallMax()) { return -1; }
+            int price = GetCallPrice(c);
+            if (_credits < price) { return 0; }
+            _credits -= price;
+            _calls[c]++;
+            PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]);
+            SaveCredits();
+            _version++;
+            return 1;
+        }
+
+        /// 호출권 한 장을 쓴다(폭격 = 투하할 때, 급유 = 보급이 끝났을 때). 없으면 false.
+        public bool UseCall(int c)
+        {
+            if (!_restored || c < 0 || c >= CALL_COUNT || _calls[c] <= 0) { return false; }
+            _calls[c]--;
+            PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]);
+            _version++;
+            return true;
+        }
+
+        /// 격납고에서 고른 지원(CALL_* 또는 CALL_NONE).
+        public int GetCallPick() { return _restored ? _callPick : CALL_NONE; }
+
+        public void SetCallPick(int c)
+        {
+            if (!_restored) { return; }
+            if (c < 0 || c >= CALL_COUNT) { c = CALL_NONE; }
+            if (c == _callPick) { return; }
+            _callPick = c;
+            PlayerData.SetInt(KEY_CALL_PICK, c + 1);
+            _version++;
+        }
+
+        /// 남은 쿨타임(초, 0 = 부를 수 있음).
+        public float GetCallCooldown(int c) { return c >= 0 && c < CALL_COUNT ? Mathf.Max(_callReadyAt[c] - Time.time, 0f) : 0f; }
+
+        public void StartCallCooldown(int c)
+        {
+            if (c < 0 || c >= CALL_COUNT) { return; }
+            float cd = CallCooldowns != null && c < CallCooldowns.Length ? CallCooldowns[c] : 120f;
+            _callReadyAt[c] = Time.time + Mathf.Max(cd, 0f);
+            _version++;
+        }
+
+        /// 정한 시간(초)만큼 쿨타임(급유 실패 등 — 정해진 쿨타임 대신 짧게).
+        public void StartCallCooldownSeconds(int c, float seconds)
+        {
+            if (c < 0 || c >= CALL_COUNT) { return; }
+            _callReadyAt[c] = Time.time + Mathf.Max(seconds, 0f);
+            _version++;
+        }
+
+        /// 모든 지원 호출 쿨타임을 지운다(작전 시작).
+        private void ClearCallCooldowns()
+        {
+            for (int c = 0; c < CALL_COUNT; c++) { _callReadyAt[c] = 0f; }
         }
 
         public bool BuySpecial(string id, int price)
@@ -453,6 +619,7 @@ namespace ACO
         public bool IsInSafeZone(Vector3 position)
         {
             if (SafeZones == null || SafeZones.Length == 0) { return true; }
+            if (Interior != null && Interior.Contains(position)) { return true; }
             for (int i = 0; i < SafeZones.Length; i++)
             {
                 if (SafeZones[i] && SafeZones[i].bounds.Contains(position)) { return true; }
@@ -467,8 +634,33 @@ namespace ACO
             _personalScore += points;
         }
 
+        /// 내가 쓰러뜨린 표적 하나(ACO_MissionLog). 기록은 미션이 끝날 때 GrantReward에서 집계한다.
+        public void AddMissionKill()
+        {
+            if (!_inMission || _rewarded) { return; }
+            _missionKills++;
+        }
+
+        // 성공·실패 모두 끝난 미션이면 센다. 도중에 나가면 기록되지 않는다
+        private void SaveBestKills()
+        {
+            if (_missionKills <= _bestKills) { return; }
+            _bestKills = _missionKills;
+            if (_restored) { PlayerData.SetInt(KEY_BEST_KILLS, _bestKills); }
+        }
+
         public int GetMissionDeaths() { return _inMission ? _deaths : 0; }
         public int GetMissionPersonalScore() { return _inMission ? _personalScore : 0; }
+        public int GetMissionKills() { return _missionKills; }
+
+        /// 지금 미션이 성공으로 끝나면 받을 크레딧(표시용). 실제 보상은 GrantReward가 정한다.
+        public int GetMissionRewardPreview()
+        {
+            if (!_inMission || Manager == null || (RequireSortie && !_sortied)) { return 0; }
+            int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
+            int personal = Mathf.RoundToInt(Mathf.Max(_personalScore, 0) * PersonalShare);
+            return Mathf.RoundToInt((team + personal) * RewardFraction(true, _deaths));
+        }
 
         void Update()
         {
@@ -505,8 +697,10 @@ namespace ACO
                     _sortied = _piloting;   // 미션 시작 때 이미 타고 있었으면 출격으로 친다
                     _deaths = 0;
                     _personalScore = 0;
+                    _missionKills = 0;
                     _rewarded = false;
                     _rewardAt = -1f;
+                    ClearCallCooldowns();   // 지원 호출 쿨타임은 작전마다 처음부터
                     _version++;
                 }
                 return;
@@ -523,6 +717,7 @@ namespace ACO
         {
             if (_rewarded || Manager == null) { return; }
             _rewarded = true;
+            SaveBestKills();
 
             bool success = Manager.GetState() == ACO_MissionManager.STATE_COMPLETE;
             int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
@@ -540,6 +735,11 @@ namespace ACO
             _lastDeaths = _deaths;
             _lastSortied = _sortied || !RequireSortie;
 
+            if (reward > _bestReward)
+            {
+                _bestReward = reward;
+                if (_restored) { PlayerData.SetInt(KEY_BEST_REWARD, _bestReward); }
+            }
             if (reward > 0)
             {
                 if (_restored) { _credits += reward; SaveCredits(); }
@@ -569,11 +769,12 @@ namespace ACO
         public string GetLastRewardSummary()
         {
             if (!_hasLastReward) { return ""; }
-            if (!_lastSortied) { return "REWARD 0 CR  (NO SORTIE)"; }
-            string s = "REWARD +" + _lastReward.ToString("N0") + " CR  (TEAM " + _lastTeamPart.ToString("N0")
-                + " + YOU " + _lastPersonalPart.ToString("N0") + ")";
+            if (!_lastSortied) { return T("prog.reward.nosortie", "REWARD 0 CR  (NO SORTIE)"); }
+            // 문장 틀에 값을 끼운다(6-166 — 언어마다 어순이 다르다). 배수 " x55%"는 어느 언어나 같다
+            string s = T("prog.reward.base", "REWARD +{0} CR  (TEAM {1} + YOU {2})").Replace("{0}", _lastReward.ToString("N0"))
+                .Replace("{1}", _lastTeamPart.ToString("N0")).Replace("{2}", _lastPersonalPart.ToString("N0"));
             if (_lastFraction < 0.999f) { s += " x" + Mathf.RoundToInt(_lastFraction * 100f) + "%"; }
-            if (_lastDeaths > 0) { s += "  SHOT DOWN " + _lastDeaths; }
+            if (_lastDeaths > 0) { s += "  " + T("prog.reward.shotdown", "SHOT DOWN {0}").Replace("{0}", _lastDeaths.ToString()); }
             return s;
         }
     }

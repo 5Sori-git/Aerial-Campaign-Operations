@@ -44,10 +44,30 @@ namespace ACO
         [Tooltip("전탄 소모 후 재장전 시간(초). 0이면 재장전 없음")]
         public float ReloadTime = 20f;
         public AudioSource LaunchSound;
+        [Tooltip("한 번 쏠 때 연달아 쏘는 발 수(1 = 한 발). 발사 이벤트 한 번에 모든 화면이 BurstGap 간격으로 같은 연사를 재생한다(탄창에서 발마다 뺀다). 발 수는 오너가 정해 이벤트에 싣는다(6-159)")]
+        public int BurstCount = 1;
+        public float BurstGap = 0.3f;
+        [Tooltip("곧게 나는 레일건 탄(LUNA): 쏠 때마다 스침 소리 판정(ACO_BulletFlyby.ReportRail — Bake가 Flyby를 넣는다, 6-156)")]
+        public bool RailFlyby;
+        public ACO_BulletFlyby Flyby;
+        public float RailFlybySpeed = 4000f;
+        public float RailFlybyRange = 6000f;
+        public float RailFlybyHitRadius = 10f;
+
+        [Header("덮개 (VLS)")]
+        [Tooltip("덮개의 경첩. 비우면 없는 것으로 친다. 락온을 시작하거나 발사하면 모두 열리고, 조용해지면 닫힌다")]
+        public Transform[] Hatches;
+        public float HatchAngle = 110f;
+        [Tooltip("마지막 경고·발사 뒤 이 시간(초)이 지나면 닫는다")]
+        public float HatchHoldTime = 4f;
+        public float HatchOpenTime = 0.5f;
+        public float HatchCloseTime = 1.2f;
 
         [Header("락온")]
         [Tooltip("조준을 이만큼 유지해야 발사할 수 있다. 0이면 즉시 발사")]
         public float LockTime = 2f;
+        [Tooltip("빌드 시 ACO_SceneBaker가 적 런처에 넣는다 — 플레이어 ECM 구역 안의 표적은 잠그지 못하고, 쏜 미사일도 교란된다. 아군 런처는 비운다")]
+        public ACO_RadarContacts EcmHub;
         [Tooltip("조준이 끊기면 락온 진행도가 초당 이 속도로 감소한다")]
         public float LockDecayRate = 1.5f;
         [Tooltip("락온 중 타겟 플레이어 조종석에 경고음을 보낸다")]
@@ -71,12 +91,25 @@ namespace ACO
         private bool _initialized;
 
         private float _lockProgress;
+        private Transform _aimMarker;
+        private float _ecmCheck;
+        private bool _ecmJammed;
         private int _aimTargetIdx = -1;
         private float _warningTimer;
+
+        private Quaternion[] _hatchRest;
+        private float _hatchOpen;
+        private float _hatchCloseAt;
+        private bool _hatchMoving;
 
         void Start()
         {
             Initialize();
+        }
+
+        void OnEnable()
+        {
+            _hatchMoving = false;   // 꺼져 있던 동안 지연 이벤트가 끊겼을 수 있다
         }
 
         private void Initialize()
@@ -88,6 +121,12 @@ namespace ACO
             InEditor = Networking.LocalPlayer == null;
             IsOwner = Networking.IsOwner(gameObject);
             _ammo = NumMissiles;
+
+            if (Hatches != null)
+            {
+                _hatchRest = new Quaternion[Hatches.Length];
+                for (int i = 0; i < Hatches.Length; i++) { if (Hatches[i]) { _hatchRest[i] = Hatches[i].localRotation; } }
+            }
 
             // 미사일 풀은 "시작 시점 이후에 추가된 자식"이다. 미사일은 MoveBackToPool에서 스스로 여기로 돌아온다.
             _numChildrenStart = transform.childCount;
@@ -139,9 +178,22 @@ namespace ACO
                 GameObject[] list = EntityControl ? EntityControl.AAMTargets : null;
                 GameObject marker = list != null && targetIndex < list.Length ? list[targetIndex] : null;
                 _aimSmoke = marker ? marker.GetComponentInParent<ACO_FlareDispenser>() : null;
+                _aimMarker = marker ? marker.transform : null;
+                _ecmCheck = 0f;
             }
             // 연막 속 표적은 락온할 수 없다(쌓인 락온도 잃는다)
             if (_aimSmoke != null && _aimSmoke.IsObscured()) { _lockProgress = 0f; return; }
+            // ECM 구역 안의 표적도 같다. 0.25초마다만 묻는다
+            if (EcmHub != null && _aimMarker != null)
+            {
+                _ecmCheck -= dt;
+                if (_ecmCheck <= 0f)
+                {
+                    _ecmCheck = 0.25f;
+                    _ecmJammed = EcmHub.IsJammed(_aimMarker.position);
+                }
+                if (_ecmJammed) { _lockProgress = 0f; return; }
+            }
 
             _lockProgress += dt;
 
@@ -185,6 +237,7 @@ namespace ACO
         [NetworkCallable]
         public void LockWarningEvent(ushort targetIndex)
         {
+            OpenHatches();
             if (!EntityControl) { return; }
             GameObject[] targets = EntityControl.AAMTargets;
             if (targets == null || targetIndex >= targets.Length) { return; }
@@ -201,18 +254,57 @@ namespace ACO
         }
 
         /// 오너가 호출한다. 모든 클라이언트가 같은 발사를 로컬에서 재현하도록 1회 브로드캐스트한다.
+        /// 연사 발 수는 오너가 정해 싣는다(6-159) — 탄창 재장전은 오너만 하므로(CanFire) 다른 화면의 탄창 숫자는 믿을 수 없다.
         public void FireAt(int targetIndex)
         {
             if (!CanFire()) { return; }
             if (targetIndex < 0) { return; }
-            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(LaunchEvent), (ushort)targetIndex);
+            int shots = Mathf.Clamp(Mathf.Min(Mathf.Max(BurstCount, 1), _ammo), 1, 255);
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(LaunchEvent), (ushort)targetIndex, (byte)shots);
         }
 
+        private int _burstLeft;      // 이번 연사에 남은 발
+        private int _burstNext;      // 다음에 쏠 연사 번호(0 = 연사 아님) — 조준하는 쪽이 읽는다(뒤 발일수록 더 앞을 겨눈다)
+        private ushort _burstTarget;
+
+        /// 다음에 쏠 발의 연사 번호(1 = 둘째 발, 2 = 셋째 발…). 연사 중이 아니면 0.
+        public int GetPendingBurstIndex() { return _burstNext; }
+
+        /// shots = 이번 연사의 발 수(오너가 정한다). 받는 화면은 자기 탄창과 관계없이 그만큼 쏜다(탄창은 0 밑으로 내려가지 않게만 뺀다).
         [NetworkCallable]
-        public void LaunchEvent(ushort targetIndex)
+        public void LaunchEvent(ushort targetIndex, byte shots)
+        {
+            Launch(targetIndex, true);
+            if (shots > 1)
+            {
+                _burstLeft = shots - 1;
+                _burstNext = 1;
+                _burstTarget = targetIndex;
+                SendCustomEventDelayedSeconds(nameof(_BurstShot), Mathf.Max(BurstGap, 0.02f));
+            }
+        }
+
+        /// 연사의 다음 발(모든 화면, 로컬 예약). 쏜 쪽이 격추됐거나 꺼지면 남은 발을 거둔다(탄창 숫자는 보지 않는다 — 발 수는 오너가 정했다).
+        public void _BurstShot()
+        {
+            if (_burstLeft <= 0) { _burstNext = 0; return; }
+            if (EntityControl == null || EntityControl.dead || !gameObject.activeInHierarchy) { _burstLeft = 0; _burstNext = 0; return; }
+            _burstLeft--;
+            Launch(_burstTarget, false);
+            if (_burstLeft > 0)
+            {
+                _burstNext++;
+                SendCustomEventDelayedSeconds(nameof(_BurstShot), Mathf.Max(BurstGap, 0.02f));
+            }
+            else { _burstLeft = 0; _burstNext = 0; }
+        }
+
+        /// 한 발. first = 연사의 첫 발(다음 발사 간격을 이때 센다).
+        private void Launch(ushort targetIndex, bool first)
         {
             if (!_initialized) { Initialize(); }
             if (!AAM) { return; }
+            OpenHatches();
 
             // 각 클라이언트가 스스로 판정하므로 오너에서만 true가 된다.
             IsOwner = Networking.IsOwner(gameObject);
@@ -223,7 +315,7 @@ namespace ACO
             AAMTarget = targetIndex;
 
             if (_ammo > 0) { _ammo--; }
-            _nextFireTime = Time.time + FireInterval;
+            if (first) { _nextFireTime = Time.time + FireInterval; }
             if (_ammo <= 0) { _reloadDoneTime = Time.time + ReloadTime; }
             _lockProgress = 0f;
 
@@ -235,6 +327,7 @@ namespace ACO
             else { missile.transform.SetParent(null); }
 
             missile.transform.SetPositionAndRotation(launchPoint.position, launchPoint.rotation);
+            if (RailFlyby && Flyby != null) { Flyby.ReportRail(launchPoint.position, launchPoint.forward, RailFlybyRange, RailFlybySpeed, RailFlybyHitRadius); }
 
             Rigidbody rb = missile.GetComponent<Rigidbody>();
             if (rb)
@@ -263,6 +356,7 @@ namespace ACO
                 acoMissile.ShooterJudgesHit = false; // NPC 미사일은 피격자가 판정한다
                 acoMissile.IsShooter = false;
                 acoMissile.InterceptSites = InterceptSites;
+                acoMissile.EcmHub = EcmHub;
                 // 플레이어 무장이 넣는 특수 동작은 NPC 미사일에선 늘 끈다(풀은 이 런처 것)
                 acoMissile.SeaSkim = false;
             }
@@ -274,6 +368,32 @@ namespace ACO
             UdonSharpBehaviour missileBehaviour = missile.GetComponent<UdonSharpBehaviour>();
             if (missileBehaviour) { missileBehaviour.SendCustomEvent("EnableWeapon"); }
             if (Radar != null && acoMissile != null) { Radar.AddMissile(acoMissile); }
+        }
+
+        /// 경고·발사 이벤트로 모든 클라이언트에서 불린다. 움직이는 동안만 프레임을 쓴다.
+        private void OpenHatches()
+        {
+            if (Hatches == null || Hatches.Length == 0) { return; }
+            if (!_initialized) { Initialize(); }
+            _hatchCloseAt = Time.time + HatchHoldTime;
+            if (_hatchMoving) { return; }
+            _hatchMoving = true;
+            SendCustomEventDelayedFrames(nameof(HatchTick), 1);
+        }
+
+        public void HatchTick()
+        {
+            if (!_hatchMoving) { return; }
+            bool open = Time.time < _hatchCloseAt;
+            float rate = open ? 1f / Mathf.Max(HatchOpenTime, 0.01f) : 1f / Mathf.Max(HatchCloseTime, 0.01f);
+            _hatchOpen = Mathf.MoveTowards(_hatchOpen, open ? 1f : 0f, rate * Time.deltaTime);
+            Quaternion turn = Quaternion.Euler(0f, 0f, -HatchAngle * _hatchOpen);
+            for (int i = 0; i < Hatches.Length; i++)
+            {
+                if (Hatches[i]) { Hatches[i].localRotation = _hatchRest[i] * turn; }
+            }
+            if (!open && _hatchOpen <= 0f) { _hatchMoving = false; return; }
+            SendCustomEventDelayedFrames(nameof(HatchTick), 1);
         }
 
         private Transform GetLaunchPoint()

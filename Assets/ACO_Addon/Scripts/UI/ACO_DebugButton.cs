@@ -10,11 +10,11 @@ namespace ACO
     {
         [Tooltip("같은 프리팹의 디버그 패널. 비우면 부모에서 찾는다")]
         public ACO_DebugPanel Panel;
-        [Tooltip("ACO_DebugPanel.ACT_*: 0 미션 가중치, 1 에이스 확률, 2 베테랑 확률, 3 보너스 페이즈 확률, 4 내 크레딧")]
+        [Tooltip("ACO_DebugPanel.ACT_*: 0 1페이즈 강제, 1 에이스 확률, 2 베테랑 확률, 3 보너스 페이즈 확률, 4 내 크레딧")]
         public int Action;
-        [Tooltip("미션 가중치의 모듈 번호(관리자 Modules 순서)")]
+        [Tooltip("1페이즈 강제의 모듈 번호(관리자 Modules 순서)")]
         public int Index;
-        [Tooltip("더할 값(빼려면 음수): 가중치 ±0.5, 확률 ±0.05, 크레딧 ±10000 등")]
+        [Tooltip("더할 값(빼려면 음수): 확률 ±0.05, 크레딧 ±10000 등")]
         public float Amount = 1f;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 버튼 효과음을 넣는다")]
         public ACO_UiSound Sound;

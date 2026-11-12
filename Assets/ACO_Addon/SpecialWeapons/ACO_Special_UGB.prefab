@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 3862569666679317354}
   - component: {fileID: 9032483237836644508}
   - component: {fileID: 8017142183017903911}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Dot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -94,7 +94,7 @@ GameObject:
   - component: {fileID: 5245605980794629810}
   - component: {fileID: 7759331994106565468}
   - component: {fileID: 3096430383023065300}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: CCIP
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -234,11 +234,16 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6000
   LockAngle: 15
+  LockFromCcip: 1
   LockTime: 1
   MaxLockTargets: 1
+  CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 2
   MaxAmmo: 24
@@ -254,10 +259,35 @@ MonoBehaviour:
   SplashRadius: 35
   MinSplashFraction: 0.25
   MissileSplash: 0
-  Radio: {fileID: 0}
+  FullPartSplash: 0
+  Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
+  InterceptSites: []
   CrossLockIndicator: 0
+  IgnoreCountermeasures: 0
+  ProximityAnyEnemy: 0
+  AutoTargetNearest: 0
+  DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
+  SeekerAngle: 0
+  LockHoldTime: 0
+  MissileLifetime: 0
+  SeaSkim: 0
+  SkimAltitude: 8
+  SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 3
+  TakesExtraAmmo: 0
+  LaunchCall: 7
   HoldToFire: 1
   FireInterval: 0.3
   Missile: {fileID: 774057219247744282, guid: fb44d7aac8ab9ca488b4c174e1410f30, type: 3}
@@ -276,6 +306,8 @@ MonoBehaviour:
   CcipInterval: 0.05
   CcipMaxTime: 40
   TargetIndicator: {fileID: 0}
+  SelectedObjects: []
+  SlotBarsOnlyWhenSelected: 1
   SlotBarTemplate: {fileID: 0}
   SlotBarSpacing: {x: 0.02, y: 0, z: 0}
   SlotBarVertical: 1
@@ -361,8 +393,9 @@ MonoBehaviour:
   DisplayName: UGB
   Description: 'UNGUIDED BOMB
 
-    FREE-FALL BOMBS FOR GROUND TARGETS'
+    FREE-FALL BOMBS. AIM WITH THE CCIP PIPPER.'
   Price: 8000
   Icon: {fileID: 21300000, guid: 4c3d82ff73f1085439d5a4e55a114053, type: 3}
   SortOrder: 20
+  Category: 0
   Module: {fileID: 4913150246112143235}

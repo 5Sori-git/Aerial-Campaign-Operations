@@ -69,11 +69,18 @@ namespace ACO
         [Tooltip("끄면 쉐브론이 늘 FarColor")]
         public bool UseColor = true;
         [Tooltip("먼 미사일 색(기본 HUD 초록)")]
-        public Color FarColor = new Color(0.35f, 1f, 0.45f, 0.9f);
+        public Color FarColor = new Color(0f, 1f, 0f, 1f);
         [Tooltip("가까운 미사일 색(거리에 따라 FarColor에서 섞인다)")]
         public Color CloseColor = new Color(1f, 0.15f, 0.1f, 1f);
         [Tooltip("락온 호 색")]
-        public Color LockColor = new Color(0.35f, 1f, 0.45f, 0.75f);
+        public Color LockColor = new Color(0f, 1f, 0f, 0.85f);
+
+        /// HUD 설정 패널이 부른다: 먼 위협·락온 호 색을 이 색으로(알파 그대로 — 가까우면 CloseColor로 섞이는 건 그대로).
+        public void SetHudColor(Color c)
+        {
+            FarColor = new Color(c.r, c.g, c.b, FarColor.a);
+            LockColor = new Color(c.r, c.g, c.b, LockColor.a);
+        }
         [Tooltip("이 거리(m) 안의 미사일은 경보음 박자에 맞춰 깜빡인다")]
         public float BlinkRange = 1500f;
 

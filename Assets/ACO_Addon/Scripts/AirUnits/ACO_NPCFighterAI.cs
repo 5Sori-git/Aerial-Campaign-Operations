@@ -23,8 +23,9 @@ namespace ACO
         public ACO_NPCGun Gun;
         [Tooltip("동기화 담당. 비우면 같은 오브젝트에서 찾는다")]
         public ACO_NPCFighterNet Net;
-        [Tooltip("슈퍼에이스면 그 스크립트(자식). 있으면 미션 생성기가 일반 배치에 쓰지 않고 보너스 페이즈만 내보낸다. 프리팹 빌더/Bake가 넣는다")]
-        public ACO_SuperAce SuperAce;
+        [Tooltip("보스 에이스면 그 스크립트(자식 — ACO_AceBase: 형제·SHADE·레이저 에이스·LUNA …). 있으면 생성기가 일반 배치에 쓰지 않고 그 에이스 페이즈만 내보내며, "
+            + "공격 정원 밖·숙련도 체력 배율 없음. 프리팹 빌더/Bake가 넣는다")]
+        public ACO_AceBase Ace;
         [Tooltip("공격기: 켜면 미션 생성기가 일반 배치(증원·편대·호위 요격)에 쓰지 않고 지상·해상 호위 페이즈(콘보이·상륙전)에서만 내보낸다(OBJ_ATTACK). "
             + "노리는 대상은 TargetLayers(공격기 프리팹 = 아군 지상 26)")]
         public bool GroundAttacker = false;
@@ -38,6 +39,8 @@ namespace ACO
         public GameObject[] VeteranVisuals;
         [Tooltip("에이스일 때 켤 오브젝트(에이스 모델 통째로, 전용 도색, 트레일 등). 다른 단계에선 꺼진다")]
         public GameObject[] AceVisuals;
+        [Tooltip("적 항모에서 발진할 때 켤 오브젝트(함재기 모델 통째로). 켜지면 숙련도 칸은 모두 꺼진다. 비우면 숙련도 외형 그대로 나온다")]
+        public GameObject[] CarrierVisuals;
 
         [Header("체력 (숙련도 배율 기준)")]
         [Tooltip("베테랑(배율 1) 최대 체력. 0이면 Bake가 채운다(SaccTarget 체력, 일반 전투기 기본 100은 150으로). 미션 생성기가 숙련도 배율(TierHealthMultiplier)을 곱해 "
@@ -47,6 +50,8 @@ namespace ACO
         [Header("격추 연출")]
         [Tooltip("격추 시 숨길 오브젝트. SAV의 TargetExplode 애니메이션은 '루트'의 MeshRenderer/MeshCollider만 끄므로 자식에 있는 모델은 여기 넣어야 한다")]
         public GameObject[] HideOnDeath;
+        [Tooltip("격추 시 켤 오브젝트(폭발, 불, 연기, 소리). 부활할 때 다시 끈다")]
+        public GameObject[] ShowOnDeath;
         [Tooltip("격추 시 끌 콜라이더. 루트가 BoxCollider면 애니메이션 대상(MeshCollider)이 아니라 꺼지지 않으므로 여기 넣는다")]
         public Collider[] DisableCollidersOnDeath;
 
@@ -91,6 +96,8 @@ namespace ACO
         public float ExtendClimbAngle = 20f;
         [Tooltip("이탈 시 목표로 할 고도 = 타겟 고도 + 이 값. 항상 상승하면 이탈할 때마다 고도가 쌓이기만 한다")]
         public float ExtendAltitudeAboveTarget = 300f;
+        [Tooltip("미사일을 쏘면 바로 이탈해 거리를 벌린다(치고 빠지기 — SHADE)")]
+        public bool ExtendAfterMissile = false;
 
         [Header("미사일 발사 조건")]
         public float MissileMaxRange = 2000f;
@@ -273,6 +280,7 @@ namespace ACO
             if (!TargetHealth) { TargetHealth = GetComponentInParent<SaccTarget>(); }
             if (!Net) { Net = GetComponent<ACO_NPCFighterNet>(); }
             if (!Flares) { Flares = GetComponent<ACO_FlareDispenser>(); }
+            if (Flares && Ace != null) { Flares.Ace = Ace; }   // 에이스는 일반 플레어 무전 대신 전용 대사(또는 없음)
 
             _startPos = transform.position;
             _startRot = transform.rotation;
@@ -329,6 +337,7 @@ namespace ACO
             ClearTarget();
             if (Gun) { Gun.ForceStop(); }
             SetDeathVisuals(true);
+            if (Ace != null && Ace.Wreck != null) { Ace.Wreck.Fall(); }   // 에이스: 기체 메시가 앞으로 날아가 떨어진다(6-145)
         }
 
         /// SaccTarget 애니메이터가 처리하지 못하는 부분(자식 모델, 루트가 아닌/MeshCollider가 아닌 콜라이더)을 직접 켜고 끈다.
@@ -339,6 +348,13 @@ namespace ACO
                 for (int i = 0; i < HideOnDeath.Length; i++)
                 {
                     if (HideOnDeath[i]) { HideOnDeath[i].SetActive(!dead); }
+                }
+            }
+            if (ShowOnDeath != null)
+            {
+                for (int i = 0; i < ShowOnDeath.Length; i++)
+                {
+                    if (ShowOnDeath[i]) { ShowOnDeath[i].SetActive(dead); }
                 }
             }
             if (DisableCollidersOnDeath != null)
@@ -412,7 +428,7 @@ namespace ACO
             if (MissileLauncher) { MissileLauncher.LockTime = _baseLockTime * lockTimeMul; }
             if (Gun) { Gun.DwellTime = _baseGunDwell * gunDwellMul; }
             MissileFireConeAngle = _baseMissileCone * missileConeMul;
-            _tierFullHealth = BaseHealth > 0f ? BaseHealth * (SuperAce != null ? 1f : Mathf.Max(healthMul, 0.01f)) : 0f;
+            _tierFullHealth = BaseHealth > 0f ? BaseHealth * (Ace != null ? 1f : Mathf.Max(healthMul, 0.01f)) : 0f;
             if (_tierFullHealth > 0f) { SendCustomEventDelayedFrames(nameof(_ApplyTierHealth), 2); }
 
             ApplyTierVisuals();
@@ -446,10 +462,17 @@ namespace ACO
         /// 숙련도 단계의 외형만 켠다(단계별 모델 교체). 부활할 때 HideOnDeath가 모델을 다시 켜므로 그 뒤에도 다시 부른다.
         private void ApplyTierVisuals()
         {
-            SetVisuals(RookieVisuals, _skillTier == SKILL_ROOKIE);
-            SetVisuals(VeteranVisuals, _skillTier == SKILL_VETERAN);
-            SetVisuals(AceVisuals, _skillTier == SKILL_ACE);
+            bool carrier = _carrierBased && CarrierVisuals != null && CarrierVisuals.Length > 0;
+            SetVisuals(RookieVisuals, !carrier && _skillTier == SKILL_ROOKIE);
+            SetVisuals(VeteranVisuals, !carrier && _skillTier == SKILL_VETERAN);
+            SetVisuals(AceVisuals, !carrier && _skillTier == SKILL_ACE);
+            SetVisuals(CarrierVisuals, carrier);
         }
+
+        private bool _carrierBased;
+
+        /// 이번 출격이 항모 발진인가(모든 클라이언트). ApplySkill 전에 부른다 — 외형은 ApplySkill이 고른다.
+        public void SetCarrierBased(bool on) { _carrierBased = on; }
 
         private void SetVisuals(GameObject[] objects, bool on)
         {
@@ -486,10 +509,13 @@ namespace ACO
             _yieldTimer = 0f;
             if (Flares) { Flares.ResetSalvos(); }
             SetDeathVisuals(false);
+            if (Ace != null && Ace.Wreck != null) { Ace.Wreck.Clear(); }
             // 격추 때 꺼졌던 콜라이더가 다시 켜졌다(SaccTarget 애니메이터는 조금 늦게 켤 수 있어 한 번 더)
             IgnorePlayerCollisions();
             SendCustomEventDelayedSeconds(nameof(IgnorePlayerCollisions), 0.5f);
             _alive = true;
+            SteerOverride = false;   // 특수 기동은 부활하면 풀린다(보스 스크립트도 등장 때 다시 정한다)
+            if (Flight) { Flight.SpeedBoost = 1f; Flight.AccelBoost = 1f; Flight.AllowLowSpeed = false; }
             if (_isOwner)
             {
                 EnterPatrol();
@@ -522,7 +548,7 @@ namespace ACO
                     _yieldTimer = Director.YieldCooldown;
                     EnterWait();
                 }
-                else if (Director && !TargetInDefendRange() && Director.ShouldStepDown(this, _targetIdx))
+                else if (Director && !IsBossAce() && !TargetInDefendRange() && Director.ShouldStepDown(this, _targetIdx))
                 {
                     // 자기 방어로 정원을 넘겨 교전했는데 위협이 지나갔다 — 가장 늦게 합류한 쪽이 대기로 돌아간다.
                     EnterWait();
@@ -567,9 +593,14 @@ namespace ACO
 
         // ───────────── 공격 정원 ─────────────
 
+        /// 보스 에이스(분신 에이스 형제·레이저 에이스·SHADE)는 공격 정원 밖이다 — 대기·교대 없이 늘 공격하고, 정원 수에도 세지 않는다
+        /// (편대가 둘만 덤비고 나머지는 2.5km 밖을 도는 게 보스답지 않았다). 숙련도 "에이스" 등급의 일반 전투기는 정원을 따른다.
+        public bool IsBossAce() { return Ace != null; }
+
         /// 공격 자리를 받을 수 있는지. 정원 관리자가 없으면 항상 공격한다.
         private bool CanAttackNow()
         {
+            if (IsBossAce()) { return true; }
             if (!Director || _targetIdx < 0) { return true; }
             if (TargetInDefendRange()) { return true; }
             if (_yieldTimer > 0f) { return false; }
@@ -607,6 +638,7 @@ namespace ACO
 
         private bool ShouldYield()
         {
+            if (IsBossAce()) { return false; }
             if (!Director || Director.MaxEngageTime <= 0f) { return false; }
             if (_engageTimer < Director.MaxEngageTime) { return false; }
             if (TargetInDefendRange()) { return false; }
@@ -616,6 +648,7 @@ namespace ACO
         /// CombatDirector가 정원을 셀 때 쓴다. 원격 NPC도 동기화된 모드/타겟으로 같은 답을 낸다.
         public bool IsAttacking(int targetIdx)
         {
+            if (IsBossAce()) { return false; }   // 정원 밖 — 일반 전투기의 자리를 차지하지 않는다
             return _alive && _targetIdx == targetIdx
                 && (_mode == MODE_PURSUIT || _mode == MODE_EXTEND)
                 && gameObject.activeInHierarchy;
@@ -651,11 +684,30 @@ namespace ACO
             if (MissileLauncher.IsLocked() && MissileLauncher.CanFire())
             {
                 MissileLauncher.FireAt(_targetIdx);
+                if (ExtendAfterMissile && _mode == MODE_PURSUIT)
+                {
+                    // 치고 빠지기: 쏘자마자 ReEngageDistance까지 벌린다
+                    _extendTimer = MaxExtendDuration;
+                    MissileLauncher.ReleaseAim();
+                    SetState(MODE_EXTEND, _pattern);
+                }
             }
         }
 
+        // 조종 덮어쓰기(오너의 보스 스크립트가 켠다 — 교차·이탈 같은 특수 기동). 켜져 있으면 표적·미사일 판단은 그대로 하고 조종만 이 값을 따른다(간격 유지도 끈다).
+        [System.NonSerialized] public bool SteerOverride;
+        [System.NonSerialized] public Vector3 OverrideDirection;
+        [System.NonSerialized] public float OverrideSpeed;
+
         private void Steer(float dt)
         {
+            if (SteerOverride)
+            {
+                if (_mode == MODE_PURSUIT && _target) { UpdateTargetVelocity(_target.position); }
+                Flight.DesiredDirection = OverrideDirection.sqrMagnitude > 0.000001f ? OverrideDirection : transform.forward;
+                Flight.DesiredSpeed = OverrideSpeed > 0f ? OverrideSpeed : Flight.MaxSpeed;
+                return;
+            }
             if (_mode == MODE_PURSUIT && _target)
             {
                 Vector3 targetPos = _target.position;

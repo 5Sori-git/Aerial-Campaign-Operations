@@ -5,6 +5,7 @@ using SaccFlightAndVehicles;
 
 namespace ACO
 {
+    /// 벽걸이로도 쓴다(WallMode, 브리핑실 평면 지도): 내가 가까이 있을 때만 갱신하고 내 기체 표시가 없다.
     /// 조종석 지도(기체마다 하나, 로컬 전용, 동기화 없음). 기체 안의 화면에 작전 공역 전체를 북쪽이 위인 고정 방위로 그린다 —
     /// 육각 지형(높이대 색, 바다는 바탕색), 공역 테두리, 나(흰 삼각형), 적·목표·아군(접촉 목록 ACO_RadarContacts).
     /// - 내가 이 기체에 타고 있을 때만 갱신한다(다른 기체의 화면은 꺼 둔다 — Screen). 지형 메시는 처음 탔을 때·지형이 바뀌었을 때 프레임마다 나눠 만든다.
@@ -13,7 +14,12 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_CockpitMap : UdonSharpBehaviour
     {
-        public const int MAX_BLIPS = 200;
+        public const int MAX_BLIPS = 320;
+        private const int ECM_RING_SEGMENTS = 40;
+        [Tooltip("ECM 재밍 구역 원의 색")]
+        public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
+        [Tooltip("ECM 재밍 구역 원의 굵기(지도 폭 대비)")]
+        public float EcmRingWidth = 0.008f;
         private const int MAX_VERTICES = 65000;
 
         [Header("참조")]
@@ -29,6 +35,12 @@ namespace ACO
         public MeshFilter BlipFilter;
         [Tooltip("공역 테두리 고리(지름 1 = 공역 지름). 비워도 된다")]
         public Transform Border;
+
+        [Header("벽걸이")]
+        [Tooltip("켜면 기체 없이 벽에 건 지도로 동작한다. 나 표시를 그리지 않는다")]
+        public bool WallMode;
+        [Tooltip("벽걸이일 때, 이 거리(m) 안에 내가 있을 때만 갱신한다")]
+        public float WallActiveRadius = 12f;
 
         [Header("표시")]
         [Tooltip("점을 다시 그리는 간격(초)")]
@@ -85,7 +97,7 @@ namespace ACO
         {
             if (_started) { return; }
             _started = true;
-            if (!EntityControl) { EntityControl = GetComponentInParent<SaccEntity>(); }
+            if (!EntityControl && !WallMode) { EntityControl = GetComponentInParent<SaccEntity>(); }
             _v = new Vector3[MAX_BLIPS * 4];
             _c = new Color[MAX_BLIPS * 4];
             int[] tris = new int[MAX_BLIPS * 6];
@@ -113,7 +125,7 @@ namespace ACO
             _timer = UpdateInterval;
             Start();
 
-            bool mine = Contacts != null && EntityControl != null && Contacts.LocalVehicle == EntityControl;
+            bool mine = WallMode ? PlayerNearby() : Contacts != null && EntityControl != null && Contacts.LocalVehicle == EntityControl;
             if (mine != _active) { SetActive(mine); }
             if (!mine) { return; }
 
@@ -124,6 +136,16 @@ namespace ACO
                 if (seed != _mapSeed && _terrain.IsBuilt(seed)) { BeginTerrainMesh(seed); }
             }
             Rebuild();
+        }
+
+        /// 벽걸이: 내가 근처에 있으면 켠다. 기체에 타지 않아도 접촉 목록이 돌게 깨운다.
+        private bool PlayerNearby()
+        {
+            VRCPlayerApi player = Networking.LocalPlayer;
+            if (Contacts == null || !Utilities.IsValid(player)) { return false; }
+            if ((player.GetPosition() - transform.position).sqrMagnitude > WallActiveRadius * WallActiveRadius) { return false; }
+            Contacts.Wake(UpdateInterval * 4f);
+            return true;
         }
 
         private void SetActive(bool on)
@@ -170,15 +192,50 @@ namespace ACO
                     else { Square(p, s * 0.75f, col); }
                 }
             }
+            EcmRings(c);
             // 나: 맨 위에 그리도록 마지막
-            Transform me = EntityControl.transform;
-            Vector3 mf = me.forward;
-            Tri(ToMap(me.position), Mathf.Atan2(mf.x, mf.z) * Mathf.Rad2Deg, s * SelfScale, SelfColor);
+            if (!WallMode)
+            {
+                Transform me = EntityControl.transform;
+                Vector3 mf = me.forward;
+                Tri(ToMap(me.position), Mathf.Atan2(mf.x, mf.z) * Mathf.Rad2Deg, s * SelfScale, SelfColor);
+            }
 
             for (int v = _n * 4; v < _v.Length; v++) { _v[v] = Vector3.zero; }
             _blipMesh.vertices = _v;
             _blipMesh.colors = _c;
             _blipMesh.RecalculateBounds();
+        }
+
+        /// 켜진 ECM의 재밍 구역: 초록 테두리 원. 지도 밖의 호는 그리지 않는다.
+        private void EcmRings(ACO_RadarContacts c)
+        {
+            if (!c.IsEcmOn() || c.EcmPods == null) { return; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            float radius = c.EcmRange * _k;
+            for (int i = 0; i < c.EcmPods.Length; i++)
+            {
+                ACO_DFUNC_Missile pod = c.EcmPods[i];
+                if (pod == null || !pod.IsEcmActive(now)) { continue; }
+                Vector3 o = ToMap(pod.transform.position);
+                for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                    Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                    if (Mathf.Abs(p0.x) > 0.5f || Mathf.Abs(p0.y) > 0.5f || Mathf.Abs(p1.x) > 0.5f || Mathf.Abs(p1.y) > 0.5f) { continue; }
+                    if (_n >= MAX_BLIPS - 1) { return; }
+                    Vector3 d = p1 - p0;
+                    Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (EcmRingWidth * 0.5f);
+                    int v = _n * 4;
+                    _v[v] = p0 - r;
+                    _v[v + 1] = p0 + r;
+                    _v[v + 2] = p1 + r;
+                    _v[v + 3] = p1 - r;
+                    Fill(v, EcmColor);
+                }
+            }
         }
 
         private Vector3 ToMap(Vector3 world)

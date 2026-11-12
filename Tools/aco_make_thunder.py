@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """천둥(합성): python aco_make_thunder.py [출력 폴더] (기본 Assets/ACO_Addon/Audio/Generated)
 폭풍 날씨(ACO_Lightning)가 번개 거리에 따라 고른다 — 가까운 천둥(2km 안) / 먼 천둥.
-  - 가까이: 찢어지는 소리(아주 짧은 밝은 충격 + 0.3초 지글거림) → 크게 터지는 저역 폭음 → 몇 번 울렁이며 잦아드는 우르릉(4~6초).
+  - 가까이: 어두운 짧은 충격 + 0.3초 찢어지는 중역 → 크게 터지는 저역 폭음
   - 멀리: 충격 없이 낮게 깔리는 우르릉(고역이 공기에 먹혀 어둡다), 느리게 커졌다 몇 번 울렁이며 사라진다.
 울렁임 = 번개 길(수 km)의 여러 지점에서 오는 소리가 시간차로 겹친 것 — 무작위 시각·세기의 덩어리 몇 개를 겹쳐 만든다. 44.1kHz 16bit 모노."""
 import os, sys, math, random
@@ -34,20 +34,15 @@ def lumps(length, count, start, spread, tau_lo, tau_hi, seed):
 def near(name, seed, length=6.0):
     n = int(length * SR)
     x = [0.0] * n
-    # 1) 찢어지는 충격: N파(3ms) + 고역 잡음 20ms
-    crack = [0.0] * n
-    nw = int(0.003 * SR)
-    for j in range(nw):
-        crack[j] = 1.0 - 2.0 * j / nw
-    burst = biquad(noise(0.03, seed), 'hp', 1500)
-    burst = mul(burst, env_exp(len(burst), 0.0003, 0.008))
-    mix(crack, burst, 0.0, 0.8)
-    mix(x, crack, 0.0, 0.55)
-    # 2) 지글거림(번개 줄기가 갈라지는 소리): 0.35초, 밝다가 어두워진다
-    rip_src = [a + 0.7 * b for a, b in zip(noise(0.5, seed + 1), crackle(0.5, 1400, seed + 2))]
-    rip = onepole_lp_var(rip_src, lambda t: 300 + 5000 * math.exp(-t / 0.08))
-    rip = mul(rip, env_exp(len(rip), 0.002, 0.12))
-    mix(x, rip, 0.005, 0.7)
+    # 1) 충격: 어두운 잡음을 짧게 — 찰칵하는 N파·고역 잡음은 지지직으로 들린다
+    crack = biquad(biquad(noise(0.3, seed), 'lp', 2600), 'lp', 2600)
+    crack = mul(crack, env_exp(len(crack), 0.0015, 0.04))
+    mix(x, crack, 0.0, 1.6)
+    # 2) 찢어지는 소리(번개 줄기가 갈라진다): 중역 잡음 × 작은 덩어리들 — 엔벨로프가 부드러워 낱낱의 잡음으로 들리지 않는다
+    rip = band(noise(0.8, seed + 1), 250, 2200, 1)
+    rip_env = lumps(0.8, 14, 0.0, 0.4, 0.015, 0.05, seed + 2)
+    rip = [v * e for v, e in zip(rip, rip_env)]
+    mix(x, rip, 0.005, 0.32)
     # 3) 폭음: 저역 잡음 큰 덩어리(0.05초 뒤 정점, 0.6초 감쇠)
     boom = biquad(biquad(noise(2.5, seed + 3), 'lp', 220), 'lp', 220)
     boom = mul(boom, env_exp(len(boom), 0.05, 0.6))
@@ -59,8 +54,8 @@ def near(name, seed, length=6.0):
     env = lumps(length, 5, 0.25, 2.3, 0.4, 1.1, seed + 5)
     rum = [v * e for v, e in zip(rum, env)]
     mix(x, rum, 0.0, 2.6)
-    x = biquad(x, 'hp', 28)
-    x = fade(softclip(x, 1.6), 0.001, 0.6)
+    x = biquad(biquad(x, 'lp', 4500), 'hp', 28)
+    x = fade(level(normalize(x, 1.0), 0.5), 0.001, 0.6)
     return finish(name, x)
 
 
@@ -81,7 +76,6 @@ def finish(name, x):
     print(name, '%.2fs' % (len(x) / SR), path)
 
 
-near('ACO_Thunder_Near_1', 101)
-near('ACO_Thunder_Near_2', 202, 5.5)
+# 가까운 천둥은 녹음으로 바꿨다 — aco_thunder_rec.py. near()는 쓰지 않는다(지지직거렸다).
 far('ACO_Thunder_Far_1', 303)
 far('ACO_Thunder_Far_2', 404, 7.0)

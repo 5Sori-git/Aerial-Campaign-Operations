@@ -301,6 +301,8 @@ namespace ACO
         private int _buildSeed;
         private int _buildGeneration;
 
+        private const float SYNC_CHECK_SECONDS = 2f;
+
         void Start()
         {
             BuildGrid();
@@ -308,6 +310,7 @@ namespace ACO
             {
                 Generate(InitialSeed != 0 ? InitialSeed : Random.Range(1, int.MaxValue));
             }
+            SendCustomEventDelayedSeconds(nameof(_CheckSync), SYNC_CHECK_SECONDS);
         }
 
         // ───────────── 진입점 ─────────────
@@ -336,7 +339,28 @@ namespace ACO
 
         public override void OnDeserialization()
         {
-            if (_generation != _builtGeneration && !(_building && _buildGeneration == _generation)) { BeginBuild(); }
+            if (NeedsBuild()) { BeginBuild(); }
+        }
+
+        private bool NeedsBuild() { return _generation != _builtGeneration && !(_building && _buildGeneration == _generation); }
+
+        /// 씨앗은 값이 바뀔 때 한 번만 온다. 입장 타이밍에 놓치면 다음 새 지형까지 지형이 없으므로 계속 확인한다:
+        /// 값을 못 받았으면 오너에게 다시 보내 달라고 하고, 값은 있는데 안 만들었으면 만든다.
+        public void _CheckSync()
+        {
+            SendCustomEventDelayedSeconds(nameof(_CheckSync), SYNC_CHECK_SECONDS);
+            if (_generation == 0)
+            {
+                if (!Networking.IsOwner(gameObject)) { SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.Owner, nameof(NetSendState)); }
+                return;
+            }
+            if (NeedsBuild()) { BeginBuild(); }
+        }
+
+        [NetworkCallable]
+        public void NetSendState()
+        {
+            if (Networking.IsOwner(gameObject) && _generation != 0) { RequestSerialization(); }
         }
 
         /// 이 씨앗의 지형이 이 클라이언트에서 다 세워졌는지(생성기가 유닛 배치 전에 기다린다).

@@ -18,6 +18,7 @@ namespace ACO
     /// 해금한 무장이 하나도 없으면 특수무장 없이 출격한다(슬롯이 비고, GetSpecialId = "").
     /// 미리보기: PreviewVisuals[목록 번호] 중 지금 보고 있는 무장(잠긴 무장 포함)의 오브젝트만 켠다 — 격납고 전시 기체의 무장 모델(로컬).
     /// 같은 오브젝트를 여러 무장 칸에 넣어도 된다(보고 있는 무장의 오브젝트와 같으면 켜 둔다).
+    /// 지원(6-142): 아래 SUPPORT 줄의 < >로 이번 출격에 가져갈 지원 호출(없음 / 벙커버스터 / 급유 드론)을 고른다 — 진행도에 저장, 조종석 SUPPORT 다이얼이 읽는다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_Loadout : UdonSharpBehaviour
     {
@@ -32,7 +33,7 @@ namespace ACO
         public string[] SpecialIds = new string[] { "4AAM", "UGB", "RKT" };
         [Tooltip("표시 이름")]
         public string[] SpecialNames = new string[] { "4AAM", "UGB", "RKT" };
-        [Tooltip("설명(격납고 패널에 표시)")]
+        [Tooltip("설명(격납고 패널에 표시) — 영어(번역 장치가 없을 때). 번역 키 wpn.<무장 ID>(첫 줄 = 부제)")]
         [TextArea] public string[] SpecialDescriptions = new string[] {
             "MULTI-TARGET AAM\nLOCKS UP TO 4 AIR TARGETS - ONE MISSILE EACH",
             "UNGUIDED BOMB\nFREE-FALL BOMBS FOR GROUND TARGETS",
@@ -43,7 +44,7 @@ namespace ACO
         public Sprite[] SpecialIcons;
         [Tooltip("분류(CAT_*: 0 공대공, 1 공대지, 2 폭탄, 3 기타). Bake가 무장 정의(분류 또는 모듈의 강화 계열)로 채운다")]
         public int[] SpecialCategories = new int[] { 0, 2, 2 };
-        [Tooltip("분류 이름(CAT_* 순서)")]
+        [Tooltip("분류 이름(CAT_* 순서) — 영어(번역 장치가 없을 때). 번역 키 load.cat.0~3")]
         public string[] CategoryNames = new string[] { "AIR-TO-AIR", "AIR-TO-GROUND", "BOMBS / ROCKETS", "OTHER" };
         [Tooltip("처음 보여 줄 무장(목록 번호). 해금돼 있으면 장착한다")]
         public int DefaultSpecial = 0;
@@ -59,6 +60,8 @@ namespace ACO
         [Header("패널 표시 (프리팹 빌더가 채운다)")]
         [Tooltip("지금 보고 있는 무장의 이름과 설명(잠겼으면 가격)")]
         public TextMeshProUGUI SelectionText;
+        [Tooltip("무장 상세 칸(프리팹 빌더가 만든다 — 부제·설명, 정확한 수치는 없다). 비우면 예전처럼 설명을 SelectionText에 쓴다")]
+        public TextMeshProUGUI DetailText;
         [Tooltip("페이지 칸별 버튼 배경(장착한 무장만 SelectedColor, 잠긴 무장은 LockedColor). 칸 수 = 한 페이지의 무장 수, 남는 칸은 숨긴다")]
         public Image[] ButtonImages;
         [Tooltip("칸별 이름 글자(페이지에 따라 바뀐다)")]
@@ -69,6 +72,10 @@ namespace ACO
         public GameObject[] LockIcons;
         [Tooltip("분류 표시(< AIR-TO-AIR > 1/4)")]
         public TextMeshProUGUI PageText;
+        [Tooltip("분류 아이콘(PageText 옆)")]
+        public Image PageIcon;
+        [Tooltip("분류별 아이콘(CAT_* 순서)")]
+        public Sprite[] PageIcons;
         [Tooltip("분류 넘김 좌우 버튼(늘 보인다 — 분류 4개를 돌아가며 넘긴다)")]
         public GameObject[] PagerObjects;
         [Tooltip("이 분류에 무장이 없을 때 켜는 글자")]
@@ -85,6 +92,17 @@ namespace ACO
         public Color BuyColor = new Color(0.45f, 0.4f, 0.12f, 1f);
         public Color BuyDisabledColor = new Color(0.16f, 0.17f, 0.17f, 1f);
 
+        [Header("지원 (SUPPORT 줄 — 프리팹 빌더가 채운다)")]
+        [Tooltip("\"SUPPORT  < BUNKER BUSTER x3 >\" 글자")]
+        public TextMeshProUGUI SupportText;
+        [Tooltip("고른 지원 아이콘(CALL_* 순서는 SupportIcons, 없음이면 숨김)")]
+        public Image SupportIcon;
+        public Sprite[] SupportIcons;
+
+        [Header("번역 (6-166)")]
+        [Tooltip("번역 장치. Bake가 넣는다")]
+        public ACO_Localization Loc;
+
         [Header("미리보기 (선택)")]
         [Tooltip("목록 번호별 미리보기 오브젝트(격납고 전시 기체에 달린 무장 모델 등). 보고 있는 무장 것만 켜고 나머지는 끈다. 비운 칸은 건너뛴다")]
         public GameObject[] PreviewVisuals;
@@ -98,7 +116,9 @@ namespace ACO
         private bool _started;
         private bool _restoredSeen;
         private int _seenVersion = -1;
-        private string _message = "";
+        private string _seenSpecial = "";
+        private string _message = "";     // 안내 한 줄의 번역 키("" = 없음) — 언어가 바뀌어도 맞게 다시 그린다
+        private string _messageEn = "";
 
         void Start()
         {
@@ -111,6 +131,27 @@ namespace ACO
                 ShowWeapon(_preview);
                 Refresh();
             }
+        }
+
+        /// 번역 장치가 언어를 바꾸면 부른다.
+        public void LocalizationChanged()
+        {
+            if (_started) { Refresh(); }
+        }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english).
+        private string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+
+        private void SetMessage(string key, string english)
+        {
+            _message = key;
+            _messageEn = english;
         }
 
         void Update()
@@ -128,6 +169,14 @@ namespace ACO
                 _seenVersion = Progress.GetVersion();
                 Refresh();
             }
+            // 복제 패널에서 고른 무장을 따라간다. 기체는 어느 패널이든 하나만 보므로 패널끼리 맞아야 한다
+            string saved2 = Progress.GetSavedSpecialId();
+            if (_restoredSeen && saved2 != _seenSpecial)
+            {
+                _seenSpecial = saved2;
+                int index = IndexOfId(saved2);
+                if (index >= 0 && index != _special && IsUnlocked(index)) { Equip(index); }
+            }
         }
 
         /// 격납고 버튼이 부른다(slot = 지금 화면 안의 줄 번호). 해금된 무장은 장착하고, 잠긴 무장은 보기만 한다.
@@ -137,7 +186,7 @@ namespace ACO
             int n = SpecialIds != null ? SpecialIds.Length : 0;
             int index = _rows != null && slot >= 0 && slot < _rows.Length ? _rows[slot] : -1;
             if (n == 0 || index < 0 || index >= n) { return ACO_UiSound.KIND_DENY; }
-            _message = "";
+            SetMessage("", "");
             if (IsUnlocked(index))
             {
                 if (IsLocked()) { return ACO_UiSound.KIND_DENY; }
@@ -203,10 +252,46 @@ namespace ACO
 
         /// 구매 버튼: 보고 있는 잠긴 무장을 사고 장착한다. 효과음 종류를 돌려준다(산 경우만 결정음).
         /// 출격 카운트다운 중이면 안내를 띄우고 true(무장 변경·구매 거절).
+        /// SUPPORT 줄 < >: 없음 → 벙커버스터 → 급유 드론 → 없음. 장수 0인 지원도 고를 수 있다(조종석에서 부르면 NO CALLS LEFT).
+        public int ChangeSupport(int dir)
+        {
+            if (!Progress) { return ACO_UiSound.KIND_DENY; }
+            if (IsLocked()) { return ACO_UiSound.KIND_DENY; }
+            if (!Progress.IsReady()) { SetMessage("common.loadingsave", "LOADING SAVE DATA..."); Refresh(); return ACO_UiSound.KIND_DENY; }
+            int n = ACO_PlayerProgress.CALL_COUNT + 1;
+            int cur = Progress.GetCallPick() + 1;
+            int next = (cur + (dir < 0 ? n - 1 : 1)) % n;
+            Progress.SetCallPick(next - 1);
+            SetMessage("", "");
+            Refresh();
+            return ACO_UiSound.KIND_CLICK;
+        }
+
+        private void RefreshSupport()
+        {
+            if (!SupportText && !SupportIcon) { return; }
+            int pick = Progress ? Progress.GetCallPick() : ACO_PlayerProgress.CALL_NONE;
+            string body;
+            if (pick < 0) { body = "<color=#8FA89A>" + T("load.none", "NONE") + "</color>"; }
+            else
+            {
+                int count = Progress.GetCallCount(pick);
+                body = Progress.GetCallName(pick) + "  " + (count > 0 ? "<color=#FFD24D>x" + count + "</color>" : "<color=#FF5544>" + T("load.support.zero", "x0 - BUY IN THE SUPPORT TAB") + "</color>");
+            }
+            string s = T("load.support", "SUPPORT") + "<pos=30%>" + body;
+            if (SupportText && SupportText.text != s) { SupportText.text = s; }
+            if (SupportIcon)
+            {
+                Sprite icon = pick >= 0 && SupportIcons != null && pick < SupportIcons.Length ? SupportIcons[pick] : null;
+                if (SupportIcon.sprite != icon) { SupportIcon.sprite = icon; }
+                if (SupportIcon.enabled != (icon != null)) { SupportIcon.enabled = icon != null; }
+            }
+        }
+
         private bool IsLocked()
         {
             if (Flow == null || !Flow.IsLoadoutLocked()) { return false; }
-            _message = "ALL READY - LOADOUT LOCKED";
+            SetMessage("load.msg.locked", "ALL READY - LOADOUT LOCKED");
             Refresh();
             return true;
         }
@@ -215,9 +300,9 @@ namespace ACO
         {
             if (_preview < 0 || IsUnlocked(_preview) || !Progress) { return ACO_UiSound.KIND_DENY; }
             if (IsLocked()) { return ACO_UiSound.KIND_DENY; }
-            if (!Progress.IsReady()) { _message = "LOADING SAVE DATA..."; Refresh(); return ACO_UiSound.KIND_DENY; }
-            if (Progress.BuySpecial(IdOf(_preview), GetPrice(_preview))) { _message = ""; Equip(_preview); return ACO_UiSound.KIND_CONFIRM; }
-            _message = "NOT ENOUGH CREDITS";
+            if (!Progress.IsReady()) { SetMessage("common.loadingsave", "LOADING SAVE DATA..."); Refresh(); return ACO_UiSound.KIND_DENY; }
+            if (Progress.BuySpecial(IdOf(_preview), GetPrice(_preview))) { SetMessage("", ""); Equip(_preview); return ACO_UiSound.KIND_CONFIRM; }
+            SetMessage("common.nocredits", "NOT ENOUGH CREDITS");
             Refresh();
             return ACO_UiSound.KIND_DENY;
         }
@@ -277,17 +362,28 @@ namespace ACO
 
         private void Refresh()
         {
+            RefreshSupport();
             int n = SpecialIds != null ? SpecialIds.Length : 0;
             bool locked = _preview >= 0 && !IsUnlocked(_preview);
             if (SelectionText && _preview >= 0 && _preview < n)
             {
                 string label = SpecialNames != null && _preview < SpecialNames.Length ? SpecialNames[_preview] : SpecialIds[_preview];
-                string desc = SpecialDescriptions != null && _preview < SpecialDescriptions.Length ? SpecialDescriptions[_preview] : "";
-                string head = locked ? "<color=#BBBBBB>LOCKED: " + label + "</color>" : "SPECIAL WEAPON: " + label;
-                string s = head + "\n<size=60%>" + desc + "</size>";
-                if (locked) { s += "\n<size=60%><color=#FFD24D>PRICE " + GetPrice(_preview).ToString("N0") + " CR</color></size>"; }
-                if (_special < 0) { s += "\n<size=55%><color=#FF5544>NO SPECIAL WEAPON EQUIPPED</color></size>"; }
-                if (_message != "") { s += "\n<size=55%><color=#FF5544>" + _message + "</color></size>"; }
+                string desc = T("wpn." + SpecialIds[_preview], SpecialDescriptions != null && _preview < SpecialDescriptions.Length ? SpecialDescriptions[_preview] : "");
+                string head = locked ? "<color=#BBBBBB>" + T1("load.locked", "LOCKED: {0}", label) + "</color>" : T1("load.special", "SPECIAL WEAPON: {0}", label);
+                string s = DetailText ? head : head + "\n<size=60%>" + desc + "</size>";
+                if (DetailText)
+                {
+                    // 상세 칸: 부제(설명 첫 줄, 굵게) / 설명
+                    string sub = desc;
+                    string body = "";
+                    int nl = desc.IndexOf('\n');
+                    if (nl >= 0) { sub = desc.Substring(0, nl); body = desc.Substring(nl + 1); }
+                    string d = "<b>" + sub + "</b>" + (body != "" ? "\n<size=85%>" + body + "</size>" : "");
+                    if (DetailText.text != d) { DetailText.text = d; }
+                }
+                if (locked) { s += "\n<size=60%><color=#FFD24D>" + T1("load.price", "PRICE {0} CR", GetPrice(_preview).ToString("N0")) + "</color></size>"; }
+                if (_special < 0) { s += "\n<size=55%><color=#FF5544>" + T("load.noequip", "NO SPECIAL WEAPON EQUIPPED") + "</color></size>"; }
+                if (_message != "") { s += "\n<size=55%><color=#FF5544>" + T(_message, _messageEn) + "</color></size>"; }
                 SelectionText.text = s;
             }
             if (BuyButton) { BuyButton.SetActive(locked); }
@@ -302,7 +398,7 @@ namespace ACO
                     if (g.activeSelf != on) { g.SetActive(on); }
                 }
             }
-            if (BuyText && locked) { BuyText.text = "BUY " + GetPrice(_preview).ToString("N0") + " CR"; }
+            if (BuyText && locked) { BuyText.text = T1("load.buy", "BUY {0} CR", GetPrice(_preview).ToString("N0")); }
             // 크레딧이 모자라면 구매 버튼을 회색으로(그래도 누르면 안내 + 거절음).
             if (BuyButton && locked)
             {
@@ -315,9 +411,10 @@ namespace ACO
             if (_page >= pages) { _page = pages - 1; }
             if (PageText)
             {
-                string cat = CategoryNames != null && _category < CategoryNames.Length ? CategoryNames[_category] : "";
+                string cat = T("load.cat." + _category, CategoryNames != null && _category < CategoryNames.Length ? CategoryNames[_category] : "");
                 PageText.text = cat + "<size=70%>   " + (_category + 1) + " / " + CATEGORY_COUNT + (pages > 1 ? "   (" + (_page + 1) + "/" + pages + ")" : "") + "</size>";
             }
+            if (PageIcon && PageIcons != null && _category < PageIcons.Length) { PageIcon.sprite = PageIcons[_category]; }
             if (ButtonImages == null) { return; }
             // 이 분류·쪽의 줄 → 목록 번호
             int size = ButtonImages.Length;
@@ -348,8 +445,8 @@ namespace ACO
                 if (ButtonLabels != null && k < ButtonLabels.Length && ButtonLabels[k] != null)
                 {
                     string name = SpecialNames != null && i < SpecialNames.Length ? SpecialNames[i] : SpecialIds[i];
-                    string state = i == _special ? "<color=#BFFFC8>EQUIPPED</color>"
-                        : (IsUnlocked(i) ? "<color=#8FA89A>OWNED</color>" : "<color=#FFD24D>" + GetPrice(i).ToString("N0") + " CR</color>");
+                    string state = i == _special ? "<color=#BFFFC8>" + T("shop.row.equipped", "EQUIPPED") + "</color>"
+                        : (IsUnlocked(i) ? "<color=#8FA89A>" + T("load.owned", "OWNED") + "</color>" : "<color=#FFD24D>" + GetPrice(i).ToString("N0") + " CR</color>");
                     string label = name + "<pos=62%><size=75%>" + state + "</size>";
                     if (ButtonLabels[k].text != label) { ButtonLabels[k].text = label; }
                 }

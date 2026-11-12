@@ -14,6 +14,7 @@ namespace ACO
     ///    LAYER_DECK = 비구름층(DeckBottom~DeckTop): 아래는 짙은 회색 천장(비), 안은 짙은 안개, 위로 뚫고 나오면 흰 구름바다 위 맑은 하늘.
     ///    LAYER_FOG = 낮은 안개층(FogLayerTop 아래 짙고 FogLayerFade 동안 옅어진다): 위에서 보면 흰 안개 바다(높은 봉우리만 솟는다), 위는 맑다.
     ///    날씨가 바뀌면 LayerFadeTime 동안 디더링으로 나타나고 사라진다.
+    ///    CloudVolume(셰이더 ACO/CloudVolume)이 있으면 판과 층 속 안개를 쓰지 않는다 — 시선이 층을 지나는 길이로 픽셀마다 계산해 경계를 지날 때 튀지 않는다.
     ///  - 하늘 안개 돔(SkyFog, 셰이더 ACO/SkyFog): 머리로 옮기기만 한다 — 셰이더가 지금 안개로 하늘 픽셀을 덮는다.
     ///  - 날씨가 쓸 API: SetCoverage, SetDarkness(어두운 구름), SetBaseFog(구름 밖 안개), SetLayer. 물속 연출(ACO_Underwater)은 SetUnderwater로 물속 안개를 넣는다 —
     ///    씬 안개는 이 스크립트 하나가 쓴다(기본 → 층 위(맑음) → 층 속 → 구름 속 → 물속 순서로 겹친다).
@@ -89,6 +90,25 @@ namespace ACO
         [Tooltip("비구름층 속 물안개 막 배율(층 속은 시정 2km라 뭉게구름 속보다 옅게)")]
         [Range(0f, 1f)] public float DeckVeilStrength = 0.55f;
 
+        [Header("체적 구름층 (ACO_SkyBuilder가 만든다 — 있으면 판 대신 쓴다)")]
+        public Renderer CloudVolume;
+        [Tooltip("관전 카메라가 그리는 체적 구름(카메라 자식, 레이어 18). Bake가 넣는다. CloudVolume은 FX 레이어라 관전 카메라에 찍히지 않는다")]
+        public Renderer SpectatorVolume;
+        [Tooltip("비구름층 밀도(1m당). 층 두께 500m면 0.005가 수직으로 약 92% 가린다")]
+        public float DeckVolumeDensity = 0.005f;
+        public Color DeckTopColor = new Color(0.95f, 0.96f, 0.98f, 1f);
+        public Color DeckUnderColor = new Color(0.55f, 0.58f, 0.63f, 1f);
+        [Tooltip("낮은 안개층 밀도(1m당)")]
+        public float FogVolumeDensity = 0.004f;
+        [Tooltip("층 속에서 전역 안개도 쓰는 정도(0~1). 투명 물체는 체적 층보다 뒤에 그려져 전역 안개로만 흐려진다")]
+        [Range(0f, 1f)] public float VolumeGlobalFog = 1f;
+        public Color FogTopColor = new Color(0.93f, 0.94f, 0.96f, 1f);
+        public Color FogUnderColor = new Color(0.78f, 0.8f, 0.83f, 1f);
+        private bool _planeMode;   // HUD 설정 CLOUD QUALITY LOW: 판으로 그린다
+        private Material _volumeMat;
+        private int _volumeLayer = -1;
+        private float _volumeFade = -1f;
+
         private int _placedSeed = int.MinValue;
         private float _placedCoverage = -1f;
         private float _seedTimer;
@@ -150,6 +170,12 @@ namespace ACO
             if (DeckTopRenderer) { _deckTopMat = DeckTopRenderer.material; DeckTopRenderer.gameObject.SetActive(false); }
             if (FogTopRenderer) { _fogTopMat = FogTopRenderer.material; FogTopRenderer.gameObject.SetActive(false); }
             if (CloudVeil) { _veilMat = CloudVeil.material; CloudVeil.gameObject.SetActive(false); }
+            if (CloudVolume) { _volumeMat = CloudVolume.material; CloudVolume.gameObject.SetActive(false); }
+            _idFogBottom = VRCShader.PropertyToID("_UdonACOFogBottom");
+            _idFogTop = VRCShader.PropertyToID("_UdonACOFogTop");
+            _idFogDensity = VRCShader.PropertyToID("_UdonACOFogDensity");
+            _idFogFade = VRCShader.PropertyToID("_UdonACOFogFade");
+            if (SpectatorVolume && _volumeMat) { SpectatorVolume.sharedMaterial = _volumeMat; }   // 층 높이, 페이드, 번개를 그대로 나눠 쓴다
             CheckSeed();
         }
 
@@ -197,6 +223,7 @@ namespace ACO
             Vector3 head = lp.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
             if (SkyFog) { SkyFog.transform.position = head; }
             if (CloudVeil && CloudVeil.gameObject.activeSelf) { CloudVeil.transform.position = head; }
+            if (CloudVolume && CloudVolume.gameObject.activeSelf) { CloudVolume.transform.position = head; }
             FollowPlane(DeckBottomRenderer, head, DeckBottom);
             FollowPlane(DeckTopRenderer, head, DeckTop);
             FollowPlane(FogTopRenderer, head, FogLayerTop);
@@ -221,12 +248,22 @@ namespace ACO
                 _appliedDeckFade = _deckFade;
                 SetPlane(DeckBottomRenderer, _deckBottomMat, _deckFade);
                 SetPlane(DeckTopRenderer, _deckTopMat, _deckFade);
+                // 층 윗면보다 낮은 뭉게구름을 숨긴다 — 고도가 겹치면 층의 부드러운 경계로 윤곽이 비친다
+                if (_material)
+                {
+                    _material.SetFloat("_HideBelow", DeckTop);
+                    _material.SetFloat("_HideAmount", _deckFade);
+                }
+                ApplyCloudLight();
             }
             if (_fogFade != _appliedFogFade)
             {
                 _appliedFogFade = _fogFade;
                 SetPlane(FogTopRenderer, _fogTopMat, _fogFade);
+                ApplyCloudLight();
             }
+
+            UpdateVolume();
 
             _layerAbove = 0f;
             _deckIn = 0f;
@@ -235,11 +272,14 @@ namespace ACO
             float y = _head.y;
             if (_deckFade > 0f)
             {
-                float edge = Mathf.Max(DeckEdge, 1f);
+                // 체적 층은 불투명한 물체가 이미 흐려져 있어 전역 안개를 더 넓게 섞어도 된다(지날 때 튀지 않게)
+                float edge = Mathf.Max(DeckEdge, Volumetric() ? 200f : 1f);
                 float enter = Smooth01((y - (DeckBottom - edge)) / (edge * 2f));
                 float leave = Smooth01(((DeckTop + edge) - y) / (edge * 2f));
                 _deckIn = _deckFade * enter * leave;
-                _layerAbove = Mathf.Max(_layerAbove, _deckFade * Smooth01((y - DeckTop) / (edge * 2f)));
+                // 체적 층은 층 전체를 지나는 동안 맑은 공기로 넘어간다(판이 있을 때는 윗면 둘레에서)
+                float above = Volumetric() ? Smooth01((y - DeckBottom) / Mathf.Max(DeckTop - DeckBottom, 1f)) : Smooth01((y - DeckTop) / (edge * 2f));
+                _layerAbove = Mathf.Max(_layerAbove, _deckFade * above);
             }
             if (_fogFade > 0f)
             {
@@ -249,9 +289,68 @@ namespace ACO
             }
         }
 
+        private bool Volumetric() { return CloudVolume != null && !_planeMode; }
+
+        /// HUD 설정 CLOUD QUALITY(내 화면만): true = 체적, false = 판.
+        public void SetVolumetric(bool on)
+        {
+            _planeMode = !on;
+            _appliedDeckFade = -1f;
+            _appliedFogFade = -1f;
+            _volumeLayer = -1;
+            _volumeFade = -1f;
+            _fogDirty = true;
+        }
+
+        // 파티클(연기·불)이 층을 지나며 흐려지는 정도 = 층 뒤 지형과 같게(1배). 예전 2.5배는 층 아래 연기·미사일 꼬리가 지형보다 훨씬 먼저 사라져
+        // (층 위·층 속에서 아래를 보면 땅은 비쳐 보이는데 연기만 없음) 투명해진 것처럼 보였다.
+        private const float PARTICLE_FOG_BOOST = 1f;
+        private int _idFogBottom;
+        private int _idFogTop;
+        private int _idFogDensity;
+        private int _idFogFade;
+        // -1: 처음 한 번은 반드시 전역값을 쓴다. 0으로 두면 층이 없는 날씨(CLOUDY 등)에서 한 번도 쓰지 않아,
+        // 에디터에서 지난 플레이(비구름층)가 남긴 전역 페이드가 그대로 남아 구름 없이도 층 높이 아래 파티클이 흐려졌다.
+        private float _shaderFogFade = -1f;
+
+        private void UpdateVolume()
+        {
+            if (!_volumeMat) { return; }
+            int layer = _deckFade >= _fogFade ? LAYER_DECK : LAYER_FOG;
+            float fade = _planeMode ? 0f : Mathf.Max(_deckFade, _fogFade) * (1f - _underwater);
+            bool on = fade > 0f;
+            if (CloudVolume.gameObject.activeSelf != on) { CloudVolume.gameObject.SetActive(on); }
+            if (SpectatorVolume && SpectatorVolume.enabled != on) { SpectatorVolume.enabled = on; }
+            if (fade != _shaderFogFade)
+            {
+                _shaderFogFade = fade;
+                VRCShader.SetGlobalFloat(_idFogFade, fade);   // 파티클은 층보다 뒤에 그려져 스스로 흐려진다(ACO/FxParticle)
+            }
+            if (!on) { return; }
+            if (layer != _volumeLayer)
+            {
+                _volumeLayer = layer;
+                bool deck = layer == LAYER_DECK;
+                _volumeMat.SetFloat("_SlabBottom", deck ? DeckBottom : -10f);
+                _volumeMat.SetFloat("_SlabTop", deck ? DeckTop : FogLayerTop);
+                _volumeMat.SetFloat("_Density", deck ? DeckVolumeDensity : FogVolumeDensity);
+                VRCShader.SetGlobalFloat(_idFogBottom, deck ? DeckBottom : -10f);
+                VRCShader.SetGlobalFloat(_idFogTop, deck ? DeckTop : FogLayerTop);
+                VRCShader.SetGlobalFloat(_idFogDensity, (deck ? DeckVolumeDensity : FogVolumeDensity) * PARTICLE_FOG_BOOST);
+                _volumeMat.SetColor("_TopColor", deck ? DeckTopColor : FogTopColor);
+                _volumeMat.SetColor("_BottomColor", deck ? DeckUnderColor : FogUnderColor);
+            }
+            if (fade != _volumeFade)
+            {
+                _volumeFade = fade;
+                _volumeMat.SetFloat("_Fade", fade);
+            }
+        }
+
         private void SetPlane(Renderer r, Material m, float fade)
         {
             if (!r) { return; }
+            if (Volumetric()) { fade = 0f; }   // 체적 층이 대신 그린다
             bool on = fade > 0f;
             if (r.gameObject.activeSelf != on) { r.gameObject.SetActive(on); }
             if (on && m) { m.SetFloat("_Fade", fade); }
@@ -305,8 +404,9 @@ namespace ACO
             if (_inside <= 0f && _underwater <= 0f && _layerAbove <= 0f && _deckIn <= 0f && _fogIn <= 0f && _flash <= 0f) { RestoreBaseFog(); return; }
             float density = Mathf.Lerp(_baseDensity, _clearDensity, _layerAbove);
             Color color = Color.Lerp(_baseColor, _clearColor, _layerAbove);
-            if (_deckIn > 0f) { density = Mathf.Lerp(density, DeckFogDensity, _deckIn); color = Color.Lerp(color, DeckFogColor, _deckIn); }
-            if (_fogIn > 0f) { density = Mathf.Lerp(density, FogLayerDensity, _fogIn); color = Color.Lerp(color, FogLayerColor, _fogIn); }
+            float layerFog = Volumetric() ? VolumeGlobalFog : 1f;
+            if (_deckIn > 0f) { density = Mathf.Lerp(density, DeckFogDensity, _deckIn * layerFog); color = Color.Lerp(color, DeckFogColor, _deckIn * layerFog); }
+            if (_fogIn > 0f) { density = Mathf.Lerp(density, FogLayerDensity, _fogIn * layerFog); color = Color.Lerp(color, FogLayerColor, _fogIn * layerFog); }
             float t = _inside * _inside * (3f - 2f * _inside);
             if (t > 0f) { density = Mathf.Lerp(density, InsideFogDensity, t); color = Color.Lerp(color, InsideFogColor, t); }
             // 번개 섬광: 안개(먼 곳·하늘 안개 돔)도 잠깐 밝게 — 물속은 받지 않는다
@@ -374,6 +474,7 @@ namespace ACO
         {
             if (!_hasHead || Clouds == null || CloudCoreCenters == null || CloudCoreExtents == null) { return 0f; }
             Vector3 head = _head;
+            if (_deckFade > 0.5f && head.y < DeckTop) { return 0f; }   // 이 높이의 뭉게구름은 숨겨져 있다(층 안은 층 안개가 맡는다)
             float best = 0f;
             int n = Mathf.Min(Clouds.Length, Mathf.Min(CloudCoreCenters.Length, CloudCoreExtents.Length));
             float span = Mathf.Max(FogOuter - FogInner, 0.01f);
@@ -403,8 +504,29 @@ namespace ACO
         /// 0 = 흰 구름, 1 = 폭풍 구름. 비구름층 아랫면(천장)은 비(0.65)보다 어두울 때만(폭풍) 더 어둡게.
         public void SetDarkness(float darkness)
         {
-            if (_material) { _material.SetFloat("_Darken", Mathf.Clamp01(darkness)); }
+            _darkness = Mathf.Clamp01(darkness);
+            ApplyCloudLight();
             if (_deckBottomMat) { _deckBottomMat.SetFloat("_Darken", Mathf.Clamp01((darkness - 0.65f) / 0.3f)); }
+            if (_volumeMat) { _volumeMat.SetFloat("_Darken", Mathf.Clamp01((darkness - 0.65f) / 0.3f)); }
+        }
+
+        private float _darkness;
+        private float _sunScale = 1f;
+
+        /// 날씨가 줄인 태양 세기 배율. 층운이 있으면 뭉게구름이 이 값을 되돌린다.
+        public void SetSunScale(float scale)
+        {
+            _sunScale = scale;
+            ApplyCloudLight();
+        }
+
+        /// 뭉게구름 밝기: 층운이 있으면 보이는 구름이 층 위(해가 비치는 곳)라 흰 층 윗면과 맞게 날씨 어둡기·태양 감소를 뺀다.
+        private void ApplyCloudLight()
+        {
+            if (!_material) { return; }
+            float above = Mathf.Max(_deckFade, _fogFade);
+            _material.SetFloat("_Darken", _darkness * (1f - above));
+            _material.SetFloat("_SunGain", Mathf.Lerp(1f, 1f / Mathf.Max(_sunScale, 0.05f), above));
         }
 
         [Header("번개 섬광 (폭풍 — ACO_Lightning이 SetFlash로 넣는다)")]
@@ -422,6 +544,7 @@ namespace ACO
             Vector4 p = new Vector4(pos.x, pos.y, pos.z, 0f);
             if (_deckBottomMat) { _deckBottomMat.SetFloat("_Flash", amount); _deckBottomMat.SetVector("_FlashPos", p); }
             if (_deckTopMat) { _deckTopMat.SetFloat("_Flash", amount * 0.6f); _deckTopMat.SetVector("_FlashPos", p); }
+            if (_volumeMat) { _volumeMat.SetFloat("_Flash", amount); _volumeMat.SetVector("_FlashPos", p); }
             _fogDirty = true;
         }
 

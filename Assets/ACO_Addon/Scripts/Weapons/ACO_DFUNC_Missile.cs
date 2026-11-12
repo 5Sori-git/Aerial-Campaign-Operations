@@ -9,6 +9,23 @@ using SaccFlightAndVehicles;
 
 namespace ACO
 {
+    /// 발사 무전 코드(ACO_Chatter.LaunchTexts/LaunchClips 번호와 같다).
+    public enum ACO_LaunchCall
+    {
+        None = 0,
+        FoxTwo = 1,       // 단거리·적외선 대공
+        FoxThree = 2,     // 장거리·능동 레이더 대공
+        Rifle = 3,        // 대지 미사일
+        Magnum = 4,
+        Greyhound = 5,    // 순항 미사일
+        Bruiser = 6,      // 대함 미사일
+        Pickle = 7,       // 폭탄
+        Rockets = 8,
+        Spear = 9,        // 레일건(RGP)
+        Music = 10,       // ECM
+        Drive = 11        // 마이크로미사일 포드(MMP)
+    }
+
     /// 플레이어 기체용 미사일 다이얼 기능(SAV DFUNC_AAM 대체). SaccEntity의 Dial_Functions_L/R에 넣는다.
     ///
     /// - 표적: TargetLayers에 있는 씬 오브젝트(락온 마커). 빌드 시 ACO_SceneBaker가 Targets에 굽는다 — SaccEntity의
@@ -46,6 +63,8 @@ namespace ACO
         public GameObject[] Targets;
         [Tooltip("시야를 가리는 레이어(지형 등). 이 레이어가 표적보다 앞에 있으면 락온이 풀린다")]
         public LayerMask ObstacleLayers = 2049;
+        [Tooltip("수면으로 볼 레이어(바다 트리거 상자, 기본 Water 4). 기체가 이 안(물속)에 있으면 락온·발사를 막는다")]
+        public LayerMask WaterLayers = 1 << 4;
         [Tooltip("지상 활주 중에도 락온/발사를 허용한다")]
         public bool AllowFiringWhenGrounded = false;
 
@@ -97,6 +116,8 @@ namespace ACO
         [Range(0f, 1f)] public float MinSplashFraction = 0.25f;
         [Tooltip("켜면 유도 미사일도 터진 자리에 범위 피해를 준다(대지 미사일). 대공 미사일은 끈다")]
         public bool MissileSplash = false;
+        [Tooltip("켜면 함선 부위에도 범위 피해를 그대로 준다(LASM). 끄면 직접 닿지 않은 부위는 함선의 PartSplashScale(해상 유닛 0.2)만큼만 받는다")]
+        public bool FullPartSplash = false;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(내 미사일 빗나감/플레어에 속음 대사)")]
         [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
         public ACO_Chatter Chatter;
@@ -120,8 +141,25 @@ namespace ACO
         public bool AutoTargetNearest = false;
         [Tooltip("투하(초): 발사 후 이 시간 동안 엔진 없이 모기체 속도 + 중력으로 떨어진 뒤 점화한다. 0 = 바로 점화(일반 발사). 투하 중과 점화 뒤 2초까지는 시커 각도 제한이 없다")]
         public float DropTime = 0f;
+        [Tooltip("투하 때 밀어내는 속도(m/s, 0 = 없음). 모기체 속도에 EjectDirection 쪽으로 더한다 — 포드 셀에서 아래로 사출(MMP)")]
+        public float EjectSpeed = 0f;
+        [Tooltip("사출 방향(발사 지점 로컬 — 앞 = 기수, 위 = 위). 기본은 아래로, 조금 앞으로")]
+        public Vector3 EjectDirection = new Vector3(0f, -0.958f, 0.287f);
+        [Tooltip("투하 중 표적 쪽으로 기수를 돌리는 속도(도/초). 0 = 기수 그대로 떨어진다")]
+        public float DropTurnRate = 0f;
+        [Tooltip("일제 발사 간격(초). 0 = 한 번에 다 쏜다. 다표적·전탄 발사(OneMissilePerTarget 끔)에서 슬롯을 이 간격으로 차례로 쏜다(MMP 연사)")]
+        public float SalvoInterval = 0f;
+        [Tooltip("락온한 표적이 있으면 발사 순간 탄의 기수를 표적의 예상 자리(리드)로 돌려 쏜다 — 레일건(RGP)처럼 빠른 탄이 곧게 날아가 맞게. 날아가는 동안 보정은 TurnRate만큼")]
+        public bool SnapAimAtLaunch = false;
+        [Tooltip("탄의 처음 속력(m/s). 0 = 미사일 프리팹 값(ACO_Missile.LaunchSpeed). 레일건 탄처럼 처음부터 최고 속력으로 나가게")]
+        public float MuzzleSpeed = 0f;
+        [Tooltip("발사마다 재생하는 포구 섬광(선택 — 모든 클라이언트)")]
+        public ParticleSystem LaunchFlash;
         [Tooltip("시커 범위 기본값(도). 0 = 미사일 프리팹 값(ACO_Missile.MaxTrackingAngle). 강화 SEEKER CONE이 이 값을 키운다(최대 180 = 전방위)")]
         public float SeekerAngle = 0f;
+        [Tooltip("발사 후 락 유지(초): 이 시간 동안 미사일이 시커 범위를 벗어나거나 노칭을 당해도 표적을 놓치지 않는다. 플레어·채프는 막지 않는다. "
+            + "0 = 미사일 프리팹 값(ACO_Missile.LockHoldTime). 유도 미사일만")]
+        public float LockHoldTime = 0f;
         [Tooltip("미사일 수명(초). 0 = 미사일 프리팹 값. 느린 미사일은 늘린다")]
         public float MissileLifetime = 0f;
         [Tooltip("시스키밍(LASM): 표적이 함선이면 해수면 위 SkimAltitude로 낮게 깔려 날아가고(완만하게 내려간다, 앞쪽 지형이 높으면 넘는다) "
@@ -132,10 +170,25 @@ namespace ACO
         [Tooltip("시스키밍을 끝내고 표적으로 꽂히는 수평 거리(m)")]
         public float SkimTerminalDistance = 500f;
 
+        [Header("전자전 (ECM — 켜면 미사일 대신 재밍 포드가 된다)")]
+        [Tooltip("켜면 트리거로 재밍을 켠다: EcmDuration초 동안 ACO_RadarContacts.EcmRange 안의 적 미사일이 표적을 놓치고, NPC가 락온하지 못하고, 적 대공포가 흔들린다. 슬롯·다이얼·격납고는 무장과 같다")]
+        public bool EcmMode = false;
+        [Tooltip("재밍 지속 시간(초). 끝난 뒤 SlotReloadTime초 재충전한다")]
+        public float EcmDuration = 10f;
+        [Tooltip("빌드 시 ACO_SceneBaker가 넣는다 — 재밍 상태를 모은다")]
+        public ACO_RadarContacts EcmHub;
+
         [Header("강화 계열")]
         [Tooltip("격납고 강화 중 어느 탭의 효과를 받는가. Missile = 일반 미사일, SpecialAAM = 특수 대공, SpecialAGM = 특수 대지, "
             + "SpecialBomb = 특수 폭탄/로켓, None = 강화 없음. 대공 탭은 피해/탄수/선회/락온 속도·거리·범위, 대지·폭탄 탭은 피해/탄수/폭발 반경")]
         public ACO_UpgradeFamily UpgradeFamily = ACO_UpgradeFamily.Missile;
+        [Tooltip("강화 계열 밖(None — OTHER 무장 MMP·RGP)이어도 EXTRA AMMO 소모품의 탄수 배수를 받는다. 특수 대공·대지·폭탄 계열은 이것 없이도 받는다")]
+        public bool TakesExtraAmmo = false;
+
+        [Header("발사 무전")]
+        [Tooltip("쏠 때(발사 입력 한 번에 한 번, 같은 코드 쿨타임) 쏜 사람 화면에 무전 — 자막 [내 콜사인] 코드, 음성은 관제기가 코드만. "
+            + "다른 무전이 나오고 있으면 버린다. 글자·음성은 ACO_Chatter의 LaunchTexts/LaunchClips")]
+        public ACO_LaunchCall LaunchCall = ACO_LaunchCall.None;
 
         [Header("발사 입력")]
         [Tooltip("켜면 트리거를 누르고 있는 동안 FireInterval마다 계속 쏜다(로켓·폭탄 연속 투하). 끄면 한 번 당길 때마다 한 번")]
@@ -217,9 +270,19 @@ namespace ACO
         // 가려진 상태가 이 시간(초) 넘게 이어지면 표적을 놓는다(SAV와 같은 0.25초).
         private const float OBSCURED_GRACE = 0.25f;
         private const ushort NO_TARGET = 65535;
+        // 가려진 표적은 이 시간(초) 동안 후보에서 뺀다 — 같은 방향에 겹친 표적(거대 함선의 반대쪽 부위)이 앞의 표적을 가로채지 않게.
+        private const float HIDDEN_SKIP = 0.6f;
+        // 한 프레임에 시야를 확인해 보는 후보 수(가려졌으면 다음 후보)
+        private const int PICK_TRIES = 4;
 
         private bool _initialized;
         private bool _pilot;
+        // 일제 발사 연사(SalvoInterval): 쏠 슬롯·표적을 미리 골라 두고 차례로 보낸다
+        private int[] _salvoSlot;
+        private int[] _salvoTarget;
+        private int _salvoCount;
+        private int _launchCount;   // 쏜 횟수(발사 무전 — 이번 입력에 실제로 쐈는가)
+        private int _salvoNext;
         private bool _selected;
         private bool _triggerLastFrame;
         private VRCPlayerApi _localPlayer;
@@ -250,10 +313,22 @@ namespace ACO
         // 표적. 락온 칸 MaxLockTargets개 — 칸마다 표적 번호/락온 시간/완료/가려진 시간. 비어 있으면 -1.
         // 주 표적 = 처음으로 채워진 칸(HUD 표적 표시와 단일 조회가 쓴다). 칸을 옮기지 않으므로 마커 연출이 끊기지 않는다.
         private SaccEntity[] _targetEntities;
+        private ACO_LockGate[] _targetGates;   // 표적의 락온 제한(ACO_LockGate — 마커에서 부모 쪽으로 찾는다. 없으면 null)
+        private bool[] _targetLooked;          // 표적의 SaccEntity·락온 제한을 찾았는가 — 켜져 있을 때만 찾는다(부모 찾기는 꺼진 오브젝트를 건너뛴다)
+        private float[] _hiddenUntil;
         private int[] _lockIdx;
         private float[] _lockTimer;
         private bool[] _lockDone;
         private float[] _lockObscured;
+        // 같은 함선 부위끼리는 락온 진행도를 잇는다: 표적 i가 속한 함선(없으면 null, 처음 볼 때 부모를 거슬러 찾는다),
+        // 칸을 비운 순간의 함선·진행도 — 곧(CARRY_TIME 안에) 같은 함선의 다른 부위로 채우면 그 진행도로 시작한다
+        private ACO_Warship[] _targetShip;
+        private bool[] _targetShipKnown;
+        private ACO_Warship[] _carryShip;
+        private float[] _carryTimer;
+        private bool[] _carryDone;
+        private float[] _carryAt;
+        private const float CARRY_TIME = 1f;
         private float _scanTimer;
         private float _nextHoldFire;
 
@@ -305,12 +380,12 @@ namespace ACO
             if (Targets == null) { Targets = new GameObject[0]; }
             EnsureLockSlots();
             _targetEntities = new SaccEntity[Targets.Length];
-            for (int i = 0; i < Targets.Length; i++)
-            {
-                if (Targets[i]) { _targetEntities[i] = Targets[i].GetComponentInParent<SaccEntity>(); }
-            }
+            _targetGates = new ACO_LockGate[Targets.Length];
+            _targetLooked = new bool[Targets.Length];
+            _hiddenUntil = new float[Targets.Length];
+            for (int i = 0; i < Targets.Length; i++) { LookUpTarget(i); }
 
-            if (Missile)
+            if (Missile && !EcmMode)
             {
                 for (int i = 0; i < Mathf.Max(NumPreInstantiated, 1); i++) { ReturnToPool(InstantiateMissile()); }
                 _ordTemplate = _pool[0].GetComponent<ACO_Ordnance>();
@@ -333,11 +408,17 @@ namespace ACO
         public void SFEXT_O_PilotExit()
         {
             _pilot = false;
+            _salvoCount = 0;
+            _salvoNext = 0;
             Deselect();
         }
 
         public void SFEXT_G_PilotEnter() { gameObject.SetActive(true); }
-        public void SFEXT_G_PilotExit() { gameObject.SetActive(false); }
+        public void SFEXT_G_PilotExit()
+        {
+            _ecmUntilMs = 0;
+            gameObject.SetActive(false);
+        }
 
         public void DFUNC_Selected()
         {
@@ -407,6 +488,9 @@ namespace ACO
 
         public void SFEXT_G_Explode()
         {
+            _ecmUntilMs = 0;
+            _salvoCount = 0;
+            _salvoNext = 0;
             ResetAmmo();
             if (_selected) { Deselect(); }
         }
@@ -609,6 +693,8 @@ namespace ACO
             if (!_pilot || !_selected) { return; }
 
             bool grounded = !AllowFiringWhenGrounded && SAVControl && (bool)SAVControl.GetProgramVariable("Taxiing");
+            // 물에 잠긴 기체는 쏘지 못한다(바다에 떨어져 가라앉는 중·수면 아래 활주)
+            grounded |= Submerged();
 
             _scanTimer -= Time.deltaTime;
             if (_scanTimer <= 0f)
@@ -624,8 +710,11 @@ namespace ACO
             bool fire = pressed && !grounded && (!_triggerLastFrame || (HoldToFire && Time.time >= _nextHoldFire));
             if (fire)
             {
+                int launchedBefore = _launchCount;
                 TryFire();
                 _nextHoldFire = Time.time + FireInterval;
+                // 발사 무전: 새로 누른 입력에서 실제로 쐈을 때만(누르고 있는 연사·연사 다음 발은 아님)
+                if (!_triggerLastFrame && _launchCount != launchedBefore && Chatter != null && LaunchCall != ACO_LaunchCall.None) { Chatter.CallLaunch((int)LaunchCall); }
             }
             _triggerLastFrame = pressed;
 
@@ -655,7 +744,54 @@ namespace ACO
             _lockTimer = new float[n];
             _lockDone = new bool[n];
             _lockObscured = new float[n];
+            _carryShip = new ACO_Warship[n];
+            _carryTimer = new float[n];
+            _carryDone = new bool[n];
+            _carryAt = new float[n];
             for (int k = 0; k < n; k++) { _lockIdx[k] = -1; }
+        }
+
+        /// 표적 i(락온 마커)가 속한 함선 — 함선 부위(포대·스커트·궤도·코어 등)면 그 ACO_Warship, 아니면 null. 한 번 찾으면 기억한다.
+        /// 마커가 꺼져 있어도 찾도록 부모를 직접 거슬러 올라간다.
+        private ACO_Warship ShipOf(int i)
+        {
+            if (Targets == null || i < 0 || i >= Targets.Length) { return null; }
+            if (_targetShip == null || _targetShip.Length != Targets.Length)
+            {
+                _targetShip = new ACO_Warship[Targets.Length];
+                _targetShipKnown = new bool[Targets.Length];
+            }
+            if (!_targetShipKnown[i])
+            {
+                _targetShipKnown[i] = true;
+                Transform tr = Targets[i] != null ? Targets[i].transform : null;
+                while (tr != null)
+                {
+                    ACO_Warship w = tr.GetComponent<ACO_Warship>();
+                    if (w != null) { _targetShip[i] = w; break; }
+                    tr = tr.parent;
+                }
+            }
+            return _targetShip[i];
+        }
+
+        /// 칸 k에 표적 i를 새로 넣는다: 같은 함선의 부위에서 막 옮겨 온 거면(CARRY_TIME 안) 락온 진행도를 잇고, 아니면 처음부터.
+        private void FillSlot(int k, int i)
+        {
+            _lockIdx[k] = i;
+            _lockObscured[k] = 0f;
+            ACO_Warship ship = ShipOf(i);
+            if (ship != null && _carryShip[k] == ship && Time.time - _carryAt[k] <= CARRY_TIME)
+            {
+                _lockTimer[k] = _carryTimer[k];
+                _lockDone[k] = _carryDone[k];
+            }
+            else
+            {
+                _lockTimer[k] = 0f;
+                _lockDone[k] = false;
+            }
+            _carryShip[k] = null;
         }
 
         /// 칸마다: 잡고 있는 표적이 아직 각도 안이면 유지하고(락온이 흔들리지 않게), 빈 칸은 아직 안 잡은 표적 중
@@ -684,18 +820,25 @@ namespace ACO
                 float betterAngle = curAngle - margin;
                 for (int i = 0; i < Targets.Length; i++)
                 {
-                    if (i == cur || !IsCandidate(i, origin, rangeSq)) { continue; }
+                    if (i == cur || IsSkipped(i) || !IsCandidate(i, origin, rangeSq)) { continue; }
                     float angle = Vector3.Angle(fwd, Targets[i].transform.position - origin);
                     if (angle >= betterAngle) { continue; }
                     betterAngle = angle;
                     better = i;
                 }
+                if (better >= 0 && IsHidden(better, origin))
+                {
+                    MarkHidden(better);
+                    better = -1;
+                }
                 if (better >= 0)
                 {
-                    _lockIdx[0] = better;
-                    _lockTimer[0] = 0f;
-                    _lockDone[0] = false;
-                    _lockObscured[0] = 0f;
+                    // 같은 함선의 부위끼리는 진행도를 그대로 잇는다(부위가 촘촘한 함선에서 표시가 옮겨 다녀도 락온이 다시 시작되지 않게)
+                    _carryShip[0] = ShipOf(cur);
+                    _carryTimer[0] = _lockTimer[0];
+                    _carryDone[0] = _lockDone[0];
+                    _carryAt[0] = Time.time;
+                    FillSlot(0, better);
                 }
             }
 
@@ -703,20 +846,24 @@ namespace ACO
             {
                 if (_lockIdx[k] >= 0) { continue; }
                 int best = -1;
-                float bestAngle = LockAngle;
-                for (int i = 0; i < Targets.Length; i++)
+                for (int attempt = 0; attempt < PICK_TRIES; attempt++)
                 {
-                    if (IsHeld(i) || !IsCandidate(i, origin, rangeSq)) { continue; }
-                    float angle = Vector3.Angle(fwd, Targets[i].transform.position - origin);
-                    if (angle > bestAngle) { continue; }
-                    bestAngle = angle;
-                    best = i;
+                    best = -1;
+                    float bestAngle = LockAngle;
+                    for (int i = 0; i < Targets.Length; i++)
+                    {
+                        if (IsHeld(i) || IsSkipped(i) || !IsCandidate(i, origin, rangeSq)) { continue; }
+                        float angle = Vector3.Angle(fwd, Targets[i].transform.position - origin);
+                        if (angle > bestAngle) { continue; }
+                        bestAngle = angle;
+                        best = i;
+                    }
+                    if (best < 0 || !IsHidden(best, origin)) { break; }
+                    MarkHidden(best);
+                    best = -1;
                 }
                 if (best < 0) { break; }
-                _lockIdx[k] = best;
-                _lockTimer[k] = 0f;
-                _lockDone[k] = false;
-                _lockObscured[k] = 0f;
+                FillSlot(k, best);
             }
         }
 
@@ -737,13 +884,45 @@ namespace ACO
             return false;
         }
 
+        /// 표적 i가 장애물에 가렸는가(UpdateLock과 같은 판정).
+        private bool IsHidden(int i, Vector3 origin)
+        {
+            Vector3 dir = Targets[i].transform.position - origin;
+            float dist = dir.magnitude;
+            RaycastHit hit;
+            return Physics.Raycast(origin, dir, out hit, dist, ObstacleLayers, QueryTriggerInteraction.Ignore) && hit.distance < dist - LOS_TOLERANCE;
+        }
+
+        /// 최근에 가려져 있던 표적 — 잠시 후보에서 뺀다.
+        private bool IsSkipped(int i)
+        {
+            return _hiddenUntil != null && i < _hiddenUntil.Length && Time.time < _hiddenUntil[i];
+        }
+
+        private void MarkHidden(int i)
+        {
+            if (_hiddenUntil != null && i >= 0 && i < _hiddenUntil.Length) { _hiddenUntil[i] = Time.time + HIDDEN_SKIP; }
+        }
+
         private bool IsCandidate(int i, Vector3 origin, float rangeSq)
         {
             GameObject g = Targets[i];
             if (!g || !g.activeInHierarchy) { return false; }
+            if (!_targetLooked[i]) { LookUpTarget(i); }
             SaccEntity e = _targetEntities[i];
             if (e && (e.dead || e == EntityControl)) { return false; }
             return (g.transform.position - origin).sqrMagnitude <= rangeSq;
+        }
+
+        /// 표적 i의 SaccEntity·락온 제한(ACO_LockGate)을 찾는다. 마커가 켜져 있을 때만 — 풀에 꺼져 있던 적(예: 레이저 에이스)은
+        /// 시작 때 부모 찾기에 걸리지 않아 ECM이 빠졌다. 처음 켜진 뒤(후보로 볼 때) 한 번 찾는다.
+        private void LookUpTarget(int i)
+        {
+            GameObject g = Targets[i];
+            if (!g || !g.activeInHierarchy) { return; }
+            _targetLooked[i] = true;
+            _targetEntities[i] = g.GetComponentInParent<SaccEntity>();
+            _targetGates[i] = g.GetComponentInParent<ACO_LockGate>();
         }
 
         /// 칸마다 락온 시간을 잰다. 지형에 가리면 잠깐(OBSCURED_GRACE)은 봐주고, 그보다 길면 그 칸을 비운다.
@@ -768,14 +947,20 @@ namespace ACO
                 bool blocked = Physics.Raycast(origin, dir, out hit, dist, ObstacleLayers, QueryTriggerInteraction.Ignore)
                     && hit.distance < dist - LOS_TOLERANCE;
                 _lockObscured[k] = blocked ? _lockObscured[k] + dt : 0f;
-                if (_lockObscured[k] > OBSCURED_GRACE) { ClearSlot(k); continue; }
+                if (_lockObscured[k] > OBSCURED_GRACE)
+                {
+                    MarkHidden(i);
+                    ClearSlot(k);
+                    continue;
+                }
                 if (k == primary) { _targetDir = dir; }
 
-                if (Vector3.Angle(fwd, dir) <= LockAngle && !blocked)
+                if (Vector3.Angle(fwd, dir) <= LockAngle && !blocked && (_targetGates[i] == null || _targetGates[i].CanBeLockedFrom(origin)))
                 {
                     _lockTimer[k] += dt;
                     if (_lockTimer[k] >= LockTime) { _lockDone[k] = true; }
                 }
+                else if (blocked && ShipOf(i) != null) { }   // 함선 부위가 잠깐 가렸다: 진행도를 멈춰 둔다(OBSCURED_GRACE 넘으면 칸을 비우고 진행도는 같은 함선 다른 부위로 넘어간다)
                 else
                 {
                     _lockTimer[k] = 0f;
@@ -786,6 +971,11 @@ namespace ACO
 
         private void ClearSlot(int k)
         {
+            int i = _lockIdx[k];
+            _carryShip[k] = i >= 0 ? ShipOf(i) : null;
+            _carryTimer[k] = _lockTimer[k];
+            _carryDone[k] = _lockDone[k];
+            _carryAt[k] = Time.time;
             _lockIdx[k] = -1;
             _lockTimer[k] = 0f;
             _lockDone[k] = false;
@@ -795,7 +985,11 @@ namespace ACO
         private void ClearLock()
         {
             EnsureLockSlots();
-            for (int k = 0; k < _lockIdx.Length; k++) { ClearSlot(k); }
+            for (int k = 0; k < _lockIdx.Length; k++)
+            {
+                ClearSlot(k);
+                _carryShip[k] = null;   // 무장을 바꾸거나 다 놓았다 — 진행도를 넘기지 않는다
+            }
         }
 
         /// 주 표적 칸 = 처음으로 채워진 칸. 없으면 -1.
@@ -828,8 +1022,58 @@ namespace ACO
 
         // ───────────── 발사 ─────────────
 
+        // ───────────── 전자전 ─────────────
+
+        private int _ecmUntilMs;   // 재밍이 끝나는 서버 시각(0 = 꺼짐)
+
+        /// 조종사: 준비됐으면 모두에게 재밍을 켠다 — 판정(미사일·락온·포대)이 클라이언트마다 다르므로 모두 알아야 한다.
+        private void TryEcm()
+        {
+            if (FindReadySlot() < 0) { return; }
+            _launchCount++;
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetEcm));
+        }
+
+        public void NetEcm()
+        {
+            Init();
+            _ecmUntilMs = Networking.GetServerTimeInMilliseconds() + Mathf.RoundToInt(EcmDuration * 1000f);
+            if (_slotReadyAt != null && _slotReadyAt.Length > 0) { _slotReadyAt[0] = Time.time + EcmDuration + SlotReloadTime; }
+            if (EcmHub != null) { EcmHub.NotifyEcm(_ecmUntilMs); }
+        }
+
+        public bool IsEcmActive(int now) { return _ecmUntilMs != 0 && _ecmUntilMs - now > 0; }
+
+        /// 비행 HUD의 잔탄 칸: 일반 무장은 잔탄, ECM은 켜진 시간·재충전 시간·준비 완료.
+        public string GetHudCount()
+        {
+            if (!EcmMode) { return GetAmmo().ToString(); }
+            int left = _ecmUntilMs - Networking.GetServerTimeInMilliseconds();
+            if (_ecmUntilMs != 0 && left > 0) { return "ON " + Mathf.CeilToInt(left * 0.001f); }
+            float wait = _slotReadyAt != null && _slotReadyAt.Length > 0 ? _slotReadyAt[0] - Time.time : 0f;
+            return wait > 0f ? "+" + Mathf.CeilToInt(wait) : "RDY";
+        }
+
+        private Collider[] _waterHits = new Collider[2];
+        private float _waterTimer;
+        private bool _submerged;
+
+        /// 기체(발사 지점)가 바다 트리거 상자 안인가 — 0.2초마다 잰다.
+        private bool Submerged()
+        {
+            _waterTimer -= Time.deltaTime;
+            if (_waterTimer > 0f) { return _submerged; }
+            _waterTimer = 0.2f;
+            if (WaterLayers.value == 0) { _submerged = false; return false; }
+            Vector3 p = GetLaunchPoint(0).position;
+            _submerged = Physics.OverlapSphereNonAlloc(p, 0.5f, _waterHits, WaterLayers.value, QueryTriggerInteraction.Collide) > 0;
+            return _submerged;
+        }
+
         private void TryFire()
         {
+            if (EcmMode) { TryEcm(); return; }
+            if (_salvoNext < _salvoCount) { return; }   // 연사 중
             EnsureLockSlots();
             int lockedCount = CountLocked();
             if (lockedCount == 0 && !AllowUnguidedFire && !AutoTargetNearest) { return; }
@@ -851,16 +1095,50 @@ namespace ACO
                 int limit = OneMissilePerTarget ? Mathf.Max(lockedCount, 1) : _slotLoaded.Length;
                 int fired = 0;
                 float now = Time.time;
+                bool ripple = SalvoInterval > 0f && !OneMissilePerTarget;
+                if (ripple && (_salvoSlot == null || _salvoSlot.Length < _slotLoaded.Length))
+                {
+                    _salvoSlot = new int[_slotLoaded.Length];
+                    _salvoTarget = new int[_slotLoaded.Length];
+                }
                 for (int slot = 0; slot < _slotLoaded.Length && fired < limit; slot++)
                 {
                     if (!_slotLoaded[slot] || now < _slotReadyAt[slot]) { continue; }
                     int target = lockedCount > 0 ? LockedTargetAt(fired % lockedCount) : -1;
-                    SendLaunch(target >= 0 ? (ushort)target : NO_TARGET, slot);
+                    if (ripple)
+                    {
+                        _salvoSlot[fired] = slot;
+                        _salvoTarget[fired] = target;
+                    }
+                    else { SendLaunch(target >= 0 ? (ushort)target : NO_TARGET, slot); }
                     fired++;
                 }
                 if (fired == 0) { return; }
+                if (ripple)
+                {
+                    // 첫 발은 지금, 나머지는 SalvoInterval마다(_SalvoStep)
+                    _salvoCount = fired;
+                    _salvoNext = 0;
+                    _SalvoStep();
+                }
             }
             if (EntityControl) { EntityControl.SendEventToExtensions("SFEXT_O_AAMLaunch"); }
+        }
+
+        /// 연사 한 발: 미리 고른 슬롯이 아직 장전돼 있으면 쏘고, 남았으면 SalvoInterval 뒤에 다시. 내리거나 격추되면 멈춘다(위에서 0으로).
+        public void _SalvoStep()
+        {
+            if (_salvoNext >= _salvoCount) { return; }
+            int slot = _salvoSlot[_salvoNext];
+            int target = _salvoTarget[_salvoNext];
+            _salvoNext++;
+            if (_pilot && slot < _slotLoaded.Length && _slotLoaded[slot]) { SendLaunch(target >= 0 ? (ushort)target : NO_TARGET, slot); }
+            if (_salvoNext < _salvoCount) { SendCustomEventDelayedSeconds(nameof(_SalvoStep), SalvoInterval); }
+            else
+            {
+                _salvoCount = 0;
+                _salvoNext = 0;
+            }
         }
 
         /// AutoTargetNearest: LockRange 안에서 가장 가까운 표적(방향·시야 무관). 없으면 -1.
@@ -885,6 +1163,7 @@ namespace ACO
         /// 유도 방식·비례항법 상수는 강화로 바뀌지 않으므로 보내지 않고 받는 쪽이 자기 무장 값을 쓴다.
         private void SendLaunch(ushort target, int slot)
         {
+            _launchCount++;
             if (_ordTemplate)
             {
                 // 폭탄/로켓: SAV처럼 슬롯과 비행 성능만 보낸다. 받은 쪽은 자기 화면의 기체 발사 지점과 동기화 속도(CurrentVel)에서
@@ -913,6 +1192,7 @@ namespace ACO
             UpdateAmmoVisuals();
 
             if (LaunchSound && LaunchSound.clip) { LaunchSound.PlayOneShot(LaunchSound.clip); }
+            if (LaunchFlash) { LaunchFlash.Play(); }
             if (WeaponAnimator && AnimFiredTriggerName != string.Empty) { WeaponAnimator.SetTrigger(AnimFiredTriggerName); }
             if (!Missile) { return; }
 
@@ -945,6 +1225,7 @@ namespace ACO
             {
                 ordnance.Damage = Damage;
                 ordnance.MinSplashFraction = MinSplashFraction;
+                ordnance.FullPartSplash = FullPartSplash;
             }
 
             m.SetActive(true);
@@ -1036,6 +1317,7 @@ namespace ACO
             UpdateAmmoVisuals();
 
             if (LaunchSound && LaunchSound.clip) { LaunchSound.PlayOneShot(LaunchSound.clip); }
+            if (LaunchFlash) { LaunchFlash.Play(); }
             if (WeaponAnimator && AnimFiredTriggerName != string.Empty) { WeaponAnimator.SetTrigger(AnimFiredTriggerName); }
             if (!Missile) { return; }
 
@@ -1064,6 +1346,7 @@ namespace ACO
                 missile.MaxSpeed = maxSpeed;
                 missile.Acceleration = acceleration;
                 missile.TurnRate = turnRate;
+                missile.WanderSeed = 3.7f + slot * 5.31f + (target != NO_TARGET ? target : 0) * 1.73f;   // 비틀거림(MMP) — 모든 화면이 같은 값
                 missile.GuidanceMode = GuidanceMode;              // 강화로 바뀌지 않아 받는 쪽 무장 값
                 missile.NavigationConstant = NavigationConstant;
                 missile.ProximityRadius = proximity;
@@ -1077,20 +1360,27 @@ namespace ACO
                 missile.SeaSkim = SeaSkim;
                 missile.SkimAltitude = SkimAltitude;
                 missile.SkimTerminalDistance = SkimTerminalDistance;
+                missile.SnapAimAtLaunch = SnapAimAtLaunch;
+                if (MuzzleSpeed > 0f) { missile.LaunchSpeed = MuzzleSpeed; }
                 if (DropTime > 0f)
                 {
-                    // 콜드 런치로 투하한다: 사출 속도 0(모기체 속도를 이어받는다), 기수는 그대로, 중력 그대로.
+                    // 콜드 런치로 투하한다: 사출 속도 0(모기체 속도를 이어받는다), 중력 그대로. 사출(EjectSpeed)이 있으면 발사 지점 기준 EjectDirection으로 밀어낸다.
+                    // 기수는 그대로이거나(DropTurnRate 0) 떨어지는 동안 표적 쪽으로 돈다.
                     missile.ColdLaunchTime = DropTime;
                     missile.ColdLaunchSpeed = 0f;
-                    missile.ColdLaunchTurnRate = 0f;
+                    missile.ColdLaunchTurnRate = DropTurnRate;
                     missile.ColdLaunchGravity = 1f;
+                    Vector3 eject = EjectDirection.normalized;
+                    missile.ColdLaunchKick = EjectSpeed > 0f ? launchPoint.TransformDirection(eject) * EjectSpeed : Vector3.zero;
                 }
                 if (MissileLifetime > 0f) { missile.MaxLifetime = MissileLifetime; }
+                if (LockHoldTime > 0f) { missile.LockHoldTime = LockHoldTime; }
                 // 피해는 명중을 판정하는 쏜 사람의 값만 쓰인다(범위 피해도 쏜 사람만 준다).
                 if (isShooter) { missile.Damage = Damage; }
                 missile.SplashRadius = isShooter ? splash : 0f;
                 missile.VisualSplashRadius = splash;   // 폭발 범위 표시는 모든 화면(쏜 사람의 강화 반영 반경)
                 missile.MinSplashFraction = MinSplashFraction;
+                missile.FullPartSplash = FullPartSplash;
             }
 
             m.SetActive(true);

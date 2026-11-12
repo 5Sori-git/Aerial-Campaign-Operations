@@ -49,11 +49,11 @@ MonoBehaviour:
   DisplayName: LGB
   Description: 'LASER-GUIDED BOMB
 
-    LOCK A GROUND TARGET AND DROP - STEERS ONTO
-    IT, TIGHTER BLAST'
+    LOCK A GROUND TARGET AND RELEASE. THE BOMB
+    STEERS ITSELF ONTO IT WITH A WIDE BLAST.'
   Price: 11000
   Icon: {fileID: 21300000, guid: 9ba15ac5b85e3f042aea979c60f25f5e, type: 3}
-  SortOrder: 22
+  SortOrder: 110
   Category: 0
   Module: {fileID: 3455654353913746016}
 --- !u!1 &3965697018313018844
@@ -67,7 +67,7 @@ GameObject:
   - component: {fileID: 6611964435993310517}
   - component: {fileID: 179797160881854574}
   - component: {fileID: 8764719953207219264}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Dot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -150,7 +150,7 @@ GameObject:
   - component: {fileID: 6830513444271702145}
   - component: {fileID: 7373968941803051016}
   - component: {fileID: 645034335406819992}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: CCIP
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -290,9 +290,13 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 5000
   LockAngle: 45
+  LockFromCcip: 1
   LockTime: 1
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
@@ -311,20 +315,35 @@ MonoBehaviour:
   SplashRadius: 60
   MinSplashFraction: 0.25
   MissileSplash: 0
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
   InterceptSites: []
   CrossLockIndicator: 1
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 0
   AutoTargetNearest: 0
   DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 0
+  LockHoldTime: 0
   MissileLifetime: 0
   SeaSkim: 0
   SkimAltitude: 8
   SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 3
+  TakesExtraAmmo: 0
+  LaunchCall: 7
   HoldToFire: 1
   FireInterval: 0.3
   Missile: {fileID: 774057219247744282, guid: fb44d7aac8ab9ca488b4c174e1410f30, type: 3}

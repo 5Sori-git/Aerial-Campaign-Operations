@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using VRC.SDKBase;
 
 namespace ACO
 {
@@ -43,6 +44,9 @@ namespace ACO
         public bool Enabled = true;
         [Tooltip("무작위 선택 가중치(기본 페이즈 가중치와 같은 눈금, 1 = 보통)")]
         public float Weight = 1f;
+        [Tooltip("페이즈별 가중치: 칸 0 = 1페이즈, 칸 1 = 2페이즈 … (비우면 모든 페이즈에 Weight). 칸보다 뒤의 페이즈는 마지막 칸 값. 0이면 그 페이즈엔 안 나온다. "
+            + "보너스 전용 모듈은 본 미션 페이즈 수 기준(5칸 = 5페이즈 미션의 보너스)")]
+        public float[] PhaseWeights;
         [Tooltip("이 페이즈 번호(1부터)부터 나온다")]
         public int MinPhase = 1;
 
@@ -63,7 +67,7 @@ namespace ACO
         public AudioClip StartClip;
         public AudioClip SuccessClip;
         public AudioClip FailClip;
-        [Tooltip("대사별 화자(무전 SpeakerNames 순서: 0 SKY EYE, 1 ENEMY, 2 TRANSPORT, 3 WINGMAN). -1이면 무전의 PhaseSpeaker. 이름 색·무전 채널(PTT)은 화자를 따른다")]
+        [Tooltip("대사별 화자(무전 SpeakerNames 순서: 0 AWACS, 1 ENEMY, 2 TRANSPORT, 3 WINGMAN). -1이면 무전의 PhaseSpeaker. 이름 색·무전 채널(PTT)은 화자를 따른다")]
         public int StartSpeaker = -1;
         public int SuccessSpeaker = -1;
         public int FailSpeaker = -1;
@@ -81,6 +85,12 @@ namespace ACO
         [Tooltip("보너스 페이즈 제한 시간(초) — 지나면 목표가 물러나고 보너스 없이 미션 클리어(관리자가 판정한다)")]
         public float BonusTimeLimit = 240f;
 
+        [Header("BGM (ACO_Bgm — 영상 플레이어 스트리밍)")]
+        [Tooltip("이 페이즈 전용 곡 풀(URL). 비우면 보스 페이즈는 ACO_Bgm의 보스 기본 풀, 일반 페이즈는 무음")]
+        public VRCUrl[] BgmUrls;
+        [Tooltip("BgmUrls와 같은 순서의 곡 이름 — BGM 패널에 표시(비우면 URL). 인스펙터에서 URL 옆에 넣는다")]
+        public string[] BgmNames;
+
         // ───────────── 오너 (관리자가 부른다) ─────────────
 
         /// 지금 배치할 수 있는가(풀 여유, 지형, 항로). 찾은 자리·씨앗은 모듈이 들고 있다가 Begin에서 그대로 쓴다.
@@ -94,6 +104,9 @@ namespace ACO
 
         /// 페이즈가 끝났다(성공·실패·교체). 모듈 지역 상태를 비운다.
         public virtual void End() { }
+
+        /// 끝난 상황을 연출로 잠시 붙잡고 있다(공중 요새의 충돌 폭발) — 이때는 제한 시간으로 실패하지 않는다.
+        public virtual bool HoldsResult() { return false; }
 
         /// 2페이즈부터 페이즈 시작 증원 웨이브를 보내는가(시한 표적처럼 목표가 차례로 나오는 페이즈는 false).
         public virtual bool WaveOnStart() { return true; }
@@ -112,6 +125,13 @@ namespace ACO
 
         // ───────────── 모든 클라이언트 ─────────────
 
+        /// 페이즈 번호 phase(1부터 — 보너스 전용은 본 미션 페이즈 수)의 선택 가중치.
+        public float GetPhaseWeight(int phase)
+        {
+            if (PhaseWeights == null || PhaseWeights.Length == 0) { return Mathf.Max(Weight, 0f); }
+            return Mathf.Max(PhaseWeights[Mathf.Clamp(phase - 1, 0, PhaseWeights.Length - 1)], 0f);
+        }
+
         /// 표적 마커가 지금 목표 태그를 목표로 표시하는가(점수 할당량처럼 아무거나 잡으면 되는 페이즈는 false).
         public virtual bool MarksObjectiveTag() { return true; }
         /// HUD에 지금 목표 태그의 호위 대상(Role VIP) 항로를 그리는가.
@@ -128,6 +148,8 @@ namespace ACO
         public virtual string GetFailText() { return FailText; }
         /// 성공 보너스(관리자가 페이즈 배율을 곱한다). 기본 = ClearBonus.
         public virtual int GetClearBonus() { return ClearBonus; }
+        /// 보스 페이즈인가 — 전용 곡(BgmUrls)이 없으면 ACO_Bgm의 보스 기본 풀을 튼다.
+        public virtual bool IsBossPhase() { return false; }
 
         /// 무전 대사: which 0 = 시작, 1 = 성공, 2 = 실패. 비면 "".
         public string GetChatterText(int which)

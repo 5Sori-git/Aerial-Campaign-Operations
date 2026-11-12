@@ -67,9 +67,15 @@ namespace ACO
         public float EscortLingerTime = 30f;
 
         [Header("보너스 페이즈 (보너스 전용 모듈 — BonusOnly)")]
-        [Tooltip("마지막 페이즈를 클리어하면 이 확률로 보너스 페이즈가 붙는다. 0이면 안 나온다")]
+        [Tooltip("마지막 페이즈를 클리어하면 보너스 페이즈가 붙을 확률 — 본 미션 페이즈 수별(1~5)")]
+        public float[] BonusChanceByPhases = new float[] { 0.05f, 0.1f, 0.25f, 0.5f, 1f };
+        [Tooltip("BonusChanceByPhases를 비웠을 때의 확률. 0이면 안 나온다")]
         [Range(0f, 1f)] public float BonusPhaseChance = 0.3f;
-        [Tooltip("이 페이즈 수 이상인 미션에서만 보너스가 붙는다")]
+        // 디버그 패널: 보너스 확률 강제(-1 = 강제 안 함) — 패널이 모든 클라이언트에 넣는다
+        [System.NonSerialized] public float DebugBonusChance = -1f;
+        // 디버그 패널 P1: 첫 페이즈로 강제할 모듈 번호(Modules 순서, -1 = 없음) — 패널이 모든 클라이언트에 넣는다
+        [System.NonSerialized] public int DebugFirstModule = -1;
+        [Tooltip("BonusChanceByPhases를 비웠을 때: 이 페이즈 수 이상인 미션에서만 보너스가 붙는다")]
         [Range(1, 5)] public int BonusMinPhases = 2;
         [Tooltip("보너스 페이즈의 점수 배율(격추 점수·보너스)")]
         public float BonusScoreMultiplier = 2.5f;
@@ -488,6 +494,14 @@ namespace ACO
 
         /// 보너스 페이즈 종류를 고른다(오너): 보너스 전용 모듈(Enabled, MinPhase ≤ 본 미션 페이즈 수, 가중치 Weight) 중 가중치로 —
         /// 고른 뒤 IsFeasible로 확인하고, 안 되면 빼고 다시. 하나도 안 되면 PHASE_NONE(보너스 없음).
+        /// 본 미션 페이즈 수별 보너스 확률. 디버그 패널 강제 값이 먼저다.
+        public float GetBonusChance(int phases)
+        {
+            if (DebugBonusChance >= 0f) { return DebugBonusChance; }
+            if (BonusChanceByPhases == null || BonusChanceByPhases.Length == 0) { return phases >= BonusMinPhases ? BonusPhaseChance : 0f; }
+            return BonusChanceByPhases[Mathf.Clamp(phases - 1, 0, BonusChanceByPhases.Length - 1)];
+        }
+
         private int PickBonusType(int mainPhases)
         {
             int n = Modules != null ? Mathf.Min(Modules.Length, MAX_MODULES) : 0;
@@ -520,10 +534,16 @@ namespace ACO
         {
             ACO_PhaseModule m = Modules[k];
             if (m == null || !m.Enabled || !m.BonusOnly || (rejected & (1 << k)) != 0 || mainPhases < m.MinPhase) { return 0f; }
-            return Mathf.Max(m.Weight, 0f);
+            return m.GetPhaseWeight(mainPhases);
         }
 
         /// 지금 페이즈가 모듈이면 끝을 알린다(성공·실패·교체·미션 끝).
+        private bool ModuleHoldsResult()
+        {
+            ACO_PhaseModule m = _phaseActive ? GetModule(GetCurrentPhaseType()) : null;
+            return m != null && m.HoldsResult();
+        }
+
         private void EndModulePhase()
         {
             ACO_PhaseModule m = GetModule(GetCurrentPhaseType());
@@ -591,7 +611,7 @@ namespace ACO
             if (type == prev || !IsModuleType(type)) { return 0f; }
             ACO_PhaseModule m = GetModule(type);
             if (!m.Enabled || m.BonusOnly || phaseIndex + 1 < m.MinPhase) { return 0f; }
-            return Mathf.Max(m.Weight, 0f);
+            return m.GetPhaseWeight(phaseIndex + 1);
         }
 
         private void Tick()
@@ -601,7 +621,7 @@ namespace ACO
 
             // 실패: 제한 시간 초과
             int limitMs = GetTimeLimitMs();
-            if (_bonusIndex < 0 && limitMs > 0 && now - _missionStartMs >= limitMs)
+            if (_bonusIndex < 0 && limitMs > 0 && now - _missionStartMs >= limitMs && !ModuleHoldsResult())
             {
                 FinishMission(false, now);
                 Debug.Log("[ACO] 미션 실패(제한 시간): 팀 점수 " + _teamScore);
@@ -668,6 +688,12 @@ namespace ACO
                 return;
             }
             int prev = _phaseIndex > 0 ? _phaseTypes[_phaseIndex - 1] : PHASE_NONE;
+            int forced = DebugForcedType(_phaseIndex, _phaseFocus);
+            if (forced != PHASE_NONE)
+            {
+                BeginPhase(forced, now, true);
+                return;
+            }
             int type = PickPhaseType(_phaseIndex, prev, 0, _phaseFocus);
             if (type == PHASE_NONE)
             {
@@ -684,6 +710,21 @@ namespace ACO
                 }
             }
             BeginPhase(type, now, true);
+        }
+
+        /// 디버그 패널 P1: 첫 페이즈를 그 모듈로 — 가중치·MinPhase·켜짐·보너스 전용을 보지 않는다. 배치할 수 없으면(지형·풀) 알리고 평소대로 고른다.
+        private int DebugForcedType(int phaseIndex, Vector3 focus)
+        {
+            if (phaseIndex != 0 || DebugFirstModule < 0 || Modules == null || DebugFirstModule >= Modules.Length) { return PHASE_NONE; }
+            ACO_PhaseModule m = Modules[DebugFirstModule];
+            if (m == null) { return PHASE_NONE; }
+            if (!m.IsFeasible(phaseIndex, focus))
+            {
+                Debug.LogWarning("[ACO] 디버그 1페이즈 강제: " + m.GetName() + " 배치 불가 — 평소대로 고름");
+                return PHASE_NONE;
+            }
+            Debug.Log("[ACO] 디버그 1페이즈 강제: " + m.GetName());
+            return PHASE_MODULE_BASE + DebugFirstModule;
         }
 
         /// 확인 없이 가중치로만 고른다(마지막 수단). 막힌 종류는 뺀다.
@@ -825,7 +866,7 @@ namespace ACO
                 {
                     _bonusRolled = true;
                     int bonusType = PHASE_NONE;
-                    if (_phaseCount >= BonusMinPhases && _phaseCount <= MAX_PHASES && Random.value < BonusPhaseChance && Generator != null)
+                    if (_phaseCount <= MAX_PHASES && Random.value < GetBonusChance(_phaseCount) && Generator != null)
                     {
                         bonusType = PickBonusType(_phaseCount);
                     }
@@ -1292,6 +1333,8 @@ namespace ACO
 
         /// 이번 미션에 호위 이동 시간으로 늘어난 제한 시간(ms). HUD가 늘어난 걸 보고 알린다.
         public int GetTimeExtensionMs() { return _timeExtensionMs; }
+        /// 모듈: 미션 제한 시간을 늘린다(오래 걸리는 페이즈 — Begin에서 부른다. 페이즈 시작과 함께 동기화된다).
+        public void AddModuleTime(float seconds) { _timeExtensionMs += Mathf.RoundToInt(Mathf.Max(seconds, 0f) * 1000f); }
 
         // ───────────── 호위 이동 시간 (오너) ─────────────
 

@@ -19,7 +19,8 @@ namespace ACO
         public Transform[] Projectors;
         public Material[] Materials;
 
-        [UdonSynced] private VRCUrl _url = VRCUrl.Empty;
+        [UdonSynced] private VRCUrl _url = VRCUrl.Empty;    // 데칼 1
+        [UdonSynced] private VRCUrl _url1 = VRCUrl.Empty;   // 데칼 2
         [UdonSynced] private Vector3 _p0;
         [UdonSynced] private Vector3 _p1;
         [UdonSynced] private Quaternion _r0 = Quaternion.identity;
@@ -28,10 +29,10 @@ namespace ACO
         [UdonSynced] private float _s1 = 1f;
         [UdonSynced] private byte _flags;   // 1 켜짐, 2 데칼1, 4 데칼2, 8 뒤집기1, 16 뒤집기2
 
-        private string _appliedUrl = "";
-        private bool _waiting;
+        private string[] _appliedUrl = new string[] { "", "" };
+        private bool[] _waiting = new bool[2];
+        private bool[] _texReady = new bool[2];
         private float _pollTimer;
-        private bool _texReady;
 
         void Start() { Apply(); }
 
@@ -42,16 +43,17 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!Utilities.IsValid(me)) { return; }
             Networking.SetOwner(me, gameObject);
-            VRCUrl url = Studio.GetUrl();
-            bool hasUrl = url != null && !string.IsNullOrEmpty(url.Get());
-            bool on0 = Studio.HasPose(DecalKey, 0);
-            bool on1 = Studio.HasPose(DecalKey, 1);
+            VRCUrl url0 = Studio.GetUrl(0);
+            VRCUrl url1 = Studio.GetUrl(1);
+            bool on0 = Studio.HasPose(DecalKey, 0) && url0 != null && !string.IsNullOrEmpty(url0.Get());
+            bool on1 = Studio.HasPose(DecalKey, 1) && url1 != null && !string.IsNullOrEmpty(url1.Get());
             byte f = 0;
-            if (hasUrl && (on0 || on1)) { f |= 1; }
+            if (on0 || on1) { f |= 1; }
             if (on0) { f |= 2; _p0 = Studio.GetPos(DecalKey, 0); _r0 = Studio.GetRot(DecalKey, 0); _s0 = Studio.GetSize(DecalKey, 0); if (Studio.GetFlip(DecalKey, 0)) { f |= 8; } }
             if (on1) { f |= 4; _p1 = Studio.GetPos(DecalKey, 1); _r1 = Studio.GetRot(DecalKey, 1); _s1 = Studio.GetSize(DecalKey, 1); if (Studio.GetFlip(DecalKey, 1)) { f |= 16; } }
             _flags = f;
-            _url = hasUrl ? url : VRCUrl.Empty;
+            _url = on0 ? url0 : VRCUrl.Empty;
+            _url1 = on1 ? url1 : VRCUrl.Empty;
             RequestSerialization();
             Apply();
         }
@@ -62,6 +64,7 @@ namespace ACO
             if (!Networking.IsOwner(gameObject)) { return; }
             _flags = 0;
             _url = VRCUrl.Empty;
+            _url1 = VRCUrl.Empty;
             RequestSerialization();
             Apply();
         }
@@ -73,16 +76,31 @@ namespace ACO
             bool active = (_flags & 1) != 0;
             bool mine = Networking.IsOwner(gameObject);
             if (active && !mine && Studio != null && Studio.HideOthers()) { active = false; }
-            string u = _url != null ? _url.Get() : "";
-            if (u != _appliedUrl) { _appliedUrl = u; _texReady = false; _waiting = false; }
-            // 보여야 하는데 이미지가 아직이면: 받아 둔 게 있으면 바로, 없으면 스튜디오에 부탁하고 기다린다(실패면 끈 채)
-            if (active && u.Length > 0 && !_texReady && Studio != null)
-            {
-                if (Studio.GetTexture(_url) != null) { _texReady = true; }
-                else if (!_waiting && !Studio.IsFailed(_url)) { Studio.Request(_url); _waiting = true; }
-            }
+            Prepare(0, _url, active && (_flags & 2) != 0);
+            Prepare(1, _url1, active && (_flags & 4) != 0);
             SetOne(0, active && (_flags & 2) != 0, _p0, _r0, _s0, (_flags & 8) != 0);
             SetOne(1, active && (_flags & 4) != 0, _p1, _r1, _s1, (_flags & 16) != 0);
+        }
+
+        private VRCUrl UrlOf(int i) { return i == 0 ? _url : _url1; }
+
+        // 보여야 하는데 이미지가 아직이면: 받아 둔 게 있으면 바로, 없으면 스튜디오에 부탁하고 기다린다
+        private void Prepare(int i, VRCUrl url, bool wanted)
+        {
+            string u = url != null ? url.Get() : "";
+            if (u != _appliedUrl[i])
+            {
+                _appliedUrl[i] = u;
+                _texReady[i] = false;
+                _waiting[i] = false;
+            }
+            if (!wanted || u.Length == 0 || _texReady[i] || Studio == null) { return; }
+            if (Studio.GetTexture(url) != null) { _texReady[i] = true; }
+            else if (!_waiting[i] && !Studio.IsFailed(url))
+            {
+                Studio.Request(url);
+                _waiting[i] = true;
+            }
         }
 
         private void SetOne(int i, bool on, Vector3 p, Quaternion r, float s, bool flip)
@@ -92,25 +110,45 @@ namespace ACO
             Transform t = Projectors[i];
             t.localPosition = p;
             t.localRotation = r;
+            bool show = on && _texReady[i];
+            // 안 보이는 프로젝터도 기체를 다시 그린다 — 오브젝트째 끈다
+            t.gameObject.SetActive(show);
             if (m == null) { return; }
             m.SetFloat("_Size", s);
             m.SetFloat("_Flip", flip ? 1f : 0f);
-            if (on && _texReady && Studio != null)
+            if (show && Studio != null)
             {
-                Texture2D tex = Studio.GetTexture(_url);
+                Texture2D tex = Studio.GetTexture(UrlOf(i));
                 if (tex != null) { m.SetTexture("_MainTex", tex); }
             }
-            m.SetFloat("_Visible", on && _texReady ? 1f : 0f);
+            m.SetFloat("_Visible", show ? 1f : 0f);
         }
 
         void Update()
         {
-            if (!_waiting || Studio == null) { return; }
+            if (!_waiting[0] && !_waiting[1] || Studio == null) { return; }
             _pollTimer -= Time.deltaTime;
             if (_pollTimer > 0f) { return; }
             _pollTimer = 0.5f;
-            if (Studio.GetTexture(_url) != null) { _waiting = false; _texReady = true; Apply(); }
-            else if (Studio.IsFailed(_url)) { _waiting = false; _texReady = false; Apply(); }
+            bool changed = false;
+            for (int i = 0; i < 2; i++)
+            {
+                if (!_waiting[i]) { continue; }
+                VRCUrl url = UrlOf(i);
+                if (Studio.GetTexture(url) != null)
+                {
+                    _waiting[i] = false;
+                    _texReady[i] = true;
+                    changed = true;
+                }
+                else if (Studio.IsFailed(url))
+                {
+                    _waiting[i] = false;
+                    _texReady[i] = false;
+                    changed = true;
+                }
+            }
+            if (changed) { Apply(); }
         }
 
         /// 다른 사람 데칼 숨기기를 바꿨을 때 스튜디오가 부른다.

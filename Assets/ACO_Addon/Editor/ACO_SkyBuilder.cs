@@ -20,6 +20,8 @@ public static class ACO_SkyBuilder
     private const string CloudMaterialPath = "Assets/ACO_Addon/Generated/ACO_Clouds.mat";
     private const string RainMaterialPath = "Assets/ACO_Addon/Generated/ACO_Rain.mat";
     private const string RainMeshPath = "Assets/ACO_Addon/Generated/ACO_RainDrops.asset";
+    public static Mesh RainMesh() { return AssetDatabase.LoadAssetAtPath<Mesh>(RainMeshPath); }
+    public static Material RainMaterial() { return AssetDatabase.LoadAssetAtPath<Material>(RainMaterialPath); }
     private const string PuffTexturePath = "Assets/ACO_Addon/Textures/Clouds/ACO_CloudPuffs.png";
     private const int VariantCount = 10;
     private const int PoolSize = 64;
@@ -194,6 +196,7 @@ public static class ACO_SkyBuilder
     private const string DeckTopMaterialPath = GeneratedDir + "/ACO_CloudDeckTop.mat";
     private const string FogTopMaterialPath = GeneratedDir + "/ACO_FogLayerTop.mat";
     private const string VeilMaterialPath = GeneratedDir + "/ACO_CloudVeil.mat";
+    private const string VolumeMaterialPath = GeneratedDir + "/ACO_CloudVolume.mat";
     /// 층 판 크기(Unity 기본 평면 10m × 이 배율) — 80km. 머리를 따라다니고 먼 쪽은 안개가 덮는다.
     private const float LayerPlaneScale = 8000f;
 
@@ -250,6 +253,13 @@ public static class ACO_SkyBuilder
                 mat.SetFloat("_Cull", (float)CullMode.Back);
             });
             field.FogTopRenderer = CreatePart(parent, "FogLayerTop", PrimitiveType.Plane, LayerPlaneScale, m, false);
+            made = true;
+        }
+        if (field.CloudVolume == null)
+        {
+            Material m = LoadOrCreate(VolumeMaterialPath, "ACO/CloudVolume", null);
+            // 위치는 셰이더가 카메라에 붙인다 — 크기는 시야 판정에서 잘리지 않을 만큼(관전 카메라 포함)
+            field.CloudVolume = CreatePart(parent, "CloudVolume", PrimitiveType.Sphere, 120000f, m, false);
             made = true;
         }
         if (field.CloudVeil == null)

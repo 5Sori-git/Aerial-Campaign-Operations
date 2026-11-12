@@ -146,6 +146,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1451328656866212972}
+  - {fileID: 5408429913354415474}
   m_Father: {fileID: 7901466337811541938}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3909137036222014767
@@ -295,6 +296,7 @@ MonoBehaviour:
   TargetHealth: {fileID: 8162597056581443719}
   Hostile: 0
   TargetName: Convoy
+  Role: 0
   MarkerLabel: CVY
   MoveMode: 2
   Speed: 20
@@ -304,6 +306,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 2049
   BobAngle: 0.5
+  HoverSeaLevel: 0
   DropEffects: []
   DropDetachDelay: 4
   DepartClimbRate: 15
@@ -312,6 +315,8 @@ MonoBehaviour:
   Flares: {fileID: 0}
   DefenseGuns: []
   AttackPriority: 0
+  PriorityForSites: 0
+  PriorityDefaultsApplied: 1
   HideOnDeath:
   - {fileID: 1230286726061208940}
   ShowOnDeath:
@@ -579,4 +584,78 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4738658877112600, guid: cf20df4b4c5ed094fac5975709fa5a9c,
     type: 3}
   m_PrefabInstance: {fileID: 1456055149575273844}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &3722519739847822625
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 762776161076373684}
+    m_Modifications:
+    - target: {fileID: 4486153565485195202, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_Name
+      value: ACO_DeathFx_Ground
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 47f030f1c32ac2b42a2eba09552c0bdd, type: 3}
+--- !u!4 &5408429913354415474 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8694077734543188051, guid: 47f030f1c32ac2b42a2eba09552c0bdd,
+    type: 3}
+  m_PrefabInstance: {fileID: 3722519739847822625}
   m_PrefabAsset: {fileID: 0}

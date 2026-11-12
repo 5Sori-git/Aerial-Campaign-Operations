@@ -9,6 +9,8 @@ namespace ACO
     ///   1) 리드 조준점과 기수가 FireStartAngle(A) 이내 → 발포 시작 (시각 효과, 모든 클라이언트 로컬)
     ///   2) EffectiveAngle(B) 이내에 DwellTime(N)초 연속 머물면 → 데미지 시작 (벗어나면 리셋)
     ///   3) 데미지 주기는 가까울수록 짧아진다 (MinDamageInterval ~ MaxDamageInterval)
+    ///   4) ShellHitRadius가 0보다 크면(대공포): 주기마다 바로 맞히지 않고 탄을 띄운다 — 쏠 때의 조준점(직진 예측)에 탄속 뒤 도착해,
+    ///      그때 표적이 ShellHitRadius 안에 있어야 맞는다. 날아가는 동안 꺾으면 빗나간다(예광탄이 빗나간 것과 같다).
     ///
     /// SAV 기총처럼 충돌 파티클을 쓰지 않는 이유: SaccEntity.OnParticleCollision은 충돌이 일어난 클라이언트에서
     /// 무조건 데미지를 적용하므로, 한 클라이언트의 화면에서 날아간 탄이 다른 기체에 닿으면 엉뚱한 기체가 맞는다.
@@ -24,6 +26,8 @@ namespace ACO
         public Transform Muzzle;
         [Tooltip("시각 전용 탄 파티클(충돌 모듈 끔). 발사 중에만 방출한다")]
         public ParticleSystem VisualParticle;
+        [Tooltip("레이저 연출(선택 — ACO_NPCLaser): 넣으면 예광탄 대신 빔을 그린다. 쏠 때 켜고 멈출 때 끈다. 판정·피해는 그대로 이 기총이 한다")]
+        public ACO_NPCLaser Laser;
         public AudioSource FireSound;
         [Tooltip("탄이 쏜 기체의 속도를 물려받는다고 보고 리드를 계산할 때 쓴다. 파티클의 Inherit Velocity 설정과 맞춘다")]
         public ACO_NPCFlightController ShooterFlight;
@@ -53,11 +57,15 @@ namespace ACO
         public byte WeaponType = 1;
         [Tooltip("지형에 가려지면 데미지가 들어가지 않는다")]
         public LayerMask GroundLayers = 2049;
+        [Tooltip("탄 도착 판정 반경(m): 탄이 조준점에 닿을 때 표적이 이 안에 있어야 맞는다. 0 = 도착을 기다리지 않고 바로 맞는다(전투기 기총)")]
+        public float ShellHitRadius = 0f;
 
         [Header("탄도 (리드 계산 / 파티클)")]
         public float MuzzleVelocity = 900f;
         [Tooltip("시각 전용 — 프리팹 빌더가 파티클 원뿔 각도로 쓴다. 데미지와 무관")]
         public float Spread = 0.6f;
+        [Tooltip("내 기체를 쏠 때 탄이 스쳐 지나가는 소리 — Bake가 채운다")]
+        public ACO_BulletFlyby Flyby;
 
         private int _targetIdx = -1;
         private Transform _target;
@@ -70,6 +78,11 @@ namespace ACO
         private float _burstTimer;
         private float _dwell;
         private float _damageTimer;
+
+        private const int MAX_SHELLS = 16;
+        private Vector3[] _shellPoint = new Vector3[MAX_SHELLS];   // 날아가는 탄의 도착 자리(표적 오너만)
+        private float[] _shellTime = new float[MAX_SHELLS];
+        private int _shellCount;
 
         void Start()
         {
@@ -84,6 +97,7 @@ namespace ACO
         {
             if (targetIndex != _targetIdx) { BindTarget(targetIndex); }
             _targetVel = targetVelocity;
+            if (_shellCount > 0) { TickShells(); }
 
             // 연막 속 표적은 조준할 수 없다
             bool valid = targetIndex >= 0 && TargetIsValid() && !(_targetSmoke != null && _targetSmoke.IsObscured());
@@ -98,6 +112,12 @@ namespace ACO
 
             bool fireNow = UpdateBurst(inRange && angle <= FireStartAngle, dt);
             SetFiring(fireNow);
+            if (fireNow && inRange && Flyby != null && Flyby.IsLocalTarget(_targetEntity))
+            {
+                // 레이저는 총알 스치는 소리 대신 전자음(빛이라 바로)
+                if (Laser) { Flyby.ReportLaser(MuzzlePosition(), dist * Mathf.Sin(angle * Mathf.Deg2Rad)); }
+                else { Flyby.ReportFire(MuzzlePosition(), dist / Mathf.Max(MuzzleVelocity, 1f), dist * Mathf.Sin(angle * Mathf.Deg2Rad)); }
+            }
 
             // 여기부터는 데미지 판정 — 타겟 기체의 오너만 한다.
             if (!inRange || !IOwnTarget()) { ResetDwell(); return; }
@@ -119,7 +139,35 @@ namespace ACO
             _damageTimer = 0f;
 
             if (BlockedByTerrain()) { return; }
-            ApplyDamage(DamagePerTick);
+            if (ShellHitRadius > 0f) { FireShell(); }
+            else { ApplyDamage(DamagePerTick); }
+        }
+
+        /// 탄을 띄운다: 지금의 직진 예측 자리에 탄속 뒤 도착한다.
+        private void FireShell()
+        {
+            if (_shellCount >= MAX_SHELLS) { return; }
+            Vector3 point = LeadPoint(_target.position, _targetVel);
+            _shellPoint[_shellCount] = point;
+            _shellTime[_shellCount] = Time.time + Vector3.Distance(MuzzlePosition(), point) / Mathf.Max(MuzzleVelocity, 1f);
+            _shellCount++;
+        }
+
+        /// 도착한 탄을 판정한다 — 그 순간 표적이 도착 자리 가까이 있어야 맞는다.
+        private void TickShells()
+        {
+            float now = Time.time;
+            float radiusSq = ShellHitRadius * ShellHitRadius;
+            for (int i = _shellCount - 1; i >= 0; i--)
+            {
+                if (now < _shellTime[i]) { continue; }
+                Vector3 point = _shellPoint[i];
+                _shellCount--;
+                _shellPoint[i] = _shellPoint[_shellCount];
+                _shellTime[i] = _shellTime[_shellCount];
+                if (!TargetIsValid() || (_target.position - point).sqrMagnitude > radiusSq || BlockedByTerrain()) { continue; }
+                ApplyDamage(DamagePerTick);
+            }
         }
 
         /// 탄속 기준 리드 조준점. AI는 기총 사거리 안에서 기체를 이 점으로 돌린다.
@@ -169,12 +217,16 @@ namespace ACO
             SetFiring(Vector3.Angle(MuzzleForward(), aimPoint - MuzzlePosition()) <= FireStartAngle * 2f);
         }
 
+        /// 지금 쏘는 중인가(연출 — 모든 화면). 레이저 에이스가 나를 비추는지 볼 때 쓴다.
+        public bool IsFiring() { return _firing; }
+
         /// 격추 등으로 즉시 멈출 때.
         public void ForceStop()
         {
             SetFiring(false);
             _inBurst = false;
             _burstTimer = 0f;
+            _shellCount = 0;
             ResetDwell();
         }
 
@@ -193,6 +245,7 @@ namespace ACO
         private void BindTarget(int idx)
         {
             ResetDwell();
+            _shellCount = 0;
             _targetIdx = idx;
             _target = null;
             _targetEntity = null;
@@ -262,6 +315,7 @@ namespace ACO
             if (_targetStatic)
             {
                 // NPC 무기 표시(작전판이 아군 유닛 격추로 가른다)
+                _targetStatic.LastHitWeaponType = (byte)(WeaponType + ACO_Missile.NPC_WEAPON_OFFSET);
                 _targetStatic.WeaponDamageTarget(damage, gameObject, (byte)(WeaponType + ACO_Missile.NPC_WEAPON_OFFSET));
             }
             else if (_targetEntity)
@@ -280,6 +334,7 @@ namespace ACO
                 if (on) { VisualParticle.Play(); }
                 else { VisualParticle.Stop(); }
             }
+            if (Laser) { Laser.SetFiring(on); }
             if (FireSound)
             {
                 if (on) { FireSound.Play(); }

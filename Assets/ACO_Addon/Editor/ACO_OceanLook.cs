@@ -82,6 +82,7 @@ public static class ACO_OceanLook
                 // 바다는 그림자를 드리울 일이 없다(깊이 텍스처에도 안 들어가게)
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 r.receiveShadows = false;
+                UseSkyOnly(r);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(r);
                 EditorUtility.SetDirty(r);
                 applied++;
@@ -98,6 +99,14 @@ public static class ACO_OceanLook
         AssetDatabase.SaveAssets();
         if (applied == 0) { Debug.LogWarning($"[ACO] 물 레이어(4)에 가로 {MinSeaSize / 1000f:0}km 이상인 바다 평면이 없습니다 — 바다 오브젝트에 {MaterialPath}를 직접 넣으세요.", m); }
         else { Debug.Log($"[ACO] 바다 머티리얼 적용: {applied}개 — 색·물결·거품은 {MaterialPath}에서. 섬 둘레 얕은 물·해안 거품은 'Use depth texture'(그림자를 켠 실시간 방향광 필요).", m); }
+    }
+
+    /// 바다는 하늘만 비춘다. 바다와 너울 원판은 범위가 맵 전체라, 프로브를 쓰면 격납고나 격실 프로브 중
+    /// 범위가 겹치는 것을 제각기 골라 원 경계에서 색이 갈린다.
+    private static void UseSkyOnly(MeshRenderer r)
+    {
+        r.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        r.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
     }
 
     public static bool IsApplied()
@@ -158,7 +167,7 @@ public static class ACO_OceanLook
         mr.sharedMaterial = swell;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
-        mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        UseSkyOnly(mr);
         EditorUtility.SetDirty(go);
         Debug.Log($"[ACO] 가까운 너울: 반경 {radius:0}m 원판(정점 {disk.vertexCount}) — 카메라 높이 {sea.GetFloat("_SwellFadeHeight"):0}m 위에선 잦아든다. 끄려면 ACO → Terrain → Remove Ocean Swell.", go);
     }

@@ -66,9 +66,13 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6000
   LockAngle: 15
+  LockFromCcip: 1
   LockTime: 1
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
@@ -87,20 +91,35 @@ MonoBehaviour:
   SplashRadius: 20
   MinSplashFraction: 0.4
   MissileSplash: 0
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
   InterceptSites: []
   CrossLockIndicator: 0
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 1
   AutoTargetNearest: 0
   DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 0
+  LockHoldTime: 0
   MissileLifetime: 0
   SeaSkim: 0
   SkimAltitude: 8
   SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 1
+  TakesExtraAmmo: 0
+  LaunchCall: 8
   HoldToFire: 1
   FireInterval: 0.12
   Missile: {fileID: 2429952938445961008, guid: ca1ec8c1c9c91424fb1fd39eb742c7ce, type: 3}
@@ -204,12 +223,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Id: FLAK
   DisplayName: FLAK
-  Description: 'PROXIMITY-FUSED AIR-TO-AIR ROCKETS
+  Description: 'PROXIMITY-FUSED ROCKETS
 
-    UNGUIDED - BURSTS NEAR ANY
-    ENEMY AIRCRAFT'
+    HOLD TO FIRE UNGUIDED ROCKETS THAT BURST
+    NEAR ANY ENEMY AIRCRAFT.'
   Price: 9000
   Icon: {fileID: 21300000, guid: 5539fbe4ff5703c41a2923b84ed44b2c, type: 3}
-  SortOrder: 65
+  SortOrder: 140
   Category: 0
   Module: {fileID: 679530770466539856}

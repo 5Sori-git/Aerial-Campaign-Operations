@@ -31,6 +31,7 @@ namespace ACO
         public const int ARRIVE_STOP = 3;
         public const int ROLE_VIP = 0;         // 지켜야 하는 대상(잃으면 실패)
         public const int ROLE_GUARD = 1;       // 같이 가며 싸우는 아군(호위함·공격헬기 — 잃어도 실패 아님). 상륙전에서만 쓴다
+        public const int ROLE_FLAGSHIP = 3;    // 함대전 기함(잃으면 실패 — 다른 호위 페이즈의 VIP 후보에 섞이지 않는다)
         public const int ROLE_MOTHERSHIP = 2;  // 후방에서 대기하는 모선(강습상륙함 — LCAC·헬기가 여기서 나온다). 상륙전에서만 쓴다
 
         [Header("참조")]
@@ -84,6 +85,10 @@ namespace ACO
         [Header("적 우선순위")]
         [Tooltip("적 전투기가 이 표적을 이만큼(m) 더 가깝게 본다 — 클수록 플레이어보다 먼저 노린다")]
         public float AttackPriority = 3000f;
+        [Tooltip("켜면 적 포대·VLS(ACO_AAGunSite, ACO_SAMSite)도 AttackPriority를 따른다. 끄면 적 전투기만 — 포대는 가까운 표적부터 쏜다")]
+        public bool PriorityForSites = false;
+        // Bake가 수송기·기함에 우선순위 기본값을 한 번 넣었다(그 뒤로 직접 바꾼 값은 건드리지 않는다)
+        [HideInInspector] public bool PriorityDefaultsApplied;
 
         [Header("격추 연출")]
         [Tooltip("격추 시 숨길 오브젝트")]
@@ -183,6 +188,14 @@ namespace ACO
         /// distanceOffset = 행렬 안에서 앞선 거리(m, 혼자면 0), stopBack = 선두보다 뒤에 멈출 거리(m, 선두/혼자면 0),
         /// arrival = 도착 방식(ARRIVE_*, 착륙이면 마지막 세 경유점 = 최종 접근 시작점/접지점/정지점), lateral = 항로 옆으로 벌어진 거리(m, 오른쪽 +).
         /// revive면 부활시킨다(늦게 들어온 클라이언트는 false — 생사는 SaccTarget 동기화가 맞춘다).
+        /// 함대전: 항로 속도를 함대 속도로 맞춘다(s <= 0이면 원래 값). 시간 함수의 입력이라 MissionStart 전에 부른다 — 생성기가 모든 클라이언트에서 같게 넣는다.
+        public void SetSpeedOverride(float s)
+        {
+            if (_baseSpeed < 0f) { _baseSpeed = Speed; }
+            Speed = s > 0f ? s : _baseSpeed;
+        }
+        private float _baseSpeed = -1f;
+
         public void MissionStart(Vector3[] route, int offset, int count, int startMs, bool revive, float distanceOffset, float stopBack, int arrival, float lateral)
         {
             Init();
@@ -417,15 +430,21 @@ namespace ACO
             if (_groundTimer <= 0f)
             {
                 _groundTimer = 0.2f;
-                RaycastHit hit;
-                if (Physics.Raycast(new Vector3(pos.x, pos.y + 500f, pos.z), Vector3.down, out hit, 2000f, GroundLayers, QueryTriggerInteraction.Ignore))
-                {
-                    _groundY = hit.point.y;
-                }
+                float y;
+                if (TerrainHeight(pos, out y)) { _groundY = y; }
                 else if (MoveMode == MOVE_HOVER) { _groundY = HoverSeaLevel; }
                 if (MoveMode == MOVE_HOVER) { _groundY = Mathf.Max(_groundY, HoverSeaLevel); }
             }
             return Mathf.Lerp(transform.position.y, _groundY, 1f - Mathf.Exp(-8f * Time.deltaTime));
+        }
+
+        /// 지형 높이. 구조물은 Environment라 GroundLayers(Default)에 맞지 않는다 — 크레인이나 지붕에 올라가지 않는다.
+        private bool TerrainHeight(Vector3 pos, out float y)
+        {
+            RaycastHit hit;
+            bool found = Physics.Raycast(new Vector3(pos.x, pos.y + 500f, pos.z), Vector3.down, out hit, 2000f, GroundLayers, QueryTriggerInteraction.Ignore);
+            y = found ? hit.point.y : 0f;
+            return found;
         }
 
         /// 방출이 끝난 투하 연출을 월드로 떼어 낸다(기체가 거둬져 꺼져도 낙하산이 남는다).

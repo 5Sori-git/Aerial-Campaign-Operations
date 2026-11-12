@@ -13,6 +13,10 @@ namespace ACO
         public float MaxSpeed = 260f;
         public float MinSpeed = 70f;
         public float Acceleration = 40f;
+        [Tooltip("가속 기동(보스 스크립트의 SpeedBoost) 상한 배율 — 동기화 예측도 최고 속도 × 이 값까지 본다(모든 화면이 같은 값이어야 한다). 1 = 가속 기동 없음")]
+        public float MaxBoost = 1f;
+        [Tooltip("저속 기동(코브라 — 보스 스크립트의 AllowLowSpeed) 하한 속도(m/s). 0 = 저속 기동 없음. 동기화 예측도 이 값까지 본다(모든 화면이 같은 값이어야 한다)")]
+        public float LowSpeedLimit = 0f;
 
         [Header("롤 (선회 시 기울기)")]
         [Tooltip("수평 방향 오차 1도당 목표 뱅크각(도). 값이 크면 조금만 틀어져도 깊게 눕는다")]
@@ -57,7 +61,31 @@ namespace ACO
         [Tooltip("하강 속도를 이 시간(초)만큼 미리 반영해 일찍 기수를 든다. 피치 반응이 늦어 바닥을 파고드는 것을 막는다")]
         public float SinkLeadTime = 0.8f;
 
+        [Header("상한 고도 (6-157)")]
+        [Tooltip("이 월드 높이(m) 위로는 오르지 않는다 — 12192 = 40,000ft(SAV 공기가 옅어지기 시작하는 고도, 해수면 0). 0 이하 = 끔")]
+        public float MaxAltitude = 12192f;
+        [Tooltip("상한까지 남은 고도를 이 시간(초)에 걸쳐 메우는 속도로 상승을 줄인다 — 클수록 일찍·부드럽게 수평이 된다")]
+        public float CeilingSettleTime = 4f;
+
+        [Header("작전 지역 경계 (6-169)")]
+        [Tooltip("원점 중심 이 반경(m) 밖으로 나가지 않는다 — 지형 끝과 같게. 0이면 끔")]
+        public float FieldRadius = 25000f;
+        [Tooltip("경계 이만큼(m) 안쪽부터 바깥으로 가는 방향을 안쪽으로 점점 돌린다")]
+        public float FieldSoftMargin = 1500f;
+        [Tooltip("경계를 넘으면 선회 · 피치 · 롤 속도 배율(바로 안쪽으로 꺾는다)")]
+        public float FieldTurnBoost = 2.5f;
+
         [System.NonSerialized] public float Speed;
+        // 가속 기동(오너의 보스 스크립트가 켠다): 최고 속도 × SpeedBoost(MaxBoost까지), 가속도 × AccelBoost
+        [System.NonSerialized] public float SpeedBoost = 1f;
+        [System.NonSerialized] public float AccelBoost = 1f;
+        // 급선회(오너의 보스 스크립트가 켠다): 선회 G·최대 선회율·롤·피치 속도 × TurnBoost (LUNA 저격 돌아서기). 원격 화면은 동기화된 회전을 따른다
+        [System.NonSerialized] public float TurnBoost = 1f;
+        // 저속 기동(코브라): 켜면 최저 속도가 LowSpeedLimit까지 내려간다
+        [System.NonSerialized] public bool AllowLowSpeed;
+
+        /// 동기화 예측이 쓰는 최저 속도(저속 기동 하한까지 — 오너·원격 같은 값).
+        public float GetPredictMinSpeed() { return LowSpeedLimit > 0f ? Mathf.Min(MinSpeed, LowSpeedLimit) : MinSpeed; }
         [System.NonSerialized] public Vector3 DesiredDirection = Vector3.forward;
         [System.NonSerialized] public float DesiredSpeed;
         // 진단용(AI의 DebugFlight 로그): 지난 프레임의 원하는 상승각과 지면 회피가 허용한 최소 상승각(도)
@@ -85,6 +113,7 @@ namespace ACO
             Vector3 dir = DesiredDirection;
             if (dir.sqrMagnitude < 0.000001f) { dir = transform.forward; }
             dir = dir.normalized;
+            dir = ApplyFieldBoundary(dir);   // 경계가 AI · 에이스 기동(조종 덮어쓰기)보다 먼저 — 지면 회피만 그 위에
             dir = ApplyGroundAvoidance(dir, dt);
 
             // 오차를 월드 기준 두 축으로 분리한다: 방위(수평) → 뱅크 → 정상선회 / 상승각(수직) → 지평선 기준 피치.
@@ -97,6 +126,32 @@ namespace ACO
             ApplyCoordinatedTurn(dt);
             ApplyPitch(elevationError, dt);
             ApplyThrust(dt);
+        }
+
+        private float _fieldBoost = 1f;
+
+        /// 경계(FieldRadius): FieldSoftMargin 안쪽부터 바깥으로 가는 수평 방향을 안쪽(원점 쪽)으로 점점 돌리고, 경계를 넘으면 곧장 안쪽 + 선회력 FieldTurnBoost.
+        /// 상승각은 그대로 둔다. 안쪽으로 가고 있으면 건드리지 않는다.
+        private Vector3 ApplyFieldBoundary(Vector3 dir)
+        {
+            _fieldBoost = 1f;
+            if (FieldRadius <= 0f) { return dir; }
+            Vector3 p = transform.position;
+            float d = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+            float soft = Mathf.Max(FieldRadius - FieldSoftMargin, 0f);
+            if (d <= soft || d < 1f) { return dir; }
+            Vector3 inward = new Vector3(-p.x / d, 0f, -p.z / d);
+            Vector3 flat = new Vector3(dir.x, 0f, dir.z);
+            Vector3 hn = flat.sqrMagnitude > 0.000001f ? flat.normalized : inward;
+            bool outside = d >= FieldRadius;
+            if (outside) { _fieldBoost = Mathf.Max(FieldTurnBoost, 1f); }
+            else if (Vector3.Dot(hn, inward) >= 0f) { return dir; }   // 이미 안쪽으로 간다
+            float k = outside ? 1f : Mathf.Clamp01((d - soft) / Mathf.Max(FieldRadius - soft, 1f));
+            Vector3 h = outside ? inward : Vector3.Slerp(hn, inward, k);
+            if (h.sqrMagnitude < 0.000001f) { h = inward; }
+            h = h.normalized;
+            float y = Mathf.Clamp(dir.y, -1f, 1f);
+            return (h * Mathf.Sqrt(Mathf.Max(1f - y * y, 0f)) + Vector3.up * y).normalized;
         }
 
         /// 지평선 위에서 본 방위 오차(도). +: 목표가 오른쪽. 목표가 거의 수직이면 0(뱅크하지 않고 피치로만 처리).
@@ -195,7 +250,20 @@ namespace ACO
             float wantAngle = Elevation(dir);
             LastWantAngle = wantAngle;
             LastFloorAngle = floorAngle;
-            if (wantAngle >= floorAngle) { return dir; }
+
+            // 상한 고도: 바닥과 같은 방식의 "천장 각" — 한참 아래면 영향 없고, 가까울수록 0도(수평), 넘으면 음수(내려온다).
+            // 방위는 그대로 두고 상승각만 깎는다. 바닥(지형 회피)이 천장보다 우선.
+            float limited = wantAngle;
+            if (MaxAltitude > 0f)
+            {
+                float predictedY = transform.position.y + sinkRate * SinkLeadTime;
+                float ceilVz = (MaxAltitude - predictedY) / Mathf.Max(CeilingSettleTime, 0.1f);
+                float ceilAngle = Mathf.Asin(Mathf.Clamp(ceilVz / Mathf.Max(Speed, 1f), -1f, 1f)) * Mathf.Rad2Deg;
+                ceilAngle = Mathf.Clamp(ceilAngle, -MaxPitchAttitude, 85f);
+                if (limited > ceilAngle) { limited = ceilAngle; }
+            }
+            if (limited < floorAngle) { limited = floorAngle; }
+            if (limited == wantAngle) { return dir; }
 
             Vector3 flat = new Vector3(dir.x, 0f, dir.z);
             if (flat.sqrMagnitude < 0.000001f)
@@ -204,7 +272,7 @@ namespace ACO
                 if (flat.sqrMagnitude < 0.000001f) { flat = Vector3.forward; }
             }
             flat = flat.normalized;
-            return (flat + Vector3.up * Mathf.Tan(floorAngle * Mathf.Deg2Rad)).normalized;
+            return (flat + Vector3.up * Mathf.Tan(limited * Mathf.Deg2Rad)).normalized;
         }
 
         /// 지형 위 현재 여유 고도. AI가 저고도에서 공격 진입을 자제할 때 쓴다.
@@ -217,7 +285,8 @@ namespace ACO
         private void ApplyRoll(float headingError, float currentBank, float dt)
         {
             float desiredBank = Mathf.Clamp(headingError * BankPerYawError, -MaxBankAngle, MaxBankAngle);
-            float rollRate = Mathf.Clamp((desiredBank - currentBank) * RollGain, -MaxRollRate, MaxRollRate);
+            float maxRoll = MaxRollRate * Mathf.Max(TurnBoost, _fieldBoost);
+            float rollRate = Mathf.Clamp((desiredBank - currentBank) * RollGain * Mathf.Max(TurnBoost, _fieldBoost), -maxRoll, maxRoll);
             // Unity의 +Z 회전은 왼쪽 롤이라 부호를 뒤집는다.
             transform.Rotate(0f, 0f, -rollRate * dt, Space.Self);
         }
@@ -228,15 +297,17 @@ namespace ACO
             if (Speed <= 1f) { return; }
 
             float bankRad = GetBankAngle() * Mathf.Deg2Rad;
-            float turnRate = (TurnG * 9.81f * Mathf.Tan(bankRad) / Speed) * Mathf.Rad2Deg;
-            turnRate = Mathf.Clamp(turnRate, -MaxTurnRate, MaxTurnRate);
+            float tb = Mathf.Max(TurnBoost, _fieldBoost);
+            float turnRate = (TurnG * tb * 9.81f * Mathf.Tan(bankRad) / Speed) * Mathf.Rad2Deg;
+            turnRate = Mathf.Clamp(turnRate, -MaxTurnRate * tb, MaxTurnRate * tb);
             // 지평선 기준으로 기수를 돌려야 뱅크각이 유지된다.
             transform.Rotate(Vector3.up, turnRate * dt, Space.World);
         }
 
         private void ApplyPitch(float elevationError, float dt)
         {
-            float pitchRate = Mathf.Clamp(elevationError * PitchGain, -MaxPitchRate, MaxPitchRate);
+            float maxPitch = MaxPitchRate * Mathf.Max(TurnBoost, _fieldBoost);
+            float pitchRate = Mathf.Clamp(elevationError * PitchGain * Mathf.Max(TurnBoost, _fieldBoost), -maxPitch, maxPitch);
 
             float pitchAttitude = Elevation(transform.forward);
             if (pitchAttitude > MaxPitchAttitude && pitchRate > 0f) { pitchRate = 0f; }
@@ -252,8 +323,9 @@ namespace ACO
         private void ApplyThrust(float dt)
         {
             float target = DesiredSpeed <= 0f ? CruiseSpeed : DesiredSpeed;
-            target = Mathf.Clamp(target, MinSpeed, MaxSpeed);
-            Speed = Mathf.MoveTowards(Speed, target, Acceleration * dt);
+            float minSpeed = AllowLowSpeed && LowSpeedLimit > 0f ? Mathf.Min(MinSpeed, LowSpeedLimit) : MinSpeed;
+            target = Mathf.Clamp(target, minSpeed, MaxSpeed * Mathf.Clamp(SpeedBoost, 1f, Mathf.Max(MaxBoost, 1f)));
+            Speed = Mathf.MoveTowards(Speed, target, Acceleration * Mathf.Max(AccelBoost, 1f) * dt);
             transform.position += transform.forward * Speed * dt;
         }
     }

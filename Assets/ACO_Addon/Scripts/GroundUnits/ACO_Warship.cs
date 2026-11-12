@@ -28,6 +28,8 @@ namespace ACO
         [Header("참조")]
         [Tooltip("본체 체력. ExplodeOther에 이 스크립트를 등록해야 격침 통지를 받는다")]
         public SaccTarget TargetHealth;
+        [Tooltip("숙련도 체력 배율의 기준(베테랑) — Bake가 SaccTarget 체력을 넣는다")]
+        public float BaseHealth = 0f;
         [Tooltip("부위(ACO_SAMSite / ACO_AAGunSite). 각자 SaccTarget을 가진 자식 오브젝트")]
         public UdonSharpBehaviour[] Parts;
 
@@ -40,11 +42,22 @@ namespace ACO
         [Tooltip("켜면 고가치 표적(타격 페이즈 목표), 끄면 일반 유닛(지상 풀 — 바다에 무리 지어 스폰, 전함 호위). ACO → Bake NPC References가 이 값으로 풀을 나눈다")]
         public bool HighValue = true;
 
+        [Tooltip("켜면 일반 고가치 표적 배치에 쓰지 않는다 — 함대전 전용(항모). Bake가 생성기 Carrier에 넣는다")]
+        public bool ReservedForFleet = false;
+        [Tooltip("켜면 순항하지 않는다 — 자리는 PoseOwner(공중 요새)가 옮긴다. 스폰·철수 때 PoseOwner에 ShipSpawned·ShipDespawned를 보낸다")]
+        public bool ExternalPose = false;
+        public UdonSharpBehaviour PoseOwner;
+
         [Header("부위 파괴")]
         [Tooltip("부위 하나가 파괴될 때 본체가 잃는 체력(최대 체력 비율)")]
         [Range(0f, 1f)] public float PartHullDamage = 0.12f;
         [Tooltip("부위 상태를 확인하는 주기(초)")]
         public float PartCheckInterval = 0.25f;
+        [Tooltip("부위(본체 말고 같은 계층의 SaccTarget)가 범위 피해를 받는 배율. 탄이 직접 닿은 부위와 FullPartSplash 무기(LASM)는 그대로 받는다. "
+            + "해상 유닛(함선·육상전함) 0.2, 공중 요새·랜스 포대 1")]
+        [Range(0f, 1f)] public float PartSplashScale = 1f;
+        [Tooltip("켜면 본체(코어, TargetHealth)는 범위 피해를 받지 않는다 — 직접 맞혀야만(코어를 락온해 명중, 폭탄이 코어에 닿음) 깎인다. 예외 무기(FullPartSplash)도 막는다. 보스(공중 요새·랜스 포대·육상전함) 코어")]
+        public bool CoreSplashImmune = false;
 
         [Header("순항")]
         [Tooltip("순항 속도(m/s). 0이면 제자리. 호위함은 기함 속도를 따른다")]
@@ -70,8 +83,14 @@ namespace ACO
         [System.NonSerialized] public Vector3 MissionSpawnPosition;
         [System.NonSerialized] public Quaternion MissionSpawnRotation = Quaternion.identity;
         [System.NonSerialized] public bool MissionRevive;
+        // 표적 마커(TGT)를 그릴 자리 — 보스가 코어 단계에 코어를 넣는다(없으면 이 오브젝트 자리). ACO_TargetMarkers가 읽는다.
+        [System.NonSerialized] public Transform MarkerAnchor;
         /// 호위할 기함과 편대 슬롯(생성기가 MissionSpawn 직전에 넣는다). null/-1이면 스스로 순항.
         [System.NonSerialized] public ACO_Warship MissionLeader;
+        /// 함대전 진격(생성기가 MissionSpawn 직전에 넣는다): 스폰 자리에서 방위 쪽으로 Speed로 Advance(m)만큼 곧게 가서 멈춘다. 0이면 평소 순항.
+        [System.NonSerialized] public float MissionAdvance;
+        [System.NonSerialized] public float MissionAdvanceSpeed;
+        [System.NonSerialized] public int MissionAdvanceMs;
         [System.NonSerialized] public int MissionSlot = -1;
 
         /// EvaluateCruise 결과(흔들림 제외).
@@ -97,6 +116,9 @@ namespace ACO
         private float _partTimer;
 
         private bool _dead;
+        private float _advance;
+        private float _advanceSpeed;
+        private int _advanceMs;
 
         void Start()
         {
@@ -142,7 +164,7 @@ namespace ACO
             float dt = Time.deltaTime;
 
             // 격침되면 그 자리에 멈춘다(가라앉는 연출은 애니메이션 몫).
-            if (!_dead) { ApplyCruisePose(); }
+            if (!_dead && !ExternalPose) { ApplyCruisePose(); }
 
             _partTimer -= dt;
             if (_partTimer <= 0f)
@@ -176,6 +198,13 @@ namespace ACO
         private void ApplyCruisePose()
         {
             double t = Networking.GetServerTimeInSeconds();
+            if (_advance > 0f)
+            {
+                // 함대전: 시간 함수로 곧게 다가가 멈춘다(같은 속도·같은 시각이라 양쪽이 함께 멈춘다)
+                float d = Mathf.Min((Networking.GetServerTimeInMilliseconds() - _advanceMs) * 0.001f * _advanceSpeed, _advance);
+                transform.SetPositionAndRotation(_center + _restRotation * Vector3.forward * d, _restRotation * BobRotation(t));
+                return;
+            }
             EvaluateCruise(t);
             // 호위함: 같은 궤도 위 기함 위치에서 편대 슬롯만큼(기함 진행 방향 기준). 바깥쪽 슬롯은 같은 각속도로 조금 더 빨리 돈다.
             Vector3 pos = CruisePos + CruiseRot * _slotOffset;
@@ -230,6 +259,18 @@ namespace ACO
             TargetHealth.Health = Mathf.Max(TargetHealth.Health - PartHullDamage * TargetHealth.FullHealth, 0f);
             // SAV의 동기화 경로를 그대로 탄다(체력 0이면 모든 클라이언트에서 Explode).
             TargetHealth.SendNetworkUpdate();
+        }
+
+        /// 범위 피해 배율: 본체는 1, 부위는 PartSplashScale. 무기(ACO_Missile·ACO_Ordnance)가 범위 피해를 넣을 때 묻는다.
+        public float GetSplashScale(SaccTarget target)
+        {
+            return target == null || target == TargetHealth ? 1f : PartSplashScale;
+        }
+
+        /// 이 표적(본체)은 범위 피해를 받지 않는가 — CoreSplashImmune이고 본체일 때. 직접 맞은 표적은 무기가 따로 거른다.
+        public bool IsSplashImmune(SaccTarget target)
+        {
+            return CoreSplashImmune && target != null && target == TargetHealth;
         }
 
         public bool IsDestroyed()
@@ -293,6 +334,10 @@ namespace ACO
             int slot = MissionSlot;
             MissionLeader = null;
             MissionSlot = -1;
+            _advance = MissionAdvance;
+            _advanceSpeed = MissionAdvanceSpeed;
+            _advanceMs = MissionAdvanceMs;
+            MissionAdvance = 0f;
             SetCruiseBasis(MissionSpawnPosition, MissionSpawnRotation);
             if (leader != null && slot >= 0)
             {
@@ -308,7 +353,7 @@ namespace ACO
             }
             _spawned = true;
             _dead = false;
-            ApplyCruisePose();
+            if (!ExternalPose) { ApplyCruisePose(); }
 
             // 부위는 각자 부활/상태 복원한다(위치는 이 오브젝트를 따라간다).
             int n = Parts != null ? Parts.Length : 0;
@@ -320,14 +365,13 @@ namespace ACO
                 part.SendCustomEvent("AttachedSpawn");
                 _partDead[i] = true;
             }
-
-            if (MissionRevive)
-            {
-                ReviveHull();
-                return;
-            }
-            SetDeathVisuals(false);
-            if (TargetHealth != null && TargetHealth.Health <= 0f) { Explode(); }
+            // 부활 처리(SetDeathVisuals — DisableCollidersOnDeath를 다시 켠다)를 먼저 하고 보스 스크립트(PoseOwner)에 알린다.
+            // 거꾸로 하면 보스가 단계대로 끈 코어 히트박스를 부활 처리가 다시 켜서, 장갑·덮개가 닫힌 단계에도 코어가 맞았다(육상전함·공중 요새·랜스 포대).
+            if (MissionRevive) { ReviveHull(); }
+            else { SetDeathVisuals(false); }
+            if (PoseOwner != null) { PoseOwner.SendCustomEvent("ShipSpawned"); }
+            // 늦게 들어왔는데 이미 격침됐다: 보스가 단계를 적용한 뒤에 끈다(히트박스까지 꺼진다)
+            if (!MissionRevive && TargetHealth != null && TargetHealth.Health <= 0f) { Explode(); }
         }
 
         /// 이번 미션에 쓰지 않는다. 생성기가 곧 오브젝트를 끈다.
@@ -335,12 +379,17 @@ namespace ACO
         {
             Init();
             _spawned = false;
+            if (PoseOwner != null) { PoseOwner.SendCustomEvent("ShipDespawned"); }
             if (Parts == null) { return; }
             for (int i = 0; i < Parts.Length; i++)
             {
                 if (Parts[i] != null) { Parts[i].SendCustomEvent("MissionDespawn"); }
             }
         }
+
+        /// 순항 중심(공중 요새 = 도시 자리)과 스폰 방위각(도).
+        public Vector3 GetCruiseCenter() { return _center; }
+        public float GetCruiseYaw() { return _restRotation.eulerAngles.y; }
 
         /// 부활 진입점(미션 밖에서 쓸 때). 미션 중엔 생성기가 MissionSpawn으로 부활시킨다.
         public void Respawn()

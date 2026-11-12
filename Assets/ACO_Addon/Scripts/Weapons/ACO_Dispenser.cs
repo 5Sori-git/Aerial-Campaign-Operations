@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using SaccFlightAndVehicles;
 
 namespace ACO
 {
@@ -39,12 +40,20 @@ namespace ACO
         private const float GOLDEN_ANGLE = 2.3999631f;
 
         private Vector3[] _pos = new Vector3[MAX_BOMBLETS];
+        private SaccTarget[] _hitTarget = new SaccTarget[MAX_BOMBLETS];   // 자탄이 떨어진 콜라이더의 표적(직접 맞은 부위 — 범위 피해 배율을 받지 않는다)
         private float[] _time = new float[MAX_BOMBLETS];
         private bool[] _done = new bool[MAX_BOMBLETS];
         private int _count;
         private int _left;
         private int _sound;
         private float _duration;
+
+        /// 앞쪽 BurstDistance 안에 땅이나 바다가 있는가 — 표적을 놓친 탄이 뿌릴 때를 정한다.
+        public bool HasGroundAhead(Vector3 origin, Vector3 direction)
+        {
+            RaycastHit hit;
+            return Physics.Raycast(origin, direction, out hit, BurstDistance, GroundLayers, QueryTriggerInteraction.Collide);
+        }
 
         /// 터지는 순간: 원뿔을 target 쪽으로 돌려 자탄을 뿌리고, 떨어질 자리·시각을 정한다.
         public void Burst(Vector3 origin, Vector3 direction)
@@ -72,6 +81,7 @@ namespace ACO
                 if (!Physics.Raycast(origin, aim * local.normalized, out hit, MaxReach, GroundLayers, QueryTriggerInteraction.Collide)) { continue; }
                 float t = hit.distance / speed;
                 _pos[_count] = hit.point;
+                _hitTarget[_count] = hit.collider ? hit.collider.GetComponentInParent<SaccTarget>() : null;
                 _time[_count] = now + t;
                 _done[_count] = false;
                 _count++;
@@ -117,7 +127,7 @@ namespace ACO
                     s.Play();
                 }
             }
-            if (Missile) { Missile.SubmunitionHit(p); }
+            if (Missile) { Missile.SubmunitionHit(p, _hitTarget[index]); }
         }
     }
 }

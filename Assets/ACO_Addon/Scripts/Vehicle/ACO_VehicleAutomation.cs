@@ -16,6 +16,10 @@ namespace ACO
     /// - 리스폰 복구: 격추 뒤 다시 나타날 때(SFEXT_G_ReAppear + RespawnFixDelay) 기체 애니메이터의 폭발 상태가 끈 오브젝트(모델·좌석·콜라이더 —
     ///   셋업 메뉴가 컨트롤러의 explode 상태 클립에서 굽는다)를 처음 상태로 켜고 애니메이터를 다시 바인딩한다(남은 트리거·잘못 잡힌 기본값 정리).
     ///   그 뒤 기어·캐노피·후크 파라미터를 지금 상태로 다시 넣는다. 탑승할 때도 어긋나 있으면 한 번 더 한다(모든 클라이언트가 각자).
+    /// - 지상 기어 잠금: 땅이나 갑판에 닿아 있는 동안(Taxiing) 기어 토글을 막아 기어가 올라가지 않는다. 떠오르면 풀린다.
+    /// - 갑판 택싱 제한: 갑판(진행도 SafeZones) 위에서 DeckTaxiSpeed 아래로 움직이기 시작하면 수평 속도를 그 값에서 묶는다.
+    ///   스로틀은 건드리지 않는다(놓은 자리가 그대로 남아 캐터펄트로 이어진다). 캐터펄트에 걸리면 풀리고,
+    ///   그보다 빠르게 내린 기체(착함 실패 뒤 다시 올라갈 때)에는 걸리지 않는다. 비행장 활주로에는 걸리지 않는다.
     /// 캐노피·후크를 다이얼에서 빼서 확장 목록에 두면 다이얼 칸이 빈다(트리거로 조작은 못 하고 자동으로만 움직인다).
     /// 셋업: 메뉴 ACO → Player Vehicle → Add Auto Canopy + Gear/Hook Link to Selected Vehicles.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -44,6 +48,16 @@ namespace ACO
         [Tooltip("지면에 이 시간(초) 이상 있으면 후크를 자동으로 올린다(0 = 끔). 와이어에 걸려 있으면 거의 멈춘 뒤부터 센다")]
         public float HookUpGroundTime = 3f;
 
+        [Header("지상 안전")]
+        [Tooltip("땅이나 갑판에 닿아 있는 동안 기어를 올리지 못하게 한다")]
+        public bool LockGearOnGround = true;
+        [Tooltip("갑판 위 택싱 속도를 제한한다(이륙은 캐터펄트로만)")]
+        public bool LimitDeckTaxi = true;
+        [Tooltip("갑판 택싱 최고 속도(m/s). 10 = 약 19kt")]
+        public float DeckTaxiSpeed = 10f;
+        [Tooltip("갑판 영역(SafeZones)을 읽는 진행도 — Bake가 채운다")]
+        public ACO_PlayerProgress Progress;
+
         [Header("리스폰 복구 (셋업 메뉴가 굽는다)")]
         [Tooltip("기체 루트의 애니메이터")]
         public Animator VehicleAnimator;
@@ -65,6 +79,9 @@ namespace ACO
         private float _lastClose = -100f;
         private float _tick;
         private float _groundTime;
+        private bool _gearLocked;
+        private bool _deckLimited;
+        private Rigidbody _body;
 
         // ───────────── SAV 이벤트 ─────────────
 
@@ -91,12 +108,16 @@ namespace ACO
             if (LinkHookToGear && Hook && Gear && Gear.GearUp) { SetHook(false); }
         }
 
-        public void SFEXT_O_PilotExit() { _piloting = false; }
+        public void SFEXT_O_PilotExit()
+        {
+            _piloting = false;
+            ClearGroundSafety();
+        }
 
         public void SFEXT_G_CatapultLockIn() { _onCatapult = true; }
         public void SFEXT_G_CatapultLockOff() { _onCatapult = false; }
-        public void SFEXT_G_Explode() { _onCatapult = false; }
-        public void SFEXT_G_RespawnButton() { _onCatapult = false; }
+        public void SFEXT_G_Explode() { _onCatapult = false; ClearGroundSafety(); }
+        public void SFEXT_G_RespawnButton() { _onCatapult = false; ClearGroundSafety(); }
 
         // 기어 함수가 모든 클라이언트에서 보낸다 — 조종사 화면에서만 후크를 맞춘다
         public void SFEXT_G_GearDown() { if (_piloting) { SyncHook(); } }
@@ -154,7 +175,54 @@ namespace ACO
             float spd = Speed();
             bool grounded = (bool)SAVControl.GetProgramVariable("Taxiing");
             UpdateHookGround(grounded, spd, 0.2f);
+            SetGearLock(LockGearOnGround && grounded && Gear && !Gear.GearUp);
+            UpdateDeckLimit(grounded, spd);
             if (AutoCanopy && Canopy && !Canopy.CanopyBroken) { UpdateCanopy(grounded, spd); }
+        }
+
+        private void FixedUpdate()
+        {
+            if (!_deckLimited) { return; }
+            if (_body == null) { _body = EntityControl ? EntityControl.VehicleRigidbody : null; }
+            if (_body == null) { return; }
+            Vector3 v = _body.velocity;
+            float h = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            if (h <= DeckTaxiSpeed) { return; }
+            float k = DeckTaxiSpeed / h;
+            v.x *= k;
+            v.z *= k;
+            _body.velocity = v;
+        }
+
+        /// 갑판에서 제한 속도 아래일 때만 건다 — 착함에 실패해 빠르게 구르는 기체는 스로틀을 올려 다시 떠야 한다.
+        private void UpdateDeckLimit(bool grounded, float spd)
+        {
+            if (!LimitDeckTaxi || !grounded || _onCatapult || !OnDeck())
+            {
+                _deckLimited = false;
+                return;
+            }
+            if (spd <= DeckTaxiSpeed) { _deckLimited = true; }
+        }
+
+        // 영역이 없으면 갑판이 아니다(IsInSafeZone은 빈 목록을 어디서나 참으로 본다 — 활주로까지 묶이면 안 된다)
+        private bool OnDeck()
+        {
+            return Progress != null && Progress.SafeZones != null && Progress.SafeZones.Length > 0
+                && EntityControl && Progress.IsInSafeZone(EntityControl.transform.position);
+        }
+
+        private void SetGearLock(bool on)
+        {
+            if (on == _gearLocked || !Gear) { return; }
+            _gearLocked = on;
+            Gear.SetProgramVariable("DisableGearToggle", (int)Gear.GetProgramVariable("DisableGearToggle") + (on ? 1 : -1));
+        }
+
+        private void ClearGroundSafety()
+        {
+            _deckLimited = false;
+            SetGearLock(false);
         }
 
         /// 지면에 오래 있으면 후크를 올린다.
