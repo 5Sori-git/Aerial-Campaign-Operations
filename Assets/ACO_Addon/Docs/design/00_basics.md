@@ -163,7 +163,7 @@ Assets/ACO_Addon/
       ACO_HexTerrain.cs            육각 기둥 지형: 씨앗 노이즈(정수 해시) 높이 → 기둥 배치(런타임 Instantiate 1회 후 재사용, 프레임 분할)
       ACO_MissionManager.cs        미션 진행: 페이즈 1~5개(페이즈 모듈 중 무작위), 증원 웨이브(페이즈 시작/교착), 팀 점수·랭크, 이벤트 방송
       ACO_PhaseModule.cs           페이즈 모듈 기반(추상): 고르기·시작·판정·종료·표시·대사 — 관리자 자식에 두면 Bake가 목록에 넣는다(6-32~6-38)
-      ACO_PhaseDestroy.cs 외        페이즈 모듈: Destroy(타격·SEAD·제공권·보스), Quota, TimeSensitive, Escort, Convoy, Intercept, Amphibious, SuperAce(보너스)
+      ACO_PhaseDestroy.cs 외        페이즈 모듈: Destroy(타격·SEAD·제공권·보스), Quota, TimeSensitive, Escort, Convoy, Intercept, Amphibious, Twins(보너스)
     AirUnits/
       ACO_NPCFighterAI.cs          전투기 두뇌: 순찰/추격/이탈/대기 상태머신, 요격 조준, 편대 간격, 격추/부활, 숙련도
       ACO_NPCFighterNet.cs         전투기 동기화: 오차 기반 전송, 원격 예측/보정, 소유권. Update 없음(AI가 OwnerTick/RemoteTick 호출)

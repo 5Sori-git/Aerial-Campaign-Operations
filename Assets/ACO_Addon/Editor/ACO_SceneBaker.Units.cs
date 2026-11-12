@@ -31,21 +31,21 @@ public partial class ACO_SceneBaker
         if (fixedCount > 0) { Debug.Log($"[ACO] SaccTarget 애니메이터 {fixedCount}개에 Keep Animator State On Disable을 켰습니다(풀 재사용 때 파괴된 모습이 기본값으로 잡히지 않게)."); }
     }
 
-    /// 슈퍼에이스 ↔ 같은 기체의 AI(AI.SuperAce가 있어야 생성기가 일반 배치에서 뺀다). 생성기 풀에 없으면 알린다.
-    private static void BakeSuperAces()
+    /// 슈퍼에이스 ↔ 같은 기체의 AI(AI.Twins가 있어야 생성기가 일반 배치에서 뺀다). 생성기 풀에 없으면 알린다.
+    private static void BakeTwins()
     {
         var generators = new List<ACO_MissionGenerator>();
-        var aces = new List<ACO_SuperAce>();
+        var aces = new List<ACO_Twins>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
-            aces.AddRange(root.GetComponentsInChildren<ACO_SuperAce>(true));
+            aces.AddRange(root.GetComponentsInChildren<ACO_Twins>(true));
         }
-        foreach (ACO_SuperAce ace in aces)
+        foreach (ACO_Twins ace in aces)
         {
             ACO_NPCFighterAI ai = ace.GetComponentInParent<ACO_NPCFighterAI>(true);
             if (ai == null) { Debug.LogWarning($"[ACO] 슈퍼에이스 '{ace.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", ace); continue; }
-            if (ai.SuperAce != ace) { ai.SuperAce = ace; MarkChanged(ai); }
+            if (ai.Ace != ace) { ai.Ace = ace; MarkChanged(ai); }
             if (ace.AI != ai) { ace.AI = ai; MarkChanged(ace); }
             bool pooled = false;
             foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
@@ -55,7 +55,7 @@ public partial class ACO_SceneBaker
         // 교차를 정하는 쪽은 형(TAILS가 아닌 쪽 — 둘 다 아니면 앞의 것)
         for (int i = 0; i < aces.Count; i++)
         {
-            ACO_SuperAce want = (i % 2 == 0) ? (i + 1 < aces.Count ? aces[i + 1] : null) : aces[i - 1];
+            ACO_Twins want = (i % 2 == 0) ? (i + 1 < aces.Count ? aces[i + 1] : null) : aces[i - 1];
             if (aces[i].Partner != want) { aces[i].Partner = want; MarkChanged(aces[i]); }
             bool leader = false;
             if (want != null)
@@ -76,7 +76,7 @@ public partial class ACO_SceneBaker
         if (ai != null && cross.AI != ai) { cross.AI = ai; MarkChanged(cross); }
     }
 
-    /// SHADE 편대: AI ↔ SHADE, 풀 순서로 번호 1~(4), 편대 목록, 교차 짝(1·2, 3·4 — 앞 번호가 정한다). 생성기 풀에 없으면 알린다.
+    /// SHADE 편대: AI ↔ SHADE, 풀 순서로 번호 1~(4), 편대 목록, 교차 기동 편대 집결(Group — 편대원 모두, 같은 순서. 짝·정하는 쪽은 비운다). 생성기 풀에 없으면 알린다.
     private static void BakeShades()
     {
         var generators = new List<ACO_MissionGenerator>();
@@ -87,21 +87,30 @@ public partial class ACO_SceneBaker
             shades.AddRange(root.GetComponentsInChildren<ACO_ShadeAce>(true));
         }
         ACO_ShadeAce[] squad = shades.ToArray();
+        var group = new ACO_CrossManeuver[shades.Count];
+        for (int i = 0; i < shades.Count; i++) { group[i] = shades[i].Cross; }
         for (int i = 0; i < shades.Count; i++)
         {
             ACO_ShadeAce s = shades[i];
             ACO_NPCFighterAI ai = s.GetComponentInParent<ACO_NPCFighterAI>(true);
             if (ai == null) { Debug.LogWarning($"[ACO] SHADE '{s.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", s); continue; }
-            if (ai.Shade != s) { ai.Shade = s; MarkChanged(ai); }
+            if (ai.Ace != s) { ai.Ace = s; MarkChanged(ai); }
             if (s.AI != ai) { s.AI = ai; MarkChanged(s); }
             if (s.Number != i + 1) { s.Number = i + 1; MarkChanged(s); }
             if (!SameShades(s.Squad, squad)) { s.Squad = squad; MarkChanged(s); }
-            ACO_ShadeAce partner = (i % 2 == 0) ? (i + 1 < shades.Count ? shades[i + 1] : null) : shades[i - 1];
-            LinkCross(s.Cross, partner != null ? partner.Cross : null, i % 2 == 0 && partner != null, ai);
+            LinkCross(s.Cross, null, false, ai);
+            if (s.Cross != null && !SameCrosses(s.Cross.Group, group)) { s.Cross.Group = (ACO_CrossManeuver[])group.Clone(); MarkChanged(s.Cross); }
             bool pooled = false;
             foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
             if (!pooled) { Debug.LogWarning($"[ACO] SHADE '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(SHADE 편대 페이즈가 안 나온다).", ai); }
         }
+    }
+
+    private static bool SameCrosses(ACO_CrossManeuver[] a, ACO_CrossManeuver[] b)
+    {
+        if (a == null || a.Length != b.Length) { return false; }
+        for (int i = 0; i < a.Length; i++) { if (a[i] != b[i]) { return false; } }
+        return true;
     }
 
     private static bool SameShades(ACO_ShadeAce[] a, ACO_ShadeAce[] b)
@@ -111,25 +120,25 @@ public partial class ACO_SceneBaker
         return true;
     }
 
-    /// 레이저 에이스 ↔ 같은 기체의 AI(AI.LaserAce가 있어야 생성기가 일반 배치에서 뺀다), 페이즈 모듈·무전·내 기체, 사일로 연출 ↔ 모듈·구름.
-    private static void BakeLaserAces()
+    /// 레이저 에이스 ↔ 같은 기체의 AI(AI.Borderless가 있어야 생성기가 일반 배치에서 뺀다), 페이즈 모듈·무전·내 기체, 사일로 연출 ↔ 모듈·구름.
+    private static void BakeBorderlesss()
     {
-        ACO_PhaseLaserAce phase = Object.FindObjectOfType<ACO_PhaseLaserAce>(true);
+        ACO_PhaseBorderless phase = Object.FindObjectOfType<ACO_PhaseBorderless>(true);
         ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
         ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
         ACO_CloudField clouds = Object.FindObjectOfType<ACO_CloudField>();
         var generators = new List<ACO_MissionGenerator>();
-        var aces = new List<ACO_LaserAce>();
+        var aces = new List<ACO_Borderless>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
-            aces.AddRange(root.GetComponentsInChildren<ACO_LaserAce>(true));
+            aces.AddRange(root.GetComponentsInChildren<ACO_Borderless>(true));
         }
-        foreach (ACO_LaserAce ace in aces)
+        foreach (ACO_Borderless ace in aces)
         {
             ACO_NPCFighterAI ai = ace.GetComponentInParent<ACO_NPCFighterAI>(true);
             if (ai == null) { Debug.LogWarning($"[ACO] 레이저 에이스 '{ace.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", ace); continue; }
-            if (ai.LaserAce != ace) { ai.LaserAce = ace; MarkChanged(ai); }
+            if (ai.Ace != ace) { ai.Ace = ace; MarkChanged(ai); }
             if (ace.AI != ai || ace.Phase != phase || ace.Chatter != chatter || ace.Contacts != contacts)
             {
                 ace.AI = ai;
@@ -147,6 +156,77 @@ public partial class ACO_SceneBaker
         ACO_IcbmSite site = phase.Site != null ? phase.Site : phase.GetComponentInChildren<ACO_IcbmSite>(true);
         if (phase.Site != site) { phase.Site = site; MarkChanged(phase); }
         if (site != null && (site.Phase != phase || site.Clouds != clouds)) { site.Phase = phase; site.Clouds = clouds; MarkChanged(site); }
+    }
+
+    /// LUNA ↔ 같은 기체의 AI(AI.Luna가 있어야 생성기가 일반 배치에서 뺀다), 페이즈 모듈·무전·내 기체, 궤도 폭격 연출 ↔ 모듈·구름.
+    private static void BakeLunas()
+    {
+        ACO_PhaseLuna phase = Object.FindObjectOfType<ACO_PhaseLuna>(true);
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        ACO_CloudField clouds = Object.FindObjectOfType<ACO_CloudField>();
+        var generators = new List<ACO_MissionGenerator>();
+        var aces = new List<ACO_LunaAce>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
+            aces.AddRange(root.GetComponentsInChildren<ACO_LunaAce>(true));
+        }
+        foreach (ACO_LunaAce ace in aces)
+        {
+            ACO_NPCFighterAI ai = ace.GetComponentInParent<ACO_NPCFighterAI>(true);
+            if (ai == null) { Debug.LogWarning($"[ACO] LUNA '{ace.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", ace); continue; }
+            if (ai.Ace != ace) { ai.Ace = ace; MarkChanged(ai); }
+            if (ace.AI != ai || ace.Phase != phase || ace.Chatter != chatter || ace.Contacts != contacts)
+            {
+                ace.AI = ai;
+                ace.Phase = phase;
+                ace.Chatter = chatter;
+                ace.Contacts = contacts;
+                MarkChanged(ace);
+            }
+            bool pooled = false;
+            foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
+            if (!pooled) { Debug.LogWarning($"[ACO] LUNA '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(LUNA 페이즈가 안 나온다).", ai); }
+        }
+        if (phase == null) { return; }
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        ACO_OrbitalStrike strike = phase.Strike != null ? phase.Strike : phase.GetComponentInChildren<ACO_OrbitalStrike>(true);
+        if (phase.Strike != strike) { phase.Strike = strike; MarkChanged(phase); }
+        if (strike != null && (strike.Phase != phase || strike.Clouds != clouds)) { strike.Phase = phase; strike.Clouds = clouds; MarkChanged(strike); }
+    }
+
+    /// MR. S ↔ 같은 기체의 AI(AI.Ace가 있어야 생성기가 일반 배치에서 뺀다), 무전·내 기체(레이더 접촉)·태양(날씨의 Sun — 없으면 씬의 해).
+    private static void BakeMrS()
+    {
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        ACO_Weather weather = Object.FindObjectOfType<ACO_Weather>(true);
+        Light sun = weather != null && weather.Sun != null ? weather.Sun : ACO_SkyBuilder.FindSun();
+        var generators = new List<ACO_MissionGenerator>();
+        var aces = new List<ACO_MrS>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            generators.AddRange(root.GetComponentsInChildren<ACO_MissionGenerator>(true));
+            aces.AddRange(root.GetComponentsInChildren<ACO_MrS>(true));
+        }
+        foreach (ACO_MrS ace in aces)
+        {
+            ACO_NPCFighterAI ai = ace.GetComponentInParent<ACO_NPCFighterAI>(true);
+            if (ai == null) { Debug.LogWarning($"[ACO] MR. S '{ace.name}'이 NPC 전투기(ACO_NPCFighterAI) 안에 있지 않습니다.", ace); continue; }
+            if (ai.Ace != ace) { ai.Ace = ace; MarkChanged(ai); }
+            if (ace.AI != ai || ace.Chatter != chatter || ace.Contacts != contacts || ace.Sun != sun)
+            {
+                ace.AI = ai;
+                ace.Chatter = chatter;
+                ace.Contacts = contacts;
+                ace.Sun = sun;
+                MarkChanged(ace);
+            }
+            bool pooled = false;
+            foreach (ACO_MissionGenerator g in generators) { if (g.Fighters != null && System.Array.IndexOf(g.Fighters, ai) >= 0) { pooled = true; } }
+            if (!pooled) { Debug.LogWarning($"[ACO] MR. S '{ai.name}'이 미션 생성기 풀(Fighters)에 없습니다 — 생성기의 UnitPoolRoot 아래로 옮기세요(MR. S 페이즈가 안 나온다).", ai); }
+        }
     }
 
     /// CIWS 미사일 요격: 요격 CIWS 목록(InterceptProtectLayers가 있는 것)을 모든 무장·NPC 런처에 굽는다. 요격 수치는 ACO_PrefabTuning이 프리팹에 넣는다.
@@ -204,7 +284,7 @@ public partial class ACO_SceneBaker
     /// 대공포 탄 도착 판정 반경: 아직 없으면 넣는다. CIWS는 조밀한 탄, 그 밖의 포는 큰 탄이라 넓다. 넣었으면 true.
     public static bool ApplyShellRadius(ACO_AAGunSite aa)
     {
-        if (aa.Gun == null || aa.Gun.ShellHitRadius > 0f) { return false; }
+        if (aa.Gun == null || aa.Gun.ShellHitRadius > 0f || aa.Gun.Laser != null) { return false; }   // 레이저는 탄이 아니다
         aa.Gun.ShellHitRadius = aa.MarkerLabel == "CIWS" ? 20f : 45f;
         return true;
     }

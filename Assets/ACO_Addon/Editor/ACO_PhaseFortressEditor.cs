@@ -8,6 +8,7 @@ using ACO;
 [CustomEditor(typeof(ACO_PhaseBoss), true)]
 public class ACO_PhaseFortressEditor : Editor
 {
+    private bool _showBgm = true;
     private static readonly string[] Arrays = { "LineEvent", "LineSpeaker", "LineText", "LineClip" };
     // ACO_PhaseRailgun.SIT_* 순서
     private static readonly string[] RailgunSituations =
@@ -33,16 +34,42 @@ public class ACO_PhaseFortressEditor : Editor
     {
         "등장", "첫 스커트 파괴", "궤도 절반 파괴 ({left} = 남은 수)", "첫 배기구 노출", "배기구 절반 파괴", "코어 셔터 열림",
         "코어 체력 절반", "도시 접근 (먼 거리)", "도시 접근 (가까운 거리)", "도시 접근 (마지막)", "코어 파괴", "도시 도착", "방공 수리",
+        "총력 복구 (자동 사통)", "방공 수리 (자동 사통 뒤)",
+    };
+    // ACO_PhaseBorderless.SIT_* 순서
+    private static readonly string[] BorderlessSituations =
+    {
+        "등장", "탄도미사일 발사 (2단계 시작)", "ECM 재밍 (정면 락온만)", "착탄 2분 전", "착탄 1분 전", "착탄 30초 전",
+        "에이스 격추 (미사일 공중 폭발)", "착탄 (기지 파괴)",
+    };
+    // ACO_PhaseLuna.SIT_* 순서
+    private static readonly string[] LunaSituations =
+    {
+        "등장", "UAV 전개 (1차)", "UAV 전멸", "UAV 재전개 (2차)", "폭격 2분 전", "폭격 1분 전", "폭격 30초 전",
+        "LUNA 격추 (폭격 빗나감)", "도시 착탄",
     };
     private static readonly string[] Speakers = { "적", "AWACS" };
     private static readonly string[] FleetSpeakers = { "적", "AWACS", "함대장" };
+    private static readonly string[] LandShipSpeakers = { "적 함장", "AWACS", "-", "선원", "시스템" };
     private bool _showLines = true;
+
+    /// 모듈 종류별 상황 이름(각 스크립트의 SIT_* 순서). 새 대사 표 모듈을 만들면 여기에 더한다 — 빠지면 공중 요새 이름이 나온다.
+    private static string[] SituationsFor(Object t)
+    {
+        if (t is ACO_PhaseFleet) { return FleetSituations; }
+        if (t is ACO_PhaseRailgun) { return RailgunSituations; }
+        if (t is ACO_PhaseLandShip) { return LandShipSituations; }
+        if (t is ACO_PhaseBorderless) { return BorderlessSituations; }
+        if (t is ACO_PhaseLuna) { return LunaSituations; }
+        return Situations;
+    }
 
     public override void OnInspectorGUI()
     {
         if (UdonSharpGUI.DrawDefaultUdonSharpBehaviourHeader(target)) { return; }
         serializedObject.Update();
-        DrawPropertiesExcluding(serializedObject, "m_Script", Arrays[0], Arrays[1], Arrays[2], Arrays[3]);
+        DrawPropertiesExcluding(serializedObject, "m_Script", Arrays[0], Arrays[1], Arrays[2], Arrays[3], "BgmUrls", "BgmNames");
+        ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "이 페이즈 전용 BGM (비우면 보스 기본 풀)", ref _showBgm);
 
         SerializedProperty events = serializedObject.FindProperty(Arrays[0]);
         SerializedProperty speakers = serializedObject.FindProperty(Arrays[1]);
@@ -68,8 +95,8 @@ public class ACO_PhaseFortressEditor : Editor
                     {
                         SerializedProperty sit = events.GetArrayElementAtIndex(i);
                         SerializedProperty who = speakers.GetArrayElementAtIndex(i);
-                        sit.intValue = EditorGUILayout.Popup(sit.intValue, target is ACO_PhaseFleet ? FleetSituations : (target is ACO_PhaseRailgun ? RailgunSituations : (target is ACO_PhaseLandShip ? LandShipSituations : Situations)));
-                        who.intValue = EditorGUILayout.Popup(who.intValue, target is ACO_PhaseFleet ? FleetSpeakers : Speakers, GUILayout.Width(76f));
+                        sit.intValue = EditorGUILayout.Popup(sit.intValue, SituationsFor(target));
+                        who.intValue = EditorGUILayout.Popup(who.intValue, target is ACO_PhaseFleet ? FleetSpeakers : (target is ACO_PhaseLandShip ? LandShipSpeakers : Speakers), GUILayout.Width(76f));
                         using (new EditorGUI.DisabledScope(i == 0))
                         {
                             if (GUILayout.Button("▲", GUILayout.Width(24f))) { moveUp = i; }

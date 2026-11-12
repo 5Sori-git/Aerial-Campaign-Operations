@@ -49,10 +49,11 @@ MonoBehaviour:
   DisplayName: HVAA
   Description: 'HIGH-VELOCITY AAM
 
-    VERY FAST - HARD TO OUTRUN, LESS AGILE'
+    VERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE.'
   Price: 13000
   Icon: {fileID: 21300000, guid: 4e8ef1ff9f2cb7b4d953489a66d6ec7e, type: 3}
   SortOrder: 90
+  Category: 0
   Module: {fileID: 6402770904296200865}
 --- !u!1 &5998600399227858080
 GameObject:
@@ -120,11 +121,16 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6500
   LockAngle: 12
+  LockFromCcip: 1
   LockTime: 1.4
   MaxLockTargets: 1
+  CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 2
   MaxAmmo: 16
@@ -140,10 +146,35 @@ MonoBehaviour:
   SplashRadius: 25
   MinSplashFraction: 0.25
   MissileSplash: 0
-  Radio: {fileID: 0}
+  FullPartSplash: 0
+  Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
+  InterceptSites: []
   CrossLockIndicator: 1
+  IgnoreCountermeasures: 0
+  ProximityAnyEnemy: 0
+  AutoTargetNearest: 0
+  DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
+  SeekerAngle: 0
+  LockHoldTime: 0
+  MissileLifetime: 0
+  SeaSkim: 0
+  SkimAltitude: 8
+  SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 1
+  TakesExtraAmmo: 0
+  LaunchCall: 2
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 0}
@@ -162,6 +193,8 @@ MonoBehaviour:
   CcipInterval: 0.05
   CcipMaxTime: 40
   TargetIndicator: {fileID: 0}
+  SelectedObjects: []
+  SlotBarsOnlyWhenSelected: 1
   SlotBarTemplate: {fileID: 0}
   SlotBarSpacing: {x: 0.02, y: 0, z: 0}
   SlotBarVertical: 1

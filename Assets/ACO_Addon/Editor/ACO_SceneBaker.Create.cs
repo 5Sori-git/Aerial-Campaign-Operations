@@ -198,6 +198,27 @@ public partial class ACO_SceneBaker
     }
 
     [MenuItem("ACO/Create Screen Fader")]
+    /// 플레이어별 URL 저장소(6-153): Player Object 템플릿(VRCPlayerObject + VRCEnablePersistence + ACO_UrlStore). 씬에 하나. 데칼 스튜디오 연결은 Bake.
+    public static void CreateUrlStore()
+    {
+        ACO_UrlStore existing = Object.FindObjectOfType<ACO_UrlStore>(true);
+        if (existing != null)
+        {
+            Selection.activeGameObject = existing.gameObject;
+            Debug.Log("[ACO] 씬에 이미 URL 저장소가 있어 그것을 선택했습니다.", existing);
+            return;
+        }
+        var go = new GameObject("ACO_UrlStore");
+        Undo.RegisterCreatedObjectUndo(go, "Create URL Store");
+        go.AddComponent<VRC.SDK3.Components.VRCPlayerObject>();
+        go.AddComponent<VRC.SDK3.Components.VRCEnablePersistence>();
+        go.AddUdonSharpComponent<ACO_UrlStore>();
+        Selection.activeGameObject = go;
+        BakeNeighbors();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] URL 저장소(Player Object, 영구 저장)를 만들었습니다 — 데칼 이미지 URL을 다음 접속에도 씁니다.", go);
+    }
+
     public static void CreateScreenFader()
     {
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
@@ -248,6 +269,22 @@ public partial class ACO_SceneBaker
         Debug.Log("[ACO] HUD 설정 패널을 씬에 놓았습니다. 로비나 격납고로 옮기세요(파란 화살표 +Z가 관객 쪽).", go);
     }
 
+    [MenuItem("ACO/Create BGM Panel")]
+    public static void CreateBgmPanel()
+    {
+        const string path = "Assets/ACO_Addon/Prefabs/ACO_BgmPanel.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreateBgmPanelPrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null) { return; }
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, SceneManager.GetActiveScene());
+        Undo.RegisterCreatedObjectUndo(go, "Create BGM Panel");
+        Selection.activeGameObject = go;
+        BakeBgm();
+        BakeNeighbors();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] BGM 패널을 씬에 놓았습니다. 로비나 격납고로 옮기세요(파란 화살표 +Z가 관객 쪽).", go);
+    }
+
     [MenuItem("ACO/Create Chatter (Subtitles + Voice)")]
     public static void CreateChatter()
     {
@@ -268,6 +305,93 @@ public partial class ACO_SceneBaker
         BakeNeighbors();
         EditorSceneManager.MarkSceneDirty(go.scene);
         Debug.Log("[ACO] 무전 채터를 만들었습니다(위치 무관 — 머리를 따라온다). 대사·음성·확률·쿨타임은 인스펙터에서 고칩니다.", go);
+    }
+
+    /// 조종석 음성 경고(로컬 전용 — 씬에 하나): 2D 음성 AudioSource + ACO_VoiceWarning, 음성은 Audio/Generated/ACO_Voice_*.wav 9종(ElevenLabs Betty1 — Tools/aco_elevenlabs.py, 목록의 warn_* 줄).
+    public static void CreateVoiceWarning()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            ACO_VoiceWarning existing = root.GetComponentInChildren<ACO_VoiceWarning>(true);
+            if (existing != null)
+            {
+                Selection.activeGameObject = existing.gameObject;
+                Debug.Log("[ACO] 씬에 이미 음성 경고가 있어 그것을 선택했습니다.", existing);
+                return;
+            }
+        }
+        var go = new GameObject("ACO_VoiceWarning");
+        Undo.RegisterCreatedObjectUndo(go, "Create Voice Warning");
+        AudioSource a = go.AddComponent<AudioSource>();
+        a.playOnAwake = false;
+        a.loop = false;
+        a.spatialBlend = 0f;
+        a.priority = 0;
+        a.dopplerLevel = 0f;
+        ACO_VoiceWarning w = go.AddUdonSharpComponent<ACO_VoiceWarning>();
+        w.Voice = a;
+        // 순서 = ACO_VoiceWarning.W_* (PULL UP, RAILGUN, LASER, ALTITUDE, DAMAGE, STALL, FLARES, BINGO, AMMO)
+        string[] names = { "PullUp", "Railgun", "Laser", "Altitude", "Damage", "Stall", "Flares", "Bingo", "Ammo" };
+        w.Clips = new AudioClip[ACO_VoiceWarning.COUNT];
+        for (int i = 0; i < names.Length && i < w.Clips.Length; i++)
+        {
+            w.Clips[i] = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ACO_Addon/Audio/Generated/ACO_Voice_" + names[i] + ".wav");
+            if (w.Clips[i] == null) { Debug.LogWarning("[ACO] 음성 경고 클립 ACO_Voice_" + names[i] + ".wav가 없습니다 — Tools/aco_elevenlabs.py --only warn_... 로 만드세요."); }
+        }
+        EditorUtility.SetDirty(w);
+        Selection.activeGameObject = go;
+        BakeVoiceWarning();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+    }
+
+    /// 상황별 BGM(로컬 전용 — 씬에 하나): VRC Unity Video Player(작은 렌더 텍스처, 자동 재생·반복 끔) + 2D AudioSource + ACO_Bgm(같은 오브젝트 — 영상 이벤트).
+    /// URL은 ACO_Bgm(대기실·보스 기본)과 각 페이즈 모듈 BgmUrls에 직접 넣는다.
+    public static void CreateBgm()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            ACO_Bgm existing = root.GetComponentInChildren<ACO_Bgm>(true);
+            if (existing != null)
+            {
+                Selection.activeGameObject = existing.gameObject;
+                Debug.Log("[ACO] 씬에 이미 BGM 플레이어가 있어 그것을 선택했습니다.", existing);
+                return;
+            }
+        }
+        const string rtPath = "Assets/ACO_Addon/Generated/ACO_BgmVideo.renderTexture";
+        RenderTexture rt = AssetDatabase.LoadAssetAtPath<RenderTexture>(rtPath);
+        if (rt == null)
+        {
+            rt = new RenderTexture(64, 36, 0);
+            AssetDatabase.CreateAsset(rt, rtPath);
+        }
+        var go = new GameObject("ACO_Bgm");
+        Undo.RegisterCreatedObjectUndo(go, "Create BGM");
+        AudioSource a = go.AddComponent<AudioSource>();
+        a.playOnAwake = false;
+        a.loop = false;
+        a.spatialBlend = 0f;
+        a.dopplerLevel = 0f;
+        a.volume = 0f;
+        var vp = go.AddComponent<VRC.SDK3.Video.Components.VRCUnityVideoPlayer>();
+        var so = new SerializedObject(vp);
+        so.FindProperty("autoPlay").boolValue = false;
+        so.FindProperty("loop").boolValue = false;
+        so.FindProperty("renderMode").intValue = 0;
+        so.FindProperty("targetTexture").objectReferenceValue = rt;
+        SerializedProperty outs = so.FindProperty("targetAudioSources");
+        outs.arraySize = 1;
+        outs.GetArrayElementAtIndex(0).objectReferenceValue = a;
+        SerializedProperty res = so.FindProperty("maximumResolution");
+        if (res != null) { res.intValue = 360; }
+        so.ApplyModifiedPropertiesWithoutUndo();
+        ACO_Bgm b = go.AddUdonSharpComponent<ACO_Bgm>();
+        b.Player = vp;
+        b.Output = a;
+        EditorUtility.SetDirty(b);
+        Selection.activeGameObject = go;
+        BakeBgm();
+        EditorSceneManager.MarkSceneDirty(go.scene);
     }
 
     [MenuItem("ACO/Create Combat Director")]

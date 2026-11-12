@@ -1454,7 +1454,7 @@ ParticleSystem:
       maxColor: {r: 1, g: 1, b: 1, a: 1}
       maxGradient:
         serializedVersion: 2
-        key0: {r: 1, g: 0.62, b: 0.34, a: 0.28627452}
+        key0: {r: 1, g: 0.62, b: 0.34, a: 0.89411765}
         key1: {r: 0.6, g: 0.61, b: 0.63, a: 1}
         key2: {r: 0.6, g: 0.61, b: 0.63, a: 0.8980392}
         key3: {r: 0, g: 0, b: 0, a: 0.6627451}
@@ -1479,7 +1479,7 @@ ParticleSystem:
         atime6: 0
         atime7: 0
         m_Mode: 0
-        m_ColorSpace: -1
+        m_ColorSpace: 0
         m_NumColorKeys: 3
         m_NumAlphaKeys: 6
       minGradient:
@@ -10450,7 +10450,7 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0.5
+      scalar: 1
       minScalar: 1
       maxCurve:
         serializedVersion: 2
@@ -15034,7 +15034,7 @@ ParticleSystemRenderer:
   m_RenderMode: 0
   m_MeshDistribution: 0
   m_SortMode: 0
-  m_MinParticleSize: 0.005
+  m_MinParticleSize: 0.007
   m_MaxParticleSize: 1000
   m_CameraVelocityScale: 0
   m_VelocityScale: 0
@@ -50073,6 +50073,9 @@ MonoBehaviour:
   NotchHorizon: 5
   SendMissileIncoming: 1
   MissileIncomingName: missilesincoming
+  WanderAngle: 30
+  WanderFrequency: 0.9
+  WanderFadeDistance: 400
   ProximityRadius: 0
   Dispenser: {fileID: 0}
   Damage: 50

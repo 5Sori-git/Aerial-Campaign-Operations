@@ -33,6 +33,8 @@ namespace ACO
         [Tooltip("기본 미사일(특수무장 슬롯 밖의 ACO 미사일 무장)")]
         public ACO_DFUNC_Missile[] Missiles;
         public ACO_DFUNC_Special[] Specials;
+        [Tooltip("SUPPORT 다이얼(지원 호출 — BB/TNK 줄, 6-142)")]
+        public ACO_DFUNC_Support[] Supports;
         [Tooltip("기총 탄속(m/s)·중력 배수·기체 속도 물려받기(0~1)·초당 발사 수(잔탄 = 남은 초 × 이것) — Bake가 기총 파티클에서 읽는다")]
         public float[] GunSpeed;
         public float[] GunGravity;
@@ -106,7 +108,11 @@ namespace ACO
         public float AltScale = 0.008f;        // 단위/ft
         public float ThrottleHeight = 8f;
         [Tooltip("장전 막대 간격(단위)")]
-        public float SlotSpacing = 0.55f;        [Tooltip("피치 래더 간격(판 단위 / 각도 1°) — 0.5 = 10°마다 5단위(창 ±10.5에 약 ±21°). HUD 크기와 상관없다. 1 / (BaseScale × Scale)이면 실제 각도(바깥 수평선과 겹친다)")]
+        public float SlotSpacing = 0.55f;
+        [Tooltip("한 줄에 놓는 장전 막대 수 — 슬롯이 이보다 많으면(MMP 16) 2행으로 나눈다(위 줄 먼저)")]
+        public int SlotRowMax = 8;
+        [Tooltip("장전 막대 2행일 때 줄 간격(단위 — 막대 높이 2.6보다 조금 크게, 둘째 줄은 아래)")]
+        public float SlotRowSpacing = 3f;        [Tooltip("피치 래더 간격(판 단위 / 각도 1°) — 0.5 = 10°마다 5단위(창 ±10.5에 약 ±21°). HUD 크기와 상관없다. 1 / (BaseScale × Scale)이면 실제 각도(바깥 수평선과 겹친다)")]
         [Range(0.2f, 3f)] public float LadderScale = 0.5f;
         [Tooltip("래더 칸을 보이는 창(단위, 가운데 기준 ±)")]
         public Vector2 LadderWindow = new Vector2(11f, 10.5f);
@@ -128,6 +134,7 @@ namespace ACO
 
         private int _vehicle = -1;
         private bool _shown;
+        private float _previewUntil;
         private float _textTimer;
         private float _radarTimer;
         private float _radarAltFt = 99999f;
@@ -135,6 +142,9 @@ namespace ACO
         private Color _lineBase;
         private Color[] _textBase;
         private float _appliedBright = -1f;
+        private Color[] _textOrig;   // 처음 글자 색(녹색이었는지 — HUD 색을 바꿀 대상)
+        private Color _tint;
+        private bool _tintSet;
         private int[] _headingVal;
         private int[] _speedVal;
         private int[] _altVal;
@@ -165,7 +175,9 @@ namespace ACO
             }
             int nt = AllTexts != null ? AllTexts.Length : 0;
             _textBase = new Color[nt];
-            for (int i = 0; i < nt; i++) { if (AllTexts[i]) { _textBase[i] = AllTexts[i].color; } }
+            _textOrig = new Color[nt];
+            for (int i = 0; i < nt; i++) { if (AllTexts[i]) { _textBase[i] = AllTexts[i].color; _textOrig[i] = _textBase[i]; } }
+            ApplyTint();
             _headingVal = NewVals(HeadingTicks);
             _speedVal = NewVals(SpeedTicks);
             _altVal = NewVals(AltTicks);
@@ -188,6 +200,7 @@ namespace ACO
             VRCPlayerApi lp = Networking.LocalPlayer;
             if (!Utilities.IsValid(lp) || Root == null) { return; }
             int v = FindPilotedVehicle();
+            if (ShowHud && v < 0 && Time.time < _previewUntil) { PreviewFrame(lp); return; }
             if (!ShowHud || v < 0) { if (_shown) { SetShown(false); } _vehicle = -1; return; }
             if (v != _vehicle) { _vehicle = v; _gunTarget = null; _textTimer = 0f; }
             if (!_shown) { SetShown(true); }
@@ -229,6 +242,34 @@ namespace ACO
             }
         }
 
+        /// HUD 설정 패널이 부른다: seconds 동안 기체 밖에서도 시선 앞에 보여 준다(크기·밝기·색을 바꾸며 볼 수 있게).
+        public void Preview(float seconds)
+        {
+            Start();
+            _previewUntil = Time.time + seconds;
+        }
+
+        /// 미리보기 한 프레임: 머리 방향 그대로, 예시 값(속도 450kt·고도 12000ft·방위는 시선 방향) — 테이프·피치 사다리·속도 벡터만.
+        private void PreviewFrame(VRCPlayerApi lp)
+        {
+            if (!_shown) { SetShown(true); }
+            _vehicle = -1;
+            ApplyLook();
+            VRCPlayerApi.TrackingData hd = lp.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
+            Quaternion rot = hd.rotation;
+            Root.SetPositionAndRotation(hd.position, rot);
+            Quaternion inv = Quaternion.Inverse(rot);
+            float scale = Mathf.Max(Scale * BaseScale, 0.05f);
+            Vector3 fwd = rot * Vector3.forward;
+            float heading = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
+            if (heading < 0f) { heading += 360f; }
+            UpdateTape(HeadingTicks, HeadingLabels, _headingVal, heading, 5f, 10, HeadingScale, true, 360);
+            UpdateTape(SpeedTicks, SpeedLabels, _speedVal, 450f, 10f, 50, SpeedScale, false, 0);
+            UpdateTape(AltTicks, AltLabels, _altVal, 12000f, 100f, 500, AltScale, false, 0);
+            UpdateLadder(inv, fwd, rot * Vector3.up, scale);
+            UpdateVelocityMarker(inv, fwd * 230f, scale);
+        }
+
         /// 내가 조종 중인 플레이어 기체(Vehicles 번호), 없으면 -1.
         private int FindPilotedVehicle()
         {
@@ -246,6 +287,28 @@ namespace ACO
         }
 
         /// 크기·거리·밝기가 바뀌었을 때만 판 배율·머티리얼 알파를 다시 넣는다.
+        /// HUD 설정 패널이 부른다: 선·녹색 글자를 이 색으로(알파·밝기는 그대로). 빨강 경고 같은 다른 색 글자는 그대로.
+        public void SetHudColor(Color c)
+        {
+            _tint = c;
+            _tintSet = true;
+            ApplyTint();
+        }
+
+        private void ApplyTint()
+        {
+            if (!_tintSet || _textBase == null) { return; }
+            if (_lineMat) { _lineBase = new Color(_tint.r, _tint.g, _tint.b, _lineBase.a); }
+            for (int i = 0; i < _textBase.Length; i++)
+            {
+                if (IsHudGreen(_textOrig[i])) { _textBase[i] = new Color(_tint.r, _tint.g, _tint.b, _textOrig[i].a); }
+            }
+            _appliedBright = -1f;   // 다음 ApplyLook에서 다시 넣는다
+        }
+
+        /// HUD 녹색 계열인가(색을 바꿀 대상 — 빨강 경고·파랑 아군 같은 다른 색은 그대로).
+        private bool IsHudGreen(Color c) { return c.g > 0.7f && c.r < 0.5f && c.b < 0.6f; }
+
         private void ApplyLook()
         {
             float scale = Mathf.Max(Scale * BaseScale, 0.05f);
@@ -545,13 +608,19 @@ namespace ACO
             if (SlotGroup) { SetActive(SlotGroup, on); }
             if (!on) { return; }
             int n = Mathf.Min(w.GetSlotCount(), SlotBars.Length);
+            // 한 줄에 SlotRowMax개까지 — 넘으면 2행(위 줄 = 앞 슬롯, 아래 줄 = 나머지, 열 수는 반씩)
+            int rowMax = Mathf.Max(SlotRowMax, 1);
+            int cols = n > rowMax ? (n + 1) / 2 : n;
             for (int i = 0; i < SlotBars.Length; i++)
             {
                 bool show = i < n;
                 if (SlotBars[i]) { SetActive(SlotBars[i].gameObject, show); }
                 if (!show) { continue; }
                 // 세로 막대를 왼쪽부터 늘어놓고 마지막 막대가 잔탄 글자 바로 옆(묶음 기준점)에 오게
-                SlotBars[i].localPosition = new Vector3(-(n - 1 - i) * SlotSpacing, 0f, 0f);
+                int row = i / Mathf.Max(cols, 1);
+                int col = i - row * cols;
+                int rowCount = row == 0 ? cols : n - cols;
+                SlotBars[i].localPosition = new Vector3(-(rowCount - 1 - col) * SlotSpacing, -row * SlotRowSpacing, 0f);
                 if (SlotFills != null && i < SlotFills.Length && SlotFills[i])
                 {
                     // 아래 → 위로 찬다
@@ -603,6 +672,10 @@ namespace ACO
                     // 에어브레이크: 반 초마다 깜빡인다
                     s += (Time.time % 1f < 0.6f ? "<color=#FFD050>AIRBRAKE</color>" : "") + "\n";
                 }
+                // 지원 호출 경고(조건이 안 맞을 때 — "TANKER: BANK UNDER 45", "STRIKE: NO LASER SPOT" 등): 깜빡인다
+                ACO_DFUNC_Support supAlert = Supports != null && v < Supports.Length ? Supports[v] : null;
+                string alert = supAlert != null ? supAlert.GetAlert() : "";
+                if (alert != "") { s += (Time.time % 1f < 0.7f ? "<color=#FFD050>" + alert + "</color>" : "") + "\n"; }
                 StatusText.text = s;
             }
             if (AmmoText) { BuildAmmo(v); }
@@ -626,7 +699,7 @@ namespace ACO
             return on ? text : "<alpha=#60>" + text + "<alpha=#FF>";
         }
 
-        /// 잔탄 한 줄씩, 세 칸(쉐브론 | 이름 | 수)에 같은 줄 수로 나눠 쓴다: GUN(남은 초 × 초당 발사 수), MSL(기본 미사일), 특수무장 ID, FLR. 고른 무장 줄에 ">".
+        /// 잔탄 한 줄씩, 세 칸(쉐브론 | 이름 | 수)에 같은 줄 수로 나눠 쓴다: GUN(남은 초 × 초당 발사 수), MSL(기본 미사일), 특수무장 ID, 지원(BB/TNK — 장수·쿨타임·안내), FLR. 고른 무장 줄에 ">".
         private void BuildAmmo(int v)
         {
             string mark = "";
@@ -663,6 +736,13 @@ namespace ACO
                     names += sp.GetModuleId() + "\n";
                     counts += (m.GetUdonTypeName() == GetUdonTypeName<ACO_DFUNC_Missile>() ? ((ACO_DFUNC_Missile)m).GetHudCount() : "-") + "\n";
                 }
+            }
+            ACO_DFUNC_Support sup = Supports != null && v < Supports.Length ? Supports[v] : null;
+            if (sup != null)
+            {
+                mark += Mark(sup.IsSelected());
+                names += sup.GetHudName() + "\n";
+                counts += sup.GetHudCount() + "\n";
             }
             DFUNC_Flares flr = FlareFuncs != null && v < FlareFuncs.Length ? FlareFuncs[v] : null;
             if (flr != null)

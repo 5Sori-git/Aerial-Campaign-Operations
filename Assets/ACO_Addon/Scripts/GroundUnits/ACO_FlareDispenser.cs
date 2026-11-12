@@ -48,6 +48,8 @@ namespace ACO
         [Range(0f, 1f)] public float GunSmokeChance = 0.5f;
         [Tooltip("아군 유닛(호위 대상). 호위 유닛이 출발할 때 넣는다 — 무전 대사 구분용")]
         public bool Friendly = false;
+        /// 보스 에이스(AI가 Init에서 넣는다 — 모든 화면). 있으면 일반 적 플레어 무전 대신 에이스의 OnFlare(전용 대사 또는 없음).
+        [System.NonSerialized] public ACO_AceBase Ace;
 
         [Header("연출")]
         public ParticleSystem FlareParticles;
@@ -64,11 +66,22 @@ namespace ACO
         public ACO_Chatter Chatter;
 
         private const int MAX_INCOMING = 8;
+        /// 주인 스크립트(SHADE 코브라)가 뒤에서 오는 미사일을 맡는다 — 켜져 있으면 꼬리(뒤 ±RearHandledAngle)에서 오는 미사일엔 플레어로 반응하지 않는다(오너가 매번 넣는다).
+        [System.NonSerialized] public bool RearHandled;
+        [System.NonSerialized] public float RearHandledAngle = 60f;
+        // 태양 이탈(MR. S — 6-167): 오너 에이스가 태양 이탈을 할 수 있는 동안 넣는다. 태양을 등지고 따라올 수 있는 미사일
+        // (미사일 → 나 시선이 태양 방향과 SunHandledAngle 안)은 SunHandledMinDistance보다 멀면 플레어를 굴리지 않고 둔다(가까우면 마지막 플레어).
+        [System.NonSerialized] public bool SunHandled;
+        [System.NonSerialized] public Vector3 SunHandledDir = Vector3.up;
+        [System.NonSerialized] public float SunHandledAngle = 90f;
+        [System.NonSerialized] public float SunHandledMinDistance = 700f;
+
         private ACO_Missile[] _incoming = new ACO_Missile[MAX_INCOMING];
         private bool[] _decided = new bool[MAX_INCOMING];   // 그 미사일에 대응할지 이미 정했다(미사일당 한 번만 굴린다)
         private int _salvosLeft;
         private float _nextFlare;
         private float _flareStart = -100f;
+        private float _lureMiss;   // 0 = 속은 미사일이 플레어 점에 닿아 터진다. > 0 = 그만큼 비켜 지나간다(SHADE 코브라)
         private Vector3 _flarePos;
         private Vector3 _flareVel;
         private float _checkTimer;
@@ -100,8 +113,45 @@ namespace ACO
             _salvosLeft = FlareSalvos;
             _nextFlare = 0f;
             _flareStart = -100f;
+            _sunUntil = -100f;
             for (int i = 0; i < MAX_INCOMING; i++) { _decided[i] = false; }
         }
+
+        // ───────────── 햇빛(MR. S 태양 이탈 — 모든 화면) ─────────────
+        private float _sunUntil = -100f;
+        private Vector3 _sunDir = Vector3.up;
+        private float _sunCos = 1f;
+        private int _sunGlared;
+
+        /// 모든 화면: duration초 동안 햇빛을 켠다 — 나를 쫓는 미사일의 시선(미사일 → 나)이 태양 방향(sunDir — 나에서 태양 쪽)과 halfAngle도 안이면 속는다.
+        public void BeginSunLure(Vector3 sunDir, float halfAngle, float duration)
+        {
+            if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
+            _sunDir = sunDir.sqrMagnitude > 0.000001f ? sunDir.normalized : Vector3.up;
+            _sunCos = Mathf.Cos(Mathf.Clamp(halfAngle, 0f, 90f) * Mathf.Deg2Rad);
+            _sunUntil = Time.time + Mathf.Max(duration, 0f);
+        }
+
+        public void EndSunLure() { _sunUntil = -100f; }
+
+        public bool IsSunLureActive() { return Time.time < _sunUntil; }
+
+        /// 미사일이 매 프레임 읽는다: 햇빛이 켜져 있고 이 미사일에서 본 내가 태양 원뿔 안인가.
+        public bool IsSunGlare(Vector3 missilePos)
+        {
+            if (Time.time >= _sunUntil) { return false; }
+            Vector3 los = transform.position - missilePos;
+            float m = los.magnitude;
+            if (m < 1f) { return false; }
+            return Vector3.Dot(los / m, _sunDir) >= _sunCos;
+        }
+
+        /// 햇빛에 속은 미사일이 날아갈 방향(태양 쪽).
+        public Vector3 GetSunDir() { return _sunDir; }
+
+        /// 미사일이 햇빛에 속으면 알린다(이 화면에서 센 수 — 오너 에이스가 대사를 정한다).
+        public void ReportSunGlare() { _sunGlared++; }
+        public int GetSunGlareCount() { return _sunGlared; }
 
         /// 미사일이 이 유닛을 표적으로 발사될 때 부른다(모든 클라이언트). 판단은 오너만 하지만 등록은 어디서나 한다(오너가 바뀌어도 이어지게).
         public void RegisterIncoming(ACO_Missile missile)
@@ -136,6 +186,22 @@ namespace ACO
                 ACO_Missile m = _incoming[i];
                 if (m == null || !m.gameObject.activeInHierarchy) { continue; }
                 if ((m.transform.position - transform.position).sqrMagnitude <= sq) { return true; }
+            }
+            return false;
+        }
+
+        /// 나를 쫓는 미사일 중 꼬리(뒤 ±halfAngle) distance(m) 안에 있는 게 있는지 — SHADE 코브라가 본다.
+        public bool HasIncomingBehind(float distance, float halfAngle)
+        {
+            float sq = distance * distance;
+            Vector3 me = transform.position;
+            Vector3 back = -transform.forward;
+            for (int i = 0; i < MAX_INCOMING; i++)
+            {
+                ACO_Missile m = _incoming[i];
+                if (m == null || !m.gameObject.activeInHierarchy || !m.IsTracking()) { continue; }
+                Vector3 d = m.transform.position - me;
+                if (d.sqrMagnitude <= sq && Vector3.Angle(back, d) <= halfAngle) { return true; }
             }
             return false;
         }
@@ -198,6 +264,11 @@ namespace ACO
                 if (!m.IsTracking()) { _incoming[i] = null; _decided[i] = false; continue; }
                 if (_decided[i]) { continue; }
                 if ((m.transform.position - me).sqrMagnitude > reactSq) { continue; }
+                // 뒤에서 오는 미사일을 주인 스크립트가 맡으면(코브라 준비됨) 굴리지 않고 둔다 — 못 맡게 되면 다음 확인 때 굴린다
+                if (RearHandled && Vector3.Angle(-transform.forward, m.transform.position - me) <= RearHandledAngle) { continue; }
+                // 태양 이탈이 맡는 미사일(태양을 등지고 따라오는, 아직 먼 것)도 같다
+                if (SunHandled && (m.transform.position - me).sqrMagnitude > SunHandledMinDistance * SunHandledMinDistance
+                    && Vector3.Angle(me - m.transform.position, SunHandledDir) <= SunHandledAngle) { continue; }
                 _decided[i] = true;
                 if (Random.value > FlareChance) { continue; }
                 SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetFlare));
@@ -215,7 +286,8 @@ namespace ACO
             StartLure();
             StartVisual();
             if (FlareSound && FlareSound.clip) { FlareSound.PlayOneShot(FlareSound.clip); }
-            if (Chatter)
+            if (Ace != null) { Ace.OnFlare(); }
+            else if (Chatter)
             {
                 int ev = Friendly ? (SmokeMode ? ACO_Chatter.EV_ALLY_SMOKE : ACO_Chatter.EV_ALLY_FLARE) : ACO_Chatter.EV_ENEMY_FLARE;
                 Chatter.ReportNear(ev, transform.position, "");
@@ -229,10 +301,22 @@ namespace ACO
             StartLure();
         }
 
+        /// BeginLure와 같고, 속은 미사일이 끌려간 점에서 터지지 않고 missDistance(m)만큼 비켜 지나가 빗나간다(SHADE 코브라 — 급감속한 기체를 지나쳐 날아간다).
+        public void BeginLureMiss(float missDistance)
+        {
+            if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
+            StartLure();
+            _lureMiss = Mathf.Max(missDistance, 0f);
+        }
+
+        /// 지금 켜진 플레어 효과에 속은 미사일이 비켜 갈 거리(m). 0이면 플레어 점에서 터진다.
+        public float GetLureMiss() { return _lureMiss; }
+
         // 플레어는 기체 속도 일부를 이어받고 뒤로 사출된다(연출 파티클: 속도 상속 0.8, 사출 15~35m/s). 미사일은 이 점을 쫓는다.
         private void StartLure()
         {
             _flareStart = Time.time;
+            _lureMiss = 0f;
             _flarePos = FlareParticles ? FlareParticles.transform.position : transform.position;
             float speed = Flight != null ? Flight.Speed : (Unit != null ? Unit.Speed : 0f);
             _flareVel = transform.forward * Mathf.Max(speed * 0.8f - 25f, 0f);

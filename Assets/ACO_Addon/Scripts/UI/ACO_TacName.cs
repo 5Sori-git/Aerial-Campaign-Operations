@@ -21,6 +21,8 @@ namespace ACO
         public const string KEY_HULL = "aco_hull_no";
         private const int MAX_PLAYERS = 100;
 
+        [Tooltip("번역 장치(6-166). Bake가 넣는다")]
+        public ACO_Localization Loc;
         [Header("입력 패널 (프리팹 빌더)")]
         public InputField Input;
         public TextMeshProUGUI CurrentText;
@@ -69,15 +71,31 @@ namespace ACO
 
         // ───────────── 패널 ─────────────
 
+        /// 번역 장치가 언어를 바꾸면 부른다. 안내 한 줄은 지운다(지난 언어).
+        public void LocalizationChanged()
+        {
+            UpdateTexts("");
+            UpdateHullText();
+        }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english). {0}에 값을 끼운다(6-166)
+        private string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+
         /// SET 버튼·입력 끝: 다듬어 저장한다.
         public void Submit()
         {
-            if (!_restored) { UpdateTexts("<color=#FF5544>LOADING SAVE DATA...</color>"); Play(ACO_UiSound.KIND_DENY); return; }
+            if (!_restored) { UpdateTexts("<color=#FF5544>" + T("common.loadingsave", "LOADING SAVE DATA...") + "</color>"); Play(ACO_UiSound.KIND_DENY); return; }
             string name = Sanitize(Input ? Input.text : "");
             PlayerData.SetString(KEY, name);
             if (Input) { Input.text = name; }
             Refresh();
-            UpdateTexts(name.Length > 0 ? "CALLSIGN SET" : "CALLSIGN CLEARED");
+            UpdateTexts(name.Length > 0 ? T("tac.msg.set", "CALLSIGN SET") : T("tac.msg.cleared", "CALLSIGN CLEARED"));
             Play(ACO_UiSound.KIND_CONFIRM);
         }
 
@@ -88,7 +106,7 @@ namespace ACO
             PlayerData.SetString(KEY, "");
             if (Input) { Input.text = ""; }
             Refresh();
-            UpdateTexts("CALLSIGN CLEARED");
+            UpdateTexts(T("tac.msg.cleared", "CALLSIGN CLEARED"));
             Play(ACO_UiSound.KIND_CLICK);
         }
 
@@ -124,7 +142,7 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!HullText || !Utilities.IsValid(me)) { return; }
             string hull = ReadHull(me);
-            HullText.text = "YOUR HULL NUMBER: " + (hull.Length > 0 ? hull : "<color=#7FBF8A>(NONE)</color>");
+            HullText.text = T1("tac.hull", "YOUR HULL NUMBER: {0}", hull.Length > 0 ? hull : "<color=#7FBF8A>" + T("tac.none", "(NONE)") + "</color>");
         }
 
         private void Play(int kind)
@@ -139,8 +157,8 @@ namespace ACO
             {
                 string mine = ReadName(me);
                 string shown = GetLabel(me);
-                CurrentText.text = mine.Length == 0 ? "YOUR CALLSIGN: <color=#7FBF8A>(NONE - WINGMAN n)</color>"
-                    : "YOUR CALLSIGN: " + mine + (shown != mine && shown.Length > 0 ? "  <color=#FFD24D>(SHOWN AS " + shown + " - SAME NAME IN USE)</color>" : "");
+                CurrentText.text = mine.Length == 0 ? T1("tac.current", "YOUR CALLSIGN: {0}", "<color=#7FBF8A>" + T("tac.none.wingman", "(NONE - WINGMAN n)") + "</color>")
+                    : T1("tac.current", "YOUR CALLSIGN: {0}", mine) + (shown != mine && shown.Length > 0 ? "  <color=#FFD24D>" + T1("tac.shownas", "(SHOWN AS {0} - SAME NAME IN USE)", shown) + "</color>" : "");
             }
             if (MessageText) { MessageText.text = message; }
         }

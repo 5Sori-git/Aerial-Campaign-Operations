@@ -233,7 +233,7 @@
 - **임무 순서**: 기본 모듈의 `PhaseWeights`를 앞은 타격·제압·제공권, 중간은 호위·콘보이·상륙전, 4는 함대전, 5는 요새 위주로 둔다. 비어 있는 모듈에만 Bake가 넣는다(`ApplyDefaultWeights` — ACO → Missions → Phase Weights에서 직접 바꾼 값은 유지).
 - **숙련도**: `ACO_MissionGenerator.PhaseVeteranChance`·`PhaseAceChance`(1~5: 베테랑 15→50%, 에이스 0→25%)를 전투기 편대와 지상 유닛이 함께 쓴다. 웨이브 증원은 웨이브 값과 페이즈 값 중 높은 쪽.
 - **지상 유닛**: 유닛마다 숙련도를 굴려(`RollUnitTier` — 배치의 시드 난수를 건드리지 않는 해시) `_groundTier`·`_hvtTier`로 동기화하고, 스폰할 때 `ApplyUnitTier`가 넣는다. 함선은 부위마다, 전차·곡사포는 포마다. 기준은 프리팹 값(베테랑 1.0)이고 신병은 약해지고 에이스는 강해진다: 포 조준·체류·사격 간격, SAM·VLS 락온·재장전, 곡사포 간격·산포, 최대 체력(신병 ×0.9, 에이스 ×1.3 — 플레이어 피해 강화와 맞물린다, `Ground*Multiplier`). 체력 기준은 Bake가 채운 `BaseHealth`이고, 값은 스폰 2프레임 뒤 `SaccTarget.FullHealth`에 넣는다(전투기와 같은 방식 — 부활이 새 체력으로 채운다). 건물·TEL·공중 요새 코어·엔진은 체력 대상이 아니다(요새 포대는 대상). 아군 함선·호위 유닛은 아무것도 대상이 아니다.
-- **보너스**: 페이즈를 많이 고를수록 보너스 페이즈가 잘 붙는다(1~5페이즈: 5·10·25·50·100%, `BonusChanceByPhases`). 디버그 패널의 ACE·VETERAN·BONUS 버튼은 표 대신 고정 값을 쓰게 만든다(`DebugFixedChance`, `DebugBonusChance` — 표시는 그전까지 BY PHASE).
+- **보너스**: 페이즈를 많이 고를수록 보너스 페이즈가 잘 붙는다(1~5페이즈: 5·10·25·50·100%, `BonusChanceByPhases`). > 바뀜(6-161): 일단 폐지 — 확률을 모두 0으로 둔다(Setup Check `bonus-off-1`). 디버그 패널의 ACE·VETERAN·BONUS 버튼은 표 대신 고정 값을 쓰게 만든다(`DebugFixedChance`, `DebugBonusChance` — 표시는 그전까지 BY PHASE).
 
 ### 6-75. 함대전 대사 표·항로 검사
 
@@ -271,3 +271,16 @@
 - 안전지대 = `ACO_PlayerProgress.SafeZones`(보급 트리거 — 씬의 `SafeArea`, 레이어 27 = SAV 보급 레이어). 기체 확장 `ACO_VehicleUpgrades`가 모든 클라이언트에서 0.5초마다 기체 위치가 그 콜라이더 안인지 본다(`Collider.ClosestPoint` — 회전한 상자도 맞다).
 - 안이면 그 기체의 락온 마커(`LockTarget` — SaccEntity 아래 "AAMTarget", 레이어 25, Bake가 찾아 넣는다)를 끈다. 적 대공포·SAM·전투기·기총은 꺼진 마커를 표적으로 고르지 않고(`activeInHierarchy`), 날아오던 적 미사일도 표적을 잃는다(`ACO_Missile.TargetIsValid`). 나오면 다시 켠다. 위치는 SAV가 동기화하므로 표적을 고르는 오너 화면에서도 같은 답이 나온다.
 - 이미 터져 남아 있는 소형 레일건 폭발 지역 같은 범위 피해는 막지 않는다(안전지대 근처로 쏘지 않으므로).
+
+### 6-161. 보너스 작전 끄기 (일단 폐지)
+- 결정: 보너스 작전은 일단 쓰지 않는다. 대신 "연속 임무(캠페인) 수가 길수록 플레이 시간이 늘고 강한 적이 나올 확률이 오른다"가 난이도 선택의 보상이다(튜토리얼 6-160 1페이지 문구).
+- 방법: 설정만 바꾼다 — 씬 미션 관리자의 `BonusChanceByPhases`를 모두 0(Setup Check `bonus-off-1`). 보너스 전용 모듈(`BonusOnly` — 지금 씬의 `BONUS - {ACE}`)과 코드는 남겨 두어, 확률만 되돌리면 다시 켜진다.
+- 디버그 패널 BONUS 버튼(`DebugBonusChance`, 테스트용 고정 확률)은 그대로 둔다 — 테스트할 때만 붙는다.
+
+### 6-169. NPC 작전 지역 경계 — 원점 중심 반경 25km 밖으로 나가지 않는다
+- 배경: 적기는 공역 정사각형(±20km) 바깥 5~15km(원점에서 최대 약 35km)에서 나타나 들어왔고, 날아다니는 NPC를 막는 장치가 없었다. 플레이어 루프(SAV `RepeatingWorld`)는 원이 아니라 축별 ±30km 정사각형(한 축이 30km를 넘으면 그 축만 반대편으로 60km). 지형 끝(`ACO_HexTerrain.FieldRadius`)은 씬에서 25km.
+- **경계**: 원점 중심 반경 25km(지형 끝과 같게). 루프 정사각형의 안쪽 원(30km)보다 안이라 NPC가 루프에 닿지 않는다.
+- **배치(생성기 `NpcFieldRadius` 25000 · `NpcFieldMargin` 500)**: 땅 · 바다 · 경로 자리를 고르는 함수(`SampleGround`, `IsSeaAt`, `SampleDryGround`, `RoutePointHeight`)가 24.5km 밖을 거른다 — 지상 유닛 · 시설 · 사일로 · 레일건 자리, 함대 · 바다 자리, 호위 · 콘보이 · 상륙 · 육상전함 항로가 모두 안에서만 만들어진다. 전투기(편대 · 증원 · 보스 에이스 · 형제 · SHADE)는 `MarkFighter`가 나타나는 자리와 진입 목표를 같은 방위의 24.5km 안으로 당긴다 — 바깥에서 날아 들어오던 편대는 경계 안쪽에서 나타나 들어온다. 0이면 끔.
+- **비행 중(`ACO_NPCFlightController` — NPC 전투기 · 공격기 · 모든 보스 에이스)**: `FieldRadius` 25000, `FieldSoftMargin` 1500, `FieldTurnBoost` 2.5. 23.5km를 넘어 바깥으로 가면 원하는 수평 방향을 안쪽(원점 쪽)으로 점점 돌리고(경계에서 완전히 안쪽), 25km를 넘으면 곧장 안쪽 + 선회 · 피치 · 롤 속도 ×2.5. 상승각은 그대로, 안쪽으로 가고 있으면 건드리지 않는다. AI 판단 · 에이스 조종 덮어쓰기(MISTER.S 태양 돌진, LUNA 선회 · 이탈, SHADE 코브라 등)보다 먼저 적용되고 지면 회피만 그 위에. 동기화는 그대로(오너가 조종).
+- 손대지 않은 것: 플레이어(30km 루프 그대로), 아군 지원 호출 유닛(플레이어를 따라간다 — 자기 이동 스크립트), 풀에 숨은 대기 자리.
+- 새 직렬화 칸은 스크립트 기본값으로 이미 있는 프리팹 · 씬에 그대로 들어간다(Setup Check 없음).

@@ -49,11 +49,12 @@ MonoBehaviour:
   DisplayName: 4AGM
   Description: 'MULTI-TARGET AGM
 
-    LOCKS UP TO 4 GROUND TARGETS - ONE MISSILE
-    EACH'
+    LOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE
+    MISSILE AT EACH.'
   Price: 9000
   Icon: {fileID: 21300000, guid: 0bc0ec17f47b5704f8b2fe0cf15da30d, type: 3}
   SortOrder: 40
+  Category: 0
   Module: {fileID: 9075314154998943502}
 --- !u!1 &5409582863274412782
 GameObject:
@@ -121,11 +122,16 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 4000
   LockAngle: 25
+  LockFromCcip: 1
   LockTime: 1.2
   MaxLockTargets: 4
+  CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 4
   MaxAmmo: 16
@@ -141,10 +147,35 @@ MonoBehaviour:
   SplashRadius: 20
   MinSplashFraction: 0.3
   MissileSplash: 1
-  Radio: {fileID: 0}
+  FullPartSplash: 0
+  Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
+  InterceptSites: []
   CrossLockIndicator: 1
+  IgnoreCountermeasures: 0
+  ProximityAnyEnemy: 0
+  AutoTargetNearest: 0
+  DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
+  SeekerAngle: 0
+  LockHoldTime: 0
+  MissileLifetime: 0
+  SeaSkim: 0
+  SkimAltitude: 8
+  SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 2
+  TakesExtraAmmo: 0
+  LaunchCall: 3
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 0}
@@ -163,6 +194,8 @@ MonoBehaviour:
   CcipInterval: 0.05
   CcipMaxTime: 40
   TargetIndicator: {fileID: 0}
+  SelectedObjects: []
+  SlotBarsOnlyWhenSelected: 1
   SlotBarTemplate: {fileID: 0}
   SlotBarSpacing: {x: 0.02, y: 0, z: 0}
   SlotBarVertical: 1

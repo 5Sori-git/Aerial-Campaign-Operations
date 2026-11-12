@@ -62,7 +62,7 @@ namespace ACO
         public Color FriendlyColor = new Color(0.35f, 0.65f, 1f, 1f);
         public Color MissileColor = new Color(1f, 1f, 1f, 1f);
         public Color SelfColor = new Color(1f, 1f, 1f, 1f);
-        public Color NorthColor = new Color(0.35f, 1f, 0.45f, 1f);
+        public Color NorthColor = new Color(0f, 1f, 0f, 1f);
         [Tooltip("ECM 재밍 구역 원의 색")]
         public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
         [Tooltip("ECM 재밍 구역 원의 굵기(스코프 지름 대비)")]
@@ -80,7 +80,30 @@ namespace ACO
         private bool _hasRot;
         private Material[] _mats;
         private Color[] _baseColors;
+        private Color[] _origColors;   // 처음 재질 색(녹색이었는지 — HUD 색을 바꿀 대상)
         private float _appliedOpacity = -1f;
+        private Color _tint;
+        private bool _tintSet;
+
+        /// HUD 설정 패널이 부른다: 녹색 선·북쪽 표시를 이 색으로(알파·불투명도 그대로). 바탕·적 점 같은 다른 색은 그대로.
+        public void SetHudColor(Color c)
+        {
+            _tint = c;
+            _tintSet = true;
+            NorthColor = new Color(c.r, c.g, c.b, NorthColor.a);
+            ApplyTint();
+        }
+
+        private void ApplyTint()
+        {
+            if (!_tintSet || _baseColors == null) { return; }
+            for (int i = 0; i < _baseColors.Length; i++)
+            {
+                Color o = _origColors[i];
+                if (o.g > 0.7f && o.r < 0.5f && o.b < 0.6f) { _baseColors[i] = new Color(_tint.r, _tint.g, _tint.b, o.a); }
+            }
+            _appliedOpacity = -1f;   // 다음 ApplyOpacity에서 다시 넣는다
+        }
 
         void Start()
         {
@@ -107,12 +130,15 @@ namespace ACO
             int n = Renderers != null ? Renderers.Length : 0;
             _mats = new Material[n];
             _baseColors = new Color[n];
+            _origColors = new Color[n];
             for (int i = 0; i < n; i++)
             {
                 if (!Renderers[i]) { continue; }
                 _mats[i] = Renderers[i].material;
                 _baseColors[i] = _mats[i].GetColor("_Color");
+                _origColors[i] = _baseColors[i];
             }
+            ApplyTint();
             SetShown(false);
         }
 

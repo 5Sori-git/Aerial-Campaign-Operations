@@ -13,7 +13,7 @@
 //    카메라가 _SwellFadeHeight보다 높으면 너울이 줄어든다(고공에선 안 보인다). 원판은 셰이더가 카메라 위치(VR이면 두 눈 가운데)로 옮긴다 — 스크립트 없음.
 //  - 물속에서 본 수면: 평소엔 뒷면을 버리고(_Cull = Back), 물속 연출(ACO_Underwater)이 내 화면의 너울 머티리얼 복사본만 _Cull = Off로 바꾼다.
 //    뒷면은 조명 없이 _UnderColor로 스스로 빛난다(바로 위일수록 밝게).
-//  - 비(전역 _UdonACORain — ACO_Rain): 가까운 바다(300m)에 빗방울 파문(격자마다 퍼지는 고리 두 겹), 반짝임 조금 거칠게.
+//  - 비(전역 _UdonACORain — ACO_Rain): 가까운 바다(300m)에 빗방울 파문(격자마다 퍼지는 고리 두 겹), 수면을 거칠게 해 해 반짝임을 흐린다(_RainDull).
 // 그림자 투사 패스가 없다(깊이 텍스처에 바다 자신이 들어가지 않게). 큐 Transparent-100(불투명 다음, 깊이 씀).
 Shader "ACO/Ocean"
 {
@@ -46,6 +46,7 @@ Shader "ACO/Ocean"
         _ShallowColor ("Shallow (depth mode)", Color) = (0.06, 0.38, 0.42, 1)
         _BlotchColor ("Color blotch amount", Range(0, 1)) = 0.3
         _Smoothness ("Smoothness near", Range(0, 1)) = 0.95
+        _RainDull ("Rain: smoothness loss (dull sun glint)", Range(0, 1)) = 0.6
         _FarSmoothness ("Smoothness far", Range(0, 1)) = 0.82
         _FarDistance ("Far distance (m)", Float) = 8000
         _FarGlowStart ("Far brightness limit start (m)", Float) = 3000
@@ -102,7 +103,7 @@ Shader "ACO/Ocean"
         float _FoamFadeStart, _FoamFadeEnd;
         float _FarGlowStart, _FarGlowEnd, _FarGlowLimit;
         fixed4 _DeepColor, _HorizonColor, _ShallowColor, _FoamColor;
-        float _BlotchColor, _Smoothness, _FarSmoothness, _FarDistance;
+        float _BlotchColor, _Smoothness, _FarSmoothness, _FarDistance, _RainDull;
         float _FoamAmount, _FoamScale;
         float _ShallowDepth, _ClearDepth, _ShoreFoamWidth;
         float _SeaY, _SwellRadius, _SwellSnap, _SwellScale, _SwellFadeHeight;
@@ -305,8 +306,8 @@ Shader "ACO/Ocean"
             }
 
             o.Albedo = col;
-            // 비가 오면 수면 반짝임이 조금 거칠다(빗방울에 흐트러진다)
-            o.Smoothness = lerp(lerp(_Smoothness, _FarSmoothness, far), 0.3, foam) * (1 - 0.08 * _UdonACORain);
+            // 비가 오면 수면이 거칠어 해 반짝임이 흐려진다(빗방울 · 흐린 하늘 — 비 0.85 · 폭풍 1에서 _RainDull만큼, 예전엔 8%라 흐린 날에도 해 반사가 밝게 남았다)
+            o.Smoothness = lerp(lerp(_Smoothness, _FarSmoothness, far), 0.3, foam) * (1 - _RainDull * _UdonACORain);
             o.Metallic = 0;
             o.Alpha = alpha;
         }

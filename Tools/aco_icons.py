@@ -479,6 +479,51 @@ def i_lock(c):
     seg(c, (50, 66), (50, 80), 5)
 
 
+# 지원 호출(서포트) 아이콘 — 인게임 드론을 위에서 본 모양(코를 위로, 오른쪽 반을 적어 좌우 대칭으로 닫는다)
+TANKER_HALF = [(50, 4), (53, 14), (55, 28), (90, 56), (90, 62), (58, 62), (54, 67), (50, 67)]   # 급유 드론: 뾰족한 기수 + 넓은 삼각 날개(뒷전 곧게)
+GUARD_HALF = [(50, 4), (54, 14), (55, 24), (55, 46), (80, 58), (80, 66), (55, 64), (55, 82), (63, 89), (63, 95), (55, 93), (50, 96)]   # 가디언 드론: 긴 동체 + 가운데 후퇴익 + 꼬리 작은 핀
+
+
+def sym(half):
+    return half + [(100 - x, y) for x, y in reversed(half[1:-1])]
+
+
+def shape(c, half, cx, cy, s, fill=False, w=W):
+    pts = [(cx + (x - 50) * s, cy + (y - 50) * s) for x, y in sym(half)]
+    if fill: fill_poly(c, pts)
+    else: poly(c, pts, w)
+
+
+def i_sup_strike(c):
+    # 벙커버스터: 떨어지는 폭탄 + 땅에 묻힌 벙커(반구 + 입구) + 충격선
+    bomb(c, 50, 30, 0.6)
+    seg(c, (8, 88), (92, 88))
+    arc(c, 50, 88, 22, 180, 360)
+    poly(c, [(43, 88), (43, 79), (57, 79), (57, 88)], 4.5, closed=False)
+    for x0, x1 in ((22, 14), (78, 86)):
+        seg(c, (x0, 64), (x1, 56), 4.5)
+    seg(c, (26, 74), (16, 72), 4.5); seg(c, (74, 74), (84, 72), 4.5)
+
+
+def i_sup_tanker(c):
+    # 급유 드론: 위에서 본 드론 + 꼬리에서 늘어진 급유 호스(점선) + 작은 드로그(사다리꼴)
+    shape(c, TANKER_HALF, 50, 41, 0.74)
+    dashed(c, (50, 55), (50, 75), 5.0, 4.0, 4.0)
+    poly(c, [(45, 76), (55, 76), (60, 88), (40, 88)], 4.5)
+
+
+def i_sup_guardian(c):
+    # 가디언 드론: 방패 안의 드론 + 방패에 막혀 튕기는 미사일(불꽃)
+    poly(c, [(46, 14), (78, 24), (76, 54), (66, 72), (46, 88), (26, 72), (16, 54), (14, 24)])
+    shape(c, GUARD_HALF, 46, 50, 0.5, fill=True)
+    missile(c, 86, 13, 135, 18, 2.8, 5, 3.0, 4, fill=True)
+    for ang in (300, 345, 30):
+        r0, r1 = 4, 10
+        cx, cy = 80, 20
+        a = math.radians(ang)
+        seg(c, (cx + r0 * math.cos(a), cy + r0 * math.sin(a)), (cx + r1 * math.cos(a), cy + r1 * math.sin(a)), 3.5)
+
+
 def i_cm_pod(c):
     # 대응탄 포드: 원통 포드 + 아래로 떨어지는 플레어 셋(꼬리 곡선)
     rrect(c, 20, 18, 80, 40, 10)
@@ -759,6 +804,7 @@ ICONS = [
     ("weapon_flak", i_w_flak), ("weapon_ccaa", i_w_ccaa), ("weapon_adam", i_w_adam), ("weapon_lasm", i_w_lasm),
     ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm), ("weapon_mmp", i_w_mmp), ("weapon_rgp", i_w_rgp),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
+    ("sup_strike", i_sup_strike), ("sup_tanker", i_sup_tanker), ("sup_guardian", i_sup_guardian),
     ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),
     ("power", i_power), ("screen", i_screen), ("target", i_target), ("camera", i_camera), ("score", i_score),

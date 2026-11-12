@@ -49,6 +49,7 @@ public static partial class ACO_PrefabBuilder
         flame.transform.localScale = new Vector3(2f, 7f, 2f);
         flame.GetComponent<MeshRenderer>().sharedMaterial = flameMat;
         CreateFortressSmoke(flying.transform, "Trail", new Vector3(0f, 0f, 0f), 3f, 200f);
+        ACO_EngineSounds.AddRocket(flying.transform);   // 날 때만 켜진다 — 10km까지(6-156)
         flying.SetActive(false);
 
         GameObject blast = CreateFortressSmoke(root.transform, "Blast", new Vector3(0f, 8f, 0f), 10f, 80f);

@@ -256,6 +256,7 @@ MonoBehaviour:
   EntityControl: {fileID: 1402218590741753856}
   Muzzle: {fileID: 8994294750156433523}
   VisualParticle: {fileID: 1646780701822536956}
+  Laser: {fileID: 0}
   FireSound: {fileID: 6804649801502992557}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -999,8 +1000,8 @@ MonoBehaviour:
   - {fileID: 2735445909785076947}
   - {fileID: 3584210906226491232}
   - {fileID: 6810818944132611641}
-  - {fileID: 6307463124052226046}
-  - {fileID: 4640546291453174742}
+  - {fileID: 6284105848182112734}
+  - {fileID: 8532394643371378476}
   TargetName: Cruiser
   ScoreValue: 4000
   MarkerLabel: CG
@@ -1011,6 +1012,7 @@ MonoBehaviour:
   PartHullDamage: 0.05
   PartCheckInterval: 0.25
   PartSplashScale: 0.2
+  CoreSplashImmune: 0
   CruiseSpeed: 12
   CruiseRadius: 2500
   BobAngle: 0.6
@@ -6486,6 +6488,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 1.2
   AimLeadTime: 0
@@ -6503,6 +6506,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -12526,6 +12530,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3637084429803990054}
   Muzzle: {fileID: 4231863409488173337}
   VisualParticle: {fileID: 8434007962892886733}
+  Laser: {fileID: 0}
   FireSound: {fileID: 4677614844350643310}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -13881,6 +13886,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 0.35
   AimLeadTime: 0
@@ -13898,6 +13904,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 1.5
+  SilentIntercept: 0
   InterceptTuneVersion: 1
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -14436,6 +14443,7 @@ MonoBehaviour:
   EntityControl: {fileID: 4176196027992179350}
   Muzzle: {fileID: 9064323614641720620}
   VisualParticle: {fileID: 1893151265104833188}
+  Laser: {fileID: 0}
   FireSound: {fileID: 7730076139027156756}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -14848,6 +14856,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 0.35
   AimLeadTime: 0
@@ -14865,6 +14874,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 1.5
+  SilentIntercept: 0
   InterceptTuneVersion: 1
   InterceptDefaultsApplied: 1
   SleepMargin: 3000

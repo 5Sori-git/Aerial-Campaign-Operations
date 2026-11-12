@@ -31,8 +31,9 @@ namespace ACO
         public float RepairInterval = 40f;
         [Tooltip("한 번에 되살리는 방공·부포 부위 수")]
         public int RepairCount = 3;
-        [Tooltip("이 페이즈 동안 되살리는 방공·부포 부위의 최대 수(합계). 0이면 끝없이")]
-        public int MaxRepairs = 6;
+        [Tooltip("수리는 살아 있는 방공·부포 부위가 이 수보다 적을 때만, 이 수까지(한 번에 RepairCount곳). 0이면 한도 없이 RepairCount곳씩 — 너무 많이 되살아나면 부순 의미가 없다")]
+        public int RepairAliveCap = 6;
+        [HideInInspector] public int MaxRepairs = 6;   // 예전 값(페이즈 전체 합계 — 이제 쓰지 않는다, 저장된 값만 남긴다)
         [Tooltip("남은 거리(m)가 이만큼이면 도시 접근 대사 (먼·가까운·마지막)")]
         public float CityWarnFar = 3000f;
         public float CityWarnNear = 1500f;
@@ -43,6 +44,11 @@ namespace ACO
         public float ClearDelay = 8f;
         [Tooltip("도시에 닿은 뒤 미션 실패로 넘어가기까지(초)")]
         public float CityFailDelay = 4f;
+        [Header("총력 복구 (코어 단계에 한 번 — 자동 사격 통제)")]
+        [Tooltip("코어 셔터가 열린 뒤 이만큼(초) 지나 부서진 포대를 전부 되살린다 — 셔터가 열릴 때의 대사(약 9초)가 끝난 뒤. 0 = 끔")]
+        public float AllRepairDelay = 10f;
+        [Tooltip("되살리기를 이만큼(초)에 걸쳐 차례로(한꺼번에 툭 생기지 않게)")]
+        public float AllRepairSpread = 4f;
 
         public const int SIT_SPAWN = 0;
         public const int SIT_SKIRT_DOWN = 1;
@@ -56,21 +62,23 @@ namespace ACO
         public const int SIT_CITY_LAST = 9;
         public const int SIT_CORE_DOWN = 10;
         public const int SIT_CITY_HIT = 11;
-        public const int SIT_REPAIR = 12;      // 방공·부포 부위가 되살아났다
+        public const int SIT_REPAIR = 12;      // 방공·부포 부위가 되살아났다(장갑 단계 — 수리반)
+        public const int SIT_ALL_REPAIR = 13;  // 총력 복구 — 선원이 무력화돼 자동 사격 통제로 바꾸고 포대를 전부 되살린다
+        public const int SIT_REPAIR_AUTO = 14; // 총력 복구 뒤의 주기 수리(자동 사통 — 시스템 음성)
 
-        [Header("상황별 대사 표 (같은 순서의 배열 — 한 줄 = 대사 하나)")]
+        [Header("상황별 대사 표 (같은 순서의 배열 — 한 줄 = 대사 하나) — 3판: 적 함장은 1판 대사, AWACS는 2판 대사(6-150)")]
         [Tooltip("이 대사가 나오는 상황(SIT_*)")]
         public int[] LineEvent = new int[] {
-            SIT_SPAWN,
             SIT_SPAWN,
             SIT_SKIRT_DOWN,
             SIT_TRACK_HALF,
             SIT_TRACK_HALF,
             SIT_VENT_OPEN,
             SIT_VENT_OPEN,
-            SIT_VENT_HALF,
             SIT_CORE_OPEN,
             SIT_CORE_OPEN,
+            SIT_ALL_REPAIR,
+            SIT_ALL_REPAIR,
             SIT_CORE_HALF,
             SIT_CORE_HALF,
             SIT_CITY_FAR,
@@ -82,20 +90,21 @@ namespace ACO
             SIT_CITY_HIT,
             SIT_CITY_HIT,
             SIT_REPAIR,
-            SIT_REPAIR };
-        [Tooltip("말하는 쪽(0 = 적, 1 = AWACS)")]
+            SIT_REPAIR,
+            SIT_REPAIR_AUTO };
+        [Tooltip("말하는 쪽(0 = 적 함장, 1 = AWACS, 3 = 선원, 4 = 자동 사통 시스템)")]
         public int[] LineSpeaker = new int[] {
             SPEAKER_ENEMY,
             SPEAKER_AWACS,
-            SPEAKER_AWACS,
-            SPEAKER_ENEMY,
-            SPEAKER_AWACS,
             SPEAKER_ENEMY,
             SPEAKER_AWACS,
             SPEAKER_AWACS,
             SPEAKER_ENEMY,
             SPEAKER_AWACS,
             SPEAKER_ENEMY,
+            SPEAKER_ENEMY,
+            SPEAKER_AWACS,
+            SPEAKER_ENEMY,
             SPEAKER_AWACS,
             SPEAKER_AWACS,
             SPEAKER_AWACS,
@@ -106,33 +115,37 @@ namespace ACO
             SPEAKER_ENEMY,
             SPEAKER_AWACS,
             SPEAKER_ENEMY,
+            SPEAKER_AWACS,
             SPEAKER_AWACS };
         [Tooltip("대사. {left} = 남은 궤도 수(궤도 절반 파괴 대사)")]
         public string[] LineText = new string[] {
             "All batteries, open fire. Grind a path to the city.",
-            "A land battleship is moving on the city! Strip its armor plates, then go for the tracks!",
             "Armor plate down! The track behind it is exposed!",
             "Half our tracks are gone! Keep moving, full power to the rest!",
             "Half its tracks are destroyed! It is losing speed. {left} tracks left!",
+            "Exhaust vents exposed! They're tucked inside the track wells, glowing blue. Destroy them and cripple that thing!",
             "Exhaust ducts exposed! Seal them, now!",
-            "Those glowing vents behind the tracks are its weak point. Destroy them!",
-            "Half its exhaust vents are gone! Keep at it!",
+            "The core is exposed! Hit it with everything you have!",
             "Reactor overheating! Open the core shutters!",
-            "The shutters on top are open! The core is exposed, hit it with everything you have!",
+            "Reroute reactor power to the batteries. All of them. Now!",
+            "It's feeding reactor power to its guns! Every battery is back! Stay on the core!",
             "Core integrity at fifty percent! Hold together!",
             "The core is failing! Keep hitting it!",
             "Three kilometers to the city!",
             "It is almost at the city limits! Stop it now!",
             "Nothing can stop us now!",
             "Five hundred meters! Bring it down!",
-            "The reactor... it is going critical!",
+            "Keep firing! Keep fir-",
             "Core destroyed! The battleship is going up!",
             "We have reached the city. Commence bombardment.",
             "It is inside the city... It is shelling the city!",
             "Damage control, bring the batteries back online!",
+            "Some of its guns are back online. Watch yourselves!",
             "Some of its guns are back online. Watch yourselves!" };
         [Tooltip("음성(선택 — 비우면 자막만)")]
-        public AudioClip[] LineClip = new AudioClip[22];
+        public AudioClip[] LineClip = new AudioClip[23];
+        [Tooltip("코어 폭발 첫 대사 음성에서 말이 끊기는 시각(초) — 이 지점이 대폭발(ACO_LandShip.DeathChainTime)에 맞게 늦춰 튼다. 그 뒤는 비명. 0이면 음성 끝")]
+        public float CoreDownCutAt = 2.16f;
 
         [UdonSynced] private int _stamp;
         [UdonSynced] private int _stage;
@@ -143,6 +156,7 @@ namespace ACO
         [UdonSynced] private float _speedScale = 1f;
         [UdonSynced] private int _destSite = -1;
         [UdonSynced] private int _repairedUnits;   // 지금까지 되살린 방공·부포 부위 수(MaxRepairs와 비교 — 새 오너도 이어서 센다)
+        [UdonSynced] private int _allRepairMs;     // 총력 복구를 시작한 서버 시각(0 = 아직 — 페이즈에 한 번)
 
         // 오너 지역 상태
         private Vector3[] _plan = new Vector3[MAX_ROUTE];
@@ -153,6 +167,9 @@ namespace ACO
         private int _arriveMs;
         private bool _released;
         private int _nextRepairMs;
+        private int _coreStageMs;   // 코어 단계가 된 시각(오너 지역 — 새 오너는 처음 본 때부터)
+        private int _allRepairTotal;
+        private int _allRepairDone;
         private int[] _gunDownMs = new int[0];   // 주포가 고장 난 걸 본 시각(0 = 멀쩡, 오너 지역 상태 — 오너가 바뀌면 처음부터 잰다)
 
         // 대사(모든 클라이언트 지역 상태)
@@ -165,6 +182,7 @@ namespace ACO
         private bool _saidVentHalf;
         private bool _saidCoreHalf;
         private int _saidCity;
+        private bool _saidAllRepair;
 
         private ACO_LandShip Ship() { return Generator != null ? Generator.LandShip : null; }
 
@@ -209,6 +227,8 @@ namespace ACO
             _arriveMs = 0;
             _released = false;
             _repairedUnits = 0;
+            _allRepairMs = 0;
+            _coreStageMs = 0;
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
             SyncNow();
         }
@@ -271,6 +291,7 @@ namespace ACO
 
             TickGunRepair(now, ship);
             TickRepair(now, ship);
+            TickAllRepair(now, ship);
 
             // 궤도가 부서졌다: 지금 거리에서 기준을 다시 잡아 느려진다(자리가 이어진다)
             int down = ship.CountTracksDestroyed();
@@ -294,6 +315,7 @@ namespace ACO
                 if (vents > 0 && ventsDown >= vents)
                 {
                     _stage = ACO_LandShip.STAGE_CORE;
+                    _coreStageMs = now;
                     SyncNow();
                     Debug.Log("[ACO] 육상전함: 배기구 " + ventsDown + "/" + vents + " 파괴 — 코어 단계 (페이즈 " + ((now - Manager.GetPhaseStartMs()) / 1000) + "초)");
                 }
@@ -308,12 +330,53 @@ namespace ACO
         {
             if (RepairInterval <= 0f || now - _nextRepairMs < 0 || ship.IsCoreDestroyed()) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
-            int count = MaxRepairs > 0 ? Mathf.Min(RepairCount, MaxRepairs - _repairedUnits) : RepairCount;
+            // 살아 있는 방공 부위가 RepairAliveCap보다 적을 때만, 그 수까지(페이즈 전체 합계 한도는 없다 — 6-150)
+            int count = RepairAliveCap > 0 ? Mathf.Min(RepairCount, RepairAliveCap - ship.CountAirDefenseAlive()) : RepairCount;
             if (count <= 0) { return; }
             int done = ship.RepairAirDefense(count);
             if (done <= 0) { return; }
             _repairedUnits += done;
             SyncNow();
+        }
+
+        /// 총력 복구(6-146): 코어 셔터가 열리고 AllRepairDelay초 뒤 한 번 — 선원이 무력화돼 자동 사격 통제로 바뀌며 부서진 포대(방공·부포·주포)를
+        /// AllRepairSpread초에 걸쳐 차례로 전부 되살린다. 주기 수리 한도(MaxRepairs)와 따로 센다. 장갑(스커트·궤도·배기구)은 그대로.
+        private void TickAllRepair(int now, ACO_LandShip ship)
+        {
+            if (AllRepairDelay <= 0f || _stage != ACO_LandShip.STAGE_CORE || ship.IsCoreDestroyed()) { return; }
+            if (_allRepairMs == 0)
+            {
+                if (_coreStageMs == 0) { _coreStageMs = now; }   // 코어 단계 중에 오너가 바뀌었다
+                if (now - _coreStageMs < Mathf.RoundToInt(AllRepairDelay * 1000f)) { return; }
+                _allRepairMs = now;
+                _allRepairDone = 0;
+                _allRepairTotal = ship.CountAirDefenseDown();
+                int guns = ship.GetRepairGunCount();
+                for (int i = 0; i < guns; i++) { if (ship.IsGunDown(i)) { _allRepairTotal++; } }
+                SyncNow();
+                Debug.Log("[ACO] 육상전함: 총력 복구 — 포대 " + _allRepairTotal + "곳을 " + AllRepairSpread + "초에 걸쳐 되살린다");
+            }
+            if (_allRepairDone >= _allRepairTotal) { return; }
+            float spread = Mathf.Max(AllRepairSpread, 0.1f);
+            float f = Mathf.Clamp01((now - _allRepairMs) / (spread * 1000f));
+            int want = Mathf.CeilToInt(_allRepairTotal * f) - _allRepairDone;
+            if (want <= 0) { return; }
+            // 주포 먼저, 그다음 방공·부포(무작위 자리부터)
+            int guns2 = ship.GetRepairGunCount();
+            for (int i = 0; i < guns2 && want > 0; i++)
+            {
+                if (!ship.IsGunDown(i)) { continue; }
+                ship.RepairGun(i);
+                if (i < _gunDownMs.Length) { _gunDownMs[i] = now; }
+                want--;
+                _allRepairDone++;
+            }
+            if (want > 0)
+            {
+                int done = ship.RepairAirDefense(want);
+                _allRepairDone += done;
+                if (done < want) { _allRepairDone = _allRepairTotal; }   // 더 되살릴 게 없다
+            }
         }
 
         /// 고장 난 주포는 GunRepairDelay초 뒤 되살린다(본체가 살아 있을 때만).
@@ -380,6 +443,7 @@ namespace ACO
                 _saidVentHalf = vents > 0 && ventsDown * 2 >= vents;
                 _saidCoreHalf = _stage == ACO_LandShip.STAGE_CORE && core <= 0.5f;
                 _saidCity = cityLevel;
+                _saidAllRepair = _allRepairMs != 0;
                 if (_stage == ACO_LandShip.STAGE_ARMOR && skirts == 0) { Say(SIT_SPAWN, ""); }
                 return;
             }
@@ -404,10 +468,15 @@ namespace ACO
                 _saidTrackHalf = true;
                 Say(SIT_TRACK_HALF, (ship.GetTrackTotal() - tracks).ToString());
             }
+            if (!_saidAllRepair && _allRepairMs != 0)
+            {
+                _saidAllRepair = true;
+                Say(SIT_ALL_REPAIR, "");
+            }
             if (_repairedUnits > _saidRepairs)
             {
                 _saidRepairs = _repairedUnits;
-                Say(SIT_REPAIR, "");
+                Say(_allRepairMs != 0 ? SIT_REPAIR_AUTO : SIT_REPAIR, "");   // 자동 사통 뒤엔 시스템 음성
             }
             if (!_saidVentHalf && vents > 0 && ventsDown * 2 >= vents && _stage == ACO_LandShip.STAGE_ARMOR)
             {
@@ -451,7 +520,28 @@ namespace ACO
         }
 
         /// 코어가 파괴됐다(모든 클라이언트).
-        public void SayDown() { Say(SIT_CORE_DOWN, ""); }
+        /// 코어 폭발(전함 Explode — 모든 클라이언트). 함장 대사("Keep firing! Keep fir-" + 비명)에서 말이 끊기는 곳(CoreDownCutAt)이
+        /// 대폭발(ACO_LandShip.DeathChainTime 뒤)에 맞게 늦게 시작한다(끊기는 곳이 더 뒤면 바로). AWACS 대사는 무전 대기열이 그 뒤에 잇는다.
+        public void SayDown()
+        {
+            float delay = 0f;
+            ACO_LandShip ship = Ship();
+            AudioClip first = FirstClip(SIT_CORE_DOWN);
+            float cutAt = CoreDownCutAt > 0f ? CoreDownCutAt : (first != null ? first.length : 0f);
+            if (ship != null && cutAt > 0f) { delay = Mathf.Max(ship.DeathChainTime - cutAt, 0f); }
+            if (delay <= 0.05f) { _SayDownNow(); return; }
+            SendCustomEventDelayedSeconds(nameof(_SayDownNow), delay);
+        }
+
+        public void _SayDownNow() { Say(SIT_CORE_DOWN, ""); }
+
+        /// 상황의 첫 줄 음성(없으면 null).
+        private AudioClip FirstClip(int situation)
+        {
+            if (LineEvent == null || LineClip == null) { return null; }
+            for (int i = 0; i < LineEvent.Length && i < LineClip.Length; i++) { if (LineEvent[i] == situation) { return LineClip[i]; } }
+            return null;
+        }
 
         private void Say(int situation, string left) { SayTable(situation, left, LineEvent, LineSpeaker, LineText, LineClip); }
 

@@ -181,6 +181,8 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeDebugPanels();
         BakeUiLayers();
         BakeRadar();
+        BakeVoiceWarning();
+        BakeBgm();
         BakeEcm();
         BakeDeckTaxi();
         BakeVehicleMarks();
@@ -188,9 +190,13 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeCatapultCrew();
         BakeSeatRecenter();
         BakeUiSound();
-        BakeSuperAces();
+        BakeLocalization();
+        BakeTwins();
         BakeShades();
-        BakeLaserAces();
+        BakeBorderlesss();
+        BakeLunas();
+        BakeMrS();
+        BakeSupport();
         BakeSky();
         BakeTargetAnimators();
         BakeFxLayer();

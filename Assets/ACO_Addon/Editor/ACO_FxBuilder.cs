@@ -587,6 +587,8 @@ public static class ACO_FxBuilder
     private static readonly Color LaserColor = new Color(1f, 0.32f, 0.22f, 1f);
 
     /// 레이저 빔 재질(가산 — 빛줄기 텍스처). LineRenderer가 쓴다.
+    /// 가산 섬광 재질(MR. S 레일건 충전 빛).
+    public static Material FlashMaterial() { return Flash(); }
     public static Material LaserBeamMaterial() { return EnsureMaterial("ACO_FxLaserBeam", "fx_trail.png", true, 3.5f); }
 
     /// 빔이 닿은 곳의 불티(월드 — 스크립트가 Emit). 있으면 값만 다시 맞춘다.
@@ -1051,7 +1053,7 @@ public static class ACO_FxBuilder
 
     public static readonly string[] DeathFxNames = { DeathFxPrefix + "Air", DeathFxPrefix + "Ground", DeathFxPrefix + "Ship", DeathFxPrefix + "Building", DeathFxPrefix + "Part" };
 
-    private static readonly string[] AirUnits = { "NPC_Fighter", "NPC_Attacker", "NPC_SuperAce", "NPC_Bomber", "NPC_Transport", "NPC_FriendlyGunship", "NPC_Helicopter" };
+    private static readonly string[] AirUnits = { "NPC_Fighter", "NPC_Attacker", "NPC_Heads", "NPC_Bomber", "NPC_Transport", "NPC_FriendlyGunship", "NPC_Helicopter" };
     private static readonly string[] ShipUnits = { "NPC_GuardShip", "NPC_Flagship", "NPC_AssaultShip", "NPC_Carrier", "NPC_Destroyer", "NPC_Warship" };
     private static readonly string[] BuildingUnits = { "NPC_Bunker", "NPC_Factory" };
 
@@ -1296,7 +1298,8 @@ public static class ACO_FxBuilder
     private static int DeathKind(GameObject root, SaccTarget target)
     {
         if (target.transform != root.transform || root.name.StartsWith("NPC_Turret")) { return KindPart; }
-        if (System.Array.IndexOf(AirUnits, root.name) >= 0) { return KindAir; }
+        // NPC 전투기 AI가 있으면 공중(에이스 — 레이저 에이스·SHADE·형제 동생은 이름 목록에 없어 지상 폭발이 들어갔다)
+        if (root.GetComponent<ACO_NPCFighterAI>() != null || System.Array.IndexOf(AirUnits, root.name) >= 0) { return KindAir; }
         if (System.Array.IndexOf(ShipUnits, root.name) >= 0) { return KindShip; }
         if (System.Array.IndexOf(BuildingUnits, root.name) >= 0) { return KindBuilding; }
         return KindGround;
@@ -1338,7 +1341,13 @@ public static class ACO_FxBuilder
     private static void PlaceDeathFx(SaccTarget target, Transform holder, int kind)
     {
         Transform placed = FindDeathFx(holder);
-        if (placed == null) { placed = ((GameObject)PrefabUtility.InstantiatePrefab(DeathFxAsset(kind), holder)).transform; }
+        GameObject asset = DeathFxAsset(kind);
+        if (placed != null && PrefabUtility.GetCorrespondingObjectFromSource(placed.gameObject) != asset)
+        {
+            Object.DestroyImmediate(placed.gameObject);   // 다른 종류(예: 에이스에 들어간 지상 폭발) — 맞는 것으로 바꾼다
+            placed = null;
+        }
+        if (placed == null) { placed = ((GameObject)PrefabUtility.InstantiatePrefab(asset, holder)).transform; }
         placed.localPosition = Vector3.up * AnchorHeight[kind];
         placed.localRotation = Quaternion.identity;
         ACO_TelUnit tel = target.GetComponent<ACO_TelUnit>();
@@ -1372,6 +1381,36 @@ public static class ACO_FxBuilder
     private static readonly float[] WreckCount = { 14f, 18f };
 
     /// 파편 프리팹을 만들고(이미 있으면 그대로 둔다) 전투기·공격기·에이스와 TEL에 넣는다.
+    /// 프리팹 하나(열어 둔 루트)에 파괴 효과·파편을 넣는다 — 프리팹 빌더(새로 만드는 전투기·에이스)와 Setup Check ace-death-fx-1이 쓴다.
+    /// 효과 프리팹이 아직 없으면(fx-death-1 전) 아무것도 하지 않는다. 바꿨으면 true.
+    public static bool ApplyDeathFxTo(GameObject root)
+    {
+        if (root == null || DeathFxAsset(KindAir) == null) { return false; }
+        bool changed = EditDeath(root);
+        if (root.GetComponent<ACO_NPCFighterAI>() != null && WreckFxAsset(WreckAir) != null && EditWreck(root)) { changed = true; }
+        return changed;
+    }
+
+    /// Setup Check ace-death-fx-1: 에이스 프리팹(레이저 에이스·SHADE·형제)에 공중 폭발(ACO_DeathFx_Air)·파편(ACO_WreckFx_Air)을 넣는다(지상 폭발이었다).
+    public static void ApplyToAces()
+    {
+        foreach (string name in new[] { "NPC_Borderless", "NPC_Shade", "NPC_Heads", "NPC_Tails" })
+        {
+            string path = $"{PrefabFolder}/{name}.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (ApplyDeathFxTo(root))
+                {
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                    Debug.Log($"[ACO] {name}: 공중 파괴 효과·파편을 넣었습니다.");
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+    }
+
     public static void ApplyToWreck()
     {
         for (int i = 0; i < WreckFxNames.Length; i++)
@@ -1493,6 +1532,82 @@ public static class ACO_FxBuilder
         sub.enabled = true;
         while (sub.subEmittersCount > 0) { sub.RemoveSubEmitter(0); }
         sub.AddSubEmitter(smoke, ParticleSystemSubEmitterType.Birth, ParticleSystemSubEmitterProperties.InheritNothing);
+    }
+
+    // ───────────── 에이스 추락(6-145) ─────────────
+
+    /// 추락 동체(메시 파티클 — ACO_AceWreck)에 하위 방출을 붙인다: 사는 동안 불·검은 연기 꼬리(태어날 때), 땅에 닿거나 수명이 다하면 폭발 불꽃·연기(죽을 때).
+    /// size = 조각 크기(m) — 꼬리·폭발 굵기를 맞춘다. 있으면 다시 맞춘다.
+    public static void BuildFallFx(ParticleSystem piece, float size)
+    {
+        float k = Mathf.Clamp(size / 17f, 0.5f, 2.2f);
+        Transform t = piece.transform;
+
+        ParticleSystem fire = Child(t, "Fx_FallFire", new Vector2(0.35f, 0.7f), new Vector2(0f, 3f), new Vector2(4f, 7f) * k, 0f, 200);
+        FallLoop(fire, 40f, 1f * k);
+        Flipbook(fire);
+        Fade(fire, Color.white, new Color(1f, 0.5f, 0.2f), 1f, 0f);
+        Grow(fire, 1f, 0.4f);
+        Spin(fire, 1.2f);
+        Draw(fire, Fire(), -5f).maxParticleSize = 8f;
+
+        ParticleSystem smoke = Child(t, "Fx_FallSmoke", new Vector2(2.5f, 4f), new Vector2(0f, 2f), new Vector2(8f, 16f) * k, -0.03f, 160);
+        FallLoop(smoke, 16f, 1.5f * k);
+        ParticleSystem.MainModule sm = smoke.main;
+        sm.startColor = new ParticleSystem.MinMaxGradient(new Color(0.1f, 0.095f, 0.09f), new Color(0.2f, 0.19f, 0.18f));
+        Flipbook(smoke);
+        Fade(smoke, new Color(1f, 0.6f, 0.38f), Color.white, 0.85f, 0.05f);
+        Grow(smoke, 0.6f, 2.2f);
+        Spin(smoke, 0.2f);
+        Draw(smoke, Smoke(), 10f).maxParticleSize = 8f;
+
+        ParticleSystem boom = Child(t, "Fx_FallBoom", new Vector2(0.8f, 1.6f), new Vector2(6f, 30f) * k, new Vector2(12f, 26f) * k, -0.05f, 20);
+        Shape(boom, ParticleSystemShapeType.Sphere, 2f * k, false);
+        SetBursts(boom, 0.5f, 0f, 14f);
+        Flipbook(boom);
+        Fade(boom, Color.white, new Color(1f, 0.45f, 0.18f), 1f, 0f);
+        Grow(boom, 0.6f, 1.3f);
+        Spin(boom, 0.8f);
+        Draw(boom, Fire(), -8f).maxParticleSize = 8f;
+
+        ParticleSystem boomSmoke = Child(t, "Fx_FallBoomSmoke", new Vector2(3f, 5f), new Vector2(4f, 14f) * k, new Vector2(18f, 34f) * k, -0.04f, 16);
+        Shape(boomSmoke, ParticleSystemShapeType.Sphere, 3f * k, false);
+        SetBursts(boomSmoke, 0.5f, 0f, 10f);
+        ParticleSystem.MainModule bm = boomSmoke.main;
+        bm.startColor = new ParticleSystem.MinMaxGradient(new Color(0.09f, 0.085f, 0.08f), new Color(0.2f, 0.19f, 0.18f));
+        Flipbook(boomSmoke);
+        Fade(boomSmoke, new Color(1f, 0.6f, 0.38f), Color.white, 0.85f, 0.05f);
+        Grow(boomSmoke, 0.5f, 1.8f);
+        Spin(boomSmoke, 0.15f);
+        Draw(boomSmoke, Smoke(), 10f).maxParticleSize = 8f;
+
+        // 동체 파티클은 렌더러 크기(FBX 축척 등)를 따른다 — 꼬리·폭발은 그 크기를 물려받지 않게(자기 크기만)
+        foreach (ParticleSystem c in new[] { fire, smoke, boom, boomSmoke })
+        {
+            ParticleSystem.MainModule cm = c.main;
+            cm.scalingMode = ParticleSystemScalingMode.Local;
+            c.transform.localScale = Vector3.one;
+        }
+        ParticleSystem.SubEmittersModule sub = piece.subEmitters;
+        sub.enabled = true;
+        while (sub.subEmittersCount > 0) { sub.RemoveSubEmitter(0); }
+        sub.AddSubEmitter(fire, ParticleSystemSubEmitterType.Birth, ParticleSystemSubEmitterProperties.InheritNothing);
+        sub.AddSubEmitter(smoke, ParticleSystemSubEmitterType.Birth, ParticleSystemSubEmitterProperties.InheritNothing);
+        sub.AddSubEmitter(boom, ParticleSystemSubEmitterType.Death, ParticleSystemSubEmitterProperties.InheritNothing);
+        sub.AddSubEmitter(boomSmoke, ParticleSystemSubEmitterType.Death, ParticleSystemSubEmitterProperties.InheritNothing);
+    }
+
+    /// 하위 방출 꼬리: 부모 입자가 사는 동안 rate개/초(반복, 스스로 재생 안 함).
+    private static void FallLoop(ParticleSystem ps, float rate, float radius)
+    {
+        ParticleSystem.MainModule main = ps.main;
+        main.loop = true;
+        main.playOnAwake = false;
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = rate;
+        emission.SetBursts(new ParticleSystem.Burst[0]);
+        Shape(ps, ParticleSystemShapeType.Sphere, radius, false);
     }
 
     // ───────────── 흙먼지(육상전함 궤도) ─────────────

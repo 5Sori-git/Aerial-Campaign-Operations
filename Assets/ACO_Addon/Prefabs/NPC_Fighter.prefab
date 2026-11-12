@@ -5207,6 +5207,7 @@ MonoBehaviour:
   EntityControl: {fileID: 6030372359990590669}
   Muzzle: {fileID: 7490731081154365530}
   VisualParticle: {fileID: 6140753909776182053}
+  Laser: {fileID: 0}
   FireSound: {fileID: 1611820410534860017}
   ShooterFlight: {fileID: 8374105969983717166}
   InheritShooterVelocity: 1
@@ -10267,18 +10268,18 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: c08364d2696405d4a83fe0c4bd636faf, type: 3}
+  m_audioClip: {fileID: 8300000, guid: 66d5e21d7033cc141bf498a95b453f0f, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 1
+  m_Volume: 0.7
   m_Pitch: 1
-  Loop: 0
+  Loop: 1
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
-  Priority: 128
+  Priority: 200
   DopplerLevel: 0.3
   MinDistance: 1
-  MaxDistance: 5000
+  MaxDistance: 2500
   Pan2D: 0
   rolloffMode: 2
   BypassEffects: 0
@@ -10288,31 +10289,49 @@ AudioSource:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
-      time: 0.00025
+      time: 0
       value: 1
-      inSlope: -4.871192
-      outSlope: -4.871192
+      inSlope: 0
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
-      outWeight: 0.13326123
+      outWeight: 0
     - serializedVersion: 3
-      time: 0.23972046
-      value: 0.37816662
-      inSlope: -1.2772745
-      outSlope: -1.2772745
+      time: 0.04
+      value: 0.8
+      inSlope: 0
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0.18356773
-      outWeight: 0.10233777
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.15
+      value: 0.42
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.4
+      value: 0.15
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
     - serializedVersion: 3
       time: 1
       value: 0
-      inSlope: -0.10624316
-      outSlope: -0.10624316
+      inSlope: 0
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
-      inWeight: 0.17117679
+      inWeight: 0
       outWeight: 0
     m_PreInfinity: 2
     m_PostInfinity: 2
@@ -10611,6 +10630,8 @@ MonoBehaviour:
   MaxSpeed: 260
   MinSpeed: 70
   Acceleration: 40
+  MaxBoost: 1
+  LowSpeedLimit: 0
   BankPerYawError: 2.5
   MaxBankAngle: 75
   RollGain: 3
@@ -10685,7 +10706,7 @@ MonoBehaviour:
   MissileLauncher: {fileID: 6969915550359745853}
   Gun: {fileID: 3624174378645691246}
   Net: {fileID: 6242442683066278762}
-  SuperAce: {fileID: 0}
+  Ace: {fileID: 0}
   GroundAttacker: 0
   MarkerLabel: FTR
   RookieVisuals:
@@ -10723,6 +10744,7 @@ MonoBehaviour:
   MaxExtendDuration: 15
   ExtendClimbAngle: 20
   ExtendAltitudeAboveTarget: 300
+  ExtendAfterMissile: 0
   MissileMaxRange: 2000
   MissileMinRange: 300
   MissileFireConeAngle: 15
@@ -10803,6 +10825,10 @@ MonoBehaviour:
   MinSendInterval: 0.3
   HeartbeatInterval: 4
   MaxCongestionScale: 4
+  FarDistance: 10000
+  FarErrorScale: 3
+  FarHeartbeatScale: 2.5
+  FarMinIntervalScale: 3
   HandoffToEngagedPlayer: 1
   HandoffHoldTime: 2
   HandoffCooldown: 5
@@ -10962,6 +10988,13 @@ MonoBehaviour:
   FireInterval: 1.5
   ReloadTime: 20
   LaunchSound: {fileID: 0}
+  BurstCount: 1
+  BurstGap: 0.3
+  RailFlyby: 0
+  Flyby: {fileID: 0}
+  RailFlybySpeed: 4000
+  RailFlybyRange: 6000
+  RailFlybyHitRadius: 10
   Hatches: []
   HatchAngle: 110
   HatchHoldTime: 4

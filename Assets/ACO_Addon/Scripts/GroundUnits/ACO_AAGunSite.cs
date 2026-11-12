@@ -98,6 +98,8 @@ namespace ACO
         public float EcmInterceptFactor = 1.5f;
         [Tooltip("미사일을 떨어뜨린 뒤 다음 미사일을 맡기까지 쉬는 시간(초). 0 = 바로 다음 발")]
         public float InterceptCooldown = 0f;
+        [Tooltip("켜면 이 CIWS가 떨어뜨린 미사일은 무전을 내지 않는다 — \"아군 CIWS가 막음\"(가디언 드론 — 6-143)도, 쏜 사람의 \"요격됨\"(LUNA UAV — 에이스전엔 일반 요격 무전 없음)도")]
+        public bool SilentIntercept = false;
         // Bake가 적 CIWS에 넣은 요격 수치의 판 번호(ACO_SceneBaker.CiwsTuneVersion). 판이 같으면 직접 바꾼 값을 건드리지 않는다
         [HideInInspector] public int InterceptTuneVersion;
         // Bake가 함선 CIWS·아군 함선 대공포에 요격 기본값을 한 번 넣었다(그 뒤로 직접 바꾼 값은 건드리지 않는다)

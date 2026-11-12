@@ -10,6 +10,7 @@ namespace ACO
     ///  - 항공기 = 사각형, 지상 유닛 = 육각형, 지금 페이즈 목표 = 빨간 테두리 + "TGT", 호위 대상(아군) = 파란 테두리 + 이름(VIP)
     ///    (목표와 아군은 ObjectiveMaxDistance까지 보인다)
     ///  - MaxDistance(10km) 안의 유닛만, 거리와 무관하게 항상 같은 화면 크기로, 지형/구름 뒤에서도 보이게 그린다
+    ///  - 지원 호출 유닛(지원 폭격기·급유 드론·가디언 드론 — ACO_SupportManager 풀)도 나와 있는 동안 아군 테두리 + 이름(SupportMinDistance보다 가까우면 그리지 않는다 — 급유·호위 중 시야를 가리지 않게)
     ///  - 호위 페이즈(공중/지상)에는 호위 대상 항로의 남은 경유점(옅은 파란 마름모 + WP 번호)과 목적지(큰 마름모 + DEST + 거리)를 그린다
     ///  - 시선 방향(머리 정면)에서 LookAngle 안에 있는 유닛 중 가장 가운데 것 하나에 종류와 거리를 띄운다
     ///    (전투기: 종류 + 숙련도 "FTR ACE"·"ATK VET" 등, 지상: SAM/AAG, 고가치 표적: FAC/BNK 등 — 각 유닛의 MarkerLabel)
@@ -81,6 +82,16 @@ namespace ACO
         public string WingmanLabel = "WINGMAN ";
         [Tooltip("TAC 네임(콜사인) — Bake가 씬의 ACO_TacName을 넣는다. 아군기 테두리 위에 조종사 콜사인(없으면 WingmanLabel + 칸 번호)")]
         public ACO_TacName TacNames;
+
+        [Header("지원 유닛 (아군)")]
+        [Tooltip("Bake가 씬의 ACO_SupportManager를 넣는다 — 지원 폭격기·급유 드론·가디언 드론에 아군 테두리")]
+        public ACO_SupportManager Support;
+        public bool ShowSupport = true;
+        [Tooltip("이 거리(m)보다 가까운 지원 유닛은 그리지 않는다(급유 중인 드론·옆에 붙은 가디언 드론이 시야를 가리지 않게)")]
+        public float SupportMinDistance = 150f;
+        public string SupportBomberLabel = "SUPPORT BOMBER";
+        public string SupportTankerLabel = "TANKER DRONE";
+        public string SupportGuardianLabel = "GUARDIAN DRONE";
 
         [Header("호위 항로")]
         [Tooltip("호위 페이즈에 호위 대상의 남은 경유점과 목적지를 표시한다")]
@@ -233,12 +244,14 @@ namespace ACO
             int hvts = (Generator != null && Generator.HighValueTargets != null) ? Generator.HighValueTargets.Length : 0;
             int parts = Generator != null ? Generator.GetUnitCount(ACO_MissionGenerator.CAT_PART) : 0;
             int escorts = (Generator != null && Generator.EscortUnits != null) ? Generator.EscortUnits.Length : 0;
-            // 슈퍼에이스 기만체: 진짜와 같은 마커(이름·목표 색·체력 바)로 그린다 — 기만체가 떠 있을 때만 보인다.
+            // 보스 에이스의 딸린 표적(ACO_AceBase.GetSubUnits — 형제 분신, LUNA UAV): 켜져 있을 때만 보인다.
             int decoys = 0;
             for (int i = 0; i < fighters; i++)
             {
                 ACO_NPCFighterAI f = Generator.Fighters[i];
-                if (f != null && f.SuperAce != null && f.SuperAce.Decoys != null) { decoys += f.SuperAce.Decoys.Length; }
+                if (f == null || f.Ace == null) { continue; }
+                Transform[] subs = f.Ace.GetSubUnits();
+                if (subs != null) { decoys += subs.Length; }
             }
             int total = fighters + ground + hvts + parts + escorts + decoys;
 
@@ -260,11 +273,16 @@ namespace ACO
                 ACO_NPCFighterAI f = Generator.Fighters[i];
                 if (f == null) { continue; }
                 AddUnit(f.transform, f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i);
-                if (f.SuperAce == null || f.SuperAce.Decoys == null) { continue; }
-                for (int k = 0; k < f.SuperAce.Decoys.Length; k++)
+                if (f.Ace == null) { continue; }
+                Transform[] subs = f.Ace.GetSubUnits();
+                if (subs == null) { continue; }
+                for (int k = 0; k < subs.Length; k++)
                 {
-                    Transform d = f.SuperAce.Decoys[k];
-                    if (d != null) { AddUnit(d, f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i); }
+                    if (subs[k] == null) { continue; }
+                    // 체력이 따로 있으면(UAV) 자기 체력·이름으로, 없으면(분신) 본체와 같은 마커로 — 목표 색은 본체(같은 태그)를 따른다
+                    SaccTarget subHealth = f.Ace.GetSubUnitHealth(k);
+                    if (subHealth != null) { AddUnit(subs[k], subHealth, KIND_AIR, f.Ace.GetSubUnitLabel(), null, ACO_MissionGenerator.CAT_FIGHTER, i); }
+                    else { AddUnit(subs[k], f.TargetHealth, KIND_AIR, "FTR", f, ACO_MissionGenerator.CAT_FIGHTER, i); }
                 }
             }
             for (int i = 0; i < ground; i++)
@@ -489,6 +507,36 @@ namespace ACO
                 }
             }
 
+            // 지원 유닛: 나와 있는 폭격기·급유 드론·가디언 드론 — 아군 테두리 + 이름
+            if (ShowSupport && Support != null)
+            {
+                float minSq = SupportMinDistance * SupportMinDistance;
+                Transform[] bombers = Support.Bombers;
+                if (bombers != null)
+                {
+                    for (int k = 0; k < bombers.Length && used < Markers.Length; k++)
+                    {
+                        if (bombers[k] && bombers[k].gameObject.activeInHierarchy) { used = DrawSupport(used, bombers[k].position, SupportBomberLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+                ACO_TankerDrone[] drones = Support.Drones;
+                if (drones != null)
+                {
+                    for (int k = 0; k < drones.Length && used < Markers.Length; k++)
+                    {
+                        if (drones[k] && drones[k].gameObject.activeInHierarchy) { used = DrawSupport(used, drones[k].transform.position, SupportTankerLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+                ACO_AAGunSite[] guardians = Support.Guardians;
+                if (guardians != null)
+                {
+                    for (int k = 0; k < guardians.Length && used < Markers.Length; k++)
+                    {
+                        if (guardians[k] && guardians[k].gameObject.activeInHierarchy) { used = DrawSupport(used, guardians[k].transform.position, SupportGuardianLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+            }
+
             // 호위 항로: 남은 경유점 + 목적지
             if (ShowEscortRoute && Manager != null)
             {
@@ -531,6 +579,25 @@ namespace ACO
             }
             UpdateInfo(focusMarker, focusUnit);
             UpdateDiamonds(headPos, headUp);
+        }
+
+        /// 지원 유닛 하나: 아군기처럼 파란 사각 테두리 + 이름(같은 화면 크기, 원근 축소). 그렸으면 used + 1.
+        private int DrawSupport(int used, Vector3 pos, string label, Vector3 headPos, Vector3 headUp, float baseSize, float nearDist, float logRange, float maxSq, float minSq)
+        {
+            Vector3 d = pos - headPos;
+            float sq = d.sqrMagnitude;
+            if (sq > maxSq || sq < minSq || sq < 1f) { return used; }
+            float dist = Mathf.Sqrt(sq);
+            Vector3 dir = d / dist;
+            Transform m = Markers[used];
+            if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
+            m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+            float farT = dist <= nearDist ? 0f : Mathf.Clamp01(Mathf.Log(dist / nearDist) / logRange);
+            float size = baseSize * Mathf.Lerp(1f, FarScale, farT);
+            m.localScale = new Vector3(size, size, size);
+            if (_markerKind[used] != KIND_FRIENDLY_AIR) { SetMarkerKind(used, KIND_FRIENDLY_AIR); }
+            SetTopText(used, label);
+            return used + 1;
         }
 
         /// 격실에 들어온 순간 한 번: 켜진 마커, 이름표, 락온 표시를 모두 끈다. 나가면 다음 프레임에 다시 그린다.
@@ -752,6 +819,46 @@ namespace ACO
         }
 
         /// 마커 모양/색/TGT 표시를 종류에 맞게 바꾼다(종류가 바뀔 때만).
+        private bool _tintInit;
+        private Color _airBase;
+        private Color _groundBase;
+        private Color _infoBase;
+        private Material _crossMat;
+        private Color _crossBase;
+
+        /// HUD 설정 패널이 부른다: 적 마커(공중·지상 테두리)·정보 글자·조준 고리를 이 색으로(알파는 그대로). 목표·아군·경유점은 그대로.
+        /// 공용 재질은 처음에 이 화면 전용 사본으로 바꿔 쓴다(렌더러 .material — 에디터 재생에서 에셋이 바뀌지 않게).
+        public void SetHudColor(Color c)
+        {
+            if (!_tintInit)
+            {
+                _tintInit = true;
+                if (FrameRenderers != null && FrameRenderers.Length > 1 && FrameRenderers[0] && FrameRenderers[1])
+                {
+                    if (AirMaterial) { FrameRenderers[0].sharedMaterial = AirMaterial; AirMaterial = FrameRenderers[0].material; }
+                    if (GroundMaterial) { FrameRenderers[1].sharedMaterial = GroundMaterial; GroundMaterial = FrameRenderers[1].material; }
+                }
+                _airBase = AirMaterial ? AirMaterial.GetColor("_Color") : c;
+                _groundBase = GroundMaterial ? GroundMaterial.GetColor("_Color") : c;
+                _infoBase = InfoLabels != null && InfoLabels.Length > 0 && InfoLabels[0] ? InfoLabels[0].color : c;
+                if (Crosshair)
+                {
+                    MeshRenderer r = Crosshair.GetComponent<MeshRenderer>();
+                    if (r) { _crossMat = r.material; _crossBase = _crossMat.GetColor("_Color"); }
+                }
+                // 사본을 만든 두 칸은 다음에 그릴 때 종류에 맞는 재질을 다시 넣는다
+                if (_markerKind != null && _markerKind.Length > 1) { _markerKind[0] = -1; _markerKind[1] = -1; }
+            }
+            if (AirMaterial) { AirMaterial.SetColor("_Color", new Color(c.r, c.g, c.b, _airBase.a)); }
+            if (GroundMaterial) { GroundMaterial.SetColor("_Color", new Color(c.r, c.g, c.b, _groundBase.a)); }
+            if (_crossMat) { _crossMat.SetColor("_Color", new Color(c.r, c.g, c.b, _crossBase.a)); }
+            if (InfoLabels != null)
+            {
+                Color ic = new Color(c.r, c.g, c.b, _infoBase.a);
+                for (int i = 0; i < InfoLabels.Length; i++) { if (InfoLabels[i]) { InfoLabels[i].color = ic; } }
+            }
+        }
+
         private void SetMarkerKind(int i, int kind)
         {
             _markerKind[i] = kind;
@@ -860,9 +967,7 @@ namespace ACO
             ACO_NPCFighterAI fighter = _unitFighter[u];
             if (fighter != null)
             {
-                if (fighter.SuperAce != null) { return fighter.SuperAce.AceName; }
-                if (fighter.LaserAce != null) { return fighter.LaserAce.AceName; }
-                if (fighter.Shade != null) { return fighter.Shade.AceName(); }
+                if (fighter.Ace != null) { return fighter.Ace.GetAceName(); }
                 return fighter.GetDisplayLabel(fighter.GetSkillTier());   // "FTR ACE", "ATK VET"
             }
             return _unitLabel[u];

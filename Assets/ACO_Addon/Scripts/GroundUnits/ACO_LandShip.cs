@@ -642,6 +642,24 @@ namespace ACO
             return done;
         }
 
+        /// 살아 있는 방공·부포 부위 수(수리 한도 — 모듈이 이 수가 RepairAliveCap보다 적을 때만 되살린다).
+        public int CountAirDefenseAlive()
+        {
+            Init();
+            int n = 0;
+            for (int i = 0; i < _defenseHealth.Length; i++) { if (AirDefense[i] != null && _defenseHealth[i] != null && _defenseHealth[i].Health > 0f) { n++; } }
+            return n;
+        }
+
+        /// 부서진 방공·부포 부위 수(총력 복구).
+        public int CountAirDefenseDown()
+        {
+            Init();
+            int n = 0;
+            for (int i = 0; i < _defenseHealth.Length; i++) { if (AirDefense[i] != null && _defenseHealth[i] != null && _defenseHealth[i].Health <= 0f) { n++; } }
+            return n;
+        }
+
         public bool IsCoreDestroyed() { return TargetHealth != null && TargetHealth.Health <= 0f; }
 
         public float GetCoreHealthRatio()

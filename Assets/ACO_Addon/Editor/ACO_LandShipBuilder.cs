@@ -107,6 +107,8 @@ public static partial class ACO_PrefabBuilder
     private const float LsMainGunMinRange = 2000f;
     /// 주포 폭발 지역이 남는 시간(초) — 깔아 두는 사격(3.5초 뒤 자리)이라 표적이 닿을 때까지 남고 조금 더 머문다
     public const float LsMainGunZoneTime = 5f;
+    /// 주포 폭발 지역 반경(m) — 320에서 1.5배(껍질이 반경의 두 배로 보이던 것을 고친 뒤 너무 작아 보였다)
+    public const float LsMainGunZoneRadius = 480f;
     // 물 위 자세: 루트 = 해수면 - SeaDraft(14m) → 항적은 루트 위 14m(수면)
     private const float LsWakeHeight = 14f;
 
@@ -588,7 +590,7 @@ public static partial class ACO_PrefabBuilder
             ACO_MiniRailgun mini = gun.GetComponent<ACO_MiniRailgun>();
             mini.VolleyShots = 2;
             mini.VolleyGap = 0.8f;
-            mini.ZoneRadius = 320f;
+            mini.ZoneRadius = LsMainGunZoneRadius;
             mini.MinRange = LsMainGunMinRange;
             mini.ZoneTime = LsMainGunZoneTime;
             mini.ZoneDamage = 15f;

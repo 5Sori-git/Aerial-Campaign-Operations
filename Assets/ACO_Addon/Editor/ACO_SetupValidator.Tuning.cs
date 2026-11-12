@@ -18,6 +18,14 @@ public partial class ACO_SetupValidator
             if (missing.Count == 0) { Add(g, OK, "필수 유닛이 풀에 있습니다.", gen); continue; }
             Add(g, WARN, $"풀에 없는 유닛: {string.Join(", ", missing)}", gen, () => ACO_SceneBaker.AddPoolUnits(poolRoot));
         }
+
+        // 함선 부위 목록(Parts)에 부위 스크립트 대신 SaccEntity·SaccTarget이 들어간 칸 — 그 부위는 격침·부활 통지를 못 받는다
+        List<string> wrongParts = ACO_ShipParts.FindWrong();
+        if (wrongParts.Count == 0) { Add(g, OK, "함선 부위 목록(Parts)이 부위 스크립트를 가리킵니다."); }
+        else
+        {
+            Add(g, WARN, $"함선 부위 목록(Parts)에 부위 스크립트 대신 SaccEntity·SaccTarget이 들어간 칸: {string.Join(", ", wrongParts)} — 그 포탑은 본체가 격침돼도 계속 쏘고 다음 미션에 함께 부활하지 않습니다(오브젝트를 칸에 끌어 넣으면 첫 컴포넌트 SaccEntity가 들어간다). [고치기]가 같은 오브젝트의 ACO_SAMSite·ACO_AAGunSite로 바꿉니다.", null, ACO_ShipParts.FixAll);
+        }
     }
 
     private void CheckCrew()

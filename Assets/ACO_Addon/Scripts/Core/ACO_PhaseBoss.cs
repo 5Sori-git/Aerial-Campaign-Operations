@@ -11,6 +11,8 @@ namespace ACO
         public const int SPEAKER_ENEMY = 0;
         public const int SPEAKER_AWACS = 1;
         public const int SPEAKER_ALLY = 2;
+        public const int SPEAKER_CREW = 3;     // 적 선원(육상전함 — 적 채널)
+        public const int SPEAKER_SYSTEM = 4;   // 적 자동 시스템 안내(육상전함 자동 사통 — 적 채널)
 
         [Header("대사 — 공통")]
         [Tooltip("Bake가 넣는다")]
@@ -21,8 +23,16 @@ namespace ACO
         [Tooltip("아군 지휘관 대사의 이름·색(화자 2번 — 함대전 함대장)")]
         public string AllyName = "FLAGSHIP";
         public Color AllyColor = new Color(0.5f, 0.8f, 1f, 1f);
+        [Tooltip("적 선원 대사의 이름·색(화자 3번)")]
+        public string CrewName = "CREW";
+        public Color CrewColor = new Color(1f, 0.62f, 0.35f, 1f);
+        [Tooltip("적 자동 시스템 대사의 이름·색(화자 4번)")]
+        public string SystemName = "SYSTEM";
+        public Color SystemColor = new Color(0.7f, 0.85f, 0.9f, 1f);
         [Tooltip("음성이 이 시간(초)보다 오래 밀리면 버린다")]
         public float VoiceQueueDelay = 8f;
+
+        public override bool IsBossPhase() { return true; }
 
         /// 이 상황의 줄을 모두 말하는 데 걸리는 시간(초) — 다음 일을 대사가 끝난 뒤로 미룰 때 쓴다.
         protected float TableTime(int situation, int[] events, string[] texts, AudioClip[] clips)
@@ -55,6 +65,8 @@ namespace ACO
                 int speaker = speakers != null && i < speakers.Length ? speakers[i] : SPEAKER_AWACS;
                 if (speaker == SPEAKER_ENEMY) { Chatter.SayVoice(EnemyName, EnemyColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
                 else if (speaker == SPEAKER_ALLY) { Chatter.SayVoice(AllyName, AllyColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ALLY); }
+                else if (speaker == SPEAKER_CREW) { Chatter.SayVoice(CrewName, CrewColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
+                else if (speaker == SPEAKER_SYSTEM) { Chatter.SayVoice(SystemName, SystemColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
                 else { Chatter.SayControl(text, clip, VoiceQueueDelay); }
             }
         }

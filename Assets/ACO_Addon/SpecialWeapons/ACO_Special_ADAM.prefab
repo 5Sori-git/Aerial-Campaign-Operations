@@ -66,9 +66,13 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 4000
   LockAngle: 45
+  LockFromCcip: 1
   LockTime: 1.5
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
@@ -87,20 +91,35 @@ MonoBehaviour:
   SplashRadius: 120
   MinSplashFraction: 0.5
   MissileSplash: 1
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
   InterceptSites: []
   CrossLockIndicator: 1
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 1
   AutoTargetNearest: 1
   DropTime: 0.8
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 180
+  LockHoldTime: 0
   MissileLifetime: 35
   SeaSkim: 0
   SkimAltitude: 8
   SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 1
+  TakesExtraAmmo: 0
+  LaunchCall: 2
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 3697451406933362917, guid: 603186772b65bf94cbf05fd05a274111, type: 3}
@@ -206,10 +225,10 @@ MonoBehaviour:
   DisplayName: ADAM
   Description: 'AREA DENIAL AIR MUNITION
 
-    DROPS, THEN HUNTS THE NEAREST AIRCRAFT
-    - HUGE BLAST'
+    DROPS, THEN HUNTS THE NEAREST AIRCRAFT.
+    HUGE BLAST, FEW ROUNDS.'
   Price: 18000
   Icon: {fileID: 21300000, guid: eb112c52e69d6674e83df8c42683db72, type: 3}
-  SortOrder: 105
+  SortOrder: 160
   Category: 0
   Module: {fileID: 2615012340452421575}

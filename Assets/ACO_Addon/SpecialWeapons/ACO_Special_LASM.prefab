@@ -49,11 +49,11 @@ MonoBehaviour:
   DisplayName: LASM
   Description: 'LONG-RANGE ANTI-SHIP MISSILE
 
-    SEA-SKIMS TO SHIPS - CANNOT BE
-    INTERCEPTED BY CIWS'
+    SEA-SKIMS INTO SHIPS AT HIGH SPEED
+    WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT.'
   Price: 12000
   Icon: {fileID: 21300000, guid: 55c3be3e5f8b25a46b6222d84af8a5df, type: 3}
-  SortOrder: 55
+  SortOrder: 130
   Category: 0
   Module: {fileID: 8490783944498141577}
 --- !u!1 &3649815116512904719
@@ -122,9 +122,13 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6500
   LockAngle: 30
+  LockFromCcip: 1
   LockTime: 2
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
@@ -143,20 +147,35 @@ MonoBehaviour:
   SplashRadius: 10
   MinSplashFraction: 0.3
   MissileSplash: 1
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
+  Spectator: {fileID: 0}
   InterceptSites: []
   CrossLockIndicator: 1
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 0
   AutoTargetNearest: 0
   DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 0
+  LockHoldTime: 0
   MissileLifetime: 0
   SeaSkim: 1
   SkimAltitude: 8
   SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 2
+  TakesExtraAmmo: 0
+  LaunchCall: 6
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 3697451406933362917, guid: e1236c050a9bb674a8ebe1b092b012a6, type: 3}

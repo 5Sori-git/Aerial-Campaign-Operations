@@ -31,6 +31,54 @@ public static class ACO_SpecialWeaponCatalog
     // 미사일 모델(탄 프리팹). 없으면 비워 둔다 → 설치할 때 그 기체의 일반 미사일 모델을 쓴다.
     private const string P = "Assets/ACO_Addon/Prefabs/";
 
+    // 격납고 설명(6-151 — 부제 \n 한두 문장, 브리핑식, 정확한 수치는 쓰지 않는다). 정의를 새로 만들 때와 Setup Check hangar-texts-1이 쓴다
+    private static readonly System.Collections.Generic.Dictionary<string, string> Descriptions = new System.Collections.Generic.Dictionary<string, string>
+    {
+        { "4AAM", "MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. SHORT LOCK RANGE." },
+        { "UGB", "UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER." },
+        { "RKT", "ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD." },
+        { "LGB", "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE. THE BOMB STEERS ITSELF ONTO IT WITH A WIDE BLAST." },
+        { "LGR", "LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT AND HIT HARDER THAN PLAIN ROCKETS. SLOWER TO RELOAD." },
+        { "4AGM", "MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH." },
+        { "LAGM", "LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK." },
+        { "LASM", "LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT." },
+        { "SCM", "STAND-OFF CLUSTER MISSILE\nOPENS ABOVE THE TARGET AND SCATTERS BOMBLETS OVER A WIDE AREA. FEW ROUNDS, LONG RELOAD." },
+        { "MMP", "MICRO-MISSILE POD\nLOCKS UP TO EIGHT AIR OR GROUND TARGETS AND SPLITS 16 MICRO-MISSILES BETWEEN THEM. LIGHT WARHEADS, SHORT REACH." },
+        { "RGP", "RAIL GUN POD\nHYPERSONIC SLUG THAT HITS HARD AT VERY LONG RANGE. A NARROW INSTANT LOCK AIMS IT. LONG CHARGE BETWEEN SHOTS." },
+        { "FLAK", "PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT." },
+        { "SASM", "AERIAL SUPPRESSION AAM\nLARGE PROXIMITY BLAST THAT ALSO CATCHES NEARBY AIRCRAFT. SHORT LOCK RANGE." },
+        { "LAAM", "LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK." },
+        { "QAAM", "QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE." },
+        { "HVAA", "HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE." },
+        { "CCAA", "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. FAST AND HARD-HITTING, BUT SHORT-RANGED, SLOW TO LOCK AND TURNS WIDE." },
+        { "HPAA", "HIGH-POWER AAM\nOVERSIZED WARHEAD WITH A WIDE PROXIMITY FUSE." },
+        { "ADAM", "AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS." },
+        { "ECM", "ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS." },
+    };
+
+    public static string DescriptionFor(string id, string fallback) { return Descriptions.TryGetValue(id, out string d) ? d : fallback; }
+
+    /// Setup Check hangar-texts-1: 무장 정의 프리팹의 설명을 새 문구로(정의에 없는 ID는 그대로). 고친 뒤 Bake(격납고 목록이 따라간다).
+    public static void RewriteDescriptions()
+    {
+        int n = 0;
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { Folder }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                ACO_SpecialWeaponDef d = root.GetComponent<ACO_SpecialWeaponDef>();
+                if (d == null || !Descriptions.TryGetValue(d.Id, out string text) || d.Description == text) { continue; }
+                d.Description = text;
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                n++;
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        Debug.Log($"[ACO] 특수무장 설명: 정의 {n}개를 새 문구로 바꿨습니다. Bake 하세요.");
+    }
+
     private static Example[] Examples()
     {
         return new[]
@@ -41,39 +89,39 @@ public static class ACO_SpecialWeaponCatalog
                 Projectile = P + "ACO_Bomb.prefab", Ccip = true, Desc = "UNGUIDED BOMB\nFREE-FALL BOMBS FOR GROUND TARGETS" },
             new Example { Id = "RKT", Name = "RKT", Order = 30, Price = 8000, Icon = "weapon_rkt", Preset = ACO_PlayerMissileSetup.ApplyRocketPreset,
                 Projectile = P + "ACO_Rocket.prefab", Desc = "ROCKET LAUNCHER\nUNGUIDED ROCKETS FOR GROUND TARGETS" },
-            new Example { Id = "LGB", Name = "LGB", Order = 22, Price = 11000, Icon = "weapon_lgb", Preset = ApplyLGB,
+            new Example { Id = "LGB", Name = "LGB", Order = 110, Price = 11000, Icon = "weapon_lgb", Preset = ApplyLGB,
                 Projectile = P + "ACO_Bomb.prefab", Ccip = true, Desc = "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND DROP - STEERS ONTO IT, TIGHTER BLAST" },
-            new Example { Id = "LGR", Name = "LGR", Order = 32, Price = 11000, Icon = "weapon_lgr", Preset = ApplyLGR,
+            new Example { Id = "LGR", Name = "LGR", Order = 120, Price = 11000, Icon = "weapon_lgr", Preset = ApplyLGR,
                 Projectile = P + "ACO_Rocket.prefab", Desc = "LASER-GUIDED ROCKETS\nLOCKED ROCKETS STEER ONTO THE TARGET - SLOWER RELOAD" },
             new Example { Id = "4AGM", Name = "4AGM", Order = 40, Price = 9000, Icon = "weapon_4agm", Preset = Apply4AGM,
                 Projectile = P + "ACO_Missile_AGM.prefab", Desc = "MULTI-TARGET AGM\nLOCKS UP TO 4 GROUND TARGETS - ONE MISSILE EACH" },
             new Example { Id = "LAGM", Name = "LAGM", Order = 50, Price = 10000, Icon = "weapon_lagm", Preset = ApplyLAGM,
                 Projectile = P + "ACO_Missile_LAGM.prefab", Desc = "LONG-RANGE AGM\nSTRIKES GROUND TARGETS FROM STANDOFF RANGE" },
-            new Example { Id = "LASM", Name = "LASM", Order = 55, Price = 12000, Icon = "weapon_lasm", Preset = ApplyLASM,
+            new Example { Id = "LASM", Name = "LASM", Order = 130, Price = 12000, Icon = "weapon_lasm", Preset = ApplyLASM,
                 Projectile = P + "ACO_Missile_LAGM.prefab", Desc = "LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS TO SHIPS - CANNOT BE INTERCEPTED BY CIWS" },
-            new Example { Id = "ECM", Name = "ECM", Order = 90, Price = 15000, Icon = "weapon_ecm", Preset = ApplyECM,
+            new Example { Id = "ECM", Name = "ECM", Order = 180, Price = 15000, Icon = "weapon_ecm", Preset = ApplyECM,
                 Projectile = null, Desc = "ELECTRONIC WARFARE POD\n5KM JAMMING FOR 10S - BREAKS ENEMY MISSILES AND LOCKS, DISRUPTS AA GUNS" },
-            new Example { Id = "SCM", Name = "SCM", Order = 58, Price = 14000, Icon = "weapon_scm", Preset = ApplySCM,
+            new Example { Id = "SCM", Name = "SCM", Order = 170, Price = 14000, Icon = "weapon_scm", Preset = ApplySCM,
                 Projectile = P + "ACO_Missile_SCM.prefab", Desc = "STAND-OFF CLUSTER MISSILE\nBURSTS ABOVE THE TARGET - SCATTERS BOMBLETS OVER A WIDE AREA" },
-            new Example { Id = "MMP", Name = "MMP", Order = 60, Price = 17000, Icon = "weapon_mmp", Preset = ApplyMMP,
+            new Example { Id = "MMP", Name = "MMP", Order = 190, Price = 17000, Icon = "weapon_mmp", Preset = ApplyMMP,
                 Projectile = P + "ACO_Missile_MMP.prefab", Desc = "MICRO-MISSILE POD\nLOCKS UP TO 8 AIR OR GROUND TARGETS - 16 MISSILES SPLIT AMONG THEM" },
-            new Example { Id = "RGP", Name = "RGP", Order = 62, Price = 18000, Icon = "weapon_rgp", Preset = ApplyRGP,
+            new Example { Id = "RGP", Name = "RGP", Order = 200, Price = 18000, Icon = "weapon_rgp", Preset = ApplyRGP,
                 Projectile = P + "ACO_Missile_RGP.prefab", Desc = "RAIL GUN POD\nHYPERSONIC SLUG - INSTANT NARROW LOCK AIMS IT, 10 KM, RECHARGES IN 8 S" },
-            new Example { Id = "FLAK", Name = "FLAK", Order = 65, Price = 9000, Icon = "weapon_flak", Preset = ApplyFLAK,
+            new Example { Id = "FLAK", Name = "FLAK", Order = 140, Price = 9000, Icon = "weapon_flak", Preset = ApplyFLAK,
                 Projectile = P + "ACO_Rocket.prefab", Desc = "PROXIMITY-FUSED AIR-TO-AIR ROCKETS\nUNGUIDED - BURSTS NEAR ANY ENEMY AIRCRAFT" },
-            new Example { Id = "SASM", Name = "SASM", Order = 75, Price = 10000, Icon = "weapon_sasm", Preset = ApplySASM,
+            new Example { Id = "SASM", Name = "SASM", Order = 70, Price = 10000, Icon = "weapon_sasm", Preset = ApplySASM,
                 Projectile = P + "ACO_Missile_SRAAM.prefab", Desc = "SHORT-RANGE AERIAL SUPPRESSION AAM\nHUGE PROXIMITY BLAST - ALSO HITS NEARBY AIRCRAFT" },
-            new Example { Id = "LAAM", Name = "LAAM", Order = 70, Price = 12000, Icon = "weapon_laam", Preset = ApplyLAAM,
+            new Example { Id = "LAAM", Name = "LAAM", Order = 60, Price = 12000, Icon = "weapon_laam", Preset = ApplyLAAM,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "LONG-RANGE AAM\nLOCKS AIR TARGETS FROM BEYOND VISUAL RANGE" },
             new Example { Id = "QAAM", Name = "QAAM", Order = 80, Price = 15000, Icon = "weapon_qaam", Preset = ApplyQAAM,
                 Projectile = P + "ACO_Missile_SRAAM.prefab", Desc = "QUICK MANEUVER AAM\nWIDE SEEKER, EXTREME TURN RATE FOR DOGFIGHTS" },
             new Example { Id = "HVAA", Name = "HVAA", Order = 90, Price = 13000, Icon = "weapon_hvaa", Preset = ApplyHVAA,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "HIGH-VELOCITY AAM\nVERY FAST - HARD TO OUTRUN, LESS AGILE" },
-            new Example { Id = "CCAA", Name = "CCAA", Order = 95, Price = 16000, Icon = "weapon_ccaa", Preset = ApplyCCAA,
+            new Example { Id = "CCAA", Name = "CCAA", Order = 150, Price = 16000, Icon = "weapon_ccaa", Preset = ApplyCCAA,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES AND CHAFF - SLOW LOCK, LESS AGILE" },
             new Example { Id = "HPAA", Name = "HPAA", Order = 100, Price = 14000, Icon = "weapon_hpaa", Preset = ApplyHPAA,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "HIGH-POWER AAM\nHUGE WARHEAD AND WIDE PROXIMITY FUSE" },
-            new Example { Id = "ADAM", Name = "ADAM", Order = 105, Price = 18000, Icon = "weapon_adam", Preset = ApplyADAM,
+            new Example { Id = "ADAM", Name = "ADAM", Order = 160, Price = 18000, Icon = "weapon_adam", Preset = ApplyADAM,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT - HUGE BLAST" },
         };
     }
@@ -149,7 +197,7 @@ public static class ACO_SpecialWeaponCatalog
             ACO_SpecialWeaponDef def = root.AddComponent<ACO_SpecialWeaponDef>();
             def.Id = e.Id;
             def.DisplayName = e.Name;
-            def.Description = e.Desc;
+            def.Description = DescriptionFor(e.Id, e.Desc);
             def.Price = e.Price;
             def.SortOrder = e.Order;
             def.Icon = ACO_HUDBuilder.LoadIcon(e.Icon);
@@ -159,6 +207,7 @@ public static class ACO_SpecialWeaponCatalog
             modGo.transform.SetParent(root.transform, false);
             ACO_DFUNC_Missile m = modGo.AddUdonSharpComponent<ACO_DFUNC_Missile>();
             e.Preset(m);
+            m.LaunchCall = LaunchCallFor(e.Id);
             m.Missile = e.Projectile != null ? AssetDatabase.LoadAssetAtPath<GameObject>(e.Projectile) : null;   // 없으면 비움 → 기체의 일반 미사일 모델
             m.TargetIndicator = null;
             m.WeaponAnimator = null;
@@ -313,6 +362,7 @@ public static class ACO_SpecialWeaponCatalog
         m.MissileLifetime = 7f;
         m.NumPreInstantiated = 8;
         m.UpgradeFamily = ACO_UpgradeFamily.None;
+        m.TakesExtraAmmo = true;   // EXTRA AMMO 소모품은 받는다(16 → 24발)
     }
 
     /// RGP(레일건 포드): 초고속 단발탄(4000m/s, 10km를 2.5초). 락온은 좁고(2.5도) 즉시 — 락온하면 발사 순간 표적의 예상 자리로 겨눠 쏘고(SnapAimAtLaunch),
@@ -334,6 +384,7 @@ public static class ACO_SpecialWeaponCatalog
         m.MissileLifetime = 3f;
         m.NumPreInstantiated = 2;
         m.UpgradeFamily = ACO_UpgradeFamily.None;
+        m.TakesExtraAmmo = true;   // EXTRA AMMO 소모품은 받는다(16 → 24발)
     }
 
     /// Setup Check(mmp-other-1): 이미 만든 MMP를 격납고 OTHER 분류·강화 없음으로 — 정의 프리팹, 기체 프리팹의 Module_MMP, 씬에서 덮어쓴 값, 격납고 목록.
@@ -394,6 +445,183 @@ public static class ACO_SpecialWeaponCatalog
         }
         SyncLoadouts();
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// Setup Check(other-extra-ammo-1): 이미 만든 MMP·RGP가 EXTRA AMMO 소모품(탄수 ×1.5)을 받게 한다 — 정의 프리팹, 기체 프리팹의 슬롯 모듈, 씬에서 덮어쓴 값.
+    /// 강화 계열(None)과 다른 값은 그대로.
+    public static void TuneOtherExtraAmmo()
+    {
+        string[] ids = { "MMP", "RGP" };
+        foreach (string id in ids)
+        {
+            string defPath = $"{Folder}/ACO_Special_{id}.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(defPath) == null) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(defPath);
+            try
+            {
+                ACO_SpecialWeaponDef def = root.GetComponent<ACO_SpecialWeaponDef>();
+                if (def != null && def.Module != null && !def.Module.TakesExtraAmmo)
+                {
+                    def.Module.TakesExtraAmmo = true;
+                    PrefabUtility.SaveAsPrefabAsset(root, defPath);
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        var prefabs = new List<string>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(special.gameObject);
+                if (!string.IsNullOrEmpty(path) && !prefabs.Contains(path)) { prefabs.Add(path); }
+            }
+        }
+        foreach (string path in prefabs)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                bool changed = false;
+                foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+                {
+                    foreach (string id in ids)
+                    {
+                        ACO_DFUNC_Missile m = SlotModule(special, id);
+                        if (m != null && !m.TakesExtraAmmo) { m.TakesExtraAmmo = true; changed = true; }
+                    }
+                }
+                if (changed) { PrefabUtility.SaveAsPrefabAsset(root, path); Debug.Log($"[ACO] {path}: MMP·RGP가 EXTRA AMMO를 받게 했습니다."); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        // 씬에서 값을 덮어썼거나 프리팹이 아닌 기체
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                foreach (string id in ids)
+                {
+                    ACO_DFUNC_Missile m = SlotModule(special, id);
+                    if (m == null || m.TakesExtraAmmo) { continue; }
+                    Undo.RecordObject(m, "ACO other extra ammo");
+                    m.TakesExtraAmmo = true;
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+                    EditorUtility.SetDirty(m);
+                }
+            }
+        }
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// 예제 무장의 발사 무전 코드. 대공 단거리 Fox Two, 장거리·4AAM Fox Three, 4AGM Rifle, LAGM Magnum, SCM Greyhound, LASM Bruiser,
+    /// 폭탄 Pickle, 로켓 Rockets, RGP Spear, ECM Music, MMP Drive. 모르는 무장(복제해 만든 것)은 없음.
+    public static ACO_LaunchCall LaunchCallFor(string id)
+    {
+        switch (id)
+        {
+            case "QAAM": case "SASM": case "HPAA": case "CCAA": return ACO_LaunchCall.FoxTwo;
+            case "4AAM": case "LAAM": case "HVAA": case "ADAM": return ACO_LaunchCall.FoxThree;
+            case "MMP": return ACO_LaunchCall.Drive;
+            case "4AGM": return ACO_LaunchCall.Rifle;
+            case "LAGM": return ACO_LaunchCall.Magnum;
+            case "SCM": return ACO_LaunchCall.Greyhound;
+            case "LASM": return ACO_LaunchCall.Bruiser;
+            case "UGB": case "LGB": return ACO_LaunchCall.Pickle;
+            case "RKT": case "LGR": case "FLAK": return ACO_LaunchCall.Rockets;
+            case "RGP": return ACO_LaunchCall.Spear;
+            case "ECM": return ACO_LaunchCall.Music;
+        }
+        return ACO_LaunchCall.None;
+    }
+
+    /// Setup Check(launch-call-1): 발사 무전 코드를 넣는다 — 특수무장 정의 프리팹, 기체 프리팹의 슬롯 모듈(정의 Id로), 기체의 일반 미사일(Fox Two),
+    /// 씬에서 덮어쓴 값. 이미 코드가 있는 무장은 그대로.
+    public static void TuneLaunchCalls()
+    {
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { Folder }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            ACO_SpecialWeaponDef probe = AssetDatabase.LoadAssetAtPath<GameObject>(path)?.GetComponent<ACO_SpecialWeaponDef>();
+            if (probe == null || probe.Module == null || probe.Module.LaunchCall != ACO_LaunchCall.None || LaunchCallFor(probe.Id) == ACO_LaunchCall.None) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                ACO_SpecialWeaponDef def = root.GetComponent<ACO_SpecialWeaponDef>();
+                if (def != null && def.Module != null)
+                {
+                    def.Module.LaunchCall = LaunchCallFor(def.Id);
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        var prefabs = new List<string>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Special special in root.GetComponentsInChildren<ACO_DFUNC_Special>(true))
+            {
+                string path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(special.gameObject);
+                if (!string.IsNullOrEmpty(path) && !prefabs.Contains(path)) { prefabs.Add(path); }
+            }
+        }
+        int n = 0;
+        foreach (string path in prefabs)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                int c = ApplyLaunchCalls(root);
+                if (c > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); n += c; }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        // 씬에서 값을 덮어썼거나 프리팹이 아닌 기체
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.LaunchCall != ACO_LaunchCall.None) { continue; }
+                ACO_LaunchCall want = WantedLaunchCall(m);
+                if (want == ACO_LaunchCall.None) { continue; }
+                Undo.RecordObject(m, "ACO launch call");
+                m.LaunchCall = want;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+                EditorUtility.SetDirty(m);
+                n++;
+            }
+        }
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 발사 무전: 무장 모듈 {n}개에 코드를 넣었습니다(정의 프리팹 포함 — 이미 있던 코드는 그대로).");
+    }
+
+    /// 한 기체(프리팹 내용)의 무장 모듈에 코드를 넣는다. 넣은 수.
+    private static int ApplyLaunchCalls(GameObject root)
+    {
+        int n = 0;
+        foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+        {
+            if (m.LaunchCall != ACO_LaunchCall.None) { continue; }
+            ACO_LaunchCall want = WantedLaunchCall(m);
+            if (want == ACO_LaunchCall.None) { continue; }
+            m.LaunchCall = want;
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        return n;
+    }
+
+    /// 이 모듈이 받을 코드: 특수무장 슬롯 모듈이면 그 슬롯의 정의 Id로, 아니면 일반 미사일 계열(Missile)은 Fox Two.
+    private static ACO_LaunchCall WantedLaunchCall(ACO_DFUNC_Missile m)
+    {
+        ACO_DFUNC_Special special = m.GetComponentInParent<ACO_DFUNC_Special>(true);
+        if (special != null && special.Modules != null && special.ModuleIds != null)
+        {
+            int k = System.Array.IndexOf(special.Modules, m);
+            if (k >= 0 && k < special.ModuleIds.Length) { return LaunchCallFor(special.ModuleIds[k]); }
+        }
+        if (m.EcmMode) { return ACO_LaunchCall.Music; }
+        return m.UpgradeFamily == ACO_UpgradeFamily.Missile ? ACO_LaunchCall.FoxTwo : ACO_LaunchCall.None;
     }
 
     private static ACO_DFUNC_Missile SlotModule(ACO_DFUNC_Special special, string id)
@@ -762,7 +990,7 @@ public static class ACO_SpecialWeaponCatalog
         return n;
     }
 
-    /// 격납고 목록: 없는 ID는 끝에 더하고(목록 순서), 있는 ID는 이름·설명·가격·아이콘을 정의 값으로 맞춘다. 새로 더한 수. 그대로면 기록하지 않는다.
+    /// 격납고 목록: 없는 ID는 더하고, 있는 ID는 이름·설명·가격·아이콘을 정의 값으로 맞춘 뒤 정의 순서(SortOrder)로 정렬한다. 새로 더한 수. 그대로면 기록하지 않는다.
     private static int AddToLoadout(ACO_Loadout loadout, List<ACO_SpecialWeaponDef> defs)
     {
         var ids = new List<string>(loadout.SpecialIds ?? new string[0]);
@@ -788,6 +1016,23 @@ public static class ACO_SpecialWeaponCatalog
             icons[k] = d.Icon != null ? d.Icon : ACO_HUDBuilder.SpecialIcon(d.Id);
             cats[k] = CategoryOf(d);
         }
+        // 순서: 정의 순서(SortOrder — 격납고 패널 기준)로 맞춘다 — 예전엔 패널마다 없는 ID를 끝에 따로 붙여 격납고 · 브리핑실 순서가 달라졌다. 정의에 없는 ID는 끝에 원래 순서로
+        var order = new List<int>();
+        for (int i = 0; i < ids.Count; i++) { order.Add(i); }
+        order.Sort((x, y) =>
+        {
+            int dx = defs.FindIndex(d => d.Id == ids[x]);
+            int dy = defs.FindIndex(d => d.Id == ids[y]);
+            if (dx < 0) { dx = 100000 + x; }
+            if (dy < 0) { dy = 100000 + y; }
+            return dx.CompareTo(dy);
+        });
+        ids = order.ConvertAll(i => ids[i]);
+        names = order.ConvertAll(i => names[i]);
+        descs = order.ConvertAll(i => descs[i]);
+        prices = order.ConvertAll(i => prices[i]);
+        icons = order.ConvertAll(i => icons[i]);
+        cats = order.ConvertAll(i => cats[i]);
         if (Same(loadout.SpecialIds, ids) && Same(loadout.SpecialNames, names) && Same(loadout.SpecialDescriptions, descs)
             && Same(loadout.SpecialPrices, prices) && Same(loadout.SpecialIcons, icons) && Same(loadout.SpecialCategories, cats)) { return 0; }
         Undo.RecordObject(loadout, "ACO special catalog");

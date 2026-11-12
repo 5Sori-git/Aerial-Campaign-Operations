@@ -31,6 +31,10 @@ namespace ACO
         public SaccTarget TargetHealth;
         [Tooltip("내가 탄 기체를 알려 준다(Bake가 넣는다) — 사선 피해")]
         public ACO_RadarContacts Contacts;
+        [Tooltip("빔이 내 곁을 스치는 소리(Bake가 넣는다, 6-156)")]
+        public ACO_BulletFlyby Flyby;
+        [Tooltip("Bake가 넣는다 — 사선 경고 안에 내 기체가 있으면 RAILGUN 음성")]
+        public ACO_VoiceWarning Voice;
         [Tooltip("방공 부위 — 1단계 목표. 뒤 단계에 일부가 수리돼 다시 돈다")]
         public UdonSharpBehaviour[] AirDefense;
         [Tooltip("냉각기 — 2단계 목표")]
@@ -289,6 +293,14 @@ namespace ACO
             if (!on) { return; }
             WarnBeam.SetPosition(0, Muzzle.position);
             WarnBeam.SetPosition(1, Muzzle.position + Muzzle.forward * BeamLength);
+            // 사선(반경의 1.5배) 안에 내 기체가 있으면 음성 경고
+            if (Voice != null && Contacts != null && Contacts.LocalVehicle != null)
+            {
+                Vector3 d = Contacts.LocalVehicle.transform.position - Muzzle.position;
+                float along = Vector3.Dot(d, Muzzle.forward);
+                float r = BeamRadius * 1.5f;
+                if (along > 0f && along < BeamLength && (d - Muzzle.forward * along).sqrMagnitude < r * r) { Voice.Warn(ACO_VoiceWarning.W_RAILGUN); }
+            }
         }
 
         // ───────────── 사격 ─────────────
@@ -324,6 +336,7 @@ namespace ACO
             }
             if (FireSound) { FireSound.Play(); }   // 연출이라 거리와 상관없이 바로 들린다
             HitLocalVehicle(from, dir);
+            if (Flyby != null) { Flyby.ReportRail(from, dir, BeamLength, 0f, BeamRadius); }
             // 착탄 자리: 수평으로 지평선까지(포신이 들려 있어도 땅에서 번쩍인다)
             Vector3 flat = dir;
             flat.y = 0f;

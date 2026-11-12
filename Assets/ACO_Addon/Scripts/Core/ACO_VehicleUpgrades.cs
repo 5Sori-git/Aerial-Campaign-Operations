@@ -12,7 +12,10 @@ namespace ACO
     /// 오너가 깎고 동기화하므로 조종사 값만 바꾸면 된다. 미사일 비행 성능은 발사 이벤트에 실려 가고 피해는 쏜 사람 값을 쓴다.
     ///
     /// - 체력: SaccAirVehicle.FullHealth(남은 체력은 같은 비율로), 기동: RollStrength × 배수, PitchStrength/YawStrength는 PitchYawShare만큼만, 추력: ThrottleStrength(+애프터버너),
-    ///   연료 효율: FuelConsumption ÷ 배수(+애프터버너 소모량), 안정성: Lift × 배수 + ExtraVelLift에 (배수 − 1)을 더함(내릴 때 뺀다).
+    ///   연료 효율: FuelConsumption ÷ 배수(+애프터버너 소모량).
+    ///   기동성 강화는 양력과 리미터 한계도 함께 올린다(안정성 강화를 합쳤다 — 회전만 세지면 받음각이 튀어 실속하기 쉬웠다): 강화 비율 t(= 단계 / 최대 단계)만큼
+    ///   Lift × (1 + LiftBonus·t) + ExtraVelLift에 LiftBonus·t를 더함(내릴 때 뺀다), SAV 리미터(DFUNC_Limits)의 받음각·하중 한계를 LimiterAoABonus·t도, LimiterGBonus·t G 올린다
+    ///   (시작점과 한계를 같이 올린다 — 리미터가 구간 폭을 시작할 때 한 번만 재므로). 받음각 한계는 실속각의 LimiterAoAMaxRatio, 하중 한계는 MaxGs − 2를 넘지 않는다.
     /// - 소모품(진행도 CONS_*, 사 둔 것만): 장갑판 = 체력 배수, 연료탱크 = 연료 용량(SaccAirVehicle.FullFuel — 남은 연료는 같은 비율로),
     ///   대응탄 포드 = SAV 플레어(DFUNC_Flares.FullFlares, 채워서 시작), 탄약 증량 = 특수무장(대공·대지·폭탄 계열) 탄수 배수. 내릴 때 되돌린다.
     /// - 무장(Weapons, ACO_DFUNC_Missile): 무장 인스펙터에서 고른 계열(UpgradeFamily)의 강화로 ACO_DFUNC_Missile.ApplyUpgrades. None이면 그대로.
@@ -52,6 +55,14 @@ namespace ACO
         [Header("기동성 강화 배분")]
         [Tooltip("기동성 강화 중 피치·요에 주는 몫(0~1). 롤은 강화를 다 받는다. 피치까지 다 키우면 받음각이 순간 튀어 리미터를 지나 실속하기 쉬워서 기본 절반")]
         [Range(0f, 1f)] public float PitchYawShare = 0.5f;
+        [Tooltip("기동성 최대 단계에서 양력 증가(0.5 = ×1.5 — 예전 안정성 강화 10단계와 같다). 저속에서 쳐들어도 버티고 기수가 덜 처진다")]
+        public float LiftBonus = 0.5f;
+        [Tooltip("기동성 최대 단계에서 리미터 받음각 한계를 이만큼(도) 올린다(시작점도 같이)")]
+        public float LimiterAoABonus = 5f;
+        [Tooltip("기동성 최대 단계에서 리미터 하중 한계를 이만큼(G) 올린다(시작점도 같이)")]
+        public float LimiterGBonus = 5f;
+        [Tooltip("올린 받음각 한계가 실속각(MaxAngleOfAttackPitch)의 이 비율을 넘지 않는다")]
+        [Range(0.5f, 0.95f)] public float LimiterAoAMaxRatio = 0.8f;
 
         [Header("소모품 외형 (CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크 — 비워도 된다)")]
         [Tooltip("사 둔 소모품으로 탑승하면 켜고(모든 플레이어 화면) 내리면 끈다. 여러 개면 빈 부모로 묶어 부모를 넣는다")]
@@ -96,6 +107,12 @@ namespace ACO
         private float _baseLift;
         private float _baseFullFuel;
         private int[] _baseFlares;
+        private DFUNC_Limits _limits;
+        private bool _limitsSearched;
+        private float _baseAoABegin;
+        private float _baseAoA;
+        private float _baseGBegin;
+        private float _baseG;
         private float _velLiftAdded;   // ExtraVelLift에 더해 둔 값(플랩도 같은 값을 더하고 빼므로 곱하지 않고 더한 만큼만 되돌린다)
         private float _burstUntil;
         private bool _bursting;
@@ -305,6 +322,31 @@ namespace ACO
             if (Chatter) { Chatter.Report(ACO_Chatter.EV_SELF_DOWN, ""); }
         }
 
+        /// SAV 리미터(DFUNC_Limits) 한계를 기동성 강화 비율 t만큼 올린다(t = 0이면 원래 값). 시작점과 한계를 같은 양만큼 — 리미터가 구간 폭을 시작할 때만 잰다.
+        private void ApplyLimiter(float t)
+        {
+            if (!_limitsSearched)
+            {
+                _limitsSearched = true;
+                if (EntityControl) { _limits = EntityControl.GetComponentInChildren<DFUNC_Limits>(true); }
+                if (_limits)
+                {
+                    _baseAoABegin = _limits.AoALimiter_Begin;
+                    _baseAoA = _limits.AoALimiter;
+                    _baseGBegin = _limits.GLimiter_Begin_Pos;
+                    _baseG = _limits.GLimiter_Pos;
+                }
+            }
+            if (!_limits || !AirVehicle) { return; }
+            float aoaMax = AirVehicle.MaxAngleOfAttackPitch * LimiterAoAMaxRatio;
+            float aoaShift = Mathf.Clamp(LimiterAoABonus * t, 0f, Mathf.Max(aoaMax - _baseAoA, 0f));
+            float gShift = Mathf.Clamp(LimiterGBonus * t, 0f, Mathf.Max(AirVehicle.MaxGs - 2f - _baseG, 0f));
+            _limits.AoALimiter_Begin = _baseAoABegin + aoaShift;
+            _limits.AoALimiter = _baseAoA + aoaShift;
+            _limits.GLimiter_Begin_Pos = _baseGBegin + gShift;
+            _limits.GLimiter_Pos = _baseG + gShift;
+        }
+
         private void Apply(bool on)
         {
             if (!Progress || on == _applied) { return; }
@@ -329,7 +371,10 @@ namespace ACO
                 float mobility = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_MOBILITY) : 1f;
                 float engine = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_ENGINE) : 1f;
                 float fuel = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_FUEL) : 1f;
-                float stability = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_STABILITY) : 1f;
+                // 기동성 강화 비율(0 ~ 1) — 양력·리미터 한계도 이만큼 함께 올린다(안정성 강화는 기동성에 합쳤다)
+                int maxLevel = Progress.GetMaxLevel();
+                float t = on && maxLevel > 0 ? Mathf.Clamp01(Progress.GetLevel(ACO_PlayerProgress.UP_MOBILITY) / (float)maxLevel) : 0f;
+                float stability = 1f + LiftBonus * t;
 
                 float oldFull = AirVehicle.FullHealth;
                 float newFull = _baseHealth * hull;
@@ -363,6 +408,8 @@ namespace ACO
                 float velLiftDelta = stability - 1f;
                 AirVehicle.ExtraVelLift += velLiftDelta - _velLiftAdded;
                 _velLiftAdded = velLiftDelta;
+
+                ApplyLimiter(t);
             }
 
             // 기총 피해: 탄 파티클의 덤 피해 배수(충돌은 조종사 화면에서만 일어난다)
@@ -372,7 +419,7 @@ namespace ACO
                 for (int i = 0; i < GunBonuses.Length; i++) { if (GunBonuses[i]) { GunBonuses[i].Factor = gun; } }
             }
 
-            // 대응탄 포드: SAV 플레어 최대 수를 늘리고 채운다(내릴 때 원래 수로 채운다)
+            // 대응탄 수 강화(단계마다 한 발씩 더함) → 대응탄 포드(소모품 배수): SAV 플레어 최대 수를 늘리고 채운다(내릴 때 원래 수로 채운다)
             if (Flares != null)
             {
                 if (_baseFlares == null || _baseFlares.Length != Flares.Length)
@@ -381,11 +428,12 @@ namespace ACO
                     for (int i = 0; i < Flares.Length; i++) { _baseFlares[i] = Flares[i] ? Flares[i].FullFlares : 0; }
                 }
                 float cm = on ? Progress.GetConsumableFactor(ACO_PlayerProgress.CONS_CM) : 1f;
+                int extra = on ? Progress.GetCountermeasureBonus() : 0;
                 for (int i = 0; i < Flares.Length; i++)
                 {
                     DFUNC_Flares f = Flares[i];
                     if (!f) { continue; }
-                    int want = Mathf.RoundToInt(_baseFlares[i] * cm);
+                    int want = Mathf.RoundToInt((_baseFlares[i] + extra) * cm);
                     if (f.FullFlares == want) { continue; }
                     f.FullFlares = want;
                     f.ReInitNumFlares();
@@ -405,8 +453,8 @@ namespace ACO
                 }
                 // None(4) 등 계열 밖의 값이면 항목이 없어 모든 배수가 1이다.
                 int f = (int)w.UpgradeFamily;
-                // 탄약 증량은 특수무장(대공·대지·폭탄 계열)만
-                bool special = f == ACO_PlayerProgress.FAMILY_SP_AAM || f == ACO_PlayerProgress.FAMILY_SP_AGM || f == ACO_PlayerProgress.FAMILY_SP_BOMB;
+                // 탄약 증량은 특수무장(대공·대지·폭탄 계열)과 따로 켠 OTHER 무장(MMP·RGP — 강화 트리는 받지 않는다)만
+                bool special = f == ACO_PlayerProgress.FAMILY_SP_AAM || f == ACO_PlayerProgress.FAMILY_SP_AGM || f == ACO_PlayerProgress.FAMILY_SP_BOMB || w.TakesExtraAmmo;
                 w.ApplyUpgrades(
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_DAMAGE),
                     Progress.GetFamilyFactor(f, ACO_PlayerProgress.STAT_AMMO) * (special ? extraAmmo : 1f),

@@ -5,6 +5,8 @@
 //  - VR: 두 눈의 가운데를 향한다(눈마다 다르게 펼치면 좌우 형상이 달라 지글거린다)
 //  - 판인데 둥글게: UV로 구 법선을 복원(_PuffRound) + 덩어리 바깥 방향과 섞어 덩어리 전체가 해 쪽이 밝다
 //  - 조명: 감싸는 조명, 두꺼운 곳은 어둡게, 해를 등지면 얇은 가장자리가 빛남(은빛 테두리), 아래쪽·안쪽 어둡게(정점 색)
+//  - 역광(해를 마주 봄 — 해가 낮을 때 잘 보인다): 퍼프 둥근 노멀을 덩어리 노멀로 펴고(_BackFlatten), 덩어리 단위 투과광(_BackCore — 속 밝기),
+//    은빛 테두리는 덩어리 바깥 위주, 해 둘레 앞쪽 산란(_BackScatter). 순광·옆에서 볼 때는 예전과 같다
 //  - 가장자리: 알파 투 커버리지(MSAA에서 부드럽게, 정렬 불필요, 깊이 기록) — MSAA가 없으면 알파 테스트처럼 그려진다
 //  - 가까이(_NearFadeEnd → _NearFadeStart) 오면 디더링으로 사라진다(구름 속은 ACO_CloudField가 안개로 채운다)
 //  - 멀리(_LodStart → _LodEnd)는 퍼프 일부를 접고(_LodKeep만 남김) 남은 퍼프를 키운다
@@ -29,6 +31,9 @@ Shader "ACO/CloudPuffs"
         _Ambient ("Sky ambient", Range(0, 1)) = 0.25
         _Silver ("Silver lining", Range(0, 3)) = 1.2
         _SilverPower ("Silver lining focus", Range(1, 32)) = 8
+        _BackFlatten ("Backlit: flatten puffs", Range(0, 1)) = 0.85
+        _BackCore ("Backlit: core brightness", Range(0, 1)) = 0.45
+        _BackScatter ("Backlit: glow near sun", Range(0, 2)) = 0.5
         _Darken ("Weather darken", Range(0, 1)) = 0
         _StormColor ("Storm tint", Color) = (0.42, 0.44, 0.5, 1)
         _Flash ("Lightning flash (script)", Range(0, 2)) = 0
@@ -151,6 +156,7 @@ Shader "ACO/CloudPuffs"
 
             fixed4 _LitColor, _ShadeColor, _BottomColor, _StormColor, _FlashColor;
             float _Wrap, _PuffRound, _ThickShade, _Ambient, _Silver, _SilverPower, _Darken, _Soft, _Flash, _SunGain;
+            float _BackFlatten, _BackCore, _BackScatter;
 
             struct v2f
             {
@@ -193,12 +199,20 @@ Shader "ACO/CloudPuffs"
                 float2 c = i.uv.zw;
                 float z = sqrt(saturate(1 - dot(c, c)));
                 float3 puffN = normalize(i.right * c.x + i.up * c.y - i.fwd * z);
-                float3 n = normalize(lerp(normalize(i.clusterN), puffN, _PuffRound));
                 float3 L = normalize(_WorldSpaceLightPos0.xyz);
+                float3 V = normalize(i.worldPos - CenterEye());
+                // 해를 마주 보는 정도(역광) — 해가 낮으면 퍼프마다 그늘진 면이 보여 공을 모아 둔 것처럼 보였다:
+                // 역광일수록 퍼프의 둥근 노멀을 덩어리 노멀로 펴고, 덩어리 단위로 빛이 비쳐 지나가는 반투명 덩어리처럼 칠한다
+                float facing = saturate(dot(V, L));
+                float back = facing * facing;
+                float3 n = normalize(lerp(normalize(i.clusterN), puffN, _PuffRound * (1 - back * _BackFlatten)));
                 float thick = tex.r;
+                float edge = i.data.x;   // 덩어리 바깥 · 위쪽일수록 1(정점 차폐)
 
                 // 감싸는 조명 + 두꺼운 곳 어둡게
                 float lit = saturate((dot(n, L) + _Wrap) / (1 + _Wrap)) * (1 - _ThickShade * thick);
+                // 역광 투과: 덩어리 바깥은 밝고 속은 어둡다(퍼프 하나하나가 아니라 덩어리 단위)
+                lit = lerp(lit, lerp(_BackCore, 1, edge) * (1 - 0.2 * thick), back);
                 float3 light = _LightColor0.rgb * _SunGain;
                 float3 sun = _LitColor.rgb * light;
                 float3 col = lerp(_ShadeColor.rgb * (0.35 + 0.65 * saturate(light)), sun, lit);
@@ -207,9 +221,10 @@ Shader "ACO/CloudPuffs"
                 // 아래쪽·안쪽 어둡게(정점 색)
                 col = lerp(col, _BottomColor.rgb * (0.4 + 0.6 * saturate(light)), i.data.y * saturate(0.6 - n.y * 0.6));
                 col *= lerp(0.7, 1, i.data.x);
-                // 은빛 테두리: 해를 등지고 보면 얇은 가장자리가 빛난다
-                float3 V = normalize(i.worldPos - CenterEye());
-                col += light * _Silver * pow(saturate(dot(V, L)), _SilverPower) * (1 - thick);
+                // 은빛 테두리: 해를 마주 보면 덩어리 바깥의 얇은 가장자리가 빛난다(퍼프마다 윤곽이 빛나지 않게 덩어리 바깥 위주)
+                col += light * _Silver * pow(facing, _SilverPower) * (1 - 0.6 * thick) * edge * edge;
+                // 해 둘레: 해 가까이 있는 구름은 앞쪽 산란으로 은은하게 밝다
+                col += light * _BackScatter * pow(facing, 12) * lerp(0.4, 1, edge);
                 // 날씨: 어두운 회색
                 col = lerp(col, dot(col, float3(0.3, 0.5, 0.2)) * _StormColor.rgb * 1.6, _Darken);
                 // 번개: 두꺼운 곳(속)이 더 밝게 — 안에서 번쩍이는 느낌

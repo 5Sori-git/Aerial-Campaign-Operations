@@ -4,7 +4,7 @@ using VRC.SDKBase;
 
 namespace ACO
 {
-    /// 레이저 에이스 페이즈의 사일로·탄도미사일 연출(동기화 없음). ACO_PhaseLaserAce의 동기화 값(단계·시각·사일로 자리·착탄 방향)과 서버 시각만으로
+    /// 레이저 에이스 페이즈의 사일로·탄도미사일 연출(동기화 없음). ACO_PhaseBorderless의 동기화 값(단계·시각·사일로 자리·착탄 방향)과 서버 시각만으로
     /// 모든 화면에서 같게 그린다 — 사일로 문이 열리고, 미사일이 연기 기둥을 남기며 솟아 대기권 밖으로 사라지고, 착탄 직전 지평선 너머로 떨어진다.
     /// 에이스가 격추되면 날던 미사일이 하늘에서 자폭한다(섬광·불덩이, 하늘이 밝아진다). 착탄하면 지평선 너머 아군 기지에서 큰 섬광과 늦게 오는 폭음.
     /// 페이즈가 아니면 모두 숨긴다. 피해·판정은 없다(판정은 모듈).
@@ -12,7 +12,7 @@ namespace ACO
     public class ACO_IcbmSite : UdonSharpBehaviour
     {
         [Header("참조 (Bake가 넣는다)")]
-        public ACO_PhaseLaserAce Phase;
+        public ACO_PhaseBorderless Phase;
         public ACO_CloudField Clouds;
 
         [Header("사일로")]

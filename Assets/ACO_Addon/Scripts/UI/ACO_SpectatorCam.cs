@@ -798,23 +798,39 @@ namespace ACO
 
         private string[] ShotNames = { "CHASE", "FLYBY", "TELEPHOTO", "SIDE", "WINGMAN", "COCKPIT", "PILOT", "MISSILE", "TARGET" };
 
+        [Tooltip("번역 장치(6-166). Bake가 넣는다")]
+        public ACO_Localization Loc;
+
+        /// 번역 장치가 언어를 바꾸면 부른다.
+        public void LocalizationChanged() { UpdateTexts(); }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english). {0}에 값을 끼운다(6-166)
+        private string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+
+
         private void UpdateTexts()
         {
-            if (PowerText) { PowerText.text = _on ? "<color=#66FF77>ON</color>" : "<color=#FF5544>OFF</color>"; }
+            if (PowerText) { PowerText.text = _on ? "<color=#66FF77>" + T("set.on", "ON") + "</color>" : "<color=#FF5544>" + T("set.off", "OFF") + "</color>"; }
             if (ResolutionText) { ResolutionText.text = _fhd ? "FHD 1080p" : "HD 720p"; }
             if (TargetText)
             {
-                if (_targetMode == AUTO) { TargetText.text = "AUTO  " + (_subject >= 0 ? SlotLabel(_subject) : "-"); }
+                if (_targetMode == AUTO) { TargetText.text = T1("spec.auto", "AUTO  {0}", _subject >= 0 ? SlotLabel(_subject) : "-"); }
                 else { TargetText.text = SlotLabel(_targetMode); }
             }
-            string shot = _shot >= 0 && _shot < ShotNames.Length ? ShotNames[_shot] : "";
-            if (ShotText) { ShotText.text = _shotMode == AUTO ? "AUTO  " + shot : shot; }
+            string shot = _shot >= 0 && _shot < ShotNames.Length ? T("spec.shot." + _shot, ShotNames[_shot]) : "";
+            if (ShotText) { ShotText.text = _shotMode == AUTO ? T1("spec.auto", "AUTO  {0}", shot) : shot; }
             if (StatusText)
             {
-                if (!_on) { StatusText.text = "SPECTATOR CAMERA OFF"; }
-                else if (_subject < 0) { StatusText.text = _targetMode == AUTO ? "NO PILOTS IN THE AIR" : "WAITING FOR PILOT"; }
-                else if ((_shot == SHOT_MISSILE || _shot == SHOT_TARGET) && _mis == null) { StatusText.text = "WAITING FOR A MISSILE (CHASE)"; }
-                else { StatusText.text = "LIVE"; }
+                if (!_on) { StatusText.text = T("spec.status.off", "SPECTATOR CAMERA OFF"); }
+                else if (_subject < 0) { StatusText.text = _targetMode == AUTO ? T("spec.status.nopilots", "NO PILOTS IN THE AIR") : T("spec.status.waitpilot", "WAITING FOR PILOT"); }
+                else if ((_shot == SHOT_MISSILE || _shot == SHOT_TARGET) && _mis == null) { StatusText.text = T("spec.status.waitmissile", "WAITING FOR A MISSILE (CHASE)"); }
+                else { StatusText.text = T("spec.status.live", "LIVE"); }
             }
         }
 
@@ -823,7 +839,7 @@ namespace ACO
         {
             int slot = Flow != null ? Flow.GetSlotOfAircraft(Vehicles[i]) : -1;
             if (slot >= 0) { return Flow.GetSlotLabel(slot); }
-            string label = "SLOT " + (i + 1);
+            string label = T1("flow.slot.fallback", "SLOT {0}", (i + 1).ToString());
             if (!IsValid(i)) { return label; }
             VRCPlayerApi p = Networking.GetOwner(Vehicles[i].gameObject);
             return Utilities.IsValid(p) ? label + "  " + p.displayName : label;

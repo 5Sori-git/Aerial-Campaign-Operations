@@ -820,6 +820,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 0.2
   AimLeadTime: 3
@@ -837,6 +838,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 0
   SleepMargin: 3000
@@ -899,6 +901,7 @@ MonoBehaviour:
   Site: {fileID: 3601570418304732222}
   Muzzle: {fileID: 2310142579666689558}
   Contacts: {fileID: 0}
+  Voice: {fileID: 0}
   Phase: {fileID: 0}
   LeadTime: 3.5
   ShellSpeed: 5000
@@ -909,12 +912,12 @@ MonoBehaviour:
   AimTime: 1.5
   VolleyShots: 1
   VolleyGap: 0.8
-  ZoneRadius: 170
+  ZoneRadius: 255
   ZoneTime: 4.5
   ZoneTick: 0.5
   ZoneDamage: 20
   BurstSpread: 0
-  ZoneReburst: 0
+  ZoneReburst: 1.2
   ShellParticle: {fileID: 0}
   BurstParticle: {fileID: 0}
   BurstFlash: {fileID: 0}
@@ -934,8 +937,10 @@ MonoBehaviour:
   - {fileID: 2055864367837934564}
   - {fileID: 1898588464721570989}
   - {fileID: 8728017550612985738}
+  ShellMeshRadius: 1
   ShellGrowTime: 0.25
   ShellFadeTime: 0.6
+  ShellAfterFade: 0.3
   FireSound: {fileID: 2171995066163949500}
   BurstSound: {fileID: 226435493069882994}
 --- !u!114 &6715452731958039267

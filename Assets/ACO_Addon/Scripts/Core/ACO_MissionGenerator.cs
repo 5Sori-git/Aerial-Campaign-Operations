@@ -43,6 +43,10 @@ namespace ACO
         [Header("작전 공역 (월드 X/Z, m)")]
         public Vector2 AreaMin = new Vector2(-200000f, -200000f);
         public Vector2 AreaMax = new Vector2(200000f, 200000f);
+        [Tooltip("NPC 경계(6-169): 모든 NPC가 원점 중심 이 반경(m — 지형 끝과 같게) 안에만 나타난다(땅 · 바다 · 경로 자리는 밖을 거르고, 전투기 자리는 안으로 당긴다). 0이면 끔")]
+        public float NpcFieldRadius = 25000f;
+        [Tooltip("나타나는 자리 · 경로 점은 경계에서 이만큼(m) 안쪽")]
+        public float NpcFieldMargin = 500f;
 
         [Header("안전지대 (지상 유닛 스폰 금지)")]
         [Tooltip("이 콜라이더들의 영역(바운딩 박스, 수평 X/Z 기준) 안에는 지상 유닛을 스폰하지 않는다. 트리거 박스로 기지 주변을 덮어 두면 된다")]
@@ -498,7 +502,7 @@ namespace ACO
         /// 지상 그룹 count대를 한 지역에(사냥터)
         public const int OBJ_HUNT = 4;
         /// 슈퍼에이스 1기(태그) + 호위 에이스 count기(태그 없음), focus 쪽으로 진입 — 보너스 페이즈
-        public const int OBJ_SUPER_ACE = 5;
+        public const int OBJ_TWINS = 5;
         /// 공격기(GroundAttacker) count기, 2기 편대로 focus 쪽으로 진입 — 지상·해상 호위 페이즈(콘보이·상륙전)만 부른다
         public const int OBJ_ATTACK = 6;
         /// 공중 요새(태그) — focus = 도시 자리, tier = 시작 방위각(도). 보스 페이즈(ACO_PhaseFortress)만 쓴다.
@@ -514,10 +518,14 @@ namespace ACO
         public const int OBJ_HATCH_FLIGHT = 12;
         /// 육상전함(태그) — focus = 항로 출발점, tier = 방위각(도). 보스 페이즈(ACO_PhaseLandShip)만 쓴다.
         public const int OBJ_LANDSHIP = 13;
-        /// 레이저 에이스 1기(태그, 호위 없음), focus 쪽으로 진입 — 레이저 에이스 페이즈(ACO_PhaseLaserAce)만 쓴다.
-        public const int OBJ_LASER_ACE = 14;
+        /// 레이저 에이스 1기(태그, 호위 없음), focus 쪽으로 진입 — 레이저 에이스 페이즈(ACO_PhaseBorderless)만 쓴다.
+        public const int OBJ_BORDERLESS = 14;
         /// SHADE 편대 count기(모두 태그), focus 쪽으로 편대 진입 — SHADE 편대 페이즈(ACO_PhaseShade)만 쓴다.
         public const int OBJ_SHADE = 15;
+        /// UAV 에이스 LUNA 1기(태그, 호위 없음), focus(도시)에서 minDist~maxDist에 나타나 도시 쪽으로 — LUNA 페이즈(ACO_PhaseLuna)만 쓴다.
+        public const int OBJ_LUNA = 16;
+        /// 태양 에이스 MR. S 1기(태그, 호위 없음), focus 쪽으로 진입 — MR. S 페이즈(ACO_PhaseMrS)만 쓴다.
+        public const int OBJ_MRS = 17;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -1055,6 +1063,11 @@ namespace ACO
 
         private void MarkFighter(int i, bool used, Vector3 pos, Quaternion rot, Vector3 ingress, int tier, int now)
         {
+            if (used)
+            {
+                pos = ClampToNpcField(pos);   // 경계 밖에서 나타나던 자리도 같은 방위의 경계 안쪽으로
+                ingress = ClampToNpcField(ingress);
+            }
             _fighterTier[i] = (byte)Mathf.Clamp(tier, 0, 255);
             _fighterCarrier[i] = used && _carrierLaunch;
             _fighterUsed[i] = used;
@@ -1341,8 +1354,28 @@ namespace ACO
         }
 
         /// (x, z)가 스폰 가능한 지면이면 true, 높이는 _sampleY. 공역 밖/안전지대/허공/급경사/너무 낮은 곳은 false.
+        /// NPC 경계(NpcFieldRadius − NpcFieldMargin) 안인가 — 원점 중심, 수평 거리.
+        public bool InNpcField(float x, float z)
+        {
+            if (NpcFieldRadius <= 0f) { return true; }
+            float r = Mathf.Max(NpcFieldRadius - NpcFieldMargin, 0f);
+            return x * x + z * z <= r * r;
+        }
+
+        /// 경계 밖이면 같은 방위의 경계 안쪽(NpcFieldRadius − NpcFieldMargin)으로 당긴다(높이는 그대로).
+        private Vector3 ClampToNpcField(Vector3 p)
+        {
+            if (NpcFieldRadius <= 0f) { return p; }
+            float r = Mathf.Max(NpcFieldRadius - NpcFieldMargin, 0f);
+            float d = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+            if (d <= r || d < 1f) { return p; }
+            float k = r / d;
+            return new Vector3(p.x * k, p.y, p.z * k);
+        }
+
         private bool SampleGround(float x, float z)
         {
+            if (!InNpcField(x, z)) { return false; }
             if (x < AreaMin.x || x > AreaMax.x || z < AreaMin.y || z > AreaMax.y) { return false; }
             if (InSafeZone(x, z)) { return false; }
             // 건물 위(지붕)에 놓지 않는다
@@ -1802,6 +1835,7 @@ namespace ACO
 
         private bool IsSeaAt(float x, float z)
         {
+            if (!InNpcField(x, z)) { return false; }   // 경계 밖 바다엔 배치·항로를 두지 않는다
             int ground = GroundLayers;
             int sea = SeaSurfaceLayers;
             RaycastHit hit;
@@ -2949,6 +2983,7 @@ namespace ACO
         /// SampleGround + 물 피하기: 물 콜라이더에 먼저 맞거나 지면이 해수면 + RouteWaterMargin보다 낮으면 false. 높이는 _sampleY.
         private bool SampleDryGround(float x, float z)
         {
+            if (!InNpcField(x, z)) { return false; }
             if (AvoidWaterOnGroundRoutes)
             {
                 int ground = GroundLayers;
@@ -2966,6 +3001,7 @@ namespace ACO
         /// 항로 한 점의 높이를 _sampleY에. 공중 = 지형 + 여유 이상의 EscortAltitude, 해상 = 바다면 해수면, 지상 = 마른 지면.
         private bool RoutePointHeight(int moveMode, float x, float z)
         {
+            if (!InNpcField(x, z)) { return false; }   // 항로(공중 · 해상 · 지상)는 경계 안에만
             if (moveMode == ACO_EscortUnit.MOVE_SEA)
             {
                 if (!IsSeaAt(x, z)) { return false; }
@@ -3176,9 +3212,11 @@ namespace ACO
             else if (kind == OBJ_SITE) { placed = DeploySite(tag, count, focus, minDist, maxDist, now); label = "목표 배치(방공 시설)"; }
             else if (kind == OBJ_GROUND) { placed = DeploySingles(tag, count, focus, minDist, maxDist, now); label = "목표 배치(시한 표적)"; }
             else if (kind == OBJ_HUNT) { placed = DeployHunt(tag, count, focus, minDist, maxDist, now); label = "목표 배치(사냥터)"; }
-            else if (kind == OBJ_SUPER_ACE) { placed = DeploySuperAce(tag, count, focus, minDist, maxDist, now); label = "목표 배치(슈퍼에이스)"; }
-            else if (kind == OBJ_LASER_ACE) { placed = DeployAce(FreeLaserAce(), tag, 0, focus, minDist, maxDist, now); label = "목표 배치(레이저 에이스)"; }
+            else if (kind == OBJ_TWINS) { placed = DeployTwins(tag, count, focus, minDist, maxDist, now); label = "목표 배치(슈퍼에이스)"; }
+            else if (kind == OBJ_BORDERLESS) { placed = DeployAce(FreeAceOfKind(ACO_AceBase.KIND_BORDERLESS, null, 0), tag, 0, focus, minDist, maxDist, now); label = "목표 배치(레이저 에이스)"; }
             else if (kind == OBJ_SHADE) { placed = DeployShade(tag, count, focus, minDist, maxDist, now); label = "목표 배치(SHADE 편대)"; }
+            else if (kind == OBJ_LUNA) { placed = DeployAce(FreeAceOfKind(ACO_AceBase.KIND_LUNA, null, 0), tag, 0, focus, minDist, maxDist, now); label = "목표 배치(LUNA)"; }
+            else if (kind == OBJ_MRS) { placed = DeployAce(FreeAceOfKind(ACO_AceBase.KIND_MRS, null, 0), tag, 0, focus, minDist, maxDist, now); label = "목표 배치(MR. S)"; }
             else if (kind == OBJ_ATTACK) { placed = DeployFlight(tag, count, tier, focus, minDist, maxDist, now, true); label = "공격기 배치"; }
             else if (kind == OBJ_HATCH_FLIGHT) { placed = DeployHatchLaunch(tag, count, tier, focus, minDist, now); label = "요새 해치 출격"; }
             else if (kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK) { placed = DeployCarrierLaunch(tag, count, tier, focus, now, kind == OBJ_CARRIER_ATTACK); label = "함재기 발진"; }
@@ -3195,7 +3233,7 @@ namespace ACO
         private int ObjectiveCategory(int kind)
         {
             if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LANDSHIP) { return CAT_HVT; }
-            if (kind == OBJ_FLIGHT || kind == OBJ_SUPER_ACE || kind == OBJ_LASER_ACE || kind == OBJ_SHADE || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT) { return CAT_FIGHTER; }
+            if (kind == OBJ_FLIGHT || kind == OBJ_TWINS || kind == OBJ_BORDERLESS || kind == OBJ_SHADE || kind == OBJ_LUNA || kind == OBJ_MRS || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT) { return CAT_FIGHTER; }
             return CAT_GROUND;
         }
 
@@ -4020,61 +4058,54 @@ namespace ACO
             return order;
         }
 
-        private bool IsSuperAceSlot(int i)
+        /// 풀 번호 i가 kind 보스 에이스인가.
+        private bool IsAceSlot(int i, int kind)
         {
-            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].SuperAce != null;
+            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].Ace != null && Fighters[i].Ace.GetAceKind() == kind;
         }
 
-        private bool IsLaserAceSlot(int i)
-        {
-            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].LaserAce != null;
-        }
-
-        private bool IsShadeSlot(int i)
-        {
-            return Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].Shade != null;
-        }
-
-        /// 보스 페이즈 전용 에이스(슈퍼에이스·레이저 에이스·SHADE) — 일반 배치·증원·호위에 쓰지 않는다.
+        /// 보스 페이즈 전용 에이스(ACO_AceBase가 붙은 전투기) — 일반 배치·증원·호위에 쓰지 않는다.
         private bool IsReservedAce(ACO_NPCFighterAI f)
         {
-            return f.SuperAce != null || f.LaserAce != null || f.Shade != null;
+            return f.Ace != null;
         }
 
-        /// 일반 배치에 쓰지 않는 전투기(슈퍼에이스 = 보너스 페이즈, 레이저 에이스 = 레이저 에이스 페이즈, 공격기 = 지상·해상 호위 페이즈).
+        /// 일반 배치에 쓰지 않는 전투기(보스 에이스 = 그 에이스 페이즈, 공격기 = 지상·해상 호위 페이즈).
         private bool IsReservedFighterSlot(int i)
         {
-            return IsSuperAceSlot(i) || IsLaserAceSlot(i) || IsShadeSlot(i) || (Fighters != null && i < Fighters.Length && Fighters[i] != null && Fighters[i].GroundAttacker);
+            return Fighters != null && i < Fighters.Length && Fighters[i] != null && (Fighters[i].Ace != null || Fighters[i].GroundAttacker);
         }
 
-        /// 내보낼 수 있는 레이저 에이스 번호(쓰지 않거나 격추된 것), 없으면 -1.
-        private int FreeLaserAce()
-        {
-            if (Fighters == null) { return -1; }
-            for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
-            {
-                if (!IsLaserAceSlot(i)) { continue; }
-                if (!_fighterUsed[i] || IsDestroyed(Fighters[i].TargetHealth)) { return i; }
-            }
-            return -1;
-        }
-
-        /// 레이저 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 레이저 에이스가 있다).
-        public bool CanDeployLaserAce()
+        /// kind 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 그 종류 에이스가 있다).
+        public bool CanDeployAce(int kind)
         {
             EnsureArrays();
-            return FreeLaserAce() >= 0;
+            return FreeAceOfKind(kind, null, 0) >= 0;
         }
 
-        /// 풀의 레이저 에이스(첫 번째). 모든 클라이언트가 같은 것을 본다(풀 순서). 없으면 null.
-        public ACO_LaserAce GetLaserAce()
+        /// 풀의 kind 에이스(첫 번째). 모든 클라이언트가 같은 것을 본다(풀 순서). 없으면 null. 페이즈가 자기 에이스 타입으로 바꿔 쓴다.
+        public ACO_AceBase GetAce(int kind)
         {
             if (Fighters == null) { return null; }
             for (int i = 0; i < Fighters.Length; i++)
             {
-                if (Fighters[i] != null && Fighters[i].LaserAce != null) { return Fighters[i].LaserAce; }
+                if (IsAceSlot(i, kind)) { return Fighters[i].Ace; }
             }
             return null;
+        }
+
+        /// 풀의 kind 에이스 이름 모두(형제면 "HEADS & TAILS"). 없으면 "ACE".
+        public string GetAceNames(int kind)
+        {
+            if (Fighters == null) { return "ACE"; }
+            string names = "";
+            for (int i = 0; i < Fighters.Length; i++)
+            {
+                if (!IsAceSlot(i, kind)) { continue; }
+                string n = Fighters[i].Ace.GetAceName();
+                names = names.Length == 0 ? n : names + " & " + n;
+            }
+            return names.Length > 0 ? names : "ACE";
         }
 
         /// 내보낼 수 있는 공격기 수(쓰지 않거나 격추된 것). 호위 페이즈가 몇 기 부를지 정할 때 본다.
@@ -4085,19 +4116,13 @@ namespace ACO
             return CollectFreeFighters(cands, true);
         }
 
-        private const int ACE_KIND_SUPER = 1;
-        private const int ACE_KIND_SHADE = 2;
-
-        /// 내보낼 수 있는 슈퍼에이스 번호(쓰지 않거나 격추된 것), 없으면 -1.
-        private int FreeSuperAce() { return FreeAceOfKind(ACE_KIND_SUPER, null, 0); }
-
         /// 내보낼 수 있는 kind 에이스 번호(쓰지 않거나 격추된 것), skip의 앞 skipCount개는 뺀다(편대를 고를 때 — 막 고른 기체는 풀에서 갓 꺼내 체력이 아직 0일 수 있어 직접 뺀다).
         private int FreeAceOfKind(int kind, int[] skip, int skipCount)
         {
             if (Fighters == null) { return -1; }
             for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
             {
-                if (kind == ACE_KIND_SUPER ? !IsSuperAceSlot(i) : !IsShadeSlot(i)) { continue; }
+                if (!IsAceSlot(i, kind)) { continue; }
                 bool taken = false;
                 for (int k = 0; k < skipCount; k++) { if (skip[k] == i) { taken = true; break; } }
                 if (taken) { continue; }
@@ -4106,47 +4131,25 @@ namespace ACO
             return -1;
         }
 
-        /// SHADE 편대를 열 수 있는가(풀에 쉬고 있는 SHADE가 있다).
-        public bool CanDeployShade() { return FreeAceOfKind(ACE_KIND_SHADE, null, 0) >= 0; }
-
         /// SHADE 편대 count기(모두 태그) — 첫 기체를 DeployAce로, 나머지는 편대 자리에.
         private int DeployShade(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
         {
-            _extraAceKind = ACE_KIND_SHADE;
+            _extraAceKind = ACO_AceBase.KIND_SHADE;
             _extraAces = Mathf.Max(count - 1, 0);
-            int placed = DeployAce(FreeAceOfKind(ACE_KIND_SHADE, null, 0), tag, 0, focus, minDist, maxDist, now);
+            int placed = DeployAce(FreeAceOfKind(ACO_AceBase.KIND_SHADE, null, 0), tag, 0, focus, minDist, maxDist, now);
             _extraAces = 0;
             return placed;
-        }
-
-        /// 분신 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 슈퍼에이스가 있다).
-        public bool CanDeploySuperAce()
-        {
-            return FreeSuperAce() >= 0;
-        }
-
-        /// 슈퍼에이스 이름(풀의 슈퍼에이스 모두 — 형제면 "HEADS & TAILS"). 없으면 "ACE".
-        public string GetSuperAceName()
-        {
-            if (Fighters == null) { return "ACE"; }
-            string names = "";
-            for (int i = 0; i < Fighters.Length; i++)
-            {
-                if (Fighters[i] == null || Fighters[i].SuperAce == null) { continue; }
-                names = names.Length == 0 ? Fighters[i].SuperAce.AceName : names + " & " + Fighters[i].SuperAce.AceName;
-            }
-            return names.Length > 0 ? names : "ACE";
         }
 
         private int _extraAces;      // DeployAce가 첫 기체 옆 편대 자리에 함께 내보낼 같은 종류 에이스 수(형제·SHADE 편대 — 모두 같은 태그)
         private int _extraAceKind;
 
         /// 슈퍼에이스 count기(모두 태그 — 형제 편대, 풀에 있는 만큼). focus에서 minDist~maxDist 떨어진 곳에서 편대로 focus 상공에 진입.
-        private int DeploySuperAce(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
+        private int DeployTwins(int tag, int count, Vector3 focus, float minDist, float maxDist, int now)
         {
-            _extraAceKind = ACE_KIND_SUPER;
+            _extraAceKind = ACO_AceBase.KIND_TWIN;
             _extraAces = Mathf.Max(count - 1, 0);
-            int placed = DeployAce(FreeSuperAce(), tag, 0, focus, minDist, maxDist, now);
+            int placed = DeployAce(FreeAceOfKind(ACO_AceBase.KIND_TWIN, null, 0), tag, 0, focus, minDist, maxDist, now);
             _extraAces = 0;
             return placed;
         }

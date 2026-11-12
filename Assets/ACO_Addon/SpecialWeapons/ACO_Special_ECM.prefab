@@ -66,6 +66,9 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6000
   LockAngle: 15
@@ -88,6 +91,7 @@ MonoBehaviour:
   SplashRadius: 25
   MinSplashFraction: 0.25
   MissileSplash: 0
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
   Spectator: {fileID: 0}
@@ -97,6 +101,13 @@ MonoBehaviour:
   ProximityAnyEnemy: 0
   AutoTargetNearest: 0
   DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 0
   LockHoldTime: 0
   MissileLifetime: 0
@@ -107,6 +118,8 @@ MonoBehaviour:
   EcmDuration: 10
   EcmHub: {fileID: 0}
   UpgradeFamily: 4
+  TakesExtraAmmo: 0
+  LaunchCall: 10
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 0}
@@ -212,10 +225,10 @@ MonoBehaviour:
   DisplayName: ECM
   Description: 'ELECTRONIC WARFARE POD
 
-    5KM JAMMING FOR 10S - BREAKS ENEMY MISSILES
-    AND LOCKS, DISRUPTS AA GUNS'
+    BRIEFLY JAMS THE AREA AROUND YOU. BREAKS
+    ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS.'
   Price: 15000
   Icon: {fileID: 21300000, guid: 417d43491df69b14fa5dc18ef54510f9, type: 3}
-  SortOrder: 90
+  SortOrder: 180
   Category: 4
   Module: {fileID: 9143624982477185187}

@@ -11,7 +11,8 @@ using VRC.Udon.Common.Interfaces;
 namespace ACO
 {
     /// 데칼 스튜디오(격납고, 로컬 — 동기화 없음): 내 데칼 이미지(URL)와 자리를 정한다. 실기체에는 탑승할 때 ACO_VehicleDecal이 보낸다.
-    ///  - 이미지: URL 입력 칸(VRCUrlInputField — VRChat 키보드)에 붙여 넣고 LOAD. VRChat 제약상 URL은 저장할 수 없어 접속마다 다시 넣는다.
+    ///  - 이미지: URL 입력 칸(VRCUrlInputField — VRChat 키보드)에 붙여 넣고 LOAD. URL은 플레이어별 URL 저장소(ACO_UrlStore — Player Object 영구 저장,
+    ///    PlayerData는 VRCUrl을 못 담는다)에 넣어 두고, 다음 접속에 복원되면 다시 받는다(6-153).
     ///    받기는 이 스크립트 하나가 모든 데칼(내 것·다른 사람 기체 것)을 맡는다: 같은 URL은 한 번만(캐시), 월드 전체 제한(5초에 1장)에 맞춰 차례로(DownloadGap).
     ///    패널에서 고른 이미지가 대기열 맨 앞이다. 실패는 한 번 자동으로 다시 받고, 끝내 실패해도 LOAD를 누르면 다시 받는다. 응답이 없으면 DownloadTimeout 뒤 실패로 친다(대기열이 멈추지 않게).
     ///    불러온 이미지는 패널의 작은 창(LoadedImage)에 비율을 지켜 보인다 — 받는 동안엔 이전 이미지가 남아 있다.
@@ -92,6 +93,7 @@ namespace ACO
         private VRCUrl[] _cacheVrcUrl = new VRCUrl[CACHE];
         private float _nextDownload;
         private int _downloading = -1;
+        private ACO_UrlStore _store;   // 내 URL 저장소(복원되면 저장소가 알려 준다)
         private string _downloadingUrl = "";   // 칸이 다른 이미지로 다시 쓰여도 늦게 온 응답을 알아본다
         private float _downloadStart;
         private int _evictNext;
@@ -101,7 +103,7 @@ namespace ACO
             _downloader = new VRCImageDownloader();
             for (int i = 0; i < 2; i++) { _rot[i] = Quaternion.identity; _size[i] = 1f; }
             ApplyPreview();
-            UpdateTexts("PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD");
+            Msg("decal.msg.start", "PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD", "", false);
         }
 
         public override void OnPlayerRestored(VRCPlayerApi player)
@@ -123,6 +125,24 @@ namespace ACO
             UpdateTexts("");
         }
 
+        /// 내 URL 저장소가 복원됐다(ACO_UrlStore가 부른다): 저장된 데칼 이미지 URL을 다시 받는다(이번 접속에 이미 넣은 칸은 그대로).
+        public void OnUrlStoreRestored(ACO_UrlStore store)
+        {
+            _store = store;
+            bool any = false;
+            for (int i = 0; i < 2; i++)
+            {
+                if (HasUrl(i) || store == null || !store.Has(ACO_UrlStore.SLOT_DECAL + i)) { continue; }
+                VRCUrl u = store.Get(ACO_UrlStore.SLOT_DECAL + i);
+                _urls[i] = u;
+                Request(u);
+                any = true;
+            }
+            if (!any) { return; }
+            ApplyPreview();
+            Msg("decal.msg.restored", "SAVED IMAGES RESTORED - LOADING...", "", false);
+        }
+
         void OnDestroy()
         {
             if (_downloader != null) { _downloader.Dispose(); }
@@ -139,14 +159,16 @@ namespace ACO
             if (action == ACT_LOAD)
             {
                 VRCUrl u = UrlInput != null ? UrlInput.GetUrl() : VRCUrl.Empty;
-                if (u == null || string.IsNullOrEmpty(u.Get())) { UpdateTexts("<color=#FF5544>NO URL</color>"); return ACO_UiSound.KIND_DENY; }
+                if (u == null || string.IsNullOrEmpty(u.Get())) { Msg("decal.msg.nourl", "NO URL", "", true); return ACO_UiSound.KIND_DENY; }
                 _urls[_selected] = u;
+                // 다음 접속에도 쓰게 저장(복원 뒤에만 — 저장소가 스스로 막는다)
+                if (_store != null) { _store.Set(ACO_UrlStore.SLOT_DECAL + _selected, u); }
                 int c = Find(u.Get());
                 if (c >= 0 && _cacheState[c] == 3)
                 {
                     // 이미 받아 둔 이미지 — 받기 응답이 오지 않으므로 여기서 바로 바꾼다
                     ApplyPreview();
-                    UpdateTexts(LoadedText());
+                    LoadedText();
                     return ACO_UiSound.KIND_CONFIRM;
                 }
                 if (c >= 0 && _cacheState[c] == 4)
@@ -156,14 +178,14 @@ namespace ACO
                     _cacheRetries[c] = 0;
                 }
                 Request(u);
-                UpdateTexts(WaitText());
+                WaitText();
                 return ACO_UiSound.KIND_CONFIRM;
             }
             if (action == ACT_RESET_GUN)
             {
                 if (!Gun) { return ACO_UiSound.KIND_DENY; }
                 Gun.ResetToHome();
-                UpdateTexts("DECAL GUN RETURNED");
+                Msg("decal.msg.gunreturned", "DECAL GUN RETURNED", "", false);
                 return ACO_UiSound.KIND_CLICK;
             }
             if (action == ACT_SELECT)
@@ -181,19 +203,19 @@ namespace ACO
                 UpdateTexts("");
                 return ACO_UiSound.KIND_CLICK;
             }
-            if (!_restored) { UpdateTexts("<color=#FF5544>LOADING SAVE DATA...</color>"); return ACO_UiSound.KIND_DENY; }
+            if (!_restored) { Msg("common.loadingsave", "LOADING SAVE DATA...", "", true); return ACO_UiSound.KIND_DENY; }
             int k = _selected;
             if (action == ACT_CLEAR)
             {
                 _on[k] = false;
                 Save(k);
                 ApplyPreview();
-                UpdateTexts("DECAL " + (k + 1) + " CLEARED");
+                Msg("decal.msg.cleared", "DECAL {0} CLEARED", (k + 1).ToString(), false);
                 return ACO_UiSound.KIND_CLICK;
             }
             if (action == ACT_MIRROR)
             {
-                if (!_on[0]) { UpdateTexts("<color=#FF5544>PLACE DECAL 1 FIRST</color>"); return ACO_UiSound.KIND_DENY; }
+                if (!_on[0]) { Msg("decal.msg.place1first", "PLACE DECAL 1 FIRST", "", true); return ACO_UiSound.KIND_DENY; }
                 // 기체 좌우 대칭(샘플 기준 X = 0 면): 위치 x 반대, 회전 = 거울 반사(qx, -qy, -qz, qw), 좌우 뒤집기
                 Quaternion q = _rot[0];
                 _pos[1] = new Vector3(-_pos[0].x, _pos[0].y, _pos[0].z);
@@ -204,10 +226,10 @@ namespace ACO
                 _urls[1] = _urls[0];   // 대칭은 같은 이미지
                 Save(1);
                 ApplyPreview();
-                UpdateTexts("DECAL 1 MIRRORED TO DECAL 2");
+                Msg("decal.msg.mirrored", "DECAL 1 MIRRORED TO DECAL 2", "", false);
                 return ACO_UiSound.KIND_CONFIRM;
             }
-            if (!_on[k]) { UpdateTexts("<color=#FF5544>PLACE DECAL " + (k + 1) + " FIRST (AIM THE DECAL GUN, PULL TRIGGER)</color>"); return ACO_UiSound.KIND_DENY; }
+            if (!_on[k]) { Msg("decal.msg.placefirst", "PLACE DECAL {0} FIRST (AIM THE DECAL GUN, PULL TRIGGER)", (k + 1).ToString(), true); return ACO_UiSound.KIND_DENY; }
             if (action == ACT_SIZE) { _size[k] = Mathf.Clamp(_size[k] * (step >= 0 ? 1.15f : 1f / 1.15f), MinSize, MaxSize); }
             else if (action == ACT_ROTATE) { _rot[k] = _rot[k] * Quaternion.Euler(0f, 0f, step >= 0 ? -15f : 15f); }
             else if (action == ACT_FLIP) { _flip[k] = !_flip[k]; }
@@ -237,7 +259,7 @@ namespace ACO
             ApplyPreviewOne(k, true);
             // 저장은 플레이어 데이터를 받은 뒤에만(접속 직후 잠깐) — 그 전엔 화면에만 찍힌다
             if (_restored) { Save(k); }
-            UpdateTexts("DECAL " + (k + 1) + (_restored ? " PLACED (SAVED)" : " PLACED (NOT SAVED — DATA LOADING)"));
+            if (_restored) { Msg("decal.msg.placed", "DECAL {0} PLACED (SAVED)", (k + 1).ToString(), false); } else { Msg("decal.msg.placedunsaved", "DECAL {0} PLACED (NOT SAVED — DATA LOADING)", (k + 1).ToString(), false); }
             return true;
         }
 
@@ -287,12 +309,46 @@ namespace ACO
             m.SetFloat("_Visible", visible ? 1f : 0f);
         }
 
-        private void UpdateTexts(string message)
+        [Tooltip("번역 장치(6-166). Bake가 넣는다")]
+        public ACO_Localization Loc;
+
+        // 안내 한 줄: 번역 키 + 값으로 들고 있다가 그릴 때 지금 언어로 만든다(6-166)
+        private string _msgKey = "";
+        private string _msgEn = "";
+        private string _msgArg = "";
+        private bool _msgRed;
+
+        /// 번역 장치가 언어를 바꾸면 부른다.
+        public void LocalizationChanged() { UpdateTexts(""); }
+
+        private string T(string key, string english)
         {
-            if (SelectText) { SelectText.text = "EDITING: DECAL " + (_selected + 1) + (_on[_selected] ? "" : "  <color=#7FBF8A>(NOT PLACED)</color>"); }
-            if (SizeText) { SizeText.text = _on[_selected] ? "SIZE " + _size[_selected].ToString("0.0") + " m" + (_flip[_selected] ? "  FLIPPED" : "") : "SIZE -"; }
-            if (HideText) { HideText.text = _hideOthers ? "OTHERS' DECALS: <color=#FF5544>HIDDEN</color>" : "OTHERS' DECALS: SHOWN"; }
-            if (StatusText && message.Length > 0) { StatusText.text = message; }
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+
+        private void Msg(string key, string english, string arg, bool red)
+        {
+            _msgKey = key;
+            _msgEn = english;
+            _msgArg = arg;
+            _msgRed = red;
+            UpdateTexts("");
+        }
+
+        /// 칸 글자를 다시 쓴다. 안내 한 줄은 마지막 Msg(인자는 쓰지 않는다 — 예전 호출 모양).
+        private void UpdateTexts(string unused)
+        {
+            if (SelectText) { SelectText.text = T1("decal.editing", "EDITING: DECAL {0}", (_selected + 1).ToString()) + (_on[_selected] ? "" : "  <color=#7FBF8A>" + T("decal.notplaced", "(NOT PLACED)") + "</color>"); }
+            if (SizeText) { SizeText.text = _on[_selected] ? T1("decal.size", "SIZE {0} m", _size[_selected].ToString("0.0")) + (_flip[_selected] ? "  " + T("decal.flipped", "FLIPPED") : "") : T("decal.sizenone", "SIZE -"); }
+            if (HideText) { HideText.text = T1("decal.others", "OTHERS' DECALS: {0}", _hideOthers ? "<color=#FF5544>" + T("decal.hidden", "HIDDEN") + "</color>" : T("decal.shown", "SHOWN")); }
+            if (StatusText && _msgKey.Length > 0)
+            {
+                string m = T1(_msgKey, _msgEn, _msgArg);
+                StatusText.text = _msgRed ? "<color=#FF5544>" + m + "</color>" : m;
+            }
         }
 
         // ───────────── 저장 (플레이어 영구 저장 — 기종별, 샘플 기준 상대값) ─────────────
@@ -346,7 +402,7 @@ namespace ACO
         /// 데칼 i의 이미지 — 자기 이미지가 없으면 다른 데칼의 이미지.
         public VRCUrl GetUrl(int i) { return HasUrl(i) ? _urls[i] : _urls[1 - i]; }
 
-        private string LoadedText() { return "DECAL " + (_selected + 1) + " IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT"; }
+        private void LoadedText() { Msg("decal.msg.loaded", "DECAL {0} IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT", (_selected + 1).ToString(), false); }
 
         public bool HideOthers() { return _hideOthers; }
 
@@ -424,11 +480,11 @@ namespace ACO
             return -1;
         }
 
-        private string WaitText()
+        private void WaitText()
         {
             float wait = _nextDownload - Time.time;
-            if (_downloading >= 0 || wait > 0.5f) { return "LOADING IMAGE... (VRCHAT ALLOWS ONE IMAGE EVERY 5 SECONDS)"; }
-            return "LOADING IMAGE...";
+            if (_downloading >= 0 || wait > 0.5f) { Msg("decal.msg.loadingwait", "LOADING IMAGE... (VRCHAT ALLOWS ONE IMAGE EVERY 5 SECONDS)", "", false); return; }
+            Msg("decal.msg.loading", "LOADING IMAGE...", "", false);
         }
 
         void Update()
@@ -437,7 +493,7 @@ namespace ACO
             {
                 // 응답이 오지 않으면 대기열이 영영 멈춘다
                 if (Time.time - _downloadStart < DownloadTimeout) { return; }
-                FailDownload(_downloading, _downloadingUrl, "TIMED OUT");
+                FailDownload(_downloading, _downloadingUrl, T("decal.timeout", "TIMED OUT"));
             }
             if (Time.time < _nextDownload || _downloader == null) { return; }
             int i = NextPending();
@@ -452,7 +508,7 @@ namespace ACO
             info.WrapModeU = TextureWrapMode.Clamp;
             info.WrapModeV = TextureWrapMode.Clamp;
             _downloader.DownloadImage(_cacheVrcUrl[i], null, (IUdonEventReceiver)this, info);
-            if (IsCurrent(_downloadingUrl)) { UpdateTexts("DOWNLOADING IMAGE..."); }
+            if (IsCurrent(_downloadingUrl)) { Msg("decal.msg.downloading", "DOWNLOADING IMAGE...", "", false); }
         }
 
         private bool IsCurrent(string url)
@@ -478,11 +534,11 @@ namespace ACO
             {
                 _cacheRetries[i]++;
                 _cacheState[i] = 1;
-                if (IsCurrent(url)) { UpdateTexts("RETRYING IMAGE..."); }
+                if (IsCurrent(url)) { Msg("decal.msg.retrying", "RETRYING IMAGE...", "", false); }
                 return;
             }
             _cacheState[i] = 4;
-            if (IsCurrent(url)) { UpdateTexts("<color=#FF5544>IMAGE FAILED: " + reason + " - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)</color>"); }
+            if (IsCurrent(url)) { Msg("decal.msg.failed", "IMAGE FAILED: {0} - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)", reason, true); }
         }
 
         public override void OnImageLoadSuccess(IVRCImageDownload result)
@@ -491,7 +547,7 @@ namespace ACO
             int i = Find(url);
             if (i >= 0) { _cacheTex[i] = result.Result; _cacheState[i] = 3; }
             EndDownload(url);
-            if (IsCurrent(url)) { ApplyPreview(); UpdateTexts(LoadedText()); }
+            if (IsCurrent(url)) { ApplyPreview(); LoadedText(); }
         }
 
         public override void OnImageLoadError(IVRCImageDownload result)

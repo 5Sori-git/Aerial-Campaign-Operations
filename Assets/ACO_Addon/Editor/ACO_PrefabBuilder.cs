@@ -95,13 +95,13 @@ public static partial class ACO_PrefabBuilder
         return BuildFighterPrefab(LoadOrBuildMissile());
     }
 
-    public const string SuperAceTailsPrefab = "NPC_SuperAce_Tails";
+    public const string TwinsTailsPrefab = "NPC_Tails";
     public const string ShadePrefab = "NPC_Shade";
     public const int ShadePoolSize = 4;
 
-    /// SHADE 편대 에이스: 일반 NPC 전투기 + 체력 300(배율 없음)·플레어 12번 + 전방위 미사일(AI 발사 원뿔 180도, 미사일은 SHADE 전용 콜드런치 탄
-    /// ACO_Missile_SHADE — 튀어나온 뒤 빠르게 표적 쪽으로 돌아 점화하므로 옆·뒤 표적에도 간다)
-    /// + 코브라(ACO_ShadeAce — 모델만 기수를 들고 실제 감속, 비행 저속 하한 50m/s) + 교차 플레어(ACO_CrossManeuver). 생성기 풀 아래에 4기(번호·편대·짝은 Bake).
+    /// SHADE 편대 에이스: 일반 NPC 전투기 + 체력 300(배율 없음)·플레어 12번. 평소엔 일반 미사일(일반 원뿔), 코브라 동안만 전방위 미사일
+    /// (ShadeAllAspect 런처 — SHADE 전용 콜드런치 탄 ACO_Missile_SHADE, 튀어나온 뒤 빠르게 표적 쪽으로 돌아 점화하므로 옆·뒤 표적에도 간다 — AI 원뿔 180도)
+    /// + 코브라(ACO_ShadeAce — 모델만 기수를 들고 실제 감속, 비행 저속 하한 50m/s) + 교차 플레어(ACO_CrossManeuver). 생성기 풀 아래에 4기(번호·편대·집결 편대는 Bake).
     /// 모델은 일반 전투기 상자(짙은 보라 회색) — 직접 만든 모델로 바꿔 끼운다.
     public const string ShadeMissilePrefab = "ACO_Missile_SHADE";
 
@@ -145,9 +145,7 @@ public static partial class ACO_PrefabBuilder
     public static GameObject BuildShade()
     {
         EnsurePrefabFolder();
-        GameObject missile = LoadOrBuildMissile();
-        GameObject shadeMissile = LoadOrBuildShadeMissile();
-        if (shadeMissile != null) { missile = shadeMissile; }
+        GameObject missile = LoadOrBuildMissile();   // 평소 미사일 — 전방위 탄은 코브라 때만(ShadeAllAspect)
         GameObject root = CreateFighterObject(ShadePrefab, missile);
         ACO_NPCFighterAI ai = root.GetComponent<ACO_NPCFighterAI>();
         SaccTarget health = root.GetComponent<SaccTarget>();
@@ -155,8 +153,8 @@ public static partial class ACO_PrefabBuilder
         ai.BaseHealth = 300f;   // 배율을 받지 않는다(편대 4기)
         ai.Flares.FlareSalvos = 12;
         ai.AceFlareChance = 1f;
-        ai.MissileFireConeAngle = 180f;   // 전방위 — 옆·뒤 표적에도 쏜다
         ai.Flight.LowSpeedLimit = 50f;    // 코브라 감속 하한(동기화 예측도 이 값까지)
+        TuneShadeExtend(ai);
 
         Transform model = root.transform.Find("Model");
         if (model != null)
@@ -177,7 +175,7 @@ public static partial class ACO_PrefabBuilder
         shade.AI = ai;
         shade.Model = model;
         shade.Hitbox = root.GetComponent<BoxCollider>();
-        ai.Shade = shade;
+        ai.Ace = shade;
 
         var crossGo = new GameObject("CrossManeuver");
         crossGo.transform.SetParent(aceGo.transform, false);
@@ -185,22 +183,23 @@ public static partial class ACO_PrefabBuilder
         cross.AI = ai;
         cross.Listener = shade;
         cross.FlareOnPass = true;
-        cross.Interval = 40f;
-        cross.FirstDelay = 15f;
+        TuneShadeCross(cross);
         shade.Cross = cross;
+        EnsureShadeAllAspect(shade);
+        ACO_VoiceLines.ApplyShade(shade);   // 대사 음성(있으면)
 
         return SaveAndCleanup(root, $"{PrefabDir}/{ShadePrefab}.prefab");
     }
 
-    /// 슈퍼에이스(분신 에이스 형제): 일반 NPC 전투기 + 체력 6배·플레어 12번 + 자식 ACO_SuperAce(다연장 런처 8발·기만체 3개). 형 HEADS(NPC_SuperAce)와
-    /// 동생 TAILS(NPC_SuperAce_Tails)를 미션 생성기 풀(UnitPoolRoot) 아래에 하나씩 둔다 — 일반 배치에는 안 쓰이고 분신 에이스 페이즈에만 2기 편대로 나온다.
+    /// 슈퍼에이스(분신 에이스 형제): 일반 NPC 전투기 + 체력 6배·플레어 12번 + 자식 ACO_Twins(다연장 런처 8발·기만체 3개). 형 HEADS(NPC_Heads)와
+    /// 동생 TAILS(NPC_Tails)를 미션 생성기 풀(UnitPoolRoot) 아래에 하나씩 둔다 — 일반 배치에는 안 쓰이고 분신 에이스 페이즈에만 2기 편대로 나온다.
     /// 이름·대사·색은 ApplyTwinPreset이 정한다. 모델은 일반 전투기와 같은 상자(형 금빛 빨강, 동생 짙은 파랑) — 직접 만든 모델로 바꿔 끼운다.
-    public static GameObject BuildSuperAce() { return BuildSuperAceNamed("NPC_SuperAce", false); }
+    public static GameObject BuildTwins() { return BuildTwinsNamed("NPC_Heads", false); }
 
-    public static GameObject BuildSuperAceTails() { return BuildSuperAceNamed(SuperAceTailsPrefab, true); }
+    public static GameObject BuildTwinsTails() { return BuildTwinsNamed(TwinsTailsPrefab, true); }
 
     /// 형제 이름·대사·자막 색(형 HEADS — 침착, 동생 TAILS — 들뜬). 생성기와 Setup Check(superace-twins-1)가 같이 쓴다.
-    public static void ApplyTwinPreset(ACO_SuperAce ace, bool tails)
+    public static void ApplyTwinPreset(ACO_Twins ace, bool tails)
     {
         if (!tails)
         {
@@ -213,6 +212,7 @@ public static partial class ACO_PrefabBuilder
             ace.LineDown = "Tails... finish the toss... without me...";
             ace.LinePartnerDown = "Tails...? You took my little brother. The game is over. Now I just win.";
             ace.LineCross = "Tails. Flip.";
+            ace.LineFlare = "Coin's still in the air.";
         }
         else
         {
@@ -225,14 +225,16 @@ public static partial class ACO_PrefabBuilder
             ace.LineDown = "Heads... I called it wrong...";
             ace.LinePartnerDown = "You shot down my brother?! No more coin tosses... I'm taking every one of you down!";
             ace.LineCross = "Call it, pilots!";
+            ace.LineFlare = "Ooh, shiny! Your missile likes those better!";
         }
         ace.EnragedSalvoFactor = 0.5f;
         ace.EnragedDecoyCooldownFactor = 0.5f;
+        ACO_VoiceLines.ApplyTwin(ace);   // 대사 음성(있으면 — 빈 칸만)
         EditorUtility.SetDirty(ace);
     }
 
     /// 형제 교차 기동 부품(ACO_CrossManeuver — 엇갈릴 때 기만체, 플레어는 기만체와 같이 나오므로 부품 플레어는 끈다). 없으면 붙인다. 짝·정하는 쪽은 Bake.
-    public static void EnsureTwinCross(ACO_SuperAce ace)
+    public static void EnsureTwinCross(ACO_Twins ace)
     {
         if (ace.Cross != null) { return; }
         var go = new GameObject("CrossManeuver");
@@ -241,31 +243,238 @@ public static partial class ACO_PrefabBuilder
         cross.AI = ace.AI != null ? ace.AI : ace.GetComponentInParent<ACO_NPCFighterAI>();
         cross.Listener = ace;
         cross.FlareOnPass = false;
+        TuneTwinCross(cross);
         ace.Cross = cross;
         EditorUtility.SetDirty(ace);
     }
 
-    /// Setup Check superace-twins-1: 이미 있는 NPC_SuperAce(예전 REAPER)에 형 HEADS 이름·대사를 넣는다(다시 만들지 않는다 — 씬 참조 유지).
-    public static void ApplyHeadsPreset()
+    /// 형제 교차 간격: 90초마다(첫 교차 30초 뒤), 미사일이 다가와 일찍 교차하는 반응은 40초에 한 번(10초였다 — 너무 잦았다).
+    public static void TuneTwinCross(ACO_CrossManeuver cross)
     {
-        string path = PathOf("NPC_SuperAce");
+        cross.Interval = 90f;
+        cross.FirstDelay = 30f;
+        cross.IncomingCooldown = 40f;
+        EditorUtility.SetDirty(cross);
+    }
+
+    /// SHADE 전방위 런처(ShadeAllAspect — 코브라 동안만 AI가 쓴다): SHADE 콜드런치 탄 2발(코브라 한 번에 다 쏠 수 있게 락온 0.3초·간격 0.5초),
+    /// 다 쓰면 12초 재장전. 없으면 만들고 연결한다. 바꿨으면 true.
+    public static bool EnsureShadeAllAspect(ACO_ShadeAce shade)
+    {
+        if (shade == null || shade.AllAspectLauncher != null) { return false; }
+        ACO_NPCFighterAI ai = shade.AI != null ? shade.AI : shade.GetComponentInParent<ACO_NPCFighterAI>();
+        if (ai == null) { return false; }
+        GameObject shadeMissile = LoadOrBuildShadeMissile();
+        var go = new GameObject("ShadeAllAspect");
+        go.transform.SetParent(ai.transform, false);
+        Transform lpL = NewChild(go, "LaunchPoint_L", new Vector3(-1f, -0.3f, 0.5f));
+        Transform lpR = NewChild(go, "LaunchPoint_R", new Vector3(1f, -0.3f, 0.5f));
+        ACO_MissileLauncher l = go.AddUdonSharpComponent<ACO_MissileLauncher>();
+        ACO_MissileLauncher normal = ai.MissileLauncher;
+        l.EntityControl = normal != null ? normal.EntityControl : ai.EntityControl;
+        l.InheritVelocityFrom = normal != null ? normal.InheritVelocityFrom : ai.Flight;
+        l.AAM = shadeMissile != null ? shadeMissile : (normal != null ? normal.AAM : null);
+        l.LaunchPoints = new Transform[] { lpL, lpR };
+        l.NumMissiles = 2;
+        l.NumPreInstantiated = 2;
+        l.FireInterval = 0.5f;
+        l.ReloadTime = 12f;
+        l.LockTime = 0.3f;
+        shade.AllAspectLauncher = l;
+        PutShadeLauncherOnModel(shade);
+        EditorUtility.SetDirty(shade);
+        return true;
+    }
+
+    /// 코브라 런처를 기체 모델(Model — 코브라 때 기수를 드는 것) 아래로 옮긴다(월드 자리 그대로): 세운 기수 방향으로 사출된다(코브라 샷). 옮겼으면 true.
+    private static bool PutShadeLauncherOnModel(ACO_ShadeAce shade)
+    {
+        if (shade == null || shade.Model == null || shade.AllAspectLauncher == null) { return false; }
+        Transform t = shade.AllAspectLauncher.transform;
+        if (t.IsChildOf(shade.Model)) { return false; }
+        t.SetParent(shade.Model, true);
+        return true;
+    }
+
+    /// Setup Check shade-cobra-launcher-1: 이미 있는 NPC_Shade — 코브라 런처(ShadeAllAspect)를 기체 모델 아래로 옮긴다(발사 지점 자리는 그대로, 다른 값은 그대로).
+    public static void ApplyShadeLauncherOnModel()
+    {
+        string path = PathOf(ShadePrefab);
         if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
         GameObject root = PrefabUtility.LoadPrefabContents(path);
         try
         {
-            ACO_SuperAce ace = root.GetComponentInChildren<ACO_SuperAce>(true);
-            if (ace != null)
+            bool changed = false;
+            foreach (ACO_ShadeAce shade in root.GetComponentsInChildren<ACO_ShadeAce>(true))
             {
-                ApplyTwinPreset(ace, false);
-                EnsureTwinCross(ace);
+                if (PutShadeLauncherOnModel(shade)) { changed = true; }
+                else if (shade.Model == null || shade.AllAspectLauncher == null) { Debug.LogWarning($"[ACO] NPC_Shade '{shade.name}': Model 또는 전방위 런처(ShadeAllAspect)가 비어 있어 옮기지 못했습니다.", shade); }
+            }
+            if (changed)
+            {
                 PrefabUtility.SaveAsPrefabAsset(root, path);
-                Debug.Log("[ACO] NPC_SuperAce를 형 HEADS로 바꿨습니다(이름·대사·쌍둥이 규칙).");
+                Debug.Log("[ACO] NPC_Shade: 코브라 런처(ShadeAllAspect)를 기체 모델 아래로 옮겼습니다 — 세운 기수 방향으로 쏩니다.");
             }
         }
         finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
-    private static GameObject BuildSuperAceNamed(string prefabName, bool tails)
+    /// Setup Check shade-cobra-missile-1: 이미 있는 NPC_Shade — 평소 미사일을 일반 탄·일반 원뿔로 되돌리고 코브라용 전방위 런처를 붙인다.
+    public static void ApplyShadeCobraMissile()
+    {
+        string path = PathOf(ShadePrefab);
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject normalMissile = LoadOrBuildMissile();
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            bool changed = false;
+            foreach (ACO_ShadeAce shade in root.GetComponentsInChildren<ACO_ShadeAce>(true))
+            {
+                ACO_NPCFighterAI ai = shade.AI != null ? shade.AI : shade.GetComponentInParent<ACO_NPCFighterAI>();
+                if (ai == null) { continue; }
+                if (ai.MissileLauncher != null && normalMissile != null && ai.MissileLauncher.AAM != normalMissile)
+                {
+                    ai.MissileLauncher.AAM = normalMissile;
+                    EditorUtility.SetDirty(ai.MissileLauncher);
+                    changed = true;
+                }
+                if (ai.MissileFireConeAngle > 15f)
+                {
+                    ai.MissileFireConeAngle = 15f;   // 일반 전투기 기본
+                    EditorUtility.SetDirty(ai);
+                    changed = true;
+                }
+                if (EnsureShadeAllAspect(shade)) { changed = true; }
+            }
+            if (changed)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log("[ACO] NPC_Shade: 평소 일반 미사일, 코브라 동안만 전방위 미사일(ShadeAllAspect)로 바꿨습니다.");
+            }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// SHADE 치고 빠지기: 미사일을 쏘면 바로, 또는 800m 안까지 붙으면 2.2km까지 벌렸다가(최대 10초) 다시 들어온다.
+    public static void TuneShadeExtend(ACO_NPCFighterAI ai)
+    {
+        ai.ExtendAfterMissile = true;
+        ai.BreakOffDistance = 800f;
+        ai.ReEngageDistance = 2200f;
+        ai.MaxExtendDuration = 10f;
+        EditorUtility.SetDirty(ai);
+    }
+
+    /// SHADE 교차: 90초마다(첫 교차 30초 뒤), 미사일 반응 교차는 40초에 한 번(40초·10초였다 — 너무 잦았다).
+    public static void TuneShadeCross(ACO_CrossManeuver cross)
+    {
+        cross.Interval = 90f;
+        cross.FirstDelay = 30f;
+        cross.IncomingCooldown = 40f;
+        EditorUtility.SetDirty(cross);
+    }
+
+    /// Setup Check shade-tactics-1: 이미 있는 NPC_Shade — 교차 간격, 치고 빠지기, 코브라 조건(뒤 1.5km 안 적 + 뒤에서 오는 미사일).
+    public static void ApplyShadeTactics()
+    {
+        string path = PathOf(ShadePrefab);
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            bool changed = false;
+            foreach (ACO_ShadeAce shade in root.GetComponentsInChildren<ACO_ShadeAce>(true))
+            {
+                shade.CobraEnemyDistance = 1500f;
+                EditorUtility.SetDirty(shade);
+                ACO_NPCFighterAI ai = shade.AI != null ? shade.AI : shade.GetComponentInParent<ACO_NPCFighterAI>();
+                if (ai != null) { TuneShadeExtend(ai); }
+                if (shade.Cross != null) { TuneShadeCross(shade.Cross); }
+                changed = true;
+            }
+            if (changed)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log("[ACO] NPC_Shade: 교차 90초, 치고 빠지기(쏘면 이탈·800m→2.2km), 코브라는 뒤 1.5km 안 적 + 뒤에서 오는 미사일일 때.");
+            }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// Setup Check shade-cobra-incoming-1: 이미 있는 NPC_Shade의 코브라 조건 값(나를 쫓는 미사일이 꼬리 ±60도 1200m 안).
+    public static void ApplyShadeCobraIncoming()
+    {
+        string path = PathOf(ShadePrefab);
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            bool changed = false;
+            foreach (ACO_ShadeAce shade in root.GetComponentsInChildren<ACO_ShadeAce>(true))
+            {
+                shade.CobraTriggerDistance = 1200f;
+                shade.CobraTailAngle = 60f;
+                EditorUtility.SetDirty(shade);
+                changed = true;
+            }
+            if (changed)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log("[ACO] NPC_Shade: 코브라는 나를 쫓는 미사일이 꼬리 ±60도 1200m 안으로 올 때(뒤에서 오는 미사일엔 플레어 대신 코브라).");
+            }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// Setup Check twins-cross-1: 이미 있는 형제 프리팹(NPC_Heads·NPC_Tails)의 교차 간격을 늘린다.
+    public static void ApplyTwinCrossCooldown()
+    {
+        foreach (string name in new[] { "NPC_Heads", TwinsTailsPrefab })
+        {
+            string path = PathOf(name);
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                bool changed = false;
+                foreach (ACO_Twins ace in root.GetComponentsInChildren<ACO_Twins>(true))
+                {
+                    if (ace.Cross == null) { continue; }
+                    TuneTwinCross(ace.Cross);
+                    changed = true;
+                }
+                if (changed)
+                {
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                    Debug.Log($"[ACO] {name}: 교차 간격 90초, 미사일 반응 교차 40초로 늘렸습니다.");
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+    }
+
+    /// Setup Check superace-twins-1: 이미 있는 NPC_Heads(예전 REAPER)에 형 HEADS 이름·대사를 넣는다(다시 만들지 않는다 — 씬 참조 유지).
+    public static void ApplyHeadsPreset()
+    {
+        string path = PathOf("NPC_Heads");
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            ACO_Twins ace = root.GetComponentInChildren<ACO_Twins>(true);
+            if (ace != null)
+            {
+                ApplyTwinPreset(ace, false);
+                EnsureTwinCross(ace);
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log("[ACO] NPC_Heads를 형 HEADS로 바꿨습니다(이름·대사·쌍둥이 규칙).");
+            }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    private static GameObject BuildTwinsNamed(string prefabName, bool tails)
     {
         EnsurePrefabFolder();
         GameObject missile = LoadOrBuildMissile();
@@ -291,13 +500,13 @@ public static partial class ACO_PrefabBuilder
             model.GetComponent<MeshRenderer>().sharedMaterial = saved;
         }
 
-        var aceGo = new GameObject("ACO_SuperAce");
+        var aceGo = new GameObject("ACO_Twins");
         aceGo.transform.SetParent(root.transform, false);
-        ACO_SuperAce ace = aceGo.AddUdonSharpComponent<ACO_SuperAce>();
+        ACO_Twins ace = aceGo.AddUdonSharpComponent<ACO_Twins>();
         ace.AI = ai;
         ace.TargetHealth = health;
         ace.Flight = flight;
-        ai.SuperAce = ace;
+        ai.Ace = ace;
         ApplyTwinPreset(ace, tails);
         EnsureTwinCross(ace);
 
@@ -585,8 +794,8 @@ public static partial class ACO_PrefabBuilder
         deathFx.transform.SetParent(root.transform, false);
         deathFx.SetActive(false);
         // 목적지 투하: 꼬리(화물 램프)에서 보급 상자/공수부대가 낙하산을 펴고 내려온다
-        ParticleSystem supplies = CreateAirDrop(root.transform, "AirDrop_Supplies", ACO_DecoBuilder.DropCrateMesh(), ACO_DecoBuilder.DropMaterial("Supply", new Color(0.82f, 0.78f, 0.62f)), 0f);
-        ParticleSystem troopers = CreateAirDrop(root.transform, "AirDrop_Paratroopers", ACO_DecoBuilder.DropTrooperMesh(), ACO_DecoBuilder.DropMaterial("Troop", new Color(0.36f, 0.42f, 0.28f)), 0.25f);
+        ParticleSystem supplies = CreateAirDrop(root.transform, "AirDrop_Supplies", ACO_DecoBuilder.DropCrateMesh(), ACO_DecoBuilder.DropModelMaterial("Supply"), 0f);
+        ParticleSystem troopers = CreateAirDrop(root.transform, "AirDrop_Paratroopers", ACO_DecoBuilder.DropTrooperMesh(), ACO_DecoBuilder.DropModelMaterial("Troop"), 0.25f);
 
         AddTargetAnimator(root);
         SaccTarget health = root.AddUdonSharpComponent<SaccTarget>();
@@ -649,8 +858,9 @@ public static partial class ACO_PrefabBuilder
         GameObject deathFx = new GameObject("DeathEffects");
         deathFx.transform.SetParent(root.transform, false);
         deathFx.SetActive(false);
-        // 도시 상공 투하: 폭탄창에서 폭탄이 줄지어 떨어진다(낙하산 없음)
-        ParticleSystem bombs = CreateAirDrop(root.transform, "BombDrop", ACO_DecoBuilder.DropCrateMesh(), ACO_DecoBuilder.DropMaterial("Bomb", new Color(0.18f, 0.2f, 0.18f)), 0f, false);
+        // 도시 상공 투하: 폭탄창에서 폭탄(폭격 호출과 같은 GBU-24)이 줄지어 떨어진다(낙하산 없음 — 기수가 떨어지는 방향)
+        ACO_DecoBuilder.DropBombVisual(out Mesh bombMesh, out Material bombMat);
+        ParticleSystem bombs = CreateAirDrop(root.transform, "BombDrop", bombMesh, bombMat, 0f, false);
 
         AddTargetAnimator(root);
         SaccTarget health = root.AddUdonSharpComponent<SaccTarget>();
@@ -727,6 +937,7 @@ public static partial class ACO_PrefabBuilder
 
     /// 투하 파티클: 꼬리 아래에서 0.5초마다 2개씩 6번(12개), 월드 공간, 기체 속도를 조금 물려받은 뒤 낙하산 종단 속도(6m/s)로 떨어지고
     /// 땅(Default/Environment)에 닿으면 사라진다. delay만큼 늦게 시작(두 종류가 엇갈려 나오게). parachute를 끄면 그대로 떨어진다(폭탄).
+    /// 모양·회전은 StyleAirDrop(낙하산 = 방향 무작위·조금 기울어 천천히 흔들림, 폭탄 = 기수가 떨어지는 방향).
     private static ParticleSystem CreateAirDrop(Transform parent, string name, Mesh mesh, Material material, float delay, bool parachute = true)
     {
         GameObject go = new GameObject(name);
@@ -782,10 +993,68 @@ public static partial class ACO_PrefabBuilder
 
         ParticleSystemRenderer r = go.GetComponent<ParticleSystemRenderer>();
         r.renderMode = ParticleSystemRenderMode.Mesh;
-        r.mesh = mesh;
-        r.alignment = ParticleSystemRenderSpace.World;
-        r.sharedMaterial = material;
+        StyleAirDrop(ps, mesh, material, parachute);
         return ps;
+    }
+
+    /// 투하 파티클 모양·회전(빌더와 Setup Check airdrop-model-1이 같이 쓴다). 낙하산: 방향(Y) 무작위, 앞뒤·옆으로 ±6도 기울고 노이즈로 천천히 흔들림.
+    /// 폭탄: 속도 방향으로 기수(메시 +Z)를 돌린다(수평으로 나와 점점 숙인다).
+    public static void StyleAirDrop(ParticleSystem ps, Mesh mesh, Material material, bool parachute)
+    {
+        ParticleSystem.MainModule main = ps.main;
+        main.startRotation3D = parachute;
+        if (parachute)
+        {
+            float tilt = 6f * Mathf.Deg2Rad;
+            main.startRotationX = new ParticleSystem.MinMaxCurve(-tilt, tilt);
+            main.startRotationY = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startRotationZ = new ParticleSystem.MinMaxCurve(-tilt, tilt);
+        }
+        else { main.startRotation = 0f; }
+        ParticleSystem.NoiseModule noise = ps.noise;
+        noise.rotationAmount = parachute ? 4f : 0f;   // 낙하산 흔들림(도/초 — 노이즈가 오가며 기울기가 천천히 바뀐다)
+        ParticleSystemRenderer r = ps.GetComponent<ParticleSystemRenderer>();
+        r.renderMode = ParticleSystemRenderMode.Mesh;
+        if (mesh != null) { r.mesh = mesh; }
+        if (material != null) { r.sharedMaterial = material; }
+        r.alignment = parachute ? ParticleSystemRenderSpace.World : ParticleSystemRenderSpace.Velocity;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        EditorUtility.SetDirty(ps);
+        EditorUtility.SetDirty(r);
+    }
+
+    /// Setup Check airdrop-model-1: 이미 있는 NPC_Transport·NPC_Bomber의 투하 파티클 — 새 보급 상자·공수부대원 모양(메시·머티리얼은 같은 에셋을 그 자리에서 고친다),
+    /// 폭탄은 GBU-24, 회전·흔들림. 다른 값(투하 수·간격·속도)은 그대로.
+    public static void ApplyAirDropModels()
+    {
+        Mesh crate = ACO_DecoBuilder.DropCrateMesh();
+        Mesh trooper = ACO_DecoBuilder.DropTrooperMesh();
+        Material supply = ACO_DecoBuilder.DropModelMaterial("Supply");
+        Material troop = ACO_DecoBuilder.DropModelMaterial("Troop");
+        bool bomb = ACO_DecoBuilder.DropBombVisual(out Mesh bombMesh, out Material bombMat);
+        AssetDatabase.SaveAssets();
+        foreach (string prefab in new[] { "NPC_Transport", "NPC_Bomber" })
+        {
+            string path = PathOf(prefab);
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                bool changed = false;
+                foreach (ParticleSystem ps in root.GetComponentsInChildren<ParticleSystem>(true))
+                {
+                    if (ps.gameObject.name == "AirDrop_Supplies") { StyleAirDrop(ps, crate, supply, true); changed = true; }
+                    else if (ps.gameObject.name == "AirDrop_Paratroopers") { StyleAirDrop(ps, trooper, troop, true); changed = true; }
+                    else if (ps.gameObject.name == "BombDrop" && bomb) { StyleAirDrop(ps, bombMesh, bombMat, false); changed = true; }
+                }
+                if (changed)
+                {
+                    PrefabUtility.SaveAsPrefabAsset(root, path);
+                    Debug.Log($"[ACO] {prefab}: 투하 파티클 모양을 바꿨습니다(보급 상자·공수부대원 새 모델, 폭탄 GBU-24).");
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
     }
 
     /// 전차(적 지상 유닛): 대공포 포대 구조를 그대로 쓰되 포탑은 느리고 낮게, 표적은 아군 지상(레이어 26 — 콘보이, 플레이어 지상 차량),
@@ -2267,6 +2536,8 @@ public static partial class ACO_PrefabBuilder
 
     private static GameObject SaveAndCleanup(GameObject root, string path)
     {
+        // NPC 전투기·에이스는 공중 파괴 효과·파편을 넣는다(효과 프리팹이 있을 때 — 새로 만든 에이스에 빠져 있었다)
+        if (root.GetComponent<ACO_NPCFighterAI>() != null) { ACO_FxBuilder.ApplyDeathFxTo(root); }
         ACO_SyncModeFixer.FixHierarchy(root, false);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
         DestroyAfterSetup(root);

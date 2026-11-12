@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using VRC.SDKBase;
 
 namespace ACO
 {
@@ -66,7 +67,7 @@ namespace ACO
         public AudioClip StartClip;
         public AudioClip SuccessClip;
         public AudioClip FailClip;
-        [Tooltip("대사별 화자(무전 SpeakerNames 순서: 0 SKY EYE, 1 ENEMY, 2 TRANSPORT, 3 WINGMAN). -1이면 무전의 PhaseSpeaker. 이름 색·무전 채널(PTT)은 화자를 따른다")]
+        [Tooltip("대사별 화자(무전 SpeakerNames 순서: 0 AWACS, 1 ENEMY, 2 TRANSPORT, 3 WINGMAN). -1이면 무전의 PhaseSpeaker. 이름 색·무전 채널(PTT)은 화자를 따른다")]
         public int StartSpeaker = -1;
         public int SuccessSpeaker = -1;
         public int FailSpeaker = -1;
@@ -83,6 +84,12 @@ namespace ACO
         public bool BonusOnly = false;
         [Tooltip("보너스 페이즈 제한 시간(초) — 지나면 목표가 물러나고 보너스 없이 미션 클리어(관리자가 판정한다)")]
         public float BonusTimeLimit = 240f;
+
+        [Header("BGM (ACO_Bgm — 영상 플레이어 스트리밍)")]
+        [Tooltip("이 페이즈 전용 곡 풀(URL). 비우면 보스 페이즈는 ACO_Bgm의 보스 기본 풀, 일반 페이즈는 무음")]
+        public VRCUrl[] BgmUrls;
+        [Tooltip("BgmUrls와 같은 순서의 곡 이름 — BGM 패널에 표시(비우면 URL). 인스펙터에서 URL 옆에 넣는다")]
+        public string[] BgmNames;
 
         // ───────────── 오너 (관리자가 부른다) ─────────────
 
@@ -141,6 +148,8 @@ namespace ACO
         public virtual string GetFailText() { return FailText; }
         /// 성공 보너스(관리자가 페이즈 배율을 곱한다). 기본 = ClearBonus.
         public virtual int GetClearBonus() { return ClearBonus; }
+        /// 보스 페이즈인가 — 전용 곡(BgmUrls)이 없으면 ACO_Bgm의 보스 기본 풀을 튼다.
+        public virtual bool IsBossPhase() { return false; }
 
         /// 무전 대사: which 0 = 시작, 1 = 성공, 2 = 실패. 비면 "".
         public string GetChatterText(int which)

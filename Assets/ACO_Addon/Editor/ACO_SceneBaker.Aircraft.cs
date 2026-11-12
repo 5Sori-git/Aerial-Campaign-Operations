@@ -39,6 +39,13 @@ public partial class ACO_SceneBaker
     private static void BakeDecals()
     {
         ACO_DecalStudio studio = Object.FindObjectOfType<ACO_DecalStudio>(true);
+        // URL 저장소(Player Object 템플릿) → 스튜디오(복원되면 저장된 이미지를 다시 받게)
+        foreach (ACO_UrlStore store in Object.FindObjectsOfType<ACO_UrlStore>(true))
+        {
+            if (store.Studio == studio) { continue; }
+            store.Studio = studio;
+            MarkChanged(store);
+        }
         var decals = new List<ACO_VehicleDecal>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
@@ -92,10 +99,23 @@ public partial class ACO_SceneBaker
             {
                 if (c.Units != units || c.TacNames != tac) { c.Units = units; c.TacNames = tac; MarkChanged(c); }
             }
+            foreach (ACO_Chatter c in root.GetComponentsInChildren<ACO_Chatter>(true)) { if (c.TacNames != tac) { c.TacNames = tac; MarkChanged(c); } }   // 발사 무전 자막의 내 콜사인
             foreach (ACO_PhaseModule c in root.GetComponentsInChildren<ACO_PhaseModule>(true)) { if (c.Units != units) { c.Units = units; MarkChanged(c); } }
             foreach (ACO_HudSettings c in root.GetComponentsInChildren<ACO_HudSettings>(true))
             {
                 if (c.Units != units || c.FlightHud != hud) { c.Units = units; c.FlightHud = hud; MarkChanged(c); }
+                // HUD 글자 그림자 켜기/끄기 대상(점수 패널·마커 글자, 비행 HUD 글자 재질)
+                var shadow = new System.Collections.Generic.List<Material>();
+                foreach (string matName in new[] { "ACO_HUDTextOverlay", "ACO_FlightHudTextOverlay" })
+                {
+                    Material m = AssetDatabase.LoadAssetAtPath<Material>($"Assets/ACO_Addon/Generated/{matName}.mat");
+                    if (m != null) { shadow.Add(m); }
+                }
+                if (c.TextShadowMaterials == null || c.TextShadowMaterials.Length != shadow.Count || !System.Linq.Enumerable.SequenceEqual(c.TextShadowMaterials, shadow))
+                {
+                    c.TextShadowMaterials = shadow.ToArray();
+                    MarkChanged(c);
+                }
             }
         }
         if (hud == null) { return; }
@@ -124,6 +144,7 @@ public partial class ACO_SceneBaker
         var flares = new SaccFlightAndVehicles.DFUNC_Flares[n];
         var missiles = new ACO_DFUNC_Missile[n];
         var specials = new ACO_DFUNC_Special[n];
+        var supports = new ACO_DFUNC_Support[n];
         var gunSpeed = new float[n];
         var gunGravity = new float[n];
         var gunInherit = new float[n];
@@ -144,6 +165,7 @@ public partial class ACO_SceneBaker
             guns[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Gun>(true);
             flares[i] = e.GetComponentInChildren<SaccFlightAndVehicles.DFUNC_Flares>(true);
             specials[i] = e.GetComponentInChildren<ACO_DFUNC_Special>(true);
+            supports[i] = e.GetComponentInChildren<ACO_DFUNC_Support>(true);
             foreach (ACO_DFUNC_Missile m in e.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
             {
                 if (m.GetComponentInParent<ACO_DFUNC_Special>(true) == null) { missiles[i] = m; break; }
@@ -190,7 +212,7 @@ public partial class ACO_SceneBaker
         }
         if (!SameRefs(hud.Vehicles, vehicles.ToArray())) { hud.Vehicles = vehicles.ToArray(); changed = true; }
         hud.Air = air; hud.Gears = gears; hud.FlapFuncs = flaps; hud.Hooks = hooks; hud.Brakes = brakes;
-        hud.Guns = guns; hud.FlareFuncs = flares; hud.Missiles = missiles; hud.Specials = specials;
+        hud.Guns = guns; hud.FlareFuncs = flares; hud.Missiles = missiles; hud.Specials = specials; hud.Supports = supports;
         hud.GunSpeed = gunSpeed; hud.GunGravity = gunGravity; hud.GunInherit = gunInherit; hud.GunRate = gunRate;
         if (!hud.HideSavHud) { hiddenParts.Clear(); }
         hud.HiddenSavHudParts = hiddenParts.ToArray();
@@ -429,8 +451,79 @@ public partial class ACO_SceneBaker
 
     private static bool IsFriendlyUnit(Component c)
     {
+        if (c.GetComponentInParent<ACO_SupportManager>(true) != null) { return true; }   // 가디언 드론(아군 지원)
         ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>(true);
         return escort != null && !escort.Hostile;
+    }
+
+    /// 음성 경고 ↔ 비행 HUD(내 기체·기어)·레이더 연락(내 기체)·진행도(안전지대), 그리고 경고를 부르는 쪽(랜스 포대·소형 레일건·레이저 에이스) → 음성 경고.
+    public static void BakeVoiceWarning()
+    {
+        ACO_VoiceWarning voice = null;
+        ACO_FlightHud hud = null;
+        ACO_RadarContacts contacts = null;
+        ACO_PlayerProgress progress = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (voice == null) { voice = root.GetComponentInChildren<ACO_VoiceWarning>(true); }
+            if (hud == null) { hud = root.GetComponentInChildren<ACO_FlightHud>(true); }
+            if (contacts == null) { contacts = root.GetComponentInChildren<ACO_RadarContacts>(true); }
+            if (progress == null) { progress = root.GetComponentInChildren<ACO_PlayerProgress>(true); }
+        }
+        if (voice != null && (voice.FlightHud != hud || voice.Contacts != contacts || voice.Progress != progress))
+        {
+            voice.FlightHud = hud;
+            voice.Contacts = contacts;
+            voice.Progress = progress;
+            MarkChanged(voice);
+        }
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_Railgun c in root.GetComponentsInChildren<ACO_Railgun>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+            foreach (ACO_MiniRailgun c in root.GetComponentsInChildren<ACO_MiniRailgun>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+            foreach (ACO_Borderless c in root.GetComponentsInChildren<ACO_Borderless>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+            foreach (ACO_LunaAce c in root.GetComponentsInChildren<ACO_LunaAce>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+            foreach (ACO_MrS c in root.GetComponentsInChildren<ACO_MrS>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+        }
+    }
+
+    /// BGM ↔ 미션 관리자(상황 판정).
+    public static void BakeBgm()
+    {
+        ACO_Bgm bgm = null;
+        ACO_MissionManager manager = null;
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (bgm == null) { bgm = root.GetComponentInChildren<ACO_Bgm>(true); }
+            if (manager == null) { manager = root.GetComponentInChildren<ACO_MissionManager>(true); }
+        }
+        if (bgm != null && bgm.Manager != manager)
+        {
+            bgm.Manager = manager;
+            MarkChanged(bgm);
+        }
+        var panels = new List<ACO_BgmPanel>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_BgmPanel p in root.GetComponentsInChildren<ACO_BgmPanel>(true))
+            {
+                panels.Add(p);
+                if (p.Bgm != bgm) { p.Bgm = bgm; MarkChanged(p); }
+            }
+        }
+        if (bgm != null && !SameList(bgm.Panels, panels))
+        {
+            bgm.Panels = panels.ToArray();
+            MarkChanged(bgm);
+        }
+    }
+
+    private static bool SameList<T>(T[] a, List<T> b) where T : Object
+    {
+        if (a == null) { return b.Count == 0; }
+        if (a.Length != b.Count) { return false; }
+        for (int i = 0; i < a.Length; i++) { if (a[i] != b[i]) { return false; } }
+        return true;
     }
 
     private static void BakeRadar()
@@ -556,16 +649,53 @@ public partial class ACO_SceneBaker
         ACO_BulletFlyby flyby = Object.FindObjectOfType<ACO_BulletFlyby>(true);
         if (contacts == null || flyby == null) { return; }
         if (flyby.Contacts != contacts) { flyby.Contacts = contacts; MarkChanged(flyby); }
+        if (flyby.LaserClips == null || flyby.LaserClips.Length == 0)
+        {
+            AudioClip[] zaps = LaserZapClips();
+            if (zaps.Length > 0) { flyby.LaserClips = zaps; MarkChanged(flyby); }
+        }
         foreach (ACO_NPCGun gun in Object.FindObjectsOfType<ACO_NPCGun>(true))
         {
             ACO_BulletFlyby want = IsFriendlyUnit(gun) ? null : flyby;
             if (gun.Flyby != want) { gun.Flyby = want; MarkChanged(gun); }
+        }
+        // 레일건 탄 스침 소리(6-156): 소형 레일건·육상전함 주포, Lance, LUNA 레일건 런처(RailFlyby)
+        foreach (ACO_MiniRailgun gun in Object.FindObjectsOfType<ACO_MiniRailgun>(true))
+        {
+            if (gun.Flyby != flyby) { gun.Flyby = flyby; MarkChanged(gun); }
+        }
+        foreach (ACO_Railgun gun in Object.FindObjectsOfType<ACO_Railgun>(true))
+        {
+            if (gun.Flyby != flyby) { gun.Flyby = flyby; MarkChanged(gun); }
+        }
+        foreach (ACO_MissileLauncher launcher in Object.FindObjectsOfType<ACO_MissileLauncher>(true))
+        {
+            ACO_BulletFlyby want = launcher.RailFlyby ? flyby : null;
+            if (launcher.Flyby != want) { launcher.Flyby = want; MarkChanged(launcher); }
         }
     }
 
     public static bool BulletFlybyMissing()
     {
         return Object.FindObjectOfType<ACO_RadarContacts>(true) != null && Object.FindObjectOfType<ACO_BulletFlyby>(true) == null;
+    }
+
+    /// 레일건 탄이 스칠 때(ElevenLabs 효과음, 1/4 볼륨으로 만든 파일 — 6-156).
+    public static AudioClip RailFlybyClip()
+    {
+        return AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/ACO_Addon/Audio/Generated/ACO_Rail_Flyby.wav");
+    }
+
+    /// 레이저가 스칠 때의 전자음(Tools/aco_make_laser_zap.py — ACO_Laser_Zap_1~3).
+    private static AudioClip[] LaserZapClips()
+    {
+        var zaps = new List<AudioClip>();
+        for (int i = 1; i <= 3; i++)
+        {
+            AudioClip c = AssetDatabase.LoadAssetAtPath<AudioClip>($"Assets/ACO_Addon/Audio/Generated/ACO_Laser_Zap_{i}.wav");
+            if (c != null) { zaps.Add(c); }
+        }
+        return zaps.ToArray();
     }
 
     /// 레이더 아래에 소리 한 벌을 만든다(2D 소스 3개 + 클립).
@@ -596,6 +726,8 @@ public partial class ACO_SceneBaker
             if (c != null) { clips.Add(c); }
         }
         flyby.Clips = clips.ToArray();
+        flyby.LaserClips = LaserZapClips();
+        flyby.RailClip = RailFlybyClip();
         ACO_SyncModeFixer.FixHierarchy(go, false);
         MarkChanged(flyby);
         Debug.Log("[ACO] 총탄이 스치는 소리를 만들었습니다: BulletFlyby");
@@ -773,9 +905,21 @@ public partial class ACO_SceneBaker
         int n = 0;
         foreach (MeshFilter mf in studio.SampleRoot.GetComponentsInChildren<MeshFilter>(true))
         {
-            if (mf.sharedMesh != null && mf.GetComponent<Collider>() == null) { n++; }
+            if (DecalSampleNeedsCollider(mf, studio.SampleRoot)) { n++; }
         }
         return n;
+    }
+
+    /// 데칼 건이 맞힐 샘플 기체 메시인데 콜라이더가 없는가. 무장 겉모양(WeaponVis — 장착에 따라 켜지는 포드·미사일, 기본은 꺼짐)은 뺀다:
+    /// 데칼은 기체에 찍는 것이고, 무장 설치(MMP·RGP 등)가 포드를 다시 만들면 콜라이더가 빠져 경고가 계속 다시 떴다.
+    private static bool DecalSampleNeedsCollider(MeshFilter mf, Transform root)
+    {
+        if (mf.sharedMesh == null || mf.GetComponent<Collider>() != null) { return false; }
+        for (Transform t = mf.transform; t != null && t != root; t = t.parent)
+        {
+            if (t.name == "WeaponVis") { return false; }
+        }
+        return true;
     }
 
     public static void AddDecalSampleColliders()
@@ -784,7 +928,7 @@ public partial class ACO_SceneBaker
         if (studio == null || studio.SampleRoot == null) { return; }
         foreach (MeshFilter mf in studio.SampleRoot.GetComponentsInChildren<MeshFilter>(true))
         {
-            if (mf.sharedMesh == null || mf.GetComponent<Collider>() != null) { continue; }
+            if (!DecalSampleNeedsCollider(mf, studio.SampleRoot)) { continue; }
             MeshCollider mc = Undo.AddComponent<MeshCollider>(mf.gameObject);
             mc.sharedMesh = mf.sharedMesh;
         }

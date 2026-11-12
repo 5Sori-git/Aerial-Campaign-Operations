@@ -9,6 +9,23 @@ using SaccFlightAndVehicles;
 
 namespace ACO
 {
+    /// 발사 무전 코드(ACO_Chatter.LaunchTexts/LaunchClips 번호와 같다).
+    public enum ACO_LaunchCall
+    {
+        None = 0,
+        FoxTwo = 1,       // 단거리·적외선 대공
+        FoxThree = 2,     // 장거리·능동 레이더 대공
+        Rifle = 3,        // 대지 미사일
+        Magnum = 4,
+        Greyhound = 5,    // 순항 미사일
+        Bruiser = 6,      // 대함 미사일
+        Pickle = 7,       // 폭탄
+        Rockets = 8,
+        Spear = 9,        // 레일건(RGP)
+        Music = 10,       // ECM
+        Drive = 11        // 마이크로미사일 포드(MMP)
+    }
+
     /// 플레이어 기체용 미사일 다이얼 기능(SAV DFUNC_AAM 대체). SaccEntity의 Dial_Functions_L/R에 넣는다.
     ///
     /// - 표적: TargetLayers에 있는 씬 오브젝트(락온 마커). 빌드 시 ACO_SceneBaker가 Targets에 굽는다 — SaccEntity의
@@ -165,6 +182,13 @@ namespace ACO
         [Tooltip("격납고 강화 중 어느 탭의 효과를 받는가. Missile = 일반 미사일, SpecialAAM = 특수 대공, SpecialAGM = 특수 대지, "
             + "SpecialBomb = 특수 폭탄/로켓, None = 강화 없음. 대공 탭은 피해/탄수/선회/락온 속도·거리·범위, 대지·폭탄 탭은 피해/탄수/폭발 반경")]
         public ACO_UpgradeFamily UpgradeFamily = ACO_UpgradeFamily.Missile;
+        [Tooltip("강화 계열 밖(None — OTHER 무장 MMP·RGP)이어도 EXTRA AMMO 소모품의 탄수 배수를 받는다. 특수 대공·대지·폭탄 계열은 이것 없이도 받는다")]
+        public bool TakesExtraAmmo = false;
+
+        [Header("발사 무전")]
+        [Tooltip("쏠 때(발사 입력 한 번에 한 번, 같은 코드 쿨타임) 쏜 사람 화면에 무전 — 자막 [내 콜사인] 코드, 음성은 관제기가 코드만. "
+            + "다른 무전이 나오고 있으면 버린다. 글자·음성은 ACO_Chatter의 LaunchTexts/LaunchClips")]
+        public ACO_LaunchCall LaunchCall = ACO_LaunchCall.None;
 
         [Header("발사 입력")]
         [Tooltip("켜면 트리거를 누르고 있는 동안 FireInterval마다 계속 쏜다(로켓·폭탄 연속 투하). 끄면 한 번 당길 때마다 한 번")]
@@ -257,6 +281,7 @@ namespace ACO
         private int[] _salvoSlot;
         private int[] _salvoTarget;
         private int _salvoCount;
+        private int _launchCount;   // 쏜 횟수(발사 무전 — 이번 입력에 실제로 쐈는가)
         private int _salvoNext;
         private bool _selected;
         private bool _triggerLastFrame;
@@ -289,6 +314,7 @@ namespace ACO
         // 주 표적 = 처음으로 채워진 칸(HUD 표적 표시와 단일 조회가 쓴다). 칸을 옮기지 않으므로 마커 연출이 끊기지 않는다.
         private SaccEntity[] _targetEntities;
         private ACO_LockGate[] _targetGates;   // 표적의 락온 제한(ACO_LockGate — 마커에서 부모 쪽으로 찾는다. 없으면 null)
+        private bool[] _targetLooked;          // 표적의 SaccEntity·락온 제한을 찾았는가 — 켜져 있을 때만 찾는다(부모 찾기는 꺼진 오브젝트를 건너뛴다)
         private float[] _hiddenUntil;
         private int[] _lockIdx;
         private float[] _lockTimer;
@@ -355,13 +381,9 @@ namespace ACO
             EnsureLockSlots();
             _targetEntities = new SaccEntity[Targets.Length];
             _targetGates = new ACO_LockGate[Targets.Length];
+            _targetLooked = new bool[Targets.Length];
             _hiddenUntil = new float[Targets.Length];
-            for (int i = 0; i < Targets.Length; i++)
-            {
-                if (!Targets[i]) { continue; }
-                _targetEntities[i] = Targets[i].GetComponentInParent<SaccEntity>();
-                _targetGates[i] = Targets[i].GetComponentInParent<ACO_LockGate>();
-            }
+            for (int i = 0; i < Targets.Length; i++) { LookUpTarget(i); }
 
             if (Missile && !EcmMode)
             {
@@ -688,8 +710,11 @@ namespace ACO
             bool fire = pressed && !grounded && (!_triggerLastFrame || (HoldToFire && Time.time >= _nextHoldFire));
             if (fire)
             {
+                int launchedBefore = _launchCount;
                 TryFire();
                 _nextHoldFire = Time.time + FireInterval;
+                // 발사 무전: 새로 누른 입력에서 실제로 쐈을 때만(누르고 있는 연사·연사 다음 발은 아님)
+                if (!_triggerLastFrame && _launchCount != launchedBefore && Chatter != null && LaunchCall != ACO_LaunchCall.None) { Chatter.CallLaunch((int)LaunchCall); }
             }
             _triggerLastFrame = pressed;
 
@@ -883,9 +908,21 @@ namespace ACO
         {
             GameObject g = Targets[i];
             if (!g || !g.activeInHierarchy) { return false; }
+            if (!_targetLooked[i]) { LookUpTarget(i); }
             SaccEntity e = _targetEntities[i];
             if (e && (e.dead || e == EntityControl)) { return false; }
             return (g.transform.position - origin).sqrMagnitude <= rangeSq;
+        }
+
+        /// 표적 i의 SaccEntity·락온 제한(ACO_LockGate)을 찾는다. 마커가 켜져 있을 때만 — 풀에 꺼져 있던 적(예: 레이저 에이스)은
+        /// 시작 때 부모 찾기에 걸리지 않아 ECM이 빠졌다. 처음 켜진 뒤(후보로 볼 때) 한 번 찾는다.
+        private void LookUpTarget(int i)
+        {
+            GameObject g = Targets[i];
+            if (!g || !g.activeInHierarchy) { return; }
+            _targetLooked[i] = true;
+            _targetEntities[i] = g.GetComponentInParent<SaccEntity>();
+            _targetGates[i] = g.GetComponentInParent<ACO_LockGate>();
         }
 
         /// 칸마다 락온 시간을 잰다. 지형에 가리면 잠깐(OBSCURED_GRACE)은 봐주고, 그보다 길면 그 칸을 비운다.
@@ -993,6 +1030,7 @@ namespace ACO
         private void TryEcm()
         {
             if (FindReadySlot() < 0) { return; }
+            _launchCount++;
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetEcm));
         }
 
@@ -1125,6 +1163,7 @@ namespace ACO
         /// 유도 방식·비례항법 상수는 강화로 바뀌지 않으므로 보내지 않고 받는 쪽이 자기 무장 값을 쓴다.
         private void SendLaunch(ushort target, int slot)
         {
+            _launchCount++;
             if (_ordTemplate)
             {
                 // 폭탄/로켓: SAV처럼 슬롯과 비행 성능만 보낸다. 받은 쪽은 자기 화면의 기체 발사 지점과 동기화 속도(CurrentVel)에서
@@ -1307,6 +1346,7 @@ namespace ACO
                 missile.MaxSpeed = maxSpeed;
                 missile.Acceleration = acceleration;
                 missile.TurnRate = turnRate;
+                missile.WanderSeed = 3.7f + slot * 5.31f + (target != NO_TARGET ? target : 0) * 1.73f;   // 비틀거림(MMP) — 모든 화면이 같은 값
                 missile.GuidanceMode = GuidanceMode;              // 강화로 바뀌지 않아 받는 쪽 무장 값
                 missile.NavigationConstant = NavigationConstant;
                 missile.ProximityRadius = proximity;

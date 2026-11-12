@@ -15,7 +15,7 @@ namespace ACO
 
         public override bool IsFeasible(int phaseIndex, Vector3 focus)
         {
-            return Generator != null && Generator.CanDeployShade();
+            return Generator != null && Generator.CanDeployAce(ACO_AceBase.KIND_SHADE);
         }
 
         public override void Begin(int phaseIndex, int tag, Vector3 focus, int now)
@@ -38,6 +38,8 @@ namespace ACO
             Manager.SetModuleProgress(done, total, true);
             return done >= total ? RESULT_CLEAR : RESULT_RUNNING;
         }
+
+        public override bool IsBossPhase() { return true; }
 
         public override string GetName()
         {

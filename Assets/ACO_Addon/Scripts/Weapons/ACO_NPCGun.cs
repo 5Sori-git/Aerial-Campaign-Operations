@@ -26,6 +26,8 @@ namespace ACO
         public Transform Muzzle;
         [Tooltip("시각 전용 탄 파티클(충돌 모듈 끔). 발사 중에만 방출한다")]
         public ParticleSystem VisualParticle;
+        [Tooltip("레이저 연출(선택 — ACO_NPCLaser): 넣으면 예광탄 대신 빔을 그린다. 쏠 때 켜고 멈출 때 끈다. 판정·피해는 그대로 이 기총이 한다")]
+        public ACO_NPCLaser Laser;
         public AudioSource FireSound;
         [Tooltip("탄이 쏜 기체의 속도를 물려받는다고 보고 리드를 계산할 때 쓴다. 파티클의 Inherit Velocity 설정과 맞춘다")]
         public ACO_NPCFlightController ShooterFlight;
@@ -112,7 +114,9 @@ namespace ACO
             SetFiring(fireNow);
             if (fireNow && inRange && Flyby != null && Flyby.IsLocalTarget(_targetEntity))
             {
-                Flyby.ReportFire(MuzzlePosition(), dist / Mathf.Max(MuzzleVelocity, 1f), dist * Mathf.Sin(angle * Mathf.Deg2Rad));
+                // 레이저는 총알 스치는 소리 대신 전자음(빛이라 바로)
+                if (Laser) { Flyby.ReportLaser(MuzzlePosition(), dist * Mathf.Sin(angle * Mathf.Deg2Rad)); }
+                else { Flyby.ReportFire(MuzzlePosition(), dist / Mathf.Max(MuzzleVelocity, 1f), dist * Mathf.Sin(angle * Mathf.Deg2Rad)); }
             }
 
             // 여기부터는 데미지 판정 — 타겟 기체의 오너만 한다.
@@ -212,6 +216,9 @@ namespace ACO
             ResetDwell();
             SetFiring(Vector3.Angle(MuzzleForward(), aimPoint - MuzzlePosition()) <= FireStartAngle * 2f);
         }
+
+        /// 지금 쏘는 중인가(연출 — 모든 화면). 레이저 에이스가 나를 비추는지 볼 때 쓴다.
+        public bool IsFiring() { return _firing; }
 
         /// 격추 등으로 즉시 멈출 때.
         public void ForceStop()
@@ -327,6 +334,7 @@ namespace ACO
                 if (on) { VisualParticle.Play(); }
                 else { VisualParticle.Stop(); }
             }
+            if (Laser) { Laser.SetFiring(on); }
             if (FireSound)
             {
                 if (on) { FireSound.Play(); }

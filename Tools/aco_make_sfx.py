@@ -10,7 +10,14 @@ os.makedirs(OUT, exist_ok=True)
 made = []
 
 
+# ElevenLabs 효과음으로 바꾼 것(2026-11-11 — 대포 + 천둥). 다시 만들면 덮어쓰므로 건너뛴다(예전 합성 소리를 원하면 이 목록에서 빼면 된다)
+ELEVEN_REPLACED = {'ACO_Railgun_Fire', 'ACO_Railgun_MiniFire', 'ACO_Missile_Flyby_1', 'ACO_Missile_Flyby_2'}
+
+
 def save(name, x, peak=0.89):
+    if name in ELEVEN_REPLACED:
+        print('skip (ElevenLabs):', name)
+        return
     x = normalize(x, peak)
     write_wav(os.path.join(OUT, name + '.wav'), x)
     made.append((name, len(x) / SR))

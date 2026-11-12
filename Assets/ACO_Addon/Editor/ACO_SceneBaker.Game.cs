@@ -180,10 +180,20 @@ public partial class ACO_SceneBaker
         flow.CountdownOverlays = overlays.ToArray();
         flow.CountdownTexts = overlayTexts.ToArray();
         // 격납고·상점: 출격 카운트다운 중 무장 변경·구매를 막는다
+        ACO_SupportManager support = Object.FindObjectOfType<ACO_SupportManager>(true);
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            foreach (ACO_Loadout l in root.GetComponentsInChildren<ACO_Loadout>(true)) { if (l.Flow != flow) { l.Flow = flow; MarkChanged(l); } }
-            foreach (ACO_TargetMarkers tm in root.GetComponentsInChildren<ACO_TargetMarkers>(true)) { if (tm.Flow != flow) { tm.Flow = flow; MarkChanged(tm); } }
+            foreach (ACO_Loadout l in root.GetComponentsInChildren<ACO_Loadout>(true))
+            {
+                if (l.Flow != flow) { l.Flow = flow; MarkChanged(l); }
+                // 명단 카드의 무장 이름(6-173): 격납고 패널 우선(두 패널 목록 순서는 같다 — 6-172)
+                if (flow.Loadout == null || (l.name == "ACO_Hangar" && flow.Loadout != l)) { flow.Loadout = l; MarkChanged(flow); }
+            }
+            foreach (ACO_TargetMarkers tm in root.GetComponentsInChildren<ACO_TargetMarkers>(true))
+            {
+                if (tm.Flow != flow) { tm.Flow = flow; MarkChanged(tm); }
+                if (tm.Support != support) { tm.Support = support; MarkChanged(tm); }   // 지원 유닛 아군 테두리
+            }
             foreach (ACO_Shop sh in root.GetComponentsInChildren<ACO_Shop>(true)) { if (sh.Flow != flow) { sh.Flow = flow; MarkChanged(sh); } }
         }
         flow.Buttons = buttons.ToArray();
@@ -262,10 +272,13 @@ public partial class ACO_SceneBaker
             }
             foreach (ACO_Shop shop in root.GetComponentsInChildren<ACO_Shop>(true))
             {
-                // 강화 항목 수가 바뀌었으면(예: 특수 대지에 락온 속도·거리 추가) 항목별 아이콘을 다시 채운다
-                if (shop.UpgradeIcons == null || shop.UpgradeIcons.Length != ACO_PlayerProgress.UPGRADE_COUNT)
+                // 강화 항목이 바뀌었으면(수 — 예: 특수 대지에 락온 속도·거리 추가, 또는 자리의 내용 — 예: 안정성 → 대응탄 수) 항목별 아이콘을 다시 채운다
+                Sprite[] wantIcons = ACO_HUDBuilder.BuildUpgradeIcons(progress);
+                bool sameIcons = shop.UpgradeIcons != null && shop.UpgradeIcons.Length == wantIcons.Length;
+                for (int k = 0; sameIcons && k < wantIcons.Length; k++) { if (shop.UpgradeIcons[k] != wantIcons[k]) { sameIcons = false; } }
+                if (!sameIcons)
                 {
-                    shop.UpgradeIcons = ACO_HUDBuilder.BuildUpgradeIcons(progress);
+                    shop.UpgradeIcons = wantIcons;
                     MarkChanged(shop);
                     Debug.Log($"[ACO] 상점 '{shop.name}': 강화 아이콘을 {ACO_PlayerProgress.UPGRADE_COUNT}항목에 맞게 다시 채웠습니다.", shop);
                 }

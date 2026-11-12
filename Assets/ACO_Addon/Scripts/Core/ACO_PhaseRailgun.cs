@@ -46,8 +46,9 @@ namespace ACO
         [Tooltip("방공망 수리 간격(초) — 냉각기·코어 단계")]
         public float RepairInterval = 40f;
         public int RepairCount = 3;
-        [Tooltip("이 페이즈 동안 수리로 되살리는 방공 부위의 최대 수(합계). 0이면 끝없이")]
-        public int MaxRepairs = 6;
+        [Tooltip("수리는 살아 있는 방공 부위가 이 수보다 적을 때만, 이 수까지(한 번에 RepairCount곳). 0이면 한도 없이 RepairCount곳씩 — 너무 많이 되살아나면 부순 의미가 없다")]
+        public int RepairAliveCap = 6;
+        [HideInInspector] public int MaxRepairs = 6;   // 예전 값(페이즈 전체 합계 — 이제 쓰지 않는다, 저장된 값만 남긴다)
 
         [Header("끝맺음")]
         [Tooltip("코어가 터진 뒤 성공으로 넘어가기까지(초)")]
@@ -342,7 +343,8 @@ namespace ACO
         {
             if (RepairInterval <= 0f || now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
-            int count = MaxRepairs > 0 ? Mathf.Min(RepairCount, MaxRepairs - _repairedUnits) : RepairCount;
+            // 살아 있는 방공 부위가 RepairAliveCap보다 적을 때만, 그 수까지(페이즈 전체 합계 한도는 없다 — 6-150)
+            int count = RepairAliveCap > 0 ? Mathf.Min(RepairCount, RepairAliveCap - gun.CountAirDefenseAlive()) : RepairCount;
             if (count <= 0) { return; }
             int done = gun.RepairAirDefense(count);
             if (done > 0)

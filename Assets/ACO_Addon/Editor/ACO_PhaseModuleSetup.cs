@@ -111,9 +111,9 @@ public static class ACO_PhaseModuleSetup
                 "The city has been bombed... Mission failed. All units, withdraw.");
             made++; log.Append("\n  폭격기 요격");
         }
-        if (!HasChild(mgr, "Phase_SuperAce"))
+        if (!HasChild(mgr, "Phase_Twins") && !HasChild(mgr, "Phase_SuperAce"))   // 예전 이름(콜사인으로 바꾸기 전 — callsign-names-1)도 있는 걸로 본다
         {
-            EnsureSuperAce(mgr);
+            EnsureTwins(mgr);
             made++; log.Append("\n  분신 에이스 형제");
         }
         if (!HasChild(mgr, "Phase_Shade"))
@@ -202,15 +202,16 @@ public static class ACO_PhaseModuleSetup
         m.ClearBonus = 8000;
         m.EnemyName = "BATTLESHIP COMMAND";
         ApplyLandShipTexts(m);   // 이름·배너·성공/실패 글자·상황별 대사
+        ACO_VoiceLines.ApplyPhase(m);
         Debug.Log("[ACO] 육상전함 페이즈 모듈 Phase_LandShip을 미션 관리자 아래에 만들었습니다.", m);
     }
 
     /// 분신 에이스 형제 페이즈(없으면 만든다). 3~5번째 페이즈의 공중 보스 — 슈퍼에이스 HEADS·TAILS 2기 편대, 실패 조건 없음.
     /// 예전 보너스 페이즈 모듈(Phase_Bonus_SuperAce)은 지우지 않고 끈다(보너스 후보가 없어지면 미션 끝 보너스가 나오지 않는다).
-    public static void EnsureSuperAce(ACO_MissionManager manager)
+    public static void EnsureTwins(ACO_MissionManager manager)
     {
-        ACO_PhaseSuperAce normal = null;
-        foreach (ACO_PhaseSuperAce s in manager.GetComponentsInChildren<ACO_PhaseSuperAce>(true))
+        ACO_PhaseTwins normal = null;
+        foreach (ACO_PhaseTwins s in manager.GetComponentsInChildren<ACO_PhaseTwins>(true))
         {
             if (s.BonusOnly)
             {
@@ -229,7 +230,7 @@ public static class ACO_PhaseModuleSetup
             normal = s;
         }
         if (normal != null) { return; }
-        ACO_PhaseSuperAce m = Create<ACO_PhaseSuperAce>(manager, "Phase_SuperAce");
+        ACO_PhaseTwins m = Create<ACO_PhaseTwins>(manager, "Phase_Twins");
         Setup(m, "ACES - {ACE}", "", 1, false,
             "Two bogeys in tight formation... They're aces, and they fly like brothers. Expect decoys. Make sure you're locking the real one!",
             "Both aces are down! Heads or tails, it doesn't matter now. Good work!",
@@ -238,8 +239,9 @@ public static class ACO_PhaseModuleSetup
         m.PhaseWeights = new[] { 0f, 0f, 1f, 1f, 1f };
         m.ClearBonus = 12000;
         m.Aces = 2;
+        ACO_VoiceLines.ApplyPhase(m);
         Finish(m);
-        Debug.Log("[ACO] 분신 에이스 형제 페이즈 모듈 Phase_SuperAce를 미션 관리자 아래에 만들었습니다.", m);
+        Debug.Log("[ACO] 분신 에이스 형제 페이즈 모듈 Phase_Twins를 미션 관리자 아래에 만들었습니다.", m);
     }
 
     /// SHADE 편대 페이즈(없으면 만든다). 3~5번째 페이즈의 공중 보스 — 4기 편대(코브라·전방위 미사일·교차 플레어), 실패 조건 없음.
@@ -255,37 +257,102 @@ public static class ACO_PhaseModuleSetup
         m.PhaseWeights = new[] { 0f, 0f, 1f, 1f, 1f };
         m.ClearBonus = 14000;
         m.Aces = ACO_PrefabBuilder.ShadePoolSize;
+        ACO_VoiceLines.ApplyPhase(m);
         Finish(m);
         Debug.Log("[ACO] SHADE 편대 페이즈 모듈 Phase_Shade를 미션 관리자 아래에 만들었습니다.", m);
     }
 
     /// 레이저 에이스 페이즈(없으면 만든다). 4·5번째 페이즈의 공중 보스(단독 에이스 — 2단계에 탄도미사일). 사일로 연출(IcbmSite)이 없으면 만든다.
-    public static void EnsureLaserAce(ACO_MissionManager manager)
+    public static void EnsureBorderless(ACO_MissionManager manager)
     {
-        ACO_PhaseLaserAce m = manager.GetComponentInChildren<ACO_PhaseLaserAce>(true);
+        ACO_PhaseBorderless m = manager.GetComponentInChildren<ACO_PhaseBorderless>(true);
         if (m == null)
         {
-            m = Create<ACO_PhaseLaserAce>(manager, "Phase_LaserAce");
+            m = Create<ACO_PhaseBorderless>(manager, "Phase_Borderless");
             Setup(m, "ACE - {ACE}", "BASE DESTROYED", 1, false,
-                "Sky Eye to all aircraft. A single enemy ace is inbound. Something about that aircraft is not right. Engage with caution.",
+                "All aircraft. A single enemy ace is inbound. Something about that aircraft is not right. Engage with caution.",
                 "The ace is down and the missile is gone. Outstanding work, all aircraft!",
                 "The missile hit the base... All units, withdraw.");
             m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 2f };
             m.ClearBonus = 10000;
             m.EnemyName = "BORDERLESS";
-            Debug.Log("[ACO] 레이저 에이스 페이즈 모듈 Phase_LaserAce를 미션 관리자 아래에 만들었습니다.", m);
+            ACO_VoiceLines.ApplyPhase(m);
+            Debug.Log("[ACO] 레이저 에이스 페이즈 모듈 Phase_Borderless를 미션 관리자 아래에 만들었습니다.", m);
         }
-        if (m.Site == null)
+        if (!SiteComplete(m))
         {
-            ACO_IcbmSite site = ACO_PrefabBuilder.BuildIcbmSite(m.transform);
+            ACO_IcbmSite site = ACO_PrefabBuilder.BuildIcbmSite(m.transform);   // 예전(빈 껍데기 포함) IcbmSite 자식은 지우고 새로
             if (site != null)
             {
+                Undo.RecordObject(m, "ACO ICBM site");
                 site.Phase = m;
                 m.Site = site;
                 ACO_SyncModeFixer.FixHierarchy(m.gameObject, false);
                 EditorUtility.SetDirty(m);
             }
         }
+    }
+
+    /// UAV 에이스 LUNA 페이즈(없으면 만든다). 4·5번째 페이즈의 공중 보스(도시 유도 — 궤도 폭격). 궤도 폭격 연출(OrbitalStrike)이 없거나 비었으면 만든다.
+    public static void EnsureLuna(ACO_MissionManager manager)
+    {
+        ACO_PhaseLuna m = manager.GetComponentInChildren<ACO_PhaseLuna>(true);
+        if (m == null)
+        {
+            m = Create<ACO_PhaseLuna>(manager, "Phase_Luna");
+            Setup(m, "ACE - {ACE}", "CITY DESTROYED", 1, false,
+                "All aircraft. An enemy ace is circling over the city, and she is painting it with a laser. Something is coming down from orbit. Stop her!",
+                "The strike missed the city! Outstanding work, all aircraft!",
+                "The city has been hit... All units, withdraw.");
+            m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 2f };
+            m.ClearBonus = 12000;
+            m.EnemyName = "LUNA";
+            m.EnemyColor = new Color(0.72f, 0.82f, 1f, 1f);
+            ACO_VoiceLines.ApplyPhase(m);
+            Debug.Log("[ACO] LUNA 페이즈 모듈 Phase_Luna를 미션 관리자 아래에 만들었습니다.", m);
+        }
+        if (!StrikeComplete(m))
+        {
+            ACO_OrbitalStrike strike = ACO_PrefabBuilder.BuildOrbitalStrike(m.transform);
+            if (strike != null)
+            {
+                Undo.RecordObject(m, "ACO orbital strike");
+                strike.Phase = m;
+                m.Strike = strike;
+                ACO_SyncModeFixer.FixHierarchy(m.gameObject, false);
+                EditorUtility.SetDirty(m);
+            }
+        }
+    }
+
+    /// 태양 에이스 MR. S 페이즈(없으면 만든다). 4·5번째 페이즈의 공중 보스(단독). AWACS 등장 설명은 시작 대사.
+    public static void EnsureMrS(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseMrS>(true) != null) { return; }
+        ACO_PhaseMrS m = Create<ACO_PhaseMrS>(manager, "Phase_MrS");
+        Setup(m, "ACE - {ACE}", "", 1, false,
+            "New contact, single bandit, unknown type! He's coming out of the sun. Watch your missiles!",
+            "The enemy ace is down! Outstanding flying, all aircraft!",
+            "");
+        m.BonusOnly = false;
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 2f };
+        m.ClearBonus = 12000;
+        ACO_VoiceLines.ApplyPhase(m);
+        Debug.Log("[ACO] MR. S 페이즈 모듈 Phase_MrS를 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 궤도 폭격 연출이 온전한가(빛줄기·대폭발이 있다).
+    public static bool StrikeComplete(ACO_PhaseLuna m)
+    {
+        ACO_OrbitalStrike s = m != null ? m.Strike : null;
+        return s != null && s.Streak != null && s.Blast != null;
+    }
+
+    /// 사일로 연출이 온전한가 — 연결만 있고 자식(사일로·미사일·연기)이 빠진 빈 껍데기(실행 취소 뒤 등)도 다시 만들어야 한다.
+    public static bool SiteComplete(ACO_PhaseBorderless m)
+    {
+        ACO_IcbmSite s = m != null ? m.Site : null;
+        return s != null && s.SiloRoot != null && s.Missile != null && s.Trail != null && s.LaunchSmoke != null;
     }
 
     // 육상전함 글자·대사(새 모듈과 Setup Check landship-lines-1이 같이 쓴다)
@@ -323,7 +390,7 @@ public static class ACO_PhaseModuleSetup
         m.PhaseName = "LAND DREADNOUGHT";
         m.Description = "STOP THE LAND BATTLESHIP BEFORE IT REACHES THE CITY";
         m.FailText = "CITY OVERRUN";
-        m.StartText = "Sky Eye to all aircraft. An enemy land battleship is advancing on the city. Strip its armor, cut its tracks and kill the reactor before it arrives!";
+        m.StartText = "An enemy land battleship is advancing on the city. Strip its armor, cut its tracks and kill the reactor before it arrives!";
         m.SuccessText = "Reactor destroyed! The land battleship is finished. Outstanding work, all aircraft!";
         m.FailChatterText = "The city has fallen... All units, withdraw.";
         m.LineEvent = (int[])LandShipLineEvent.Clone();
@@ -369,16 +436,19 @@ public static class ACO_PhaseModuleSetup
         if (manager.GetComponentInChildren<ACO_PhaseFleet>(true) == null) { missing.Add("Phase_Fleet"); }
         if (manager.GetComponentInChildren<ACO_PhaseRailgun>(true) == null) { missing.Add("Phase_Railgun"); }
         if (manager.GetComponentInChildren<ACO_PhaseLandShip>(true) == null) { missing.Add("Phase_LandShip"); }
-        ACO_PhaseLaserAce laser = manager.GetComponentInChildren<ACO_PhaseLaserAce>(true);
-        if (laser == null || laser.Site == null) { missing.Add("Phase_LaserAce"); }
+        ACO_PhaseBorderless laser = manager.GetComponentInChildren<ACO_PhaseBorderless>(true);
+        if (laser == null || !SiteComplete(laser)) { missing.Add("Phase_Borderless"); }
         bool twins = false, oldBonus = false;
-        foreach (ACO_PhaseSuperAce s in manager.GetComponentsInChildren<ACO_PhaseSuperAce>(true))
+        foreach (ACO_PhaseTwins s in manager.GetComponentsInChildren<ACO_PhaseTwins>(true))
         {
             if (!s.BonusOnly) { twins = true; }
             else if (s.gameObject.activeSelf || s.Enabled) { oldBonus = true; }
         }
-        if (!twins || oldBonus) { missing.Add("Phase_SuperAce"); }
+        if (!twins || oldBonus) { missing.Add("Phase_Twins"); }
         if (manager.GetComponentInChildren<ACO_PhaseShade>(true) == null) { missing.Add("Phase_Shade"); }
+        ACO_PhaseLuna luna = manager.GetComponentInChildren<ACO_PhaseLuna>(true);
+        if (luna == null || !StrikeComplete(luna)) { missing.Add("Phase_Luna"); }
+        if (manager.GetComponentInChildren<ACO_PhaseMrS>(true) == null) { missing.Add("Phase_MrS"); }
         return missing;
     }
 
@@ -400,9 +470,11 @@ public static class ACO_PhaseModuleSetup
         EnsureFleet(manager);
         EnsureRailgun(manager);
         EnsureLandShip(manager);
-        EnsureLaserAce(manager);
-        EnsureSuperAce(manager);
+        EnsureBorderless(manager);
+        EnsureTwins(manager);
         EnsureShade(manager);
+        EnsureLuna(manager);
+        EnsureMrS(manager);
         ApplyDefaultWeights(manager);
     }
 

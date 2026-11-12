@@ -68,6 +68,8 @@ namespace ACO
         public ACO_MissionManager Manager;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 진행도를 넣는다(안전지대 판정)")]
         public ACO_PlayerProgress Progress;
+        [Tooltip("명단 카드의 특수무장 이름(목록 순서) — Bake가 넣는다(6-173)")]
+        public ACO_Loadout Loadout;
         [Tooltip("참가자 기체(칸 번호 = 기체 번호, 최대 8). 기체의 원래 위치(스폰 위치)는 안 보이는 보관 장소에 둔다. 비우면 Bake가 강화 확장이 있는 기체로 채운다")]
         public SaccEntity[] Aircraft;
         [Tooltip("칸별 항모 갑판 출격 위치. 기체 루트가 이 위치·방향에 놓인다 — 갑판에 세워 둔 기체의 루트 위치를 그대로 옮겨 두면 된다")]
@@ -133,6 +135,10 @@ namespace ACO
             new Color(0.4f, 1f, 0.5f, 1f), new Color(0.8f, 1f, 0.35f, 1f), new Color(1f, 0.82f, 0.3f, 1f), new Color(1f, 0.52f, 0.2f, 1f), new Color(1f, 0.25f, 0.2f, 1f) };
         [Tooltip("페이즈 수별 난이도 이름(1~5)")]
         public string[] PhaseLevelNames = new string[] { "EASY", "NORMAL", "HARD", "VERY HARD", "ACE" };
+
+        [Header("번역 (6-166)")]
+        [Tooltip("번역 장치. Bake가 넣는다. 지형 · 난이도 · 날씨 이름도 표(flow.terrain/level/wx.<번호>)에 있으면 표의 것을 쓴다")]
+        public ACO_Localization Loc;
         [Tooltip("작전 카드: 예상 시간·바꾼 사람")]
         public TextMeshProUGUI[] PhaseInfoTexts;
         [Tooltip("작전 카드: 지형 이름·바꾼 사람")]
@@ -181,7 +187,9 @@ namespace ACO
         private float _shotDownReturnAt = -1f;  // 격추·탈출 뒤 격납고로 옮길 시각(로컬)
         private int _pilotedSlot = -1;          // 지난 확인 때 내가 조종하던 참가자 기체(로컬)
         private float _previewRequestAt = -1000f; // 오너가 마지막으로 미리 배치를 요청한 시각(로컬, 다시 요청 간격)
-        private string _message = "";
+        private string _message = "";      // 안내 한 줄의 번역 키("" = 없음)
+        private string _messageEn = "";
+        private string _messageArg = "";
         private float _messageTime;
         private int _seenLaunchEndMs;      // 출격 카운트다운 시작 감지(로컬) — 늦게 들어온 사람은 소리 없이
         private bool _launchSeenInit;
@@ -420,24 +428,24 @@ namespace ACO
             }
             else if (action == ACTION_LEAVE)
             {
-                if (LocalSlot() < 0) { return Deny("YOU ARE NOT ON THE ROSTER"); }
+                if (LocalSlot() < 0) { return Deny("flow.msg.notonroster", "YOU ARE NOT ON THE ROSTER"); }
                 action = ACTION_TOGGLE_JOIN;
             }
             if (action == ACTION_FREE_FLIGHT)
             {
-                if (!MayChangeFreeFlight(Networking.LocalPlayer)) { return Deny("ONLY THE INSTANCE OWNER CAN CHANGE FREE FLIGHT MODE"); }
-                if (IsBusy()) { return Deny("MISSION IN PROGRESS"); }
-                if (IsLaunchCountdown()) { return Deny("ALL READY - CANCEL READY FIRST"); }
+                if (!MayChangeFreeFlight(Networking.LocalPlayer)) { return Deny("flow.msg.ffowner", "ONLY THE INSTANCE OWNER CAN CHANGE FREE FLIGHT MODE"); }
+                if (IsBusy()) { return Deny("flow.msg.inprogress", "MISSION IN PROGRESS"); }
+                if (IsLaunchCountdown()) { return Deny("flow.msg.cancelreadyfirst", "ALL READY - CANCEL READY FIRST"); }
                 int wait = FreeFlightCooldownLeft();
-                if (wait > 0) { return Deny("FREE FLIGHT CAN BE CHANGED IN " + wait + "s"); }
+                if (wait > 0) { return Deny1("flow.msg.ffwait", "FREE FLIGHT CAN BE CHANGED IN {0}s", wait.ToString()); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetToggleFreeFlight));
                 return true;
             }
             if (action == ACTION_PHASES_DOWN || action == ACTION_PHASES_UP)
             {
                 int want = _phases + (action == ACTION_PHASES_UP ? 1 : -1);
-                if (want < 1) { return Deny("MINIMUM 1 PHASE"); }
-                if (want > 5) { return Deny("MAXIMUM 5 PHASES"); }
+                if (want < 1) { return Deny("flow.msg.minphase", "MINIMUM 1 PHASE"); }
+                if (want > 5) { return Deny("flow.msg.maxphase", "MAXIMUM 5 PHASES"); }
                 return RequestPhases(want);
             }
             if (action == ACTION_JOIN_SLOT)
@@ -445,14 +453,14 @@ namespace ACO
                 if (slot < 0 || slot >= SlotCount()) { return false; }
                 EnsureRoster();
                 int mine = LocalSlot();
-                if (mine == slot) { return Deny("THIS IS YOUR SLOT - PRESS LEAVE TO EXIT THE ROSTER"); }
-                if (_roster[slot] >= 0) { return Deny("SLOT TAKEN - PICK AN OPEN SLOT"); }
-                if (IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
-                if (Aircraft[slot] && Aircraft[slot].Occupied) { return Deny("THAT AIRCRAFT IS STILL IN USE"); }
+                if (mine == slot) { return Deny("flow.msg.yourslot", "THIS IS YOUR SLOT - PRESS LEAVE TO EXIT THE ROSTER"); }
+                if (_roster[slot] >= 0) { return Deny("flow.msg.slottaken", "SLOT TAKEN - PICK AN OPEN SLOT"); }
+                if (IsLaunchCountdown()) { return Deny("flow.msg.rosterlocked", "ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
+                if (Aircraft[slot] && Aircraft[slot].Occupied) { return Deny("flow.msg.thatinuse", "THAT AIRCRAFT IS STILL IN USE"); }
                 if (mine >= 0)
                 {
-                    if (IsBusy()) { return Deny("MISSION IN PROGRESS - SLOTS LOCKED"); }
-                    if (Aircraft[mine] && Aircraft[mine].Occupied) { return Deny("LAND AND EXIT BEFORE CHANGING SLOTS"); }
+                    if (IsBusy()) { return Deny("flow.msg.slotslocked", "MISSION IN PROGRESS - SLOTS LOCKED"); }
+                    if (Aircraft[mine] && Aircraft[mine].Occupied) { return Deny("flow.msg.landtochange", "LAND AND EXIT BEFORE CHANGING SLOTS"); }
                 }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetJoinSlot), slot);
                 return true;
@@ -460,35 +468,35 @@ namespace ACO
             if (action == ACTION_TOGGLE_JOIN)
             {
                 int k = LocalSlot();
-                if (k >= 0 && k < SlotCount() && Aircraft[k] && Aircraft[k].Piloting) { return Deny("LAND AND EXIT BEFORE LEAVING THE ROSTER"); }
-                if (k < 0 && IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
-                if (k < 0 && !HasOpenSlot()) { return Deny("ROSTER FULL - YOU CAN SPECTATE"); }
+                if (k >= 0 && k < SlotCount() && Aircraft[k] && Aircraft[k].Piloting) { return Deny("flow.msg.landtoleave", "LAND AND EXIT BEFORE LEAVING THE ROSTER"); }
+                if (k < 0 && IsLaunchCountdown()) { return Deny("flow.msg.rosterlocked", "ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
+                if (k < 0 && !HasOpenSlot()) { return Deny("flow.msg.fullspectate", "ROSTER FULL - YOU CAN SPECTATE"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, k >= 0 ? nameof(NetLeave) : nameof(NetJoin));
                 return true;
             }
             if (action == ACTION_TOGGLE_READY)
             {
-                if (!IsLocalParticipant()) { return Deny("JOIN THE ROSTER FIRST"); }
-                if (_freeFlight) { return Deny("FREE FLIGHT MODE - NO MISSIONS, PRESS LAUNCH"); }
-                if (IsStarting()) { return Deny("MISSION STARTING..."); }
-                if (IsRunning()) { return Deny("MISSION IN PROGRESS - USE LAUNCH"); }
-                if (AnyAircraftOccupied()) { return Deny("WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
+                if (!IsLocalParticipant()) { return Deny("flow.msg.joinfirst", "JOIN THE ROSTER FIRST"); }
+                if (_freeFlight) { return Deny("flow.msg.ffnomission", "FREE FLIGHT MODE - NO MISSIONS, PRESS LAUNCH"); }
+                if (IsStarting()) { return Deny("flow.msg.starting", "MISSION STARTING..."); }
+                if (IsRunning()) { return Deny("flow.msg.uselaunch", "MISSION IN PROGRESS - USE LAUNCH"); }
+                if (AnyAircraftOccupied()) { return Deny("flow.msg.waitland", "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
                 bool readyNow = (_readyMask & (1 << LocalSlot())) != 0;
-                if (readyNow && IsLaunchCountdown()) { return Deny("ALL READY - LAUNCH COUNTDOWN, READY LOCKED"); }
-                if (!readyNow && !IsBriefingReady()) { return Deny("PREPARING TERRAIN AND ENEMY FORCES - PLEASE WAIT"); }
+                if (readyNow && IsLaunchCountdown()) { return Deny("flow.msg.readylocked", "ALL READY - LAUNCH COUNTDOWN, READY LOCKED"); }
+                if (!readyNow && !IsBriefingReady()) { return Deny("flow.msg.preparingwait", "PREPARING TERRAIN AND ENEMY FORCES - PLEASE WAIT"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetToggleReady));
                 return true;
             }
             if (action == ACTION_REROLL)
             {
-                if (!IsLocalParticipant()) { return Deny("JOIN THE ROSTER FIRST"); }
-                if (IsBusy()) { return Deny("MISSION IN PROGRESS"); }
-                if (IsLaunchCountdown()) { return Deny("ALL READY - TERRAIN LOCKED (CANCEL READY TO CHANGE)"); }
-                if (AnyAircraftOccupied()) { return Deny("WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
+                if (!IsLocalParticipant()) { return Deny("flow.msg.joinfirst", "JOIN THE ROSTER FIRST"); }
+                if (IsBusy()) { return Deny("flow.msg.inprogress", "MISSION IN PROGRESS"); }
+                if (IsLaunchCountdown()) { return Deny("flow.msg.terrainlocked", "ALL READY - TERRAIN LOCKED (CANCEL READY TO CHANGE)"); }
+                if (AnyAircraftOccupied()) { return Deny("flow.msg.waitland", "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
                 if (!_terrain) { return false; }
-                if (!IsBriefingReady()) { return Deny("TERRAIN GENERATING - PLEASE WAIT"); }
+                if (!IsBriefingReady()) { return Deny("flow.msg.generatingwait", "TERRAIN GENERATING - PLEASE WAIT"); }
                 int left = RerollCooldownLeft();
-                if (left > 0) { return Deny("NEW TERRAIN AVAILABLE IN " + left + "s"); }
+                if (left > 0) { return Deny1("flow.msg.rerollwait", "NEW TERRAIN AVAILABLE IN {0}s", left.ToString()); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetReroll));
                 return true;
             }
@@ -498,10 +506,10 @@ namespace ACO
                 if (!IsLocalParticipant())
                 {
                     if (IsRunning() && SpectatePoint) { TeleportLocal(SpectatePoint); return true; }
-                    return Deny("JOIN THE ROSTER FIRST");
+                    return Deny("flow.msg.joinfirst", "JOIN THE ROSTER FIRST");
                 }
-                if (IsStarting()) { return Deny("MISSION STARTING..."); }
-                if (!IsRunning() && !_freeFlight) { return Deny("MISSION NOT STARTED - PRESS READY"); }
+                if (IsStarting()) { return Deny("flow.msg.starting", "MISSION STARTING..."); }
+                if (!IsRunning() && !_freeFlight) { return Deny("flow.msg.notstarted", "MISSION NOT STARTED - PRESS READY"); }
                 return LaunchLocal();
             }
             return false;
@@ -510,15 +518,18 @@ namespace ACO
         /// 페이즈 버튼이 부른다. 받아들였으면 true.
         public bool RequestPhases(int phases)
         {
-            if (IsBusy()) { return Deny("MISSION IN PROGRESS"); }
-            if (IsLaunchCountdown()) { return Deny("ALL READY - PHASES LOCKED (CANCEL READY TO CHANGE)"); }
+            if (IsBusy()) { return Deny("flow.msg.inprogress", "MISSION IN PROGRESS"); }
+            if (IsLaunchCountdown()) { return Deny("flow.msg.phaseslocked", "ALL READY - PHASES LOCKED (CANCEL READY TO CHANGE)"); }
             SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetSetPhases), Mathf.Clamp(phases, 1, 5));
             return true;
         }
 
-        private bool Deny(string message)
+        /// 거절 안내(빨간 한 줄)를 띄우고 false. 문장은 번역 표 키로 들고 있다가 그릴 때 지금 언어로 만든다(6-166).
+        private bool Deny(string key, string english) { return Deny1(key, english, ""); }
+
+        private bool Deny1(string key, string english, string arg)
         {
-            SetMessage(message);
+            SetMessage1(key, english, arg);
             return false;
         }
 
@@ -766,10 +777,10 @@ namespace ACO
             if (k < 0 || k >= SlotCount()) { return false; }
             SaccEntity e = Aircraft[k];
             if (!e) { return false; }
-            if (e.Piloting) { return Deny("ALREADY IN FLIGHT"); }
-            if (e.dead) { return Deny("AIRCRAFT RESPAWNING - TRY AGAIN SHORTLY"); }
-            if (e.Occupied) { return Deny("AIRCRAFT IN USE"); }
-            if (DeckPoints == null || k >= DeckPoints.Length || !DeckPoints[k]) { return Deny("NO DECK POINT FOR SLOT " + (k + 1)); }
+            if (e.Piloting) { return Deny("flow.msg.inflight", "ALREADY IN FLIGHT"); }
+            if (e.dead) { return Deny("flow.msg.respawning", "AIRCRAFT RESPAWNING - TRY AGAIN SHORTLY"); }
+            if (e.Occupied) { return Deny("flow.msg.inuse", "AIRCRAFT IN USE"); }
+            if (DeckPoints == null || k >= DeckPoints.Length || !DeckPoints[k]) { return Deny1("flow.msg.nodeck", "NO DECK POINT FOR SLOT {0}", (k + 1).ToString()); }
 
             _launchSlot = k;
             _launchTries = 0;
@@ -805,7 +816,7 @@ namespace ACO
                 _launchTries++;
                 if (Fader) { Fader.Fade(); }   // 기다리는 동안 화면을 계속 어둡게 둔다(어두운 시간을 다시 센다)
                 if (_launchTries < 60) { SendCustomEventDelayedFrames(nameof(_LaunchMove), 2); }
-                else { SetMessage("LAUNCH FAILED - TRY AGAIN"); _launchSlot = -1; }
+                else { SetMessage1("flow.msg.launchfailed", "LAUNCH FAILED - TRY AGAIN", ""); _launchSlot = -1; }
                 return;
             }
 
@@ -859,6 +870,7 @@ namespace ACO
             _wasRunning = running;
 
             CheckShotDown(running);
+            ReportLoadoutTick();
             ReturnIdleAircraft(0.5f);
             if (_message != "" && Time.time - _messageTime > MESSAGE_TIME) { _message = ""; }
             Refresh();
@@ -1092,7 +1104,7 @@ namespace ACO
             int mine = LocalSlot();
             if (mine < 0 || !Hud) { return; }
             bool ready = (_readyMask & (1 << mine)) != 0;
-            Hud.ShowNotice("AUTO START IN " + sec + "s" + (ready ? "" : "\n<size=70%>PRESS READY OR BECOME A SPECTATOR</size>"), 1.5f);
+            Hud.ShowNotice(T1("flow.autostart", "AUTO START IN {0}s", sec.ToString()) + (ready ? "" : "\n<size=70%>" + T("flow.notice.pressready", "PRESS READY OR BECOME A SPECTATOR") + "</size>"), 1.5f);
         }
 
         private void UpdateCountdown()
@@ -1121,15 +1133,48 @@ namespace ACO
                 }
             }
             if (!show || CountdownTexts == null) { return; }
-            string text = "<size=40%>ALL READY - LAUNCH IN</size>\n" + sec + "\n<size=30%>LOADOUT AND UPGRADES LOCKED</size>";
+            string text = "<size=40%>" + T("flow.cd.launchin", "ALL READY - LAUNCH IN") + "</size>\n" + sec + "\n<size=30%>" + T("flow.cd.locked", "LOADOUT AND UPGRADES LOCKED") + "</size>";
             for (int i = 0; i < CountdownTexts.Length; i++) { if (CountdownTexts[i]) { CountdownTexts[i].text = text; } }
         }
 
+        /// 안내 한 줄 지우기("")만 — 문장은 SetMessage1(키, 영어, 값).
         private void SetMessage(string s)
         {
-            _message = s;
+            SetMessage1(s, s, "");
+        }
+
+        private void SetMessage1(string key, string english, string arg)
+        {
+            _message = key;
+            _messageEn = english;
+            _messageArg = arg;
             _messageTime = Time.time;
             Refresh();
+        }
+
+        private string MessageText() { return T1(_message, _messageEn, _messageArg); }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english). {0} {1}에 값을 끼운다 — 이어 붙이지 않는다(6-166)
+        private string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+        private string T2(string key, string english, string a, string b) { return T(key, english).Replace("{0}", a).Replace("{1}", b); }
+
+        /// 번역 장치가 언어를 바꾸면 부른다. 다음 주기(0.5초 안)에 모든 글자를 다시 쓴다 — 카운트다운 판도.
+        public void LocalizationChanged()
+        {
+            _pollTimer = 0f;
+            _lastCountdownSec = -1;
+        }
+
+        private string WeatherName()
+        {
+            if (!Weather) { return ""; }
+            return T("flow.wx." + Weather.GetWeather(), Weather.GetWeatherName());
         }
 
         private void Refresh()
@@ -1139,40 +1184,43 @@ namespace ACO
             bool starting = IsStarting();
             int mySlot = LocalSlot();
 
-            string s = "SORTIE ROSTER   <size=70%>MISSION: " + _phases + " PHASE" + (_phases > 1 ? "S" : "") + TerrainLabel() + "</size>";
+            // 글자는 번역 표(flow.*)에서 — 6-166. 값은 문장 틀에 끼운다
+            string mission = _phases == 1 ? T("flow.roster.mission1", "MISSION: 1 PHASE") : T1("flow.roster.mission", "MISSION: {0} PHASES", _phases.ToString());
+            string s = T("flow.roster.head", "SORTIE ROSTER") + "   <size=70%>" + mission + TerrainLabel() + "</size>";
             for (int i = 0; i < SlotCount(); i++)
             {
                 int id = _roster != null && i < _roster.Length ? _roster[i] : -1;
                 VRCPlayerApi p = id >= 0 ? VRCPlayerApi.GetPlayerById(id) : null;
                 string line = (i + 1) + ". ";
-                if (!Utilities.IsValid(p)) { line += "<color=#557766>- OPEN -</color>"; }
+                if (!Utilities.IsValid(p)) { line += "<color=#557766>" + T("flow.roster.open", "- OPEN -") + "</color>"; }
                 else
                 {
                     line += (i == mySlot ? "<color=#FFD24D>" + p.displayName + "</color>" : p.displayName);
-                    if (Aircraft[i] && Aircraft[i].Occupied) { line += "<pos=60%><color=#7FD0FF>AIRBORNE</color>"; }
-                    else if (!running && (_readyMask & (1 << i)) != 0) { line += "<pos=60%><color=#7FFF8A>READY</color>"; }
-                    else if (!running) { line += "<pos=60%><color=#888888>STANDBY</color>"; }
+                    if (Aircraft[i] && Aircraft[i].Occupied) { line += "<pos=60%><color=#7FD0FF>" + T("flow.state.airborne", "AIRBORNE") + "</color>"; }
+                    else if (!running && (_readyMask & (1 << i)) != 0) { line += "<pos=60%><color=#7FFF8A>" + T("flow.state.ready", "READY") + "</color>"; }
+                    else if (!running) { line += "<pos=60%><color=#888888>" + T("flow.state.standby", "STANDBY") + "</color>"; }
                 }
                 s += "\n<size=80%>" + line + "</size>";
             }
             string footer;
-            if (_freeFlight) { footer = "<color=#7FD0FF>FREE FLIGHT MODE</color> - NO ENEMIES, NO MISSIONS"; }
-            else if (starting) { footer = "<color=#FFD24D>MISSION STARTING...</color>"; }
-            else if (running) { footer = "MISSION IN PROGRESS - JOIN AN OPEN SLOT AND PRESS LAUNCH"; }
+            if (_freeFlight) { footer = "<color=#7FD0FF>" + T("flow.ffmode", "FREE FLIGHT MODE") + "</color> - " + T("flow.foot.ff", "NO ENEMIES, NO MISSIONS"); }
+            else if (starting) { footer = "<color=#FFD24D>" + T("flow.msg.starting", "MISSION STARTING...") + "</color>"; }
+            else if (running) { footer = T("flow.foot.running", "MISSION IN PROGRESS - JOIN AN OPEN SLOT AND PRESS LAUNCH"); }
             else if (_launchEndMs != 0)
             {
                 int sec = Mathf.Max(Mathf.CeilToInt((_launchEndMs - Now()) / 1000f), 0);
-                footer = "<color=#7FFF8A>ALL READY - LAUNCH IN " + sec + "s</color> - ROSTER, READY, LOADOUT AND UPGRADES LOCKED";
+                footer = "<color=#7FFF8A>" + T1("flow.foot.launchin", "ALL READY - LAUNCH IN {0}s", sec.ToString()) + "</color> - " + T("flow.lockedall", "ROSTER, READY, LOADOUT AND UPGRADES LOCKED");
             }
             else if (_countdownEndMs != 0)
             {
                 int sec = Mathf.Max(Mathf.CeilToInt((_countdownEndMs - Now()) / 1000f), 0);
-                footer = "<size=120%><color=#FFD24D>AUTO START IN " + sec + "s</color></size>\n<color=#FF5544>PLAYERS NOT READY WILL BECOME SPECTATORS</color>";
+                footer = "<size=120%><color=#FFD24D>" + T1("flow.autostart", "AUTO START IN {0}s", sec.ToString()) + "</color></size>\n<color=#FF5544>"
+                    + T("flow.notreadyspectate", "PLAYERS NOT READY WILL BECOME SPECTATORS") + "</color>";
             }
-            else if (!IsBriefingReady()) { footer = "<color=#FFD24D>PREPARING TERRAIN AND ENEMY FORCES...</color>"; }
-            else { footer = "JOIN, PICK YOUR LOADOUT (NEW TERRAIN IF YOU LIKE), THEN PRESS READY - LAUNCH 10s AFTER ALL ARE READY"; }
+            else if (!IsBriefingReady()) { footer = "<color=#FFD24D>" + T("flow.preparing", "PREPARING TERRAIN AND ENEMY FORCES...") + "</color>"; }
+            else { footer = T("flow.foot.idle", "JOIN, PICK YOUR LOADOUT (NEW TERRAIN IF YOU LIKE), THEN PRESS READY - LAUNCH 10s AFTER ALL ARE READY"); }
             s += "\n<size=60%>" + footer + "</size>";
-            if (_message != "") { s += "\n<size=60%><color=#FF5544>" + _message + "</color></size>"; }
+            if (_message != "") { s += "\n<size=60%><color=#FF5544>" + MessageText() + "</color></size>"; }
             SetTexts(StatusTexts, s);
 
             RefreshConsole(running, starting, mySlot);
@@ -1190,38 +1238,38 @@ namespace ACO
             SaccEntity mine = participant && mySlot < SlotCount() ? Aircraft[mySlot] : null;
 
             // JOIN/LEAVE
-            string joinLabel = participant ? "LEAVE" : "JOIN";
+            string joinLabel = participant ? T("flow.btn.leave", "LEAVE") : T("flow.btn.join", "JOIN");
             bool joinOn = participant ? !(mine != null && mine.Piloting) : HasOpenSlot() && !locked;
-            if (!participant && locked) { joinLabel = "LOCKED"; }
-            else if (!participant && !joinOn) { joinLabel = "ROSTER FULL"; }
+            if (!participant && locked) { joinLabel = T("flow.btn.locked", "LOCKED"); }
+            else if (!participant && !joinOn) { joinLabel = T("flow.btn.rosterfull", "ROSTER FULL"); }
 
             // READY
-            string readyLabel = myReady ? "CANCEL READY" : (!running && !starting && !briefingReady ? "PREPARING..." : "READY");
+            string readyLabel = myReady ? T("flow.btn.cancelready", "CANCEL READY") : (!running && !starting && !briefingReady ? T("flow.btn.preparing", "PREPARING...") : T("flow.btn.ready", "READY"));
             bool readyOn = participant && !_freeFlight && !running && !starting && !occupied && (myReady ? !locked : briefingReady);
-            if (myReady && locked) { readyLabel = "LAUNCHING..."; }
+            if (myReady && locked) { readyLabel = T("flow.btn.launching", "LAUNCHING..."); }
 
             // LAUNCH / SPECTATE
-            string launchLabel = "LAUNCH";
+            string launchLabel = T("flow.btn.launch", "LAUNCH");
             bool launchOn = false;
-            if (!participant && running) { launchLabel = "SPECTATE"; launchOn = SpectatePoint != null; }
+            if (!participant && running) { launchLabel = T("flow.btn.spectate", "SPECTATE"); launchOn = SpectatePoint != null; }
             else if (participant && (running || _freeFlight) && !starting && mine != null)
             {
-                if (mine.Piloting) { launchLabel = "IN FLIGHT"; }
-                else if (mine.dead) { launchLabel = "RESPAWNING"; }
-                else if (mine.Occupied) { launchLabel = "IN USE"; }
+                if (mine.Piloting) { launchLabel = T("flow.btn.inflight", "IN FLIGHT"); }
+                else if (mine.dead) { launchLabel = T("flow.btn.respawning", "RESPAWNING"); }
+                else if (mine.Occupied) { launchLabel = T("flow.btn.inuse", "IN USE"); }
                 else { launchOn = true; }
             }
 
             // REROLL(쿨타임 중엔 남은 시간)
-            string rerollLabel = "NEW TERRAIN";
+            string rerollLabel = T("flow.btn.newterrain", "NEW TERRAIN");
             bool rerollOn = false;
             if (running || starting) { }
-            else if (locked) { rerollLabel = "TERRAIN LOCKED"; }
-            else if (_terrain != null && !briefingReady) { rerollLabel = "GENERATING..."; }
+            else if (locked) { rerollLabel = T("flow.btn.terrainlocked", "TERRAIN LOCKED"); }
+            else if (_terrain != null && !briefingReady) { rerollLabel = T("flow.btn.generating", "GENERATING..."); }
             else
             {
                 int left = RerollCooldownLeft();
-                if (left > 0) { rerollLabel = "NEW TERRAIN (" + left + "s)"; }
+                if (left > 0) { rerollLabel = T1("flow.btn.newterrainwait", "NEW TERRAIN ({0}s)", left.ToString()); }
                 else { rerollOn = participant && !occupied && _terrain != null; }
             }
 
@@ -1230,10 +1278,10 @@ namespace ACO
             bool primaryOn;
             if (!participant)
             {
-                if (running && !HasOpenSlot()) { primaryLabel = "SPECTATE"; primaryOn = SpectatePoint != null; }
+                if (running && !HasOpenSlot()) { primaryLabel = T("flow.btn.spectate", "SPECTATE"); primaryOn = SpectatePoint != null; }
                 else { primaryLabel = joinLabel; primaryOn = joinOn; }
             }
-            else if (running || starting || _freeFlight) { primaryLabel = starting ? "STARTING..." : launchLabel; primaryOn = !starting && launchOn; }
+            else if (running || starting || _freeFlight) { primaryLabel = starting ? T("flow.btn.starting", "STARTING...") : launchLabel; primaryOn = !starting && launchOn; }
             else { primaryLabel = readyLabel; primaryOn = readyOn; }
             bool leaveOn = participant && !(mine != null && mine.Piloting);
             bool phaseOn = !running && !starting && !locked;
@@ -1249,12 +1297,12 @@ namespace ACO
                     else if (b.Action == ACTION_LAUNCH) { b.SetState(launchLabel, launchOn); }
                     else if (b.Action == ACTION_REROLL) { b.SetState(rerollLabel, rerollOn); }
                     else if (b.Action == ACTION_PRIMARY) { b.SetState(primaryLabel, primaryOn); }
-                    else if (b.Action == ACTION_LEAVE) { b.SetState("LEAVE", leaveOn); }
+                    else if (b.Action == ACTION_LEAVE) { b.SetState(T("flow.btn.leave", "LEAVE"), leaveOn); }
                     else if (b.Action == ACTION_FREE_FLIGHT)
                     {
-                        string title = _freeFlight ? "FREE FLIGHT: ON" : "FREE FLIGHT: OFF";
+                        string title = _freeFlight ? T("flow.btn.ffon", "FREE FLIGHT: ON") : T("flow.btn.ffoff", "FREE FLIGHT: OFF");
                         int wait = FreeFlightCooldownLeft();
-                        if (wait > 0) { title += " (" + wait + "s)"; }
+                        if (wait > 0) { title = T2("flow.btn.ffwait", "{0} ({1}s)", title, wait.ToString()); }
                         b.SetState(title + "\n<size=60%>" + FreeFlightController() + "</size>", MayChangeFreeFlight(Networking.LocalPlayer) && !running && !starting && !locked && wait == 0);
                     }
                     else if (b.Action == ACTION_PHASES_DOWN) { b.SetState("-", phaseOn && _phases > 1); }
@@ -1271,12 +1319,14 @@ namespace ACO
             }
         }
 
+        /// 지형 이름(표 flow.terrain.<프리셋>에 있으면 지금 언어, 없으면 TerrainNames).
         private string TerrainName()
         {
             if (!_terrain) { return "-"; }
             int preset = _terrain.GetBuiltPreset();
-            if (preset < 0) { return "GENERATING..."; }
-            return TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset;
+            if (preset < 0) { return T("flow.btn.generating", "GENERATING..."); }
+            string en = TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset;
+            return T("flow.terrain." + preset, en);
         }
 
         private string PlayerName(int playerId)
@@ -1289,7 +1339,7 @@ namespace ACO
         private string SlotName(int k)
         {
             if (SlotNames != null && k < SlotNames.Length && SlotNames[k] != null && SlotNames[k] != "") { return SlotNames[k]; }
-            return k < SlotCount() && Aircraft[k] ? Aircraft[k].gameObject.name : "SLOT " + (k + 1);
+            return k < SlotCount() && Aircraft[k] ? Aircraft[k].gameObject.name : T1("flow.slot.fallback", "SLOT {0}", (k + 1).ToString());
         }
 
         private Color PhaseLevelColor()
@@ -1324,7 +1374,7 @@ namespace ACO
             if (PhaseLevelNames == null || k < 0 || k >= PhaseLevelNames.Length) { return ""; }
             Color c = PhaseLevelColor();
             string hex = Mathf.RoundToInt(c.r * 255f).ToString("X2") + Mathf.RoundToInt(c.g * 255f).ToString("X2") + Mathf.RoundToInt(c.b * 255f).ToString("X2");
-            return "<color=#" + hex + ">" + PhaseLevelNames[k] + "</color> - ";
+            return "<color=#" + hex + ">" + T("flow.level." + k, PhaseLevelNames[k]) + "</color> - ";
         }
 
         /// 작전 콘솔: 상태 배너, 작전 카드(페이즈·지형).
@@ -1352,49 +1402,50 @@ namespace ACO
                 string next;
                 if (_freeFlight)
                 {
-                    head = "<color=#7FD0FF>FREE FLIGHT MODE</color>";
-                    next = participant ? "NO ENEMIES - PRESS LAUNCH OR BOARD ANY AIRCRAFT" : "NO ENEMIES - TAP AN OPEN SLOT, OR BOARD ANY AIRCRAFT";
+                    head = "<color=#7FD0FF>" + T("flow.ffmode", "FREE FLIGHT MODE") + "</color>";
+                    next = participant ? T("flow.ban.ff.pilot", "NO ENEMIES - PRESS LAUNCH OR BOARD ANY AIRCRAFT") : T("flow.ban.ff.guest", "NO ENEMIES - TAP AN OPEN SLOT, OR BOARD ANY AIRCRAFT");
                 }
-                else if (starting) { head = "MISSION STARTING"; next = "STAND BY - LAUNCHING ALL PILOTS"; }
+                else if (starting) { head = T("flow.ban.starting", "MISSION STARTING"); next = T("flow.ban.standby", "STAND BY - LAUNCHING ALL PILOTS"); }
                 else if (running)
                 {
-                    head = "MISSION IN PROGRESS";
+                    head = T("flow.msg.inprogress", "MISSION IN PROGRESS");
                     if (participant)
                     {
-                        if (mine != null && mine.Piloting) { next = "GOOD HUNTING - YOU ARE IN FLIGHT"; }
-                        else if (mine != null && mine.dead) { next = "YOUR AIRCRAFT IS RESPAWNING..."; }
-                        else { next = "NEXT: PRESS LAUNCH TO SORTIE"; }
+                        if (mine != null && mine.Piloting) { next = T("flow.ban.goodhunting", "GOOD HUNTING - YOU ARE IN FLIGHT"); }
+                        else if (mine != null && mine.dead) { next = T("flow.ban.myrespawn", "YOUR AIRCRAFT IS RESPAWNING..."); }
+                        else { next = T("flow.ban.presslaunch", "NEXT: PRESS LAUNCH TO SORTIE"); }
                     }
-                    else { next = HasOpenSlot() ? "NEXT: TAP AN OPEN SLOT TO JOIN, THEN LAUNCH" : "ROSTER FULL - PRESS SPECTATE TO WATCH FROM THE DECK"; }
+                    else { next = HasOpenSlot() ? T("flow.ban.tapjoinlaunch", "NEXT: TAP AN OPEN SLOT TO JOIN, THEN LAUNCH") : T("flow.ban.fullspectate", "ROSTER FULL - PRESS SPECTATE TO WATCH FROM THE DECK"); }
                 }
                 else if (_launchEndMs != 0)
                 {
                     int sec = Mathf.Max(Mathf.CeilToInt((_launchEndMs - Now()) / 1000f), 0);
-                    head = "<color=#7FFF8A>ALL READY - LAUNCH IN " + sec + "</color>";
-                    next = "ROSTER, READY, LOADOUT AND UPGRADES LOCKED";
+                    head = "<color=#7FFF8A>" + T1("flow.ban.launchin", "ALL READY - LAUNCH IN {0}", sec.ToString()) + "</color>";
+                    next = T("flow.lockedall", "ROSTER, READY, LOADOUT AND UPGRADES LOCKED");
                 }
                 else
                 {
-                    head = members > 0 ? "BRIEFING   <color=#7FFF8A>" + ready + " / " + members + " READY</color>" : "BRIEFING   <color=#8FA89A>NO PILOTS YET</color>";
-                    if (!IsBriefingReady()) { next = "<color=#FFD24D>PREPARING TERRAIN AND ENEMY FORCES...</color>"; }
-                    else if (!participant) { next = HasOpenSlot() ? "NEXT: TAP AN OPEN SLOT (OR JOIN) TO SIGN UP" : "ROSTER FULL - WAIT FOR AN OPEN SLOT"; }
-                    else if (AnyAircraftOccupied()) { next = "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"; }
-                    else if (!myReady) { next = "NEXT: PICK YOUR LOADOUT IN THE HANGAR, THEN PRESS READY"; }
+                    string count = T2("flow.ban.readycount", "{0} / {1} READY", ready.ToString(), members.ToString());
+                    head = T("flow.ban.briefing", "BRIEFING") + "   " + (members > 0 ? "<color=#7FFF8A>" + count + "</color>" : "<color=#8FA89A>" + T("flow.ban.nopilots", "NO PILOTS YET") + "</color>");
+                    if (!IsBriefingReady()) { next = "<color=#FFD24D>" + T("flow.preparing", "PREPARING TERRAIN AND ENEMY FORCES...") + "</color>"; }
+                    else if (!participant) { next = HasOpenSlot() ? T("flow.ban.tapsignup", "NEXT: TAP AN OPEN SLOT (OR JOIN) TO SIGN UP") : T("flow.ban.waitslot", "ROSTER FULL - WAIT FOR AN OPEN SLOT"); }
+                    else if (AnyAircraftOccupied()) { next = T("flow.msg.waitland", "WAIT UNTIL ALL AIRCRAFT HAVE LANDED"); }
+                    else if (!myReady) { next = T("flow.ban.pickloadout", "NEXT: PICK A LOADOUT (RIGHT WALL), THEN PRESS READY"); }
                     else
                     {
                         int left = members - ready;
-                        next = "READY - WAITING FOR " + left + " MORE PILOT" + (left > 1 ? "S" : "");
+                        next = left == 1 ? T("flow.ban.waiting1", "READY - WAITING FOR 1 MORE PILOT") : T1("flow.ban.waiting", "READY - WAITING FOR {0} MORE PILOTS", left.ToString());
                     }
                     if (_countdownEndMs != 0)
                     {
                         // 상태 대신 남은 시간을 맨 위에 크게
                         int sec = Mathf.Max(Mathf.CeilToInt((_countdownEndMs - Now()) / 1000f), 0);
-                        head = "<color=#FFD24D>AUTO START IN " + sec + "</color>   <size=60%>" + ready + " / " + members + " READY</size>";
-                        next = participant && !myReady ? "<color=#FF5544>PRESS READY NOW - OR YOU BECOME A SPECTATOR</color>" : "PILOTS NOT READY BECOME SPECTATORS";
+                        head = "<color=#FFD24D>" + T1("flow.ban.autostart", "AUTO START IN {0}", sec.ToString()) + "</color>   <size=60%>" + count + "</size>";
+                        next = participant && !myReady ? "<color=#FF5544>" + T("flow.ban.pressreadynow", "PRESS READY NOW - OR YOU BECOME A SPECTATOR") + "</color>" : T("flow.ban.notreadyspectate", "PILOTS NOT READY BECOME SPECTATORS");
                     }
                 }
                 string b = head + "\n<size=55%>" + next + "</size>";
-                if (_message != "") { b += "\n<size=50%><color=#FF5544>" + _message + "</color></size>"; }
+                if (_message != "") { b += "\n<size=50%><color=#FF5544>" + MessageText() + "</color></size>"; }
                 SetTexts(BannerTexts, b);
             }
 
@@ -1404,14 +1455,110 @@ namespace ACO
                 SetTexts(PhaseTexts, _phases.ToString());
                 ApplyPhaseLevel();
                 string by = PlayerName(_phasesBy);
-                string info = PhaseLevelLabel() + "ABOUT " + Mathf.RoundToInt(_phases * MinutesPerPhase) + " MIN - LATER PHASES SCORE HIGHER";
-                info += "\n<size=80%>" + (locked ? "<color=#FFD24D>LOCKED</color>" : (by != "" ? "SET BY " + by : "TAP - / + TO CHANGE")) + "</size>";
+                string info = PhaseLevelLabel() + T1("flow.card.about", "ABOUT {0} MIN - LATER PHASES SCORE HIGHER", Mathf.RoundToInt(_phases * MinutesPerPhase).ToString());
+                info += "\n<size=80%>" + (locked ? "<color=#FFD24D>" + T("flow.btn.locked", "LOCKED") + "</color>" : (by != "" ? T1("flow.card.setby", "SET BY {0}", by) : T("flow.card.tapchange", "TAP - / + TO CHANGE"))) + "</size>";
                 SetTexts(PhaseInfoTexts, info);
                 string tby = PlayerName(_terrainBy);
-                string wx = Weather ? "WEATHER: " + Weather.GetWeatherName() + "   " : "";
-                string terrain = TerrainName() + "\n<size=45%>" + wx + (tby != "" ? "NEW TERRAIN BY " + tby : "SEE THE OPS TABLE") + "</size>";
+                string wx = Weather ? T1("flow.roster.weather", "WEATHER: {0}", WeatherName()) + "   " : "";
+                string terrain = TerrainName() + "\n<size=45%>" + wx + (tby != "" ? T1("flow.card.terrainby", "NEW TERRAIN BY {0}", tby) : T("flow.card.seetable", "SEE THE OPS TABLE")) + "</size>";
                 SetTexts(TerrainTexts, terrain);
             }
+        }
+
+        // ───────────── 명단 칸 로드아웃(6-173) ─────────────
+        // 각자 자기 특수무장(로드아웃 목록 번호) · 서포트(번호 · 남은 수)를 NetLoadout으로 모두에게 알린다.
+        // 동기화 변수가 아니라 화면마다 칸별로 둔다. 새 사람이 들어오면 명단의 각자가 다시 보낸다.
+        private int[] _ldPlayer;
+        private int[] _ldSpecial;
+        private int[] _ldSupport;
+        private int[] _ldCount;
+        private int _ldSentSlot = -2;
+        private int _ldSentSp = -9;
+        private int _ldSentSup = -9;
+        private int _ldSentCnt = -9;
+        private float _ldForceAt = -1f;
+
+        private void EnsureLd()
+        {
+            if (_ldPlayer != null) { return; }
+            _ldPlayer = new int[MAX_SLOTS];
+            _ldSpecial = new int[MAX_SLOTS];
+            _ldSupport = new int[MAX_SLOTS];
+            _ldCount = new int[MAX_SLOTS];
+            for (int i = 0; i < MAX_SLOTS; i++) { _ldPlayer[i] = -1; }
+        }
+
+        /// 내 칸 · 고른 무장 · 서포트가 바뀌었으면(또는 새 사람이 들어왔으면) 모두에게 알린다. 0.5초마다.
+        private void ReportLoadoutTick()
+        {
+            int slot = LocalSlot();
+            if (slot < 0) { _ldSentSlot = -2; return; }
+            if (Progress == null || !Progress.IsReady()) { return; }
+            string id = Progress.GetSavedSpecialId();
+            int sp = -1;
+            if (Loadout != null && Loadout.SpecialIds != null && id != "")
+            {
+                for (int i = 0; i < Loadout.SpecialIds.Length; i++) { if (Loadout.SpecialIds[i] == id) { sp = i; break; } }
+            }
+            int sup = Progress.GetCallPick();
+            int cnt = sup >= 0 ? Progress.GetCallCount(sup) : 0;
+            bool force = _ldForceAt > 0f && Time.time >= _ldForceAt;
+            if (!force && slot == _ldSentSlot && sp == _ldSentSp && sup == _ldSentSup && cnt == _ldSentCnt) { return; }
+            _ldForceAt = -1f;
+            _ldSentSlot = slot;
+            _ldSentSp = sp;
+            _ldSentSup = sup;
+            _ldSentCnt = cnt;
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetLoadout), slot, sp, sup, cnt);
+        }
+
+        /// 모든 화면: 그 사람의 칸 로드아웃(무장 목록 번호 −1 = 없음, 서포트 번호 −1 = 없음, 남은 수).
+        [NetworkCallable]
+        public void NetLoadout(int slot, int special, int support, int count)
+        {
+            EnsureLd();
+            if (slot < 0 || slot >= MAX_SLOTS) { return; }
+            VRCPlayerApi from = NetworkCalling.CallingPlayer;
+            if (!Utilities.IsValid(from)) { return; }
+            for (int i = 0; i < MAX_SLOTS; i++) { if (_ldPlayer[i] == from.playerId) { _ldPlayer[i] = -1; } }
+            _ldPlayer[slot] = from.playerId;
+            _ldSpecial[slot] = special;
+            _ldSupport[slot] = support;
+            _ldCount[slot] = count;
+            _pollTimer = 0f;
+        }
+
+        public override void OnPlayerJoined(VRCPlayerApi player)
+        {
+            // 늦게 들어온 사람에게 내 로드아웃을 다시 알린다(명단에 든 사람만 — 겹치지 않게 조금씩 늦춘다)
+            if (Utilities.IsValid(player) && !player.isLocal) { _ldForceAt = Time.time + Random.Range(0.5f, 2.5f); }
+        }
+
+        /// 카드 아래 두 줄: 특수무장 · 서포트(아직 못 받았으면 ...).
+        private string LoadoutLines(int k, int playerId)
+        {
+            EnsureLd();
+            bool has = k >= 0 && k < MAX_SLOTS && _ldPlayer[k] == playerId;
+            string none = T("load.none", "NONE");
+            string sp = "...";
+            string sup = "...";
+            if (has)
+            {
+                int s = _ldSpecial[k];
+                bool okSp = Loadout != null && Loadout.SpecialIds != null && s >= 0 && s < Loadout.SpecialIds.Length;
+                if (okSp)
+                {
+                    bool named = Loadout.SpecialNames != null && s < Loadout.SpecialNames.Length && Loadout.SpecialNames[s] != "";
+                    sp = named ? Loadout.SpecialNames[s] : Loadout.SpecialIds[s];
+                }
+                else { sp = none; }
+                int c = _ldSupport[k];
+                if (c >= 0 && Progress != null) { sup = Progress.GetCallName(c) + " x" + _ldCount[k]; }
+                else { sup = none; }
+            }
+            string a = T1("flow.slot.special", "SP  {0}", sp);
+            string b = T1("flow.slot.support", "SUPPORT  {0}", sup);
+            return "\n<size=95%><color=#9FE0B0>" + a + "\n" + b + "</color></size>";
         }
 
         /// 명단 칸 카드: 기체 이름 + 조종사 + 상태(빈 칸은 "OPEN - TAP TO JOIN"). 칸 수보다 많은 카드는 숨긴다.
@@ -1427,27 +1574,27 @@ namespace ACO
             if (!Utilities.IsValid(p))
             {
                 bool inUse = Aircraft[k] && Aircraft[k].Occupied;
-                string open = locked ? "<color=#8FA89A>OPEN - LOCKED</color>" : (inUse ? "<color=#8FA89A>OPEN - AIRCRAFT IN USE</color>" : "<color=#9FE0B0>+ OPEN - TAP TO JOIN</color>");
+                string open = locked ? "<color=#8FA89A>" + T("flow.slot.openlocked", "OPEN - LOCKED") + "</color>"
+                    : (inUse ? "<color=#8FA89A>" + T("flow.slot.openinuse", "OPEN - AIRCRAFT IN USE") + "</color>" : "<color=#9FE0B0>" + T("flow.slot.opentap", "+ OPEN - TAP TO JOIN") + "</color>");
                 b.SetStyle(head + "\n" + open, SlotOpenColor);
                 return;
             }
-            string name = k == mySlot ? "<color=#FFD24D>" + p.displayName + " (YOU)</color>" : p.displayName;
+            string name = k == mySlot ? "<color=#FFD24D>" + T1("flow.slot.you", "{0} (YOU)", p.displayName) + "</color>" : p.displayName;
             string state;
             Color bg = k == mySlot ? SlotMineColor : SlotTakenColor;
-            if (Aircraft[k] && Aircraft[k].Occupied) { state = "<color=#7FD0FF>AIRBORNE</color>"; bg = SlotAirborneColor; }
-            else if (running || _freeFlight) { state = "<color=#B0C4B8>ON DECK</color>"; }
-            else if ((_readyMask & (1 << k)) != 0) { state = "<color=#7FFF8A>READY</color>"; bg = k == mySlot ? SlotMineColor : SlotReadyColor; }
-            else { state = "<color=#B0C4B8>ARMING</color>"; }
-            b.SetStyle(head + "\n" + name + "\n<size=65%>" + state + "</size>", bg);
+            if (Aircraft[k] && Aircraft[k].Occupied) { state = "<color=#7FD0FF>" + T("flow.state.airborne", "AIRBORNE") + "</color>"; bg = SlotAirborneColor; }
+            else if (running || _freeFlight) { state = "<color=#B0C4B8>" + T("flow.state.ondeck", "ON DECK") + "</color>"; }
+            else if ((_readyMask & (1 << k)) != 0) { state = "<color=#7FFF8A>" + T("flow.state.ready", "READY") + "</color>"; bg = k == mySlot ? SlotMineColor : SlotReadyColor; }
+            else { state = "<color=#B0C4B8>" + T("flow.state.arming", "ARMING") + "</color>"; }
+            b.SetStyle(head + "\n" + name + "\n<size=80%>" + state + "</size>" + LoadoutLines(k, id), bg);
         }
 
         private string TerrainLabel()
         {
             if (!_terrain) { return ""; }
-            int preset = _terrain.GetBuiltPreset();
-            if (preset < 0) { return "   TERRAIN: GENERATING..."; }
-            return "   TERRAIN: " + (TerrainNames != null && preset < TerrainNames.Length ? TerrainNames[preset] : "#" + preset)
-                + (Weather ? "   WEATHER: " + Weather.GetWeatherName() : "");
+            string s = "   " + T1("flow.roster.terrain", "TERRAIN: {0}", TerrainName());
+            if (_terrain.GetBuiltPreset() >= 0 && Weather) { s += "   " + T1("flow.roster.weather", "WEATHER: {0}", WeatherName()); }
+            return s;
         }
 
         private void SetTexts(TextMeshProUGUI[] texts, string s)

@@ -261,6 +261,7 @@ MonoBehaviour:
   EntityControl: {fileID: 1826553378012099349}
   Muzzle: {fileID: 8479742918473556776}
   VisualParticle: {fileID: 1282657866774617778}
+  Laser: {fileID: 0}
   FireSound: {fileID: 549865704833608941}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -1049,6 +1050,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 1.2
   AimLeadTime: 0
@@ -1066,6 +1068,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -1162,6 +1165,7 @@ MonoBehaviour:
   EntityControl: {fileID: 465167439977665539}
   Muzzle: {fileID: 3686260026003922264}
   VisualParticle: {fileID: 987238134611638217}
+  Laser: {fileID: 0}
   FireSound: {fileID: 2603777713728801434}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -16538,6 +16542,7 @@ MonoBehaviour:
   MinPitch: -5
   MaxPitch: 85
   MountRelativeAim: 0
+  YawArc: 360
   ReturnToRestDelay: 2
   TrackingLag: 0.35
   AimLeadTime: 0
@@ -16555,6 +16560,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 1.5
+  SilentIntercept: 0
   InterceptTuneVersion: 1
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -21930,7 +21936,7 @@ MonoBehaviour:
   Parts:
   - {fileID: 4147830272635359414}
   - {fileID: 9141997833491756298}
-  - {fileID: 465167439977665539}
+  - {fileID: 4558947058826156727}
   TargetName: Destroyer
   ScoreValue: 500
   MarkerLabel: DD
@@ -21941,6 +21947,7 @@ MonoBehaviour:
   PartHullDamage: 0.2
   PartCheckInterval: 0.25
   PartSplashScale: 0.2
+  CoreSplashImmune: 0
   CruiseSpeed: 14
   CruiseRadius: 1500
   BobAngle: 0.6

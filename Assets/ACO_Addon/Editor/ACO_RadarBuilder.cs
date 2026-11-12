@@ -54,7 +54,7 @@ public static class ACO_RadarBuilder
         MakeRenderer(scope.transform, "Background", LoadOrBuildMesh("ACO_RadarDisc", () => BuildDisc(48, 0.5f)),
             LoadOrSaveMaterial(shader, new Color(0f, 0.07f, 0.03f, 0.55f), "ACO_RadarHudBack", 4005, CompareFunction.Always));
         MakeRenderer(scope.transform, "Grid", LoadOrBuildMesh("ACO_RadarHudGrid", BuildHudGrid),
-            LoadOrSaveMaterial(shader, new Color(0.35f, 1f, 0.45f, 0.65f), "ACO_RadarHudLine", 4006, CompareFunction.Always));
+            LoadOrSaveMaterial(shader, new Color(0f, 1f, 0f, 0.8f), "ACO_RadarHudLine", 4006, CompareFunction.Always));
         var spin = new GameObject("Spin");
         spin.transform.SetParent(scope.transform, false);
         MeshRenderer blips = MakeRenderer(spin.transform, "Blips", null,

@@ -15,7 +15,7 @@
 
   | 분류(탭) | 항목 (단계당) | 1단계 가격 | 적용 대상 |
   |---|---|---|---|
-  | AIRFRAME | 체력 +10% / 기동 +5% / 추력 +4% / 연료 효율 +8% / 안정성 +6% | 2,000 / 2,000 / 2,000 / 1,500 / 1,500 | `SaccAirVehicle.FullHealth`(남은 체력도 같은 비율) / `Pitch·Yaw·RollStrength` / `ThrottleStrength`(+`ThrottleStrengthAB`) / `FuelConsumption` ÷ 배수(+`FuelConsumptionAB`, 5단계 ×1.4 → 약 29% 덜 씀) / 양력: `Lift` × 배수 + `ExtraVelLift`에 (배수 − 1)을 더함(플랩이 같은 값을 더하고 빼므로 곱하지 않고 더한 만큼만 되돌린다) — 저속에서 쳐들어도 버티고 기수가 덜 처진다 |
+  | AIRFRAME | 체력 +10% / 기동 +5% / 추력 +4% / 연료 효율 +8% / 안정성 +6% | 2,000 / 2,000 / 2,000 / 1,500 / 1,500 | `SaccAirVehicle.FullHealth`(남은 체력도 같은 비율) / `Pitch·Yaw·RollStrength` / `ThrottleStrength`(+`ThrottleStrengthAB`) / `FuelConsumption` ÷ 배수(+`FuelConsumptionAB`, 5단계 ×1.4 → 약 29% 덜 씀) / 양력: `Lift` × 배수 + `ExtraVelLift`에 (배수 − 1)을 더함(플랩이 같은 값을 더하고 빼므로 곱하지 않고 더한 만큼만 되돌린다) — 저속에서 쳐들어도 버티고 기수가 덜 처진다 | **바뀜(6-141)**: 안정성은 기동성에 합치고, 그 자리에 대응탄 수(단계마다 +1발, 1,500).
   | MISSILE | 피해 +8% / 탄수 +15% / 선회 +6% / 락온 속도 +10% / 락온 거리 +6% / **시커 범위 +6%** / **재장전 속도 +8%** | 2,000 / 1,500… / **3,000** | 일반 미사일(특수무장 슬롯 밖) |
   | SP. AAM | 위와 같은 7개 | 2,500 / 2,000… / **3,500** | 특수 대공 미사일(4AAM 등) |
   | SP. AGM | 피해 +8% / 탄수 +15% / 폭발 반경 +6% / **재장전 속도 +8%** (유도 성능은 강화 없음) | 2,500 / 2,000 / 2,000 / **3,500** | 특수 대지 미사일(AAM·4AAM 모듈의 표적만 지상으로 바꾼 것, `MissileSplash` 켬) |
@@ -33,7 +33,7 @@
   |---|---|---|---|
   | ARMOR PLATE (`armor`) | 체력 ×1.25 | 1,500 | `SaccAirVehicle.FullHealth`(강화 배수에 곱함) |
   | CM POD (`countermeasure`) | 플레어 ×1.5 | 800 | SAV `DFUNC_Flares.FullFlares` → `ReInitNumFlares()`(가득 채움, 내릴 때 원래 수로) — Bake가 기체의 플레어 기능을 `ACO_VehicleUpgrades.Flares`에 굽는다 |
-  | EXTRA AMMO (`ammo`) | 특수무장 탄수 ×1.5 | 1,200 | UpgradeFamily가 SpecialAAM/AGM/Bomb인 무장의 탄수 배수에 곱함(일반 미사일 제외) |
+  | EXTRA AMMO (`ammo`) | 특수무장 탄수 ×1.5 | 1,200 | UpgradeFamily가 SpecialAAM/AGM/Bomb인 무장의 탄수 배수에 곱함(일반 미사일 제외). 바뀜: OTHER 무장 중 MMP·RGP도 받는다(`TakesExtraAmmo` — 16 → 24발, 강화 트리는 여전히 없음). ECM은 1회 충전식이라 제외 |
   | FUEL TANK (`fuel_tank`) | 연료 용량 ×1.5 | 600 | `SaccAirVehicle.FullFuel`(남은 연료도 같은 비율 — 탑승 때 가득이면 가득) |
 
   **외형**: 기체 강화 확장(`ACO_VehicleUpgrades.ConsumableVisuals`, CONS_* 순서)에 넣은 오브젝트를 사 둔 소모품으로 탑승하면 켠다 — 조종사가 모든 클라이언트에 알리고(`NetConsumableVisuals(mask)`, 늦게 들어온 사람에게 다시), 내리면(`SFEXT_G_PilotExit`) 끈다. 이 때문에 강화 확장의 동기화 모드가 NoVariableSync(네트워크 이벤트). 격납고 전시 기체는 `ACO_Shop.ConsumablePreviewVisuals`(같은 순서) — 사 둔 것만 켠다(로컬).
@@ -89,7 +89,7 @@
 - **추력 ×2 = 최고 속도 거의 ×2**: SAV 공기 저항은 속도에 비례(`AirFriction × 속도`)라 최고 속도가 추력에 비례한다(음속 부근 `SoundBarrierStrength` 혹만 예외). 양력은 속도² × `Lift`이지만 `MaxLift`에서 막혀서 빨라져도 하중(G)은 그 위로 안 오르고 선회율(도/초)은 오히려 준다.
 - **특수 대지(SP. AGM) 탭 6항목**: 피해·탄수·폭발 반경·**락온 속도(×1.5)·락온 거리(×2.5)**·재장전 — 대공 계열처럼 락온 시간 ÷ 배수, `LockRange` × 배수(`ACO_VehicleUpgrades`가 이미 모든 계열에 넘기던 값 — 대지 계열은 항목이 없어 1이었다). 새 저장 ID `agm_lock_speed`·`agm_lock_range`(1단계 2,500·1,500), 항목 수 28 → 30(특수 폭탄 탭은 26~29로 밀린다 — 저장은 고정 ID라 산 단계는 그대로). Bake: 진행도 강화 배열 길이가 다르면 새 기본값으로(`MigrateUpgradeArrays`), 상점 강화 아이콘 수가 다르면 다시 채운다. 선회·시커 범위는 특수 대지에 넣지 않았다. 특수 폭탄(LGB·LGR 포함)은 그대로 4항목.
 - **시커 범위 ≠ 락온 각도**: 강화 `SEEKER CONE`(상수 `STAT_SEEKER`)은 발사된 미사일의 추적 각도 `ACO_Missile.MaxTrackingAngle`을 키운다. 무장의 `LockAngle`(HUD 탐색 원 — 락온이 걸리는 각도)은 강화하지 않는다. 저장 ID `msl_seeker`/`aam_seeker`(예전 `*_lock_angle`에서 바꿨다 — 그 항목에 산 단계는 0부터 다시), 아이콘 `aco_icon_seeker`.
-- **SAV 리미터 권장값**(DFUNC_Limits — `Limits`가 하중 방향 피치 입력과 요 입력을 줄인다):
+- **SAV 리미터 권장값**(DFUNC_Limits — `Limits`가 하중 방향 피치 입력과 요 입력을 줄인다): **바뀜(6-141)**: 기동성 강화가 받음각·하중 한계를 최대 +5°·+5G 올린다(안정성 강화는 기동성에 합쳤다).
   - 받음각: `AoALimiter`(완전히 막는 각) ≤ 실속각 `MaxAngleOfAttackPitch` × 0.65, `AoALimiter_Begin` = 그보다 5~6° 낮게. SF-1(실속 25°)이면 Begin 11 / Limit 16(기본 10/14도 안전). 기동 강화로 피치가 세지면 순간 넘침이 커지므로 구간(Limit − Begin)을 좁히지 말 것.
   - 하중: `GLimiter_Pos` ≈ `MaxGs` × 0.9, `GLimiter_Begin_Pos` = 그보다 6~8 낮게(SF-1 MaxGs 40 → 28 / 36). 음의 G는 -1(=양과 같게) 그대로.
   - `DefaultLimitsOn` 켜기, 저속 실속은 리미터가 못 막는다(받음각을 줄이면 양력이 모자라 가라앉는다) — 안정성 강화(`Lift` ×1.5)가 실속 속도를 낮춘다.
@@ -190,7 +190,7 @@
 
 ### 6-96. 격납고 OTHER 탭
 
-- **탭**: 강화 탭에 OTHER를 더해 GUN DAMAGE를 AIRFRAME에서 옮겼다. 탭은 AIRFRAME, MISSILE, SP. AAM, SP. AGM, SP. BOMB, OTHER, ITEMS 순이다.
+- **탭**: 강화 탭에 OTHER를 더해 GUN DAMAGE를 AIRFRAME에서 옮겼다. 탭은 AIRFRAME, MISSILE, SP. AAM, SP. AGM, SP. BOMB, OTHER, ITEMS 순이다. **바뀜(6-142)**: 안정성을 빼 AIRFRAME에 자리가 나서 GUN DAMAGE를 AIRFRAME(6번째 줄)으로 되돌리고, OTHER 자리는 SUPPORT 탭(지원 호출권 구매, `ACO_Shop.TAB_SUPPORT` = `CAT_SUPPORT` 5, 강화 항목 0개)이 됐다.
 - **ITEMS**: 소모품 탭의 화면 이름을 SUPPLY에서 바꿨다. 구매한 항목은 EQUIPPED로 표시한다. 코드 상수 `TAB_SUPPLY`는 그대로다.
 - **탭 설명**: 탭 아래에 설명 한 줄(`ACO_Shop.TabInfoText`)을 둔다. 강화 탭은 내용을, ITEMS는 한 미션용임을 알린다. 글자는 `ACO_Shop._tabInfo`에 있고, 자리를 내려고 줄 간격을 110에서 100으로 줄였다.
 - **저장**: 항목 번호 `UP_GUN` 5와 저장 ID `gun_damage`는 그대로다. `_categoryStarts`, `_categoryLengths`가 탭을 나누므로 강화 레벨과 효과는 바뀌지 않는다.
@@ -235,6 +235,7 @@
 
 - **무장**(`ACO_Special_MMP`, `ApplyMMP`): 공중·지상 표적(레이어 29·30)을 8개까지 락온(0.8초씩, 3.5km·40도). 쏘면 장전된 16발이 `SalvoInterval` 0.07초 간격으로 락온한 표적들에 차례로 나뉘어 나간다(`OneMissilePerTarget` 끔 — 8개면 2발씩, 1개면 16발). 한 발은 피해 60, 범위 8m, 근접 8m, 속력 800, 선회 140. 16슬롯 / 64발 / 15초. 락온 없이는 쏘지 않는다. 강화를 받지 않고(`UpgradeFamily` None — 16발이 모두 강화되면 너무 세다) 격납고 분류는 OTHER(`mmp-other-1`).
 - **사출**: `DropTime` 0.35초 동안 엔진 없이 떨어진다. 모기체 속도에 발사 지점 기준 `EjectDirection`(아래, 조금 앞) × `EjectSpeed` 14m/s를 더하고(`ACO_Missile.ColdLaunchKick`), 떨어지는 동안 `DropTurnRate` 200도/초로 표적 쪽으로 기수를 돌린 뒤 점화한다. 새 칸은 모두 기본 0(다른 무장은 그대로).
+- **비틀거림**(새 — 곧게 나가 보는 재미가 없었다): 유도가 노리는 방향을 표적 쪽에서 노이즈 각도만큼 비튼다(`ACO_Missile.WanderAngle` 최대 30도, `WanderFrequency` 0.9Hz) — 미사일은 선회 한계(140)로 그 흔들리는 방향을 쫓아 술 취한 듯 구불구불 표적 쪽으로 간다(바뀜 — 처음엔 유도 뒤에 기수를 초당 110도로 더 돌렸는데, 유도 선회가 더 빨라 매 프레임 바로잡혀 거의 곧았다). 표적 `WanderFadeDistance` 400m 안에서 줄어 200m부터는 곧게 꽂힌다(명중률 그대로). 노이즈는 발사 뒤 시각과 씨앗(`WanderSeed` = 슬롯·표적 번호, 발사 이벤트에 이미 있는 값)으로만 정해져 모든 화면이 같은 모양을 그린다(새 동기화 없음). 다른 미사일은 0(곧게). 이미 만든 탄체는 Setup Check `mmp-wander-2`.
 - **연사**: `ACO_DFUNC_Missile`이 쏠 슬롯·표적을 미리 골라 두고 `_SalvoStep`으로 한 발씩 보낸다(네트워크 이벤트 초당 약 14회 — `NetLaunch` 한도 20 안). 연사 중엔 다시 쏘지 않고, 내리거나 격추되면 멈춘다.
 - **포드 외형**(`Models/MMP/ACO_MMP.fbx`, `Tools/aco_mmp_pod.py`): 납작한 육각 단면, 같은 비율로 좁아지는 기수(살짝 뭉툭한 끝면)와 꼬리(평평한 끝면), 길이 2.0m. 아랫면에 VLS처럼 덮개 달린 셀 8개(2열 × 4) — 아래·조금 앞으로만 사출한다(옆으로 쏘면 같은 날개의 다른 파일런에 걸린다). 양옆 아래 경사면에 사출 가스 벤트(루버) 4개씩. 날개 없음. 삼각형 2124개, 텍스처 4096×2048(표기는 모두 가공). 재질 `Generated/ACO_MMP.mat`.
 - **발사 지점**: 포드는 기체 프리팹의 파일런 아래 Transform 0으로 직접 놓는다(SCM과 같다). 셋업 검사 [고치기](`InstallMmpLaunchPoints`)가 포드마다 셀 자리에 `MMP_Launch_0~7`(앞 = 기수, 위 = 위)을 만들고 MMP 모듈 `LaunchPoints`에 포드를 번갈아 넣는다(연사가 양쪽 날개에서 번갈아). 자리는 `ACO_MmpModel.MmpLaunch` — 스크립트의 LP 줄과 같아야 한다. 포드가 없으면 날개 파일런에서 나간다.
@@ -249,3 +250,88 @@
 - **탄**(`ACO_Missile_RGP`): SRAAM 프리팹을 복사해 모델을 빛나는 육각 쌍뿔 탄체(길이 0.9m, `Generated/ACO_RGP_Slug.asset`)로 바꾸고 엔진 불꽃·불빛·소리를 끈다(`ACO_PrefabBuilder.BuildRgpSlug`, 카탈로그가 없으면 만든다).
 - **외형**: 파일런 두 개 — 왼쪽 파일런 축전기 포드(`Models/RGP/ACO_RGP_Cap.fbx`, 길이 2.76m), 오른쪽 파일런 레일건 포드(`ACO_RGP_Rail.fbx`, 길이 4.25m — 사각 몸통이 덮개로 매끈하게 모여 가는 배럴로 이어진다, 위아래 레일과 가로 슬롯, 배럴이 날개 앞전보다 앞으로 나온다). 모서리를 깎은 사각 단면, 생성기 `Tools/aco_rgp_pod.py`(1.5배로 키운다 — 윗면 높이와 걸이 자리는 그대로). 파일런 로컬 x는 기체 x와 반대라 전원 연결구는 각 포드의 동체 쪽(레일건 +x, 축전기 -x)에 있다.
 - **설치**: 포드는 기체 프리팹의 파일런 아래에 Transform 0으로 손으로 놓는다(MMP와 같이 모듈 외형 묶음 `ModuleVisuals`로). Setup Check [고치기](`InstallRgpLaunchPoints`)가 레일건 포드 포구(파일런 로컬 0, 2.805, -0.625)에 `RGP_Muzzle`(발사음·섬광)를 만들어 모듈 `LaunchPoints`·`LaunchSound`·`LaunchFlash`에 넣고, 비어 있는 포드 재질(`Generated/ACO_RGP_Rail.mat`·`ACO_RGP_Cap.mat`·`ACO_RGP_Glow.mat`)을 넣는다. 기체 프리팹 파일을 고친다.
+
+### 6-141. 기동성 강화에 안정성 합치기 + 리미터 한계가 같이 오름
+- **이유**: 기동성(피치·요·롤 힘)만 올리면 받음각이 순간 튀어 리미터를 지나 실속하기 쉬웠고(그래서 피치·요는 절반만 받았다), 안정성(양력)이 그걸 메우는 짝이라 따로 사면 함정이었다.
+- **안정성 강화 뺌**: 저장 키 `stability`는 다시 쓰지 않는다(안정 ID 규칙). 테스트 단계라 산 단계는 돌려주지 않는다.
+- **4번 자리 = 대응탄 수(COUNTERMEASURES)**: 새 저장 키 `countermeasure`, **단계마다 한 발씩**(`ACO_PlayerProgress.CountermeasurePerLevel` 1 — 10단계 +10발, 상점에 "+3"처럼 발 수로 표시), 1단계 1,500. SAV 플레어 최대 수(DFUNC_Flares.FullFlares) = (원래 수 + 강화 발 수) × 대응탄 포드(소모품) 배수 — 탈 때 채우고 내릴 때 원래 수로. 아이콘은 대응탄 포드와 같은 `cm_pod`. 이미 있는 씬은 Setup Check `cm-upgrade-1`(진행도의 4번 이름·배수·가격) 뒤 Bake(상점 아이콘 — Bake가 항목 내용이 바뀌어도 아이콘을 다시 채운다).
+- **기동성 강화가 함께 올리는 것**(강화 비율 t = 단계 / 최대 단계, `ACO_VehicleUpgrades`):
+  - 회전: 롤 ×(1 + 0.03·단계), 피치·요는 그 `PitchYawShare`(0.5)만큼 — 그대로.
+  - 양력: Lift × (1 + `LiftBonus`·t), ExtraVelLift + `LiftBonus`·t — 10단계 ×1.5(예전 안정성 10단계와 같다).
+  - **리미터 한계**: SAV `DFUNC_Limits`의 받음각 시작·한계를 `LimiterAoABonus`·t(최대 +5°), 하중 시작·한계를 `LimiterGBonus`·t(최대 +5G) 올린다. 시작점과 한계를 같이 올린다(리미터가 구간 폭을 시작할 때만 잰다). 받음각 한계는 실속각의 80%(`LimiterAoAMaxRatio`), 하중 한계는 MaxGs − 2를 넘지 않는다.
+  - FA-18E(실속 25°, MaxGs 50, 리미터 10/14°·35/40G) 10단계: 받음각 15/19°(실속의 76%), 하중 40/45G. 내릴 때 원래 값으로.
+- 리미터 켜고 끄기(SAV 다이얼)는 그대로다.
+
+### 6-142. 지원 호출권 — 벙커버스터 폭격 · 급유 드론
+- **개요**: 상점에서 사 모으는 **호출권**(산 만큼 쌓임, 종류마다 최대 9장, 미션이 끝나도 남는다). 격납고에서 이번 출격에 가져갈 지원을 **하나** 고르고(없음 / 폭격 / 급유), 조종석 다이얼의 **SUPPORT 칸**으로 부른다. 쿨타임은 플레이어마다(폭격 120초, 급유 180초 — 진행도 인스펙터 값). 플레이어 기체는 FA-18E(`Pit-bool/FA-18E Main_ACO.prefab`) 하나 — 프리팹 에셋을 고친다.
+- **저장**(새 키 — 바꾸거나 다시 쓰지 않는다): 장수 `aco_call_strike`, `aco_call_tanker`(int), 고른 지원 `aco_call_pick`(0 없음 / 1 폭격 / 2 급유). 진행도 `ACO_PlayerProgress`에 `CALL_STRIKE = 0`, `CALL_TANKER = 1`, 이름·효과 문구·가격·쿨타임·최대 장수 배열(`CallNames/CallEffects/CallPrices/CallCooldowns/CallMaxCount`).
+- **상점**(**SUPPORT 탭** — 예전 OTHER 자리, 탭 아이콘 `operation`): 두 줄 `BUNKER BUSTER  LASER STRIKE 500M x3  10,000 CR`, `TANKER DRONE  FULL RESUPPLY x1  4,800 CR`(최대면 MAX). 카운트다운 중에는 못 산다(소모품과 같다). 아이콘은 폭탄 탭(`tab_sp_bomb`)·연료(`fuel`) — Bake가 `CallIcons`에. 탭 설명 "SUPPORT CALLS - KEPT UNTIL USED, PICK ONE UNDER SUPPORT (LEFT)". 소모품(ITEMS) 탭은 소모품 4줄만.
+- **격납고**: 특수무장 목록 아래 한 줄 `SUPPORT  < BUNKER BUSTER ×3 >` — `<` `>`로 없음/폭격/급유를 돌린다. 장수 0인 것도 고를 수 있지만 부르면 "NO CALLS LEFT". 고른 지원은 저장된다.
+- **SUPPORT 다이얼 칸**(`ACO_DFUNC_Support`, 새 스크립트): 기체 SaccEntity의 **오른쪽 다이얼 4번째 칸**(`Dial_Functions_R[3]`). Setup Check [고치기]가 프리팹에 넣는다(그 칸에 다른 기능이 있으면 경고만 — 직접 옮긴다). HUD 잔탄 줄에 `BB`/`TNK` + 장수(쿨타임 중엔 `85s`, 안내는 잠깐 `NO SPOT` 등). **MFD**: 오른쪽 다이얼 표시(StickDisplayR)의 왼쪽 칸에 `MFD_Support`(기총 글자 MFD_Gun 복제 — 다이얼 칸 순서 위·오른쪽·아래·왼쪽이라 Element 3 = 왼쪽) — 첫 줄 `BB x3`, 쿨타임·안내는 줄바꿈해 둘째 줄. 고른 지원이 없으면 `SUP - N/A`, 불러도 아무 일도 없다.
+
+#### 벙커버스터 폭격(`CALL_STRIKE`)
+- **조준**: SUPPORT 칸을 고르면 기체의 **타게팅 포드**(AN/ASQ-228 — 프리팹에 이미 있음, 렌즈 자리 `TGP_Laser` 점을 Setup Check가 만든다)에서 **바라보는 방향**(머리 방향 — VR은 머리, 데스크톱은 시선)으로 레이저가 나간다. 지면·물·유닛에 닿는 점(최대 10km)에 원형 지역 표시(반경 = 폭발 범위). 각도 제약 없음. 닿는 곳이 없으면 표시 없이 `NO SPOT` — 트리거를 당겨도 무시.
+  - 고르기 전·조준 중 레이저는 **내 화면만**(머리 방향을 매 프레임 보내지 않는다).
+- **투하**: 트리거를 당기면 그 지점으로 확정 — 호출권 1장 사용, 쿨타임 시작, AWACS 응답 무전. **지역 지정형**(락온 없음, 확정 뒤에는 기동해도 된다). 확정부터 탄착까지 포드 → 지점 레이저를 **모든 화면**에 보인다(포드 쪽 끝은 내 기체를 따라간다).
+- **폭격기**: 확정 지점 상공(지점 높이 + 2,500m), 호출한 사람의 진행 방향으로 3km 앞에서 아군 폭격기 한 대가 나타나 지점 위를 지난다(220m/s). 투하점에서 벙커버스터 한 발을 떨어뜨리고 상승·이탈, 화면 밖에서 사라진다. 무적, 적이 노리지 않고 HUD 표적이 아니다. 모델은 **프리팹 `ACO_SupportBomber`**(바뀜 — 예전엔 풀마다 씬 복사본): 없을 때 NPC_Bomber의 `Model` 겉모양만 복사해 만든다(스크립트·충돌·파티클 없음). 풀 4칸은 이 프리팹의 인스턴스라 `Model`을 바꾸면 모두 바뀐다(진행 방향 +Z).
+- **벙커버스터**: `ACO_Ordnance`(유도 폭탄)에 **고정 지점 유도**(표적 대신 위치)를 더해 쓴다. 모델은 `Pit-bool/FA-18/prefab/weapon/GBU-24` 메시(원본 프리팹 루트 회전 -90도 X를 모델에 그대로 둬야 기수가 진행 방향 — 바뀜: 예전엔 회전을 0으로 둬 옆으로 누운 채 날았다, Setup Check `strike-bomb-forward-1`). 낙하 약 12초. 피해 중심 1,500 → 가장자리 30%, **범위 500m**(진행도 값), 큰 폭발(`ACO_FortressBlast` 작은 크기 + 지면 충격파). 피해·격추 점수는 **호출한 사람**(다른 폭탄과 같은 규칙 — 피해는 그 화면만). 호위 대상(아군)은 피해 없음.
+- 확정부터 탄착까지 약 20초(폭격기 접근 + 낙하).
+- **동기화**: 호출한 사람이 `지점·진행 방향·시각`을 네트워크 이벤트로 보내면 모든 화면이 폭격기·폭탄·폭발을 각자 재현(늦게 들어온 사람은 진행 중인 폭격을 못 봐도 된다). 장면 관리자 `ACO_SupportManager`(씬에 하나)가 폭격기·폭탄 풀(4세트)을 가진다 — 여러 명이 동시에 불러도 된다.
+
+#### 급유 드론(`CALL_TANKER`)
+- **호출**: SUPPORT 칸에서 트리거 — 쿨타임 중이 아니고 장수가 있으면 출발(이때는 호출권을 쓰지 않는다). AWACS 응답.
+- **드론**: 호출한 사람 뒤쪽 위 2km에서 나타나 **호출한 사람 앞쪽 위**로 와서 속도를 맞춘다(약 12초). **편대 추종**(LUNA UAV와 같은 방식): 드론은 월드 좌표로 움직이며 매 프레임 기체 속도만큼 같이 가고 자리 쪽으로 지수 보간한다(대기·호스 풀기 `FollowSharpness` 2.5, 연결 이후 `ContactSharpness` 8). 접근은 상대 속력 최대 `ApproachSpeed` 220m/s, 남은 거리 × 0.8로 감속. 자세는 진행 방향(속도) + 플레이어 뱅크의 `BankFollow`(절반)만 — 기체에 매달린 것처럼 같이 기울지 않는다. 자리·출현 오프셋은 진행 방향 프레임(뱅크 무시). 이탈은 앞쪽 위로 가속(`LeaveAccel`). 꽂힌 동안 드론이 살짝 늦어 생기는 차이는 호스가 곧게 당겨지며 받는다(드로그는 프로브에 그대로).
+- **대기**: 자리에 오면 호출한 사람이 `SteadyTime`(1초) 동안 이탈 조건에 안 걸려야 호스를 푼다(`NetTankerExtend`). 그 전엔 HUD/MFD에 STEADY, `WaitTimeout`(20초) 동안 안정되지 않으면 돌아간다(호출권 그대로, 쿨타임). **이미 뱅크·G가 걸린 상태에서 불러도 접근·대기 중에는 끊지 않는다.** 바뀜 — **최저 속도**: 드론은 `MinSpeedKt`(180kt)보다 느리게 날 수 없다(기체가 그보다 느리면 진행 방향으로 최저 속도를 지킨다). 그래서 착륙·저속 중에 부르면 드론이 자리를 지나쳐 버리고(오버슈트) 급유 실패 — "BREAKAWAY / TOO SLOW - MIN 180KT", 무전 break, 호출권 그대로, 쿨타임 `TankerFailCooldown`(15초) — 로 앞·위로 이탈한다. 자리에 온 뒤 느려졌으면 `SlowGraceTime`(2초) 동안 HUD STEADY(SPEED UP)로 기다리고 그래도 느리면 같은 실패. 예전엔 착륙한 기체 앞에 그냥 떠 있었다. 아래에 **버디 포드**(`EEIproducts/AirCraftSupportSet/BuddyPod` — 호스 본 `Drogue_Base → Drogue_001~025 → Drogue_Head`)가 달려 있다. 드론 몸체는 **자리 표시 큐브**(길이 8m 정도 — 사용자가 모델로 바꾼다. 몸체는 `Model` 자식 하나라 통째로 바꾸면 된다).
+- **연결 연출**(모든 화면):
+  1. 드론이 자리에 오면 기체 애니메이터 bool **`PROBE`**를 켠다(F-18 프로브가 펴진다 — `Prove/Prove.1` 끝이 프로브 끝). 끄면 `OFF` 상태(같은 클립 역재생)로 접힌다 — `FA-18F.controller`의 DEPLOY → OFF 전환 오프셋을 1로 바꿔(펴진 끝부터 거꾸로) 2초에 걸쳐 들어간다(Pit-bool 에셋 — git 밖이라 다시 받으면 되돌려야 한다).
+  2. 버디 포드 호스가 풀려나온다(약 3초) — 바뀜: 드로그가 포드 출구에서 **프로브 앞 대기 자리**(프로브 끝에서 기수 방향으로 `PreContactGap` 3m — 프로브 축 위)까지 곧게 나온다. 예전엔 뒤로 아래로 늘어졌다가 프로브로 수직으로 올라와 꽂혀 어색했다.
+  3. 드로그(`Drogue_Head`)가 대기 자리에서 프로브 끝으로 들어가 꽂힌다(`ConnectTime` 1.5초) — 코드가 본 사슬을 포드 → 드로그 2차 베지어로 매 프레임 맞춘다. 바뀜: 조절점은 드로그 높이에서 기수 방향으로 출구까지 수평 거리 × `FlowBend`(0.5) — 호스가 출구에서 뒤·아래로 나와 드로그 쪽에선 기수와 나란해져 바스켓이 뒤를 보고 프로브가 축으로 들어간다(예전 처짐 곡선은 끝이 아래에서 올라와 바스켓이 위로 들려 프로브보다 위에 찍혔다). 감겨 있을 때도 모든 본이 출구에서 뒤를 본다(예전엔 감긴 동안 본 회전을 두지 않아 풀리기 시작·다 감길 때 드로그 자세가 튀었다).
+     - 본 자세(바뀜 — 드로그가 틀어져 보였다): 본마다 펼친 포드의 원래 자세를 처음에 기억해 두고, 원래 사슬 축(다음 본 쪽)만 곡선 접선으로 돌린다(최소 회전 — 본의 원래 비틀림·기울기 유지). 예전엔 모든 본을 "포드 자세 + 위(+Y) = 접선"으로 놓아, 원래 자세가 포드와 다른 본(바스켓)이 틀어졌다.
+     - 꽂으러 가는 동안(`ConnectTime`)도 목표점에 그대로 둔다(예전엔 호스 길이로 잘라 두어 꽂히는 순간 튀었다).
+     - 드론·가디언 위치는 `PostLateUpdate`에서 놓는다(바뀜 — Update에선 기체가 그 뒤에 움직여 고속에서 드로그가 프로브와 한 프레임씩 어긋나 뚝뚝 끊겨 보였다).
+  4. 꽂힌 채 **3초** 지나면 **연료·체력·모든 무장이 즉시 가득**(SAV 보급을 한 번에 — 연료·체력 = 최대, SAV 무장 각자 가득, ACO 미사일·특수무장 모듈 가득). **이때 호출권 1장을 쓴다.** 무전 "transfer complete".
+  5. 드로그가 빠지고(바뀜 — `DisconnectTime` 0.8초 동안 프로브에서 프로브 앞 대기 자리로 물러난다. 예전엔 아래 늘어진 자리로 꺼졌다가 당겨졌다. 빠지기 시작 자리는 기체 기준으로 기억한다 — 드론 기준이던 때는 호출한 사람 화면에서 한 프레임 비행 거리만큼 튀었다) 호스가 같은 선을 따라 출구로 감기고(`RetractTime` 2초 — 풀다 만 상태면 그때 드로그 자리에서부터) `PROBE` 끔, 드론은 앞으로 상승·이탈하고 사라진다.
+- **급유는 호출한 사람만**(드론·호스는 모두 보이지만 보급은 호출한 사람 기체만 — 보급 구역 트리거를 쓰지 않는다).
+- **급유 조건**(관리자 값 — 대기 중엔 맞을 때까지 기다리고, 호스를 푼 뒤 어기면 이탈): 뒤집힘 없음, 뱅크 `MaxBank` 45도 안, **피치 `MaxPitch` ±20도 안**, 하중 0.3~2.5G, 애프터버너 끔, **속도 `MinSpeedKt`~`MaxSpeedKt` 180~1000kt**(HUD 속도와 같은 대기 속도. 바뀜 — 최고 400kt가 빡빡해 넉넉하게, Setup Check `tanker-max-speed-1`. 0이면 그쪽은 보지 않음). **HUD 경고**: 조건이 안 맞으면 비행 HUD 왼쪽 상태 줄(GEAR·FLAP 아래)에 두 줄로 깜빡인다 — 대기 중 `TANKER` / `BANK UNDER 45`, 이탈하면 `BREAKAWAY` / 이유(3초). 잔탄 줄·MFD 둘째 줄은 짧게(`STEADY`·`BRK`). 호출 실패도 같은 자리(`SUPPORT` / `COOLDOWN 85s`, `NO CALLS - BUY IN ITEMS`, `STRIKE` / `NO SPOT - LOOK AT GROUND` 등).
+- **이탈 조건**(호스를 풀기 시작한 뒤부터 완료 전까지, 관리자 값): 하중 0.3G 아래 또는 2.5G 위, 뱅크 45도 위, 애프터버너, 내리거나 격추. 하나라도 걸리면 무전 "breakaway", 호스를 감고 돌아간다 — **호출권은 쓰지 않고 쿨타임은 15초**(바뀜 — 실패해도 정해진 쿨타임 전부였다. 관리자 `TankerFailCooldown` — 이탈·CANNOT JOIN·NOT STABLE·기체가 사라짐 모두. 성공하면 진행도의 급유 쿨타임 그대로).
+- **쿨타임 초기화**(바뀜 — 모든 지원 호출): 작전(미션)이 시작되면 폭격·급유·가디언 쿨타임이 모두 0이 된다(`ACO_PlayerProgress`가 미션 시작 시각이 바뀐 것을 보고 지운다). 작전 사이 대기 중에 쓴 쿨타임이 다음 작전으로 이어지지 않는다.
+- 이미 가득이어도 부를 수 있다(그대로 쓴다 — 막지 않는다).
+- **동기화**: 호출·연결·완료·이탈을 네트워크 이벤트로. 드론은 각 화면이 호출한 사람 기체(SAV가 동기화하는 위치)를 따라가며 그린다. 보급은 호출한 사람 화면(기체 오너)만.
+
+#### 무전(AWACS, `Tools/aco_voice_lines.json`의 새 줄)
+- 폭격: 호출 응답("Copy your mark. Bomber inbound."), 투하("Bomb away."), 탄착 확인("Impact. Good effect on target.").
+- 급유: 호출 응답("Tanker drone en route. Hold steady."), 연결("Contact."), 완료("Transfer complete. Clear to break."), 이탈("Breakaway, breakaway. Tanker is returning.").
+- 문구는 키로 고르고(언어 바꾸기 대비), 음성은 AWACS 목소리(eleven_v4).
+
+#### 구현
+- **스크립트**: `ACO_DFUNC_Support`(다이얼 — 조준·호출·HUD 글자), `ACO_SupportManager`(씬에 하나 — 폭격·드론 시간표, 범위 피해, 보급, 이탈 판정, 무전), `ACO_TankerDrone`(드론 한 대 — 호스 본을 포드 출구 → 드로그 목표 2차 베지어에 늘어놓음, 길이는 펼친 포드 본 간격 합).
+- **벙커버스터 탄도**: `ACO_Ordnance`를 쓰지 않고 관리자가 정해진 시간표로 그린다(모든 화면이 같은 모양 — 수평 속도는 폭격기 그대로, 높이는 등가속으로 BombFallTime 뒤 지점). 출현 → 1,500m 날아 투하(약 6.8초) → 12초 낙하. 피해는 `ACO_Ordnance.ApplySplash`와 같은 규칙(관리자 오브젝트의 `EntityControl`에 호출한 기체를 넣어 격추 점수가 호출한 사람).
+- **보급(완료)**: 오너 화면이 연료·체력을 최대로 + SAV `SFEXT_G_ReFuel` 한 번(저연료 해제 알림 한 번) + 모든 화면이 `SFEXT_G_ReArm`을 `RearmRepeats`(12)번 — SAV 보급 이벤트를 연달아 부르면 오너가 매번 네트워크 이벤트를 보내서 나눴다.
+- **드론 자리**: 포드 출구 = 프로브 끝 + (위 0.15, 앞 0.95) × 호스 길이(기체 기준). 드로그는 프로브 앞 대기 자리까지 풀리고, 연결하면 1.5초에 프로브로 들어가 꽂힌다(바뀜 — 예전엔 늘어진 드로그가 프로브 근처 아래에 왔다). 이탈 판정은 SAV `VertGs`·`AfterburnerOn`·기체 자세.
+- **Setup Check**: 플레이어 기체 "SUPPORT 다이얼"(`ACO_PrefabBuilder.InstallSupportSlots` — 프리팹 에셋에, `Dial_Functions_R[3]`이 비어 있을 때만, 키 4는 `BindDialKey`), "지원 관리자"(`EnsureSupportManager` — 풀 4세트·드론 4대, 드론 프리팹은 없을 때만 만든다). 격납고 프리팹 판 5(SUPPORT 줄).
+- **Bake**(`BakeSupport`): 다이얼 번호(`SupportIndex` = 관리자 `Supports` 순서 — 네트워크 이벤트가 이 번호로 기체를 가리킨다)·진행도·관리자·무전 연결, 빈 무전 음성 칸을 `Audio/AWACSVoiceLines/Support/`로, 상점 `CallIcons`·격납고 `SupportIcons`. 비행 HUD `Supports`.
+- **무전 음성**: `Tools/aco_voice_lines.json`의 `support_*` 7줄(AWACS, eleven_v4).
+
+### 6-143. 지원 호출 — 가디언 드론
+- **개요**: 세 번째 지원 호출(6-142 구조 그대로 — 상점 SUPPORT 탭에서 호출권을 사고, 격납고 SUPPORT 줄에서 고르고, SUPPORT 다이얼로 부른다). 요격 드론 **한 대**가 내 기체 **옆 살짝 앞**(조종석에서 잘 보이는 자리)에 붙어 일정 시간 동안 **나를 노린 미사일**을 레이저로 떨어뜨린다. 공격(벙커버스터)·유지(급유)에 이어 방어 카드.
+- **저장**: `CALL_GUARDIAN = 2`, 저장 키 `aco_call_guardian`(새 키), 고른 지원 값 3. 이름 `GUARDIAN DRONE`, 효과 `MISSILE DEFENSE 90s`, HUD 이름 `GD`.
+- **값**(진행도 `CallPrices/CallCooldowns`, 관리자 `GuardianDuration`): 가격 8,000, 유지 90초, 쿨타임 150초(드론이 돌아간 뒤부터), 호출권은 부를 때 1장.
+- **자리**: 진행 방향 프레임에서 옆 18m · 위 2m · 앞 12m(조종석에서 고개를 조금 돌리면 보이는 곳). **왼쪽/오른쪽은 부를 때마다 랜덤**(호출한 사람이 정해 이벤트에 싣는다 — 모든 화면이 같은 쪽). 급유 드론과 같은 편대 추종(기체 속도만큼 같이 가고 자리로 지수 보간, 뱅크는 따라 기움). 출현은 뒤쪽 위에서 따라붙고, 끝나면 위로 빠져 사라진다.
+- **요격**: 함선 CIWS·LUNA UAV와 같은 방식 — 드론이 대공포(`ACO_AAGunSite`, 비행기는 노리지 않음 `TargetLayers` 0)이고 판정은 미사일이 한다(`InterceptProtectLayers` = 아군 항공기 25, 방어 반경 작게 — 호출한 기체 근처만). 한 번에 한 발, 반응 0.4초 + 격추 0.8초, 한 발 떨어뜨린 뒤 2초 쉼 — 일제 발사·연속 발사는 일부 뚫린다(회피·플레어는 여전히 필요). 레이저는 기총 레이저 부품(`ACO_NPCLaser`) — 아군 색(초록 계열). 폭탄·로켓은 막지 않는다(CIWS 규칙 그대로).
+- **내구**: 무적·락온 불가(적이 노리지 않고 HUD 표적이 아니다). 그래서 SaccEntity·SaccTarget·표적 Animator가 없다(바뀜 — 대공포 바탕에서 뺀다, 요격은 `ACO_AAGunSite`만으로 된다. 이미 있는 프리팹은 Setup Check "가디언 드론 프리팹에 SaccEntity·SaccTarget이 남아 있음" [고치기]).
+- **HUD 아군 표시**(6-142 폭격기·급유 드론과 같이): 나와 있는 동안 아군기처럼 파란 사각 테두리 + 이름(`ACO_TargetMarkers.Support` — Bake가 씬의 지원 관리자를 넣는다). 이름 `SUPPORT BOMBER`·`TANKER DRONE`·`GUARDIAN DRONE`(마커 칸 `Support*Label`). `SupportMinDistance`(150m)보다 가까우면 그리지 않는다 — 내 옆에 붙은 가디언·급유 중인 드론이 시야를 가리지 않게. 목표처럼 멀리서도 보인다(`ObjectiveMaxDistance`).
+- **끝**: 시간이 다 되거나 호출한 사람이 내리거나 격추되면 돌아간다.
+- **표시**: HUD 잔탄 줄 `GD x2`, 떠 있는 동안 `ON 64s`(남은 시간). MFD 둘째 줄도 같다. 부를 때·돌아갈 때 AWACS 무전.
+- **요격 무전 없음**: 가디언이 떨어뜨린 미사일은 아군 CIWS 요격 대사(`EV_CIWS_SAVE` "아군 CIWS가 막음")를 내지 않는다 — 대공포에 `SilentIntercept` 표시를 두고, 미사일이 요격될 때 그 CIWS가 표시돼 있으면 무전을 건너뛴다(함선 CIWS는 그대로).
+- **모델**: **프리팹 `ACO_GuardianDrone`**(바뀜 — 예전엔 풀마다 씬에서 만든 오브젝트): 요격 대공포 + `Model` 아래 자리 표시 상자(사용자가 바꾼다 — 레이저 포탑 `TurretYaw` 자리도 함께). 없을 때만 만든다. 풀 `Guardians/Guardian_0~3`은 이 프리팹의 인스턴스. 이미 있는 씬은 Setup Check "지원 관리자의 폭격기·가디언 드론이 프리팹이 아님" [고치기](`ConvertSupportPoolsToPrefabs` — 같은 자리·이름으로 바꾼다).
+- **동기화**: 변수 동기화 없이 이벤트만.
+  - `NetGuardianStart(support, caller, side, seconds)`(전원): 기체 번호·호출한 사람·쪽(±1)·남은 시간. 각 화면이 받은 순간부터 남은 시간을 세고, 드론 자리는 각 화면이 호출한 기체(SAV가 동기화하는 위치)를 따라 같은 편대 공식으로 그린다 — 화면마다 수십 cm 차이는 있어도 같은 자리.
+  - `NetGuardianEnd(support)`(전원): 호출한 사람이 내리거나 격추되면 일찍 끝낸다(시간이 다 된 끝은 각 화면이 센다).
+  - 늦게 들어온 사람: 호출한 사람이 `OnPlayerJoined`에서 그 사람에게 남은 시간으로 `NetGuardianStart`를 다시 보낸다.
+  - 요격: CIWS 규칙 그대로 — 미사일이 모든 화면에서 같은 궤적으로 날고 각 화면이 요격을 계산하지만, **피해는 판정자(NPC 미사일 = 맞는 쪽 = 호출한 사람) 화면 결과만**. 드론 위치 차이로 드물게 다른 화면에서만 요격돼 보일 수 있다(연출 차이 — 피해에는 영향 없음).
+  - 호출권·쿨타임은 호출한 사람의 진행도(PlayerData)만.
+- **구현**: 관리자 `ACO_SupportManager`의 가디언 풀 `Guardians`(4대, `Guardians/Guardian_0~3` — `CreateGuardianDrone`: LUNA UAV와 같은 대공포, 판정 상자·락온 마커 없음, 초록 레이저, `SilentIntercept`). 자리 `GuardianOffset`(18, 2, 25 — 바뀜: 앞 12m였는데 더 앞으로) — x에 쪽(±1), 진행 방향 + 뱅크 프레임(뱅크를 다 따라 조종석 옆에 보인다). 출현 `GuardianStartOffset`(80, 120, −600)에서 급유 드론과 같은 접근(`ApproachSpeed` 등)으로 다가와 `GuardianJoinDistance`(25m) 안이면 `GuardianSharpness`(4)로 붙는다. 돌아갈 때 위·바깥으로 가속 `GuardianLeaveTime`(6초). **저속 선회**(추가): 드론은 `MinSpeedKt`(180kt)보다 느리게 날 수 없어, 기체가 그보다 느리면(착륙·이륙 직후·저속) 옆 자리를 떠나 기체 위 `GuardianOrbitHeight`(300m)에서 반경 `GuardianOrbitRadius`(600m)로 최저 속도 선회하며 엄호한다 — 선회 각도는 서버 시각이라 모든 화면이 같은 자리, 도는 방향은 붙는 쪽, 원심 가속만큼 기운다. 선회 중엔 방어 반경을 `GuardianOrbitDefense`(900m)로 넓혀 머리 위에서도 내 기체를 노리는 미사일을 요격한다(옆 자리로 오면 원래 60m). 기체가 `MinSpeedKt × GuardianRejoinFactor`(1.1 — 약 198kt)를 넘으면 지금 속도를 이어받아 옆 자리로 다시 붙는다. 시간(90초)은 그대로 흐르고, 선회 중에 끝나면 그대로 위로 빠진다. 판정은 모든 화면이 같은 방법(위치 차로 잰 기체 속도). Bake: 대공포 요격 목록(`BakeCiws`)에 들어가 NPC 미사일이 가디언을 본다. 지원 관리자 아래 대공포는 아군이라 ECM 대상이 아니다(`IsFriendlyUnit`). 무전 `support_guardian_call/end`.
+
+### 6-154. 내 기체 피격음 — 금속판에 총알 4종
+- SaccFlight 기본 `Hit.wav` 하나 대신 ElevenLabs 효과음(`Tools/aco_sfx_gen.py` — 얇은 금속판에 맞는 짧고 밝은 깡 + 작은 덜그럭, 조종석에서 듣는 느낌) 4개(`Audio/SFX/ACO_BulletHit_0~3`, 같은 설명으로 네 번 뽑은 변형). `SAV_SoundController.BulletHit`에 4개를 넣으면 SAV가 맞을 때마다 하나를 무작위로, 음높이 0.8~1.2배로 튼다.
+- 설치: Setup Check `bullet-hit-sound-1` — 기체 프리팹(Pit-bool)의 첫 피격음 오브젝트를 본떠 3개를 복제하고 클립을 넣는다. 씬 인스턴스가 BulletHit 배열을 덮어쓰면 경고(Revert).

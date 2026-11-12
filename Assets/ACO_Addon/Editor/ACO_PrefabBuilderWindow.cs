@@ -35,7 +35,7 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "격납고", Description = "ACO_Hangar — 특수무장 선택/해금, 강화 상점(탭), 크레딧·보상, READY/LAUNCH(관전자는 SPECTATE)", PrefabNames = new[] { "ACO_Hangar" } },
         new Entry { Label = "지형 장식 (도시/마을/랜드마크)", Description = "도시 칸 3 + 마을 2 + 항구/비행장/등대/레이더/통신탑/유적 모델(Models/Deco) — ACO_TerrainFeatures가 지형 칸 위에 놓는다", PrefabNames = ACO_DecoBuilder.AllNames() },
         new Entry { Label = "HUD 설정 패널", Description = "ACO_HudSettings — 플레이어별 HUD 조정(점수 패널 위치·크기, 결과·안내 글자 위치·크기, 마커 테두리, 정보 각도, 크로스헤어·RWR 크기·거리), 영구 저장", PrefabNames = new[] { "ACO_HudSettings" } },
-        new Entry { Label = "분신 에이스 형제 (HEADS·TAILS)", Description = "NPC_SuperAce(형 HEADS) + NPC_SuperAce_Tails(동생 TAILS) — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적) + 쌍둥이 규칙(한 기가 떨어지면 남은 쪽이 분노). 생성기 풀 아래에 하나씩 두면 분신 에이스 페이즈(3~5번째)에 2기 편대로 나온다", PrefabNames = new[] { "NPC_SuperAce", "NPC_SuperAce_Tails" } },
+        new Entry { Label = "분신 에이스 형제 (HEADS·TAILS)", Description = "NPC_Heads(형 HEADS) + NPC_Tails(동생 TAILS) — 체력 6배 에이스 + 다연장(여러 플레이어 동시 발사) + 기만체(가짜 표적) + 쌍둥이 규칙(한 기가 떨어지면 남은 쪽이 분노). 생성기 풀 아래에 하나씩 두면 분신 에이스 페이즈(3~5번째)에 2기 편대로 나온다", PrefabNames = new[] { "NPC_Heads", "NPC_Tails" } },
         new Entry { Label = "적 폭격기 (요격 대상)", Description = "NPC_Bomber — 요격 페이즈. 도시 상공까지 항로 비행, 도착해 폭탄을 떨어뜨리면 미션 실패. 풀 아래에 4~6대", PrefabNames = new[] { "NPC_Bomber" } },
         new Entry { Label = "공격 헬리콥터", Description = "NPC_Helicopter — 전차 항로 이동 + 지면·해수면 위 70m(바다·절벽 위로도), 아군 지상·공중 표적에 기관포. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Helicopter" } },
         new Entry { Label = "곡사포 (자주포)", Description = "NPC_Artillery + 포탄 ACO_ArtilleryShell — 호위 항로에서 2.5~4.5km 떨어져 아군 콘보이·함선을 고각 포격. 생성기 지상 풀 아래에", PrefabNames = new[] { "NPC_Artillery", "ACO_ArtilleryShell" } },
@@ -182,7 +182,7 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[16]) { ACO_HUDBuilder.CreateHangarPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_Hangar")); }
         if (_selected[17]) { foreach (GameObject deco in ACO_DecoBuilder.BuildAll()) { Log(built, deco); } }
         if (_selected[18]) { ACO_HUDBuilder.CreateHudSettingsPrefab(); built.Append("\n  ").Append(ACO_PrefabBuilder.PathOf("ACO_HudSettings")); }
-        if (_selected[19]) { Log(built, ACO_PrefabBuilder.BuildSuperAce()); Log(built, ACO_PrefabBuilder.BuildSuperAceTails()); }
+        if (_selected[19]) { Log(built, ACO_PrefabBuilder.BuildTwins()); Log(built, ACO_PrefabBuilder.BuildTwinsTails()); }
         if (_selected[20]) { Log(built, ACO_PrefabBuilder.BuildBomber()); }
         if (_selected[21]) { Log(built, ACO_PrefabBuilder.BuildHelicopter()); }
         if (_selected[22]) { Log(built, ACO_PrefabBuilder.BuildArtilleryShell()); Log(built, ACO_PrefabBuilder.BuildArtillery()); }
@@ -214,6 +214,10 @@ public class ACO_PrefabBuilderWindow : EditorWindow
 
     private static void Log(System.Text.StringBuilder sb, GameObject prefab)
     {
-        if (prefab != null) { sb.Append("\n  ").Append(AssetDatabase.GetAssetPath(prefab)); }
+        if (prefab != null)
+        {
+            ACO_EngineSounds.EnsureOnPrefab(prefab);   // 항공기 엔진·TEL 로켓 소리(6-156) — 목록에 없는 프리팹은 그대로
+            sb.Append("\n  ").Append(AssetDatabase.GetAssetPath(prefab));
+        }
     }
 }

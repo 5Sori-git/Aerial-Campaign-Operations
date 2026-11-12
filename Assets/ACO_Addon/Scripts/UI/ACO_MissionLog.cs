@@ -12,7 +12,7 @@ namespace ACO
     /// 조종사별 격추 수·점수를 함께 보여 준다. 새 미션이 시작되면(관리자의 시작 시각이 바뀌면) 기록을 지운다.
     ///
     /// 격추 판정은 관리자와 같다: 같은 배치 번호(serial) 동안 "살아 있는 걸 본 뒤 파괴됨"일 때 한 번.
-    /// 조종사/무기는 SAV SaccTarget의 LastHitByPlayer/LastHitWeaponType(모든 클라이언트에서 맞은 순간 갱신)을 읽는다.
+    /// 조종사는 SAV SaccTarget의 LastHitByPlayer(모든 클라이언트에서 맞은 순간 갱신)를 읽는다. LastHitWeaponType은 아군 NPC 격추인지만 본다(무장 칸은 없다).
     /// 로컬 기록이라 중간에 들어온 사람은 들어온 뒤의 격추만 보이고, 관리자 점수와 몇 점 어긋날 수 있다(표시용).
     /// 위치는 격자 좌표(열 A~, 행 1~ 북쪽부터)와 키패드 세분(1~9, 7 = 북서, 9 = 북동, 1 = 남서)으로 표기한다.
     /// 최고 획득 순위(BestText): 지금 인스턴스에 있는 사람들의 한 미션 최고 획득 크레딧(PlayerData aco_best_reward)을 높은 순으로.
@@ -41,6 +41,8 @@ namespace ACO
         public TextMeshPro BestText;
         [Tooltip("이번 미션의 내 격추 수와 획득 크레딧")]
         public TextMeshPro MyResultText;
+        [Tooltip("번역 장치(6-166). Bake가 넣는다. 기록 줄의 번역할 말은 [[키|값]] 꼴로 넣어 두고 그릴 때 지금 언어로 바꾼다 — 언어를 바꾸면 지난 줄도 바뀐다")]
+        public ACO_Localization Loc;
 
         [Header("기록")]
         [Tooltip("격추 확인 주기(초)")]
@@ -211,9 +213,9 @@ namespace ACO
                 _logCleared++;
                 bool failed = _logCleared == cleared && Manager.GetLastPhaseFailed();
                 string row = FormatTime(Manager.GetElapsedSeconds()) + (failed
-                    ? "<pos=13%><color=#FF5544>PHASE " + _logCleared + " FAILED - "
+                    ? "<pos=13%><color=#FF5544>[[log.phasefailed|" + _logCleared + "]] - "
                         + Manager.GetPhaseFailText(Manager.GetCurrentPhaseType()) + "</color>"
-                    : "<pos=13%><color=#7FBF8A>PHASE " + _logCleared + " COMPLETE</color>");
+                    : "<pos=13%><color=#7FBF8A>[[log.phasecomplete|" + _logCleared + "]]</color>");
                 // 보너스는 마지막 페이즈 것만 알 수 있다.
                 if (_logCleared == cleared && Manager.GetLastPhaseBonus() > 0) { row += "<pos=90%>+" + Manager.GetLastPhaseBonus(); }
                 PushRow(row);
@@ -226,7 +228,7 @@ namespace ACO
             {
                 _logPhase = phase;
                 _logPhaseType = type;
-                PushRow(FormatTime(Manager.GetElapsedSeconds()) + "<pos=13%><color=#FFD24D>PHASE " + (phase + 1) + "/" + Manager.GetPhaseCount()
+                PushRow(FormatTime(Manager.GetElapsedSeconds()) + "<pos=13%><color=#FFD24D>[[log.phase|" + (phase + 1) + "/" + Manager.GetPhaseCount() + "]]"
                     + "  " + Manager.GetPhaseName(Manager.GetCurrentPhaseType())
                     + "  x" + Manager.GetScoreMultiplier().ToString("0.0#") + "</color>");
             }
@@ -250,7 +252,7 @@ namespace ACO
                 int v;
                 _bestValues[i] = Utilities.IsValid(p) && PlayerData.TryGetInt(p, ACO_PlayerProgress.KEY_BEST_REWARD, out v) ? v : 0;
             }
-            string s = "<color=#7FBF8A>PILOT<pos=62%>BEST CR</color>";
+            string s = "<color=#7FBF8A>" + T("log.bestcol", "PILOT<pos=62%>BEST CR") + "</color>";
             int rows = 0;
             for (int k = 0; k < Mathf.Max(MaxBestRows, 1); k++)
             {
@@ -267,7 +269,7 @@ namespace ACO
                 _bestValues[best] = 0;
                 rows++;
             }
-            if (rows == 0) { s += "\n<color=#7FBF8A>NO RECORDS YET</color>"; }
+            if (rows == 0) { s += "\n<color=#7FBF8A>" + T("log.norecords", "NO RECORDS YET") + "</color>"; }
             if (s == _bestShown) { return; }
             _bestShown = s;
             BestText.text = s;
@@ -288,7 +290,7 @@ namespace ACO
                     ? "<color=#FFD24D>+" + Progress.GetLastReward().ToString("N0") + " CR</color>"
                     : "~" + Progress.GetMissionRewardPreview().ToString("N0") + " CR";
             }
-            string s = "KILLS<pos=45%>" + kills + "\nCREDITS<pos=45%>" + credits;
+            string s = T("log.myresult", "KILLS<pos=45%>{0}\nCREDITS<pos=45%>{1}").Replace("{0}", kills).Replace("{1}", credits);
             if (s == _myResultShown) { return; }
             _myResultShown = s;
             MyResultText.text = s;
@@ -367,7 +369,7 @@ namespace ACO
             // 아군 NPC(호위·대공 등)의 무기 — 팀 점수에는 들어가지만(관리자가 센다) 개인 점수·조종사 집계에는 넣지 않는다.
             bool npcKill = health.LastHitWeaponType >= ACO_Missile.NPC_WEAPON_OFFSET;
             bool valid = !npcKill && Utilities.IsValid(killer);
-            string pilot = npcKill ? "<color=#66BBFF>ALLY UNIT</color>" : (valid ? Shorten(killer.displayName) : "UNKNOWN");
+            string pilot = npcKill ? "<color=#66BBFF>[[log.ally]]</color>" : (valid ? Shorten(killer.displayName) : "[[log.unknown]]");
             bool mine = valid && killer.isLocal;
 
             string target;
@@ -387,8 +389,7 @@ namespace ACO
             string row = FormatTime(Manager.GetElapsedSeconds())
                 + "<pos=13%>" + grid
                 + "<pos=27%>" + pilot
-                + "<pos=60%>" + WeaponLabel(health.LastHitWeaponType)
-                + "<pos=71%>" + target
+                + "<pos=62%>" + target
                 + "<pos=90%>+" + points;
             if (mine) { row = "<color=#FFD24D>" + row + "</color>"; }
 
@@ -469,40 +470,39 @@ namespace ACO
 
             if (state == ACO_MissionManager.STATE_IDLE || Manager == null)
             {
-                HeaderText.text = "OPERATION LOG\n<size=60%>AWAITING MISSION</size>";
+                HeaderText.text = T("log.title", "OPERATION LOG") + "\n<size=60%>" + T("log.awaiting", "AWAITING MISSION") + "</size>";
                 return;
             }
 
-            string kills = "FTR " + Manager.GetFighterKills() + "   GND " + Manager.GetGroundKills()
-                + "   PHASE " + Manager.GetPhasesCleared() + "/" + Manager.GetPhaseCount();
+            string kills = T2("log.kills", "FTR {0}   GND {1}", Manager.GetFighterKills().ToString(), Manager.GetGroundKills().ToString())
+                + "   " + T1("log.phase", "PHASE {0}", Manager.GetPhasesCleared() + "/" + Manager.GetPhaseCount());
 
             if (state == ACO_MissionManager.STATE_RUNNING)
             {
-                string phase = "BRIEFING";
+                string phase = T("flow.ban.briefing", "BRIEFING");
                 if (Manager.GetPhaseIndex() >= 0)
                 {
-                    phase = "PHASE " + (Manager.GetPhaseIndex() + 1) + "/" + Manager.GetPhaseCount() + "  "
+                    phase = T1("log.phase", "PHASE {0}", (Manager.GetPhaseIndex() + 1) + "/" + Manager.GetPhaseCount()) + "  "
                         + Manager.GetPhaseName(Manager.GetCurrentPhaseType());
                 }
-                HeaderText.text = "OPERATION LOG  -  " + phase
-                    + "\n<size=60%>ELAPSED " + FormatTime(Manager.GetElapsedSeconds())
-                    + "   SCORE " + Manager.GetTeamScore().ToString("N0")
+                HeaderText.text = T("log.title", "OPERATION LOG") + "  -  " + phase
+                    + "\n<size=60%>" + T1("log.elapsed", "ELAPSED {0}", FormatTime(Manager.GetElapsedSeconds()))
+                    + "   " + T1("log.score", "SCORE {0}", Manager.GetTeamScore().ToString("N0"))
                     + " (x" + Manager.GetScoreMultiplier().ToString("0.0#") + ")"
-                    + "   " + kills + "   WAVE " + Manager.GetWavesSent() + "</size>";
+                    + "   " + kills + "   " + T1("log.wave", "WAVE {0}", Manager.GetWavesSent().ToString()) + "</size>";
                 return;
             }
 
             bool success = state == ACO_MissionManager.STATE_COMPLETE;
-            string result = success ? "<color=#FFD24D>MISSION COMPLETE</color>"
-                : "<color=#FF5544>MISSION FAILED" + " (" + Manager.GetFailReasonText(false) + ")" + "</color>";
+            string result = success ? "<color=#FFD24D>" + T("log.complete", "MISSION COMPLETE") + "</color>"
+                : "<color=#FF5544>" + T("log.failed", "MISSION FAILED") + " (" + Manager.GetFailReasonText(false) + ")" + "</color>";
             int bonus = Manager.GetClearBonus() + Manager.GetTimeBonus() + Manager.GetPhaseBonusTotal();
-            HeaderText.text = "DEBRIEFING  -  " + result + "   RANK " + Manager.GetRankLetter()
-                + "\n<size=60%>SCORE " + Manager.GetTeamScore().ToString("N0")
-                + " (KILLS " + (Manager.GetTeamScore() - bonus).ToString("N0")
-                + " + PHASE " + Manager.GetPhaseBonusTotal().ToString("N0")
-                + " + CLEAR " + Manager.GetClearBonus().ToString("N0")
-                + " + TIME " + Manager.GetTimeBonus().ToString("N0") + ")"
-                + "   TIME " + FormatTime(Manager.GetElapsedSeconds())
+            string breakdown = T("log.breakdown", "(KILLS {0} + PHASE {1} + CLEAR {2} + TIME {3})")
+                .Replace("{0}", (Manager.GetTeamScore() - bonus).ToString("N0")).Replace("{1}", Manager.GetPhaseBonusTotal().ToString("N0"))
+                .Replace("{2}", Manager.GetClearBonus().ToString("N0")).Replace("{3}", Manager.GetTimeBonus().ToString("N0"));
+            HeaderText.text = T("log.debrief", "DEBRIEFING") + "  -  " + result + "   " + T1("log.rank", "RANK {0}", Manager.GetRankLetter())
+                + "\n<size=60%>" + T1("log.score", "SCORE {0}", Manager.GetTeamScore().ToString("N0")) + " " + breakdown
+                + "   " + T1("log.time", "TIME {0}", FormatTime(Manager.GetElapsedSeconds()))
                 + "   " + kills + "</size>";
             if (Progress && Progress.HasRewardFor(Manager.GetMissionStartMs()))
             {
@@ -516,26 +516,26 @@ namespace ACO
 
             if (LogText != null)
             {
-                string s = "<color=#7FBF8A>TIME<pos=13%>GRID<pos=27%>PILOT<pos=60%>WPN<pos=71%>TARGET<pos=90%>PTS</color>";
+                string s = "<color=#7FBF8A>" + T("log.col", "TIME<pos=13%>GRID<pos=27%>PILOT<pos=62%>TARGET<pos=90%>PTS") + "</color>";
                 int scroll = Mathf.Clamp(_scroll, 0, MaxScroll());
                 int shown = Mathf.Min(_rowCount - scroll, Mathf.Max(MaxRows, 1));
                 int cap = _rows.Length;
                 // 위에 숨은 최근 기록(스크롤 중)
-                if (scroll > 0) { s += "\n<color=#FFD24D>^ " + scroll + " NEWER  (LATEST)</color>"; }
+                if (scroll > 0) { s += "\n<color=#FFD24D>" + T1("log.newer", "^ {0} NEWER  (LATEST)", scroll.ToString()) + "</color>"; }
                 // 최근 것이 위로(스크롤만큼 건너뛰고)
                 for (int k = 0; k < shown; k++)
                 {
-                    s += "\n" + _rows[(_rowStart + _rowCount - 1 - scroll - k) % cap];
+                    s += "\n" + RenderRow(_rows[(_rowStart + _rowCount - 1 - scroll - k) % cap]);
                 }
                 int earlier = _totalLogged - scroll - shown;
-                if (earlier > 0) { s += "\n<color=#7FBF8A>v " + earlier + " EARLIER" + (_totalLogged > _rowCount ? "  (" + (_totalLogged - _rowCount) + " NOT KEPT)" : "") + "</color>"; }
-                if (_rowCount == 0) { s += "\n<color=#7FBF8A>NO KILLS YET</color>"; }
+                if (earlier > 0) { s += "\n<color=#7FBF8A>" + T1("log.earlier", "v {0} EARLIER", earlier.ToString()) + (_totalLogged > _rowCount ? "  " + T1("log.notkept", "({0} NOT KEPT)", (_totalLogged - _rowCount).ToString()) : "") + "</color>"; }
+                if (_rowCount == 0) { s += "\n<color=#7FBF8A>" + T("log.nokills", "NO KILLS YET") + "</color>"; }
                 LogText.text = s;
             }
 
             if (PilotText != null)
             {
-                string s = "<color=#7FBF8A>PILOT<pos=58%>KILLS<pos=78%>SCORE</color>";
+                string s = "<color=#7FBF8A>" + T("log.pilotcol", "PILOT<pos=58%>KILLS<pos=78%>SCORE") + "</color>";
                 // 점수 높은 순으로 MaxPilots명까지(인원이 적으니 매번 남은 사람 중 최고를 고른다)
                 bool[] used = new bool[_pilotCount];
                 int shown = Mathf.Min(_pilotCount, Mathf.Max(MaxPilots, 1));
@@ -553,10 +553,64 @@ namespace ACO
                         + "<pos=58%>" + _pilotKills[best]
                         + "<pos=78%>" + _pilotScore[best].ToString("N0");
                     if (_pilotName[best] == localName) { line = "<color=#FFD24D>" + line + "</color>"; }
-                    s += "\n" + line;
+                    s += "\n" + RenderRow(line);
                 }
                 PilotText.text = s;
             }
+        }
+
+        // ───────────── 번역(6-166) ─────────────
+
+        /// 번역 장치가 언어를 바꾸면 부른다. 다음 주기에 판 전체를 다시 쓴다(지난 기록 줄 포함).
+        public void LocalizationChanged()
+        {
+            _bodyDirty = true;
+            _bestShown = "";
+            _myResultShown = "";
+            _bestTimer = 0f;
+            _pollTimer = 0f;
+        }
+
+        /// 번역 표의 문장(장치가 없거나 표에 없으면 english).
+        private string T(string key, string english)
+        {
+            if (Loc == null) { return english; }
+            string s = Loc.Get(key);
+            return s == key ? english : s;
+        }
+        private string T1(string key, string english, string a) { return T(key, english).Replace("{0}", a); }
+        private string T2(string key, string english, string a, string b) { return T(key, english).Replace("{0}", a).Replace("{1}", b); }
+
+        /// 토큰의 영어(장치가 없을 때).
+        private string TokenEnglish(string key)
+        {
+            if (key == "log.phase") { return "PHASE {0}"; }
+            if (key == "log.phasecomplete") { return "PHASE {0} COMPLETE"; }
+            if (key == "log.phasefailed") { return "PHASE {0} FAILED"; }
+            if (key == "log.ally") { return "ALLY UNIT"; }
+            if (key == "log.unknown") { return "UNKNOWN"; }
+            return key;
+        }
+
+        /// 기록 줄의 [[키]] · [[키|값]]을 지금 언어 문장으로 바꾼다.
+        private string RenderRow(string row)
+        {
+            int a = row.IndexOf("[[");
+            int guard = 0;
+            while (a >= 0 && guard < 8)
+            {
+                guard++;
+                int b = row.IndexOf("]]", a + 2);
+                if (b < 0) { break; }
+                string tok = row.Substring(a + 2, b - a - 2);
+                int bar = tok.IndexOf('|');
+                string key = bar >= 0 ? tok.Substring(0, bar) : tok;
+                string arg = bar >= 0 ? tok.Substring(bar + 1) : "";
+                string text = T1(key, TokenEnglish(key), arg);
+                row = row.Substring(0, a) + text + row.Substring(b + 2);
+                a = row.IndexOf("[[", a + text.Length);
+            }
+            return row;
         }
 
         // ───────────── 형식 ─────────────
@@ -581,21 +635,11 @@ namespace ACO
             return label + "-" + keypad;
         }
 
-        private string WeaponLabel(byte type)
-        {
-            if (type >= ACO_Missile.NPC_WEAPON_OFFSET) { type = (byte)(type - ACO_Missile.NPC_WEAPON_OFFSET); }
-            if (type == 1 || type == 8) { return "GUN"; }
-            if (type == 2) { return "AAM"; }
-            if (type == 3) { return "AGM"; }
-            if (type == 4) { return "BOMB"; }
-            return "-";
-        }
-
         private string Shorten(string name)
         {
-            if (string.IsNullOrEmpty(name)) { return "UNKNOWN"; }
-            // TMP 태그로 해석되지 않게 꺾쇠를 바꾼다.
-            name = name.Replace("<", "(").Replace(">", ")");
+            if (string.IsNullOrEmpty(name)) { return "[[log.unknown]]"; }
+            // TMP 태그로 해석되지 않게 꺾쇠를 바꾼다. 번역 토큰([[ ]])으로 읽히지 않게 겹대괄호도 끊는다
+            name = name.Replace("<", "(").Replace(">", ")").Replace("[[", "[ [").Replace("]]", "] ]");
             return name.Length > NameLength ? name.Substring(0, NameLength) : name;
         }
 

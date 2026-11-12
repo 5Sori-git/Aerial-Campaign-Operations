@@ -21,6 +21,8 @@ namespace ACO
     ///  - 격추(내 것/아군): 작전판 / 미사일 빗나감·플레어: 쏜 사람 화면의 미사일 / 미사일 경보: 나를 노린 미사일 / 적 플레어: 플레어 장치(가까울 때만)
     ///  - 내·아군 피격 격추: 기체 강화 확장. 유닛 고유 대사(슈퍼에이스 등)는 Say로 바로.
     /// 잡담(EV_KILL 이후)은 미션 중에만. 밀린 대사는 MaxQueueDelay(페이즈 대사는 PhaseQueueDelay)보다 오래되면 버린다.
+    /// 우선순위: 잡담(EV_KILL 이후 상황 대사 — 격추·미사일·플레어·피격 등)보다 나머지(페이즈 대사, 보스·에이스 대사, 미션 흐름 대사)를 먼저 낸다 —
+    /// 대기열에 둘 다 있으면 우선 대사부터(같은 급끼리는 넣은 차례). 지금 나오는 대사는 끊지 않는다. 대기열이 차면 오래된 잡담부터 버린다.
     /// 화면은 기본 TMP 폰트라 영어 대사가 기본값이다 — 한국어는 한글 TMP 폰트 에셋을 자막 글자에 넣어야 한다.
     /// 자막 위치·크기는 HUD 설정 패널이 바꾼다(HeadOffset, Panel 크기).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -98,7 +100,7 @@ namespace ACO
         public float PttLead = -1f;
 
         [Header("화자 (번호 순)")]
-        public string[] SpeakerNames = new string[] { "SKY EYE", "ENEMY", "TRANSPORT", "WINGMAN" };
+        public string[] SpeakerNames = new string[] { "AWACS", "ENEMY", "TRANSPORT", "WINGMAN" };
         public Color[] SpeakerColors = new Color[] { new Color(0.45f, 1f, 0.55f), new Color(1f, 0.4f, 0.35f), new Color(0.5f, 0.8f, 1f), new Color(0.95f, 0.9f, 0.5f) };
         [Tooltip("화자별 무전 채널(PTT 소리): 0 관제기, 1 아군, 2 적군")]
         public int[] SpeakerChannels = new int[] { CH_CONTROL, CH_ENEMY, CH_ALLY, CH_ALLY };
@@ -188,8 +190,8 @@ namespace ACO
             0, 3, 0,
             0, 0 };
         [TextArea] public string[] LineText = new string[] {
-            "This is Sky Eye. All aircraft, the operation has begun. Good hunting.",
-            "Sky Eye to all units, you are cleared to engage. Make it count.",
+            "All aircraft, the operation has begun. Good hunting.",
+            "All units, you are cleared to engage. Make it count.",
             "All aircraft, weapons free. Let's get this done.",
             "Enemy reinforcements inbound!",
             "Radar contact - multiple bogeys approaching.",
@@ -240,6 +242,21 @@ namespace ACO
         [Tooltip("대사별 음성(선택, 같은 순서 — 비워도 된다)")]
         public AudioClip[] LineClip;
 
+        [Header("발사 무전 (쏜 사람 화면만 — 무장 모듈 LaunchCall 번호 순서)")]
+        [Tooltip("코드별 자막 글자(ACO_LaunchCall 순서: 0 없음, 1 Fox Two, 2 Fox Three, 3 Rifle, 4 Magnum, 5 Greyhound, 6 Bruiser, 7 Pickle, 8 Rockets, 9 Spear, 10 Music, 11 Drive). "
+            + "자막은 [AWACS] 내 콜사인, 글자(LaunchFormat — 6-158)")]
+        public string[] LaunchTexts = new string[] {
+            "", "Fox two.", "Fox three.", "Rifle.", "Magnum.", "Greyhound.", "Bruiser.", "Pickle.", "Rockets away.", "Spear!", "Music on.", "Drive! Drive!" };
+        [Tooltip("코드별 음성(관제기가 코드만 말한다 — 같은 순서, 비워도 된다)")]
+        public AudioClip[] LaunchClips = new AudioClip[12];
+        [Tooltip("발사 무전 자막 틀 — {name} = 내 콜사인, {call} = 코드 글자. 화자는 관제기(SpeakerNames 0번 — AWACS)")]
+        public string LaunchFormat = "{name}, {call}";
+        [Tooltip("같은 코드가 다시 나오기까지(초)")]
+        public float LaunchCooldown = 3f;
+        public Color LaunchColor = new Color(0.5f, 0.8f, 1f);
+        [Tooltip("Bake가 넣는다 — 자막의 내 콜사인(없으면 VRChat 이름)")]
+        public ACO_TacName TacNames;
+
         [Header("표시 시간")]
         [Tooltip("자막 최소 표시 시간(초). 음성이 있으면 음성 길이 + 0.3초")]
         public float MinDisplayTime = 2.5f;
@@ -249,11 +266,18 @@ namespace ACO
         public float Gap = 0.3f;
         [Tooltip("이보다 오래 밀린 상황 대사는 버린다(초)")]
         public float MaxQueueDelay = 6f;
+        [Tooltip("우선 대사(페이즈 대사·미션 진행)는 밀려도 이 시간(초)까지는 버리지 않는다 — 단계가 바뀔 때 한꺼번에 들어오는 긴 대사가 잘리지 않게")]
+        public float HighPriorityKeep = 60f;
+        [Tooltip("에이스 고유 대사(등장·기술 — SayAce)는 잡담 급이고 이보다(초) 밀리면 버린다 — 기술을 쓴 지 한참 뒤에 그 대사가 나오지 않게")]
+        public float AceLineKeep = 3f;
+        [Tooltip("격추 대사(SayAceNow)는 나오던 대사를 끊고 바로 나온다. 다른 격추 대사가 나오는 중이면 그 뒤에 — 이보다(초) 밀리면 버린다")]
+        public float InterruptQueueKeep = 8f;
         [Tooltip("미션 상태·호위 체력을 확인하는 주기(초)")]
         public float PollInterval = 0.25f;
 
         private float[] _lastEventTime;
         private int[] _lastLine;
+        private float[] _lastLaunch;
 
         // 대기열(원형): 말하는 이·색·글자·음성·넣은 시각·버릴 나이
         private string[] _qWho = new string[QUEUE_SIZE];
@@ -263,6 +287,7 @@ namespace ACO
         private int[] _qChannel = new int[QUEUE_SIZE];
         private float[] _qTime = new float[QUEUE_SIZE];
         private float[] _qKeep = new float[QUEUE_SIZE];
+        private bool[] _qHigh = new bool[QUEUE_SIZE];   // 우선 대사(잡담이 아님)
         private int _qStart;
         private int _qCount;
         private float _showUntil;
@@ -270,6 +295,7 @@ namespace ACO
         // 재생 중인 음성: PTT 누름 뒤에 틀 음성, 음성이 끝나면 PTT 놓음
         private AudioClip _pendingClip;
         private float _pendingAt;
+        private float _interruptUntil;   // 끊고 나온 격추 대사가 끝나는 시각 — 그동안은 다른 격추 대사가 끊지 않는다
         private float _pttEndAt;
         private AudioClip _pttEndClip;   // 지금 음성의 채널 PTT 놓음 소리
 
@@ -313,7 +339,43 @@ namespace ACO
             _lastLine[ev] = line;
             int speaker = LineSpeaker != null && line < LineSpeaker.Length ? LineSpeaker[line] : 0;
             AudioClip clip = LineClip != null && line < LineClip.Length ? LineClip[line] : null;
-            Enqueue(SpeakerName(speaker), SpeakerColor(speaker), LineText[line].Replace("{name}", name != null ? name : ""), clip, MaxQueueDelay, SpeakerChannel(speaker));
+            Enqueue(SpeakerName(speaker), SpeakerColor(speaker), LineText[line].Replace("{name}", name != null ? name : ""), clip, MaxQueueDelay, SpeakerChannel(speaker), ev < EV_KILL);
+        }
+
+        /// 발사 무전(쏜 사람 화면 — ACO_DFUNC_Missile이 발사 입력 한 번에 한 번 부른다): [AWACS] 내 콜사인, 코드(6-158 — 말하는 쪽이 관제기), 음성은 관제기 채널.
+        /// 같은 코드는 LaunchCooldown 안에 다시 내지 않고, 다른 대사가 나오고 있거나 밀려 있으면 버린다(늦게 나오면 쏜 때와 어긋난다).
+        public void CallLaunch(int code)
+        {
+            Start();
+            if (LaunchTexts == null || code <= 0 || code >= LaunchTexts.Length) { return; }
+            if (_lastLaunch == null || _lastLaunch.Length != LaunchTexts.Length)
+            {
+                _lastLaunch = new float[LaunchTexts.Length];
+                for (int i = 0; i < _lastLaunch.Length; i++) { _lastLaunch[i] = -1000f; }
+            }
+            if (Time.time - _lastLaunch[code] < LaunchCooldown) { return; }
+            if (IsBusy()) { return; }
+            string text = LaunchTexts[code] != null ? LaunchTexts[code] : "";
+            AudioClip clip = LaunchClips != null && code < LaunchClips.Length ? LaunchClips[code] : null;
+            if (text.Length == 0 && clip == null) { return; }
+            _lastLaunch[code] = Time.time;
+            string format = LaunchFormat != null && LaunchFormat.Length > 0 ? LaunchFormat : "{name}, {call}";
+            string line = text.Length > 0 ? format.Replace("{name}", MyCallsign()).Replace("{call}", text) : "";
+            Show(SpeakerName(0), SpeakerColor(0), line, clip, CH_CONTROL);
+        }
+
+        /// 대사가 나오는 중이거나(자막·음성·간격) 밀려 있는가.
+        private bool IsBusy()
+        {
+            return _qCount > 0 || Time.time < _nextAt || _pendingClip != null || _pttEndAt > 0f;
+        }
+
+        private string MyCallsign()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            string s = TacNames != null ? TacNames.GetLabel(me) : "";
+            if ((s == null || s.Length == 0) && Utilities.IsValid(me)) { s = me.displayName; }
+            return s != null ? s : "";
         }
 
         /// 위치가 있는 상황: 내 머리에서 FlareCalloutRange 안일 때만.
@@ -331,7 +393,7 @@ namespace ACO
         {
             Start();
             if (string.IsNullOrEmpty(text)) { return; }
-            Enqueue(who, color, text, null, MaxQueueDelay, channel);
+            Enqueue(who, color, text, null, MaxQueueDelay, channel, true);
         }
 
         /// 관제(PhaseSpeaker) 이름·색·채널로 바로 넣는다 — 페이즈 모듈의 상황별 대사.
@@ -345,7 +407,43 @@ namespace ACO
         {
             Start();
             if (string.IsNullOrEmpty(text) && clip == null) { return; }
-            Enqueue(who, color, text, clip, maxDelay, channel);
+            Enqueue(who, color, text, clip, maxDelay, channel, true);
+        }
+
+        /// 에이스 고유 대사(등장·기술·격추 — clip이 없으면 자막만). 잡담 급: 페이즈 대사 뒤에 나오고, AceLineKeep초(또는 maxDelay — 짧은 쪽)보다 밀리면 버린다.
+        public void SayAce(string who, Color color, string text, AudioClip clip, float maxDelay, int channel)
+        {
+            Start();
+            if (string.IsNullOrEmpty(text) && clip == null) { return; }
+            Enqueue(who, color, text, clip, Mathf.Min(maxDelay, AceLineKeep), channel, false);
+        }
+
+        /// 지금 나오는 대사를 끊고 바로 낸다 — 에이스 격추 대사. 끊긴 대사는 다시 나오지 않고, 밀려 있던 대사는 그 뒤에 차례로.
+        /// 다른 격추 대사가 나오는 중이면 끊지 않고 그 바로 뒤에 낸다(우선 대사로 줄 맨 앞 쪽에).
+        public void SayAceNow(string who, Color color, string text, AudioClip clip, int channel)
+        {
+            Start();
+            if (string.IsNullOrEmpty(text) && clip == null) { return; }
+            if (Time.time < _interruptUntil)
+            {
+                Enqueue(who, color, text, clip, InterruptQueueKeep, channel, true);
+                return;
+            }
+            if (Voice) { Voice.Stop(); }   // 음성·PTT 소리를 끊는다
+            _pendingClip = null;
+            _pttEndAt = 0f;
+            Show(who, color, text, clip, channel);
+            _interruptUntil = _showUntil;
+        }
+
+        /// 그 화자의 밀린 잡담 급 대사를 버린다 — 에이스가 격추되면 밀려 있던 기술 대사가 격추 뒤에 나오지 않게.
+        public void DropQueued(string who)
+        {
+            for (int i = _qCount - 1; i >= 0; i--)
+            {
+                int k = (_qStart + i) % QUEUE_SIZE;
+                if (!_qHigh[k] && _qWho[k] == who) { RemoveQueued(i); }
+            }
         }
 
         /// 밀려 있는 대사를 버린다(지금 나오는 대사는 그대로) — 급한 대사를 바로 넣을 때.
@@ -353,15 +451,21 @@ namespace ACO
 
         // ───────────── 대기열 ─────────────
 
-        private void Enqueue(string who, Color color, string text, AudioClip clip, float keep, int channel)
+        private void Enqueue(string who, Color color, string text, AudioClip clip, float keep, int channel, bool high)
         {
             if (_qCount >= QUEUE_SIZE)
             {
-                // 가득 차면 가장 오래된 대사를 버린다.
-                _qStart = (_qStart + 1) % QUEUE_SIZE;
-                _qCount--;
+                // 가득 차면 가장 오래된 잡담을 버린다(잡담이 없으면 가장 오래된 대사). 잡담을 넣을 자리가 없으면 넣지 않는다.
+                int drop = FindQueued(false);
+                if (drop < 0)
+                {
+                    if (!high) { return; }
+                    drop = 0;
+                }
+                RemoveQueued(drop);
             }
             int k = (_qStart + _qCount) % QUEUE_SIZE;
+            _qHigh[k] = high;
             _qWho[k] = who != null ? who : "";
             _qColor[k] = color;
             _qText[k] = text != null ? text : "";
@@ -397,16 +501,57 @@ namespace ACO
 
             if (Time.time >= _showUntil && SubtitleText && SubtitleText.text != "") { SubtitleText.text = ""; }
             if (Time.time < _nextAt) { return; }
-            // 오래 밀린 대사는 버리고 다음 대사를 띄운다.
+            // 오래 밀린 대사는 버리고 다음 대사를 띄운다 — 우선 대사가 있으면 그것부터.
             while (_qCount > 0)
             {
-                int k = _qStart;
-                _qStart = (_qStart + 1) % QUEUE_SIZE;
-                _qCount--;
-                if (Time.time - _qTime[k] > _qKeep[k]) { continue; }
-                Show(_qWho[k], _qColor[k], _qText[k], _qClip[k], _qChannel[k]);
+                int pos = FindQueued(true);
+                if (pos < 0) { pos = 0; }
+                int k = (_qStart + pos) % QUEUE_SIZE;
+                string who = _qWho[k];
+                Color color = _qColor[k];
+                string text = _qText[k];
+                AudioClip clip = _qClip[k];
+                int channel = _qChannel[k];
+                float keep = _qHigh[k] ? Mathf.Max(_qKeep[k], HighPriorityKeep) : _qKeep[k];   // 우선 대사는 오래 밀려도 차례로 다 나온다
+                bool expired = Time.time - _qTime[k] > keep;
+                RemoveQueued(pos);
+                if (expired) { continue; }
+                Show(who, color, text, clip, channel);
                 break;
             }
+        }
+
+        /// 대기열에서 high 급인 가장 오래된 대사의 차례(0 = 맨 앞). 없으면 -1.
+        private int FindQueued(bool high)
+        {
+            for (int i = 0; i < _qCount; i++) { if (_qHigh[(_qStart + i) % QUEUE_SIZE] == high) { return i; } }
+            return -1;
+        }
+
+        /// 대기열의 pos번째 대사를 뺀다(뒤 대사를 한 칸씩 당긴다).
+        private void RemoveQueued(int pos)
+        {
+            if (pos < 0 || pos >= _qCount) { return; }
+            if (pos == 0)
+            {
+                _qStart = (_qStart + 1) % QUEUE_SIZE;
+                _qCount--;
+                return;
+            }
+            for (int i = pos; i < _qCount - 1; i++)
+            {
+                int a = (_qStart + i) % QUEUE_SIZE;
+                int b = (_qStart + i + 1) % QUEUE_SIZE;
+                _qWho[a] = _qWho[b];
+                _qColor[a] = _qColor[b];
+                _qText[a] = _qText[b];
+                _qClip[a] = _qClip[b];
+                _qChannel[a] = _qChannel[b];
+                _qTime[a] = _qTime[b];
+                _qKeep[a] = _qKeep[b];
+                _qHigh[a] = _qHigh[b];
+            }
+            _qCount--;
         }
 
         /// 대사 한 줄이 다음 줄을 띄울 수 있게 될 때까지 걸리는 시간(초) — Show와 같은 계산(PTT는 관제기 채널 기준).

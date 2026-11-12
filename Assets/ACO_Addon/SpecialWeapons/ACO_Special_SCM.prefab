@@ -49,11 +49,11 @@ MonoBehaviour:
   DisplayName: SCM
   Description: 'STAND-OFF CLUSTER MISSILE
 
-    BURSTS ABOVE THE TARGET - SCATTERS
-    BOMBLETS OVER A WIDE AREA'
+    OPENS ABOVE THE TARGET AND SCATTERS
+    BOMBLETS OVER A WIDE AREA. FEW ROUNDS, LONG RELOAD.'
   Price: 14000
   Icon: {fileID: 21300000, guid: 0b9b6b4f2cb3ec04d85663377211721e, type: 3}
-  SortOrder: 58
+  SortOrder: 170
   Category: 0
   Module: {fileID: 5155411231419029622}
 --- !u!1 &8505174184477415966
@@ -122,6 +122,9 @@ MonoBehaviour:
   ObstacleLayers:
     serializedVersion: 2
     m_Bits: 2049
+  WaterLayers:
+    serializedVersion: 2
+    m_Bits: 16
   AllowFiringWhenGrounded: 0
   LockRange: 6000
   LockAngle: 30
@@ -144,6 +147,7 @@ MonoBehaviour:
   SplashRadius: 30
   MinSplashFraction: 0.4
   MissileSplash: 1
+  FullPartSplash: 0
   Chatter: {fileID: 0}
   Rwr: {fileID: 0}
   Spectator: {fileID: 0}
@@ -153,12 +157,25 @@ MonoBehaviour:
   ProximityAnyEnemy: 0
   AutoTargetNearest: 0
   DropTime: 0
+  EjectSpeed: 0
+  EjectDirection: {x: 0, y: -0.958, z: 0.287}
+  DropTurnRate: 0
+  SalvoInterval: 0
+  SnapAimAtLaunch: 0
+  MuzzleSpeed: 0
+  LaunchFlash: {fileID: 0}
   SeekerAngle: 180
+  LockHoldTime: 0
   MissileLifetime: 30
   SeaSkim: 0
   SkimAltitude: 8
   SkimTerminalDistance: 500
+  EcmMode: 0
+  EcmDuration: 10
+  EcmHub: {fileID: 0}
   UpgradeFamily: 2
+  TakesExtraAmmo: 0
+  LaunchCall: 5
   HoldToFire: 0
   FireInterval: 0.12
   Missile: {fileID: 7335204616034893155, guid: 8b0992daf017ae74684248a9502cd0fb, type: 3}

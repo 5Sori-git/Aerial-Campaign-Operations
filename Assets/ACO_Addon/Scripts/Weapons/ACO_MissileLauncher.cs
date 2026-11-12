@@ -44,6 +44,15 @@ namespace ACO
         [Tooltip("전탄 소모 후 재장전 시간(초). 0이면 재장전 없음")]
         public float ReloadTime = 20f;
         public AudioSource LaunchSound;
+        [Tooltip("한 번 쏠 때 연달아 쏘는 발 수(1 = 한 발). 발사 이벤트 한 번에 모든 화면이 BurstGap 간격으로 같은 연사를 재생한다(탄창에서 발마다 뺀다). 발 수는 오너가 정해 이벤트에 싣는다(6-159)")]
+        public int BurstCount = 1;
+        public float BurstGap = 0.3f;
+        [Tooltip("곧게 나는 레일건 탄(LUNA): 쏠 때마다 스침 소리 판정(ACO_BulletFlyby.ReportRail — Bake가 Flyby를 넣는다, 6-156)")]
+        public bool RailFlyby;
+        public ACO_BulletFlyby Flyby;
+        public float RailFlybySpeed = 4000f;
+        public float RailFlybyRange = 6000f;
+        public float RailFlybyHitRadius = 10f;
 
         [Header("덮개 (VLS)")]
         [Tooltip("덮개의 경첩. 비우면 없는 것으로 친다. 락온을 시작하거나 발사하면 모두 열리고, 조용해지면 닫힌다")]
@@ -245,15 +254,53 @@ namespace ACO
         }
 
         /// 오너가 호출한다. 모든 클라이언트가 같은 발사를 로컬에서 재현하도록 1회 브로드캐스트한다.
+        /// 연사 발 수는 오너가 정해 싣는다(6-159) — 탄창 재장전은 오너만 하므로(CanFire) 다른 화면의 탄창 숫자는 믿을 수 없다.
         public void FireAt(int targetIndex)
         {
             if (!CanFire()) { return; }
             if (targetIndex < 0) { return; }
-            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(LaunchEvent), (ushort)targetIndex);
+            int shots = Mathf.Clamp(Mathf.Min(Mathf.Max(BurstCount, 1), _ammo), 1, 255);
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(LaunchEvent), (ushort)targetIndex, (byte)shots);
         }
 
+        private int _burstLeft;      // 이번 연사에 남은 발
+        private int _burstNext;      // 다음에 쏠 연사 번호(0 = 연사 아님) — 조준하는 쪽이 읽는다(뒤 발일수록 더 앞을 겨눈다)
+        private ushort _burstTarget;
+
+        /// 다음에 쏠 발의 연사 번호(1 = 둘째 발, 2 = 셋째 발…). 연사 중이 아니면 0.
+        public int GetPendingBurstIndex() { return _burstNext; }
+
+        /// shots = 이번 연사의 발 수(오너가 정한다). 받는 화면은 자기 탄창과 관계없이 그만큼 쏜다(탄창은 0 밑으로 내려가지 않게만 뺀다).
         [NetworkCallable]
-        public void LaunchEvent(ushort targetIndex)
+        public void LaunchEvent(ushort targetIndex, byte shots)
+        {
+            Launch(targetIndex, true);
+            if (shots > 1)
+            {
+                _burstLeft = shots - 1;
+                _burstNext = 1;
+                _burstTarget = targetIndex;
+                SendCustomEventDelayedSeconds(nameof(_BurstShot), Mathf.Max(BurstGap, 0.02f));
+            }
+        }
+
+        /// 연사의 다음 발(모든 화면, 로컬 예약). 쏜 쪽이 격추됐거나 꺼지면 남은 발을 거둔다(탄창 숫자는 보지 않는다 — 발 수는 오너가 정했다).
+        public void _BurstShot()
+        {
+            if (_burstLeft <= 0) { _burstNext = 0; return; }
+            if (EntityControl == null || EntityControl.dead || !gameObject.activeInHierarchy) { _burstLeft = 0; _burstNext = 0; return; }
+            _burstLeft--;
+            Launch(_burstTarget, false);
+            if (_burstLeft > 0)
+            {
+                _burstNext++;
+                SendCustomEventDelayedSeconds(nameof(_BurstShot), Mathf.Max(BurstGap, 0.02f));
+            }
+            else { _burstLeft = 0; _burstNext = 0; }
+        }
+
+        /// 한 발. first = 연사의 첫 발(다음 발사 간격을 이때 센다).
+        private void Launch(ushort targetIndex, bool first)
         {
             if (!_initialized) { Initialize(); }
             if (!AAM) { return; }
@@ -268,7 +315,7 @@ namespace ACO
             AAMTarget = targetIndex;
 
             if (_ammo > 0) { _ammo--; }
-            _nextFireTime = Time.time + FireInterval;
+            if (first) { _nextFireTime = Time.time + FireInterval; }
             if (_ammo <= 0) { _reloadDoneTime = Time.time + ReloadTime; }
             _lockProgress = 0f;
 
@@ -280,6 +327,7 @@ namespace ACO
             else { missile.transform.SetParent(null); }
 
             missile.transform.SetPositionAndRotation(launchPoint.position, launchPoint.rotation);
+            if (RailFlyby && Flyby != null) { Flyby.ReportRail(launchPoint.position, launchPoint.forward, RailFlybyRange, RailFlybySpeed, RailFlybyHitRadius); }
 
             Rigidbody rb = missile.GetComponent<Rigidbody>();
             if (rb)

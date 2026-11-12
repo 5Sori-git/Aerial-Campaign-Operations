@@ -469,7 +469,7 @@ public static partial class ACO_PrefabBuilder
         return m;
     }
 
-    /// 소형 레일건에 폭발 지역 껍질(지름 1 구 × 지역 칸 수)을 단다. 이미 있으면 그대로 다시 잇는다(여러 번 불러도 같다).
+    /// 소형 레일건에 폭발 지역 껍질(Unity 내장 Sphere.fbx — 반지름 1 구 × 지역 칸 수, 스크립트 ShellMeshRadius)을 단다. 이미 있으면 그대로 다시 잇는다(여러 번 불러도 같다).
     private static bool AddZoneShells(Transform root, ACO_MiniRailgun mini)
     {
         Transform holder = root.Find("ZoneShells");

@@ -17,5 +17,5 @@
 - 모듈의 `BonusOnly`를 켜면 보너스 전용: 일반 무작위 선택에서 빠지고, 본 미션 클리어 뒤 보너스(관리자 `BonusPhaseChance`, `BonusMinPhases`)로만 나온다.
 - 보너스 종류 고르기(관리자 `PickBonusType`, 오너): 후보 = 기본 슈퍼에이스(대신하는 모듈이 없고 풀에 쉬는 슈퍼에이스가 있으면 가중치 1) + 보너스 모듈(`Enabled`, `MinPhase` ≤ 본 미션 페이즈 수, 가중치 `Weight`). 가중치로 뽑고 모듈은 `IsFeasible`로 확인해 안 되면 빼고 다시. 고른 종류는 동기화 값 `_bonusType`에 남고 다음 페이즈 시작 때 그 종류로 시작한다.
 - 보너스 공통 규칙은 관리자가 본다: 모듈 `BonusTimeLimit`(초)이 지나면 물러남(태그 철수, 보너스 없이 미션 클리어 — 배너 "PHASE n FAILED / 모듈 FailText", 무전 페이즈 실패 대사), 모듈이 `RESULT_FAIL`을 돌려줘도 물러남, `RESULT_REPLACE`면 건너뜀. 성공 보너스 = (`PhaseClearBonus` + `GetClearBonus()`) × `BonusScoreMultiplier`. 보너스 페이즈엔 시작 증원 웨이브·교착 웨이브가 없다. HUD 남은 시간은 모듈 `BonusTimeLimit`.
-- 슈퍼에이스 보너스 = `ACO_PhaseSuperAce`(동기화 없음, `ReplacesBuiltin` = PHASE_BONUS) — 변환 메뉴가 관리자 `BonusEscorts`/`BonusTimeLimit`/`BonusClearBonus`와 무전 보너스 대사(시작·성공·페이즈 실패 칸)를 옮겨 만든다. 이름 `BONUS - {ACE}`(슈퍼에이스 이름으로 바뀐다).
+- 슈퍼에이스 보너스 = `ACO_PhaseTwins`(동기화 없음, `ReplacesBuiltin` = PHASE_BONUS) — 변환 메뉴가 관리자 `BonusEscorts`/`BonusTimeLimit`/`BonusClearBonus`와 무전 보너스 대사(시작·성공·페이즈 실패 칸)를 옮겨 만든다. 이름 `BONUS - {ACE}`(슈퍼에이스 이름으로 바뀐다).
 - 새 보너스 종류는 `ACO_PhaseModule`을 상속해 `BonusOnly`를 켜고 관리자 아래에 두면 된다(Bake가 모듈 목록에 넣는다). 다음 후보: 에이스 편대, 스텔스·전자전 에이스, 공중 요새·포대 요새 등 슈퍼웨폰.

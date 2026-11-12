@@ -82,53 +82,114 @@ public static class ACO_DecoBuilder
 
     public static GameObject Load(string name) { return AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabDir}/{name}.prefab"); }
 
-    // ───────────── 수송기 투하 파티클 메시 (NPC_Transport가 쓴다) ─────────────
+    // ───────────── 수송기·폭격기 투하 파티클 메시 (NPC_Transport·NPC_Bomber가 쓴다) ─────────────
+    // 보급 상자·공수부대원 = Tools/aco_airdrop_model.py(Models/AirDrop — 텍스처 한 장), 폭탄 = 폭격 호출과 같은 GBU-24(무장 팩).
+    // 메시·머티리얼은 Generated/Deco의 같은 경로에 그 자리에서 고쳐 쓴다(GUID 유지 — 이미 있는 프리팹의 파티클 참조가 그대로 새 모양을 가리킨다).
 
-    /// 보급 상자 + 낙하산(지름 9m 반구 모양): 원점 = 상자.
-    public static Mesh DropCrateMesh()
-    {
-        return DropMesh("ACO_DropCrate", new Vector3(1.6f, 1.3f, 1.6f), 9f);
-    }
+    private const string AirDropFbx = "Assets/ACO_Addon/Models/AirDrop/ACO_AirDrop.fbx";
+    private const string AirDropTexture = "Assets/ACO_Addon/Models/AirDrop/ACO_AirDrop_Albedo.png";
 
-    /// 공수부대원 + 낙하산(지름 7m).
-    public static Mesh DropTrooperMesh()
-    {
-        return DropMesh("ACO_DropTrooper", new Vector3(0.6f, 1.8f, 0.5f), 7f);
-    }
+    /// 보급 상자(팔레트·고정 끈) + 둥근 낙하산(지름 9m, 흰색·주황) + 줄: 원점 = 상자 가운데.
+    public static Mesh DropCrateMesh() { return DropModelMesh("ACO_DropCrate"); }
 
-    public static Material DropMaterial(string name, Color color)
+    /// 공수부대원(조종줄을 잡은 자세) + 둥근 낙하산(지름 7m, 국방색 두 톤) + 줄: 원점 = 몸 가운데.
+    public static Mesh DropTrooperMesh() { return DropModelMesh("ACO_DropTrooper"); }
+
+    /// 투하 머티리얼(보급 상자·공수부대원이 같은 텍스처 — 낙하산 안쪽도 보이게 양면). name = Supply / Troop.
+    public static Material DropModelMaterial(string name)
     {
         EnsureFolders();
-        string path = $"{MeshDir}/ACO_Drop_{name}.mat";
-        Material m = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (m != null) { return m; }
+        Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(AirDropTexture);
+        if (tex == null) { throw new InvalidOperationException($"[ACO] {AirDropTexture}가 없습니다. Tools/aco_airdrop_model.py를 실행하세요."); }
         Shader shader = Shader.Find("Particles/Standard Surface");
         if (shader == null) { shader = Shader.Find("Standard"); }
-        m = new Material(shader) { name = "ACO_Drop_" + name };
-        m.color = color;
+        string path = $"{MeshDir}/ACO_Drop_{name}.mat";
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(path);
+        bool created = m == null;
+        if (created) { m = new Material(shader) { name = "ACO_Drop_" + name }; }
+        else if (m.shader != shader) { m.shader = shader; }
+        m.mainTexture = tex;
+        m.color = Color.white;
+        if (m.HasProperty("_Cull")) { m.SetFloat("_Cull", 0f); }
         m.enableInstancing = true;
-        AssetDatabase.CreateAsset(m, path);
+        if (created) { AssetDatabase.CreateAsset(m, path); }
+        else { EditorUtility.SetDirty(m); }
         return m;
     }
 
-    private static Mesh DropMesh(string name, Vector3 body, float chute)
+    /// 폭격기 투하 폭탄: 폭격 호출과 같은 GBU-24 메시(프리팹 루트 회전을 구워 기수 = +Z — 파티클이 속도 방향으로 기수를 돌린다)와 원래 머티리얼.
+    public static bool DropBombVisual(out Mesh mesh, out Material material)
+    {
+        mesh = null;
+        material = null;
+        GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.BunkerBusterPrefabPath);
+        MeshFilter mf = asset != null ? asset.GetComponentInChildren<MeshFilter>(true) : null;
+        MeshRenderer mr = mf != null ? mf.GetComponent<MeshRenderer>() : null;
+        if (mf == null || mf.sharedMesh == null || mr == null || mr.sharedMaterial == null)
+        {
+            Debug.LogWarning($"[ACO] 폭격기 투하 폭탄: {ACO_PrefabBuilder.BunkerBusterPrefabPath}의 메시를 찾지 못했습니다.");
+            return false;
+        }
+        Matrix4x4 toRoot = asset.transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+        Matrix4x4 rootRot = Matrix4x4.TRS(Vector3.zero, asset.transform.localRotation, asset.transform.localScale);
+        mesh = BakeMeshAsset($"{MeshDir}/ACO_DropBomb.asset", mf.sharedMesh, rootRot * toRoot);
+        material = mr.sharedMaterial;
+        return true;
+    }
+
+    private static Mesh DropModelMesh(string name)
     {
         EnsureFolders();
-        Mesh cube = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
-        Mesh sphere = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
-        var parts = new[]
+        return BakeFbxChild(AirDropFbx, name, $"{MeshDir}/{name}.asset", "Tools/aco_airdrop_model.py");
+    }
+
+    /// FBX의 자식 메시 하나를 축 변환·크기째 구워 assetPath에 쓴다(위 = +Y, 블렌더 -Y 앞 = +Z). 파티클 메시·직접 붙이는 메시가 쓴다.
+    public static Mesh BakeFbxChild(string fbx, string child, string assetPath, string tool)
+    {
+        ACO_PrefabBuilder.ConfigureModelImporter(fbx);
+        GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(fbx);
+        if (model == null) { throw new InvalidOperationException($"[ACO] {fbx}가 없습니다. {tool}를 실행하세요."); }
+        Transform part = model.transform.Find(child);
+        MeshFilter mf = part != null ? part.GetComponent<MeshFilter>() : null;
+        if (mf == null) { mf = model.GetComponentInChildren<MeshFilter>(true); part = mf != null ? mf.transform : null; }
+        if (mf == null || mf.sharedMesh == null) { throw new InvalidOperationException($"[ACO] {fbx}에 {child} 메시가 없습니다. {tool}를 다시 실행하세요."); }
+        // 오브젝트가 하나뿐인 FBX는 Unity가 그 노드를 루트로 합친다 — 축 변환(-90X)·단위(×100)가 루트에 남으니 그 변환을 굽는다
+        // (예전엔 단위 행렬이 되어 데칼 건이 3mm로 구워졌다)
+        Matrix4x4 m = part == model.transform
+            ? Matrix4x4.TRS(Vector3.zero, part.localRotation, part.localScale)
+            : model.transform.worldToLocalMatrix * part.localToWorldMatrix;
+        return BakeMeshAsset(assetPath, mf.sharedMesh, m);
+    }
+
+    /// src를 m으로 옮겨 path에 쓴다(있으면 그 자리에서 고친다 — GUID 유지). 서브메시는 하나로.
+    private static Mesh BakeMeshAsset(string path, Mesh src, Matrix4x4 m)
+    {
+        string name = System.IO.Path.GetFileNameWithoutExtension(path);
+        Vector3[] v = src.vertices;
+        Vector3[] n = src.normals;
+        for (int i = 0; i < v.Length; i++) { v[i] = m.MultiplyPoint3x4(v[i]); }
+        if (n != null && n.Length == v.Length)
         {
-            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, body) },
-            // 낙하산: 납작한 구(위가 볼록한 갓처럼 보인다) + 줄 대신 가는 기둥
-            new CombineInstance { mesh = sphere, transform = Matrix4x4.TRS(new Vector3(0f, body.y * 0.5f + chute * 0.8f, 0f), Quaternion.identity, new Vector3(chute, chute * 0.35f, chute)) },
-            new CombineInstance { mesh = cube, transform = Matrix4x4.TRS(new Vector3(0f, body.y * 0.5f + chute * 0.4f, 0f), Quaternion.identity, new Vector3(0.15f, chute * 0.8f, 0.15f)) },
-        };
-        var mesh = new Mesh { name = name };
-        mesh.CombineMeshes(parts, true, true);
+            for (int i = 0; i < n.Length; i++) { n[i] = m.MultiplyVector(n[i]).normalized; }
+        }
+        int[] tris = src.triangles;
+        if (m.determinant < 0f)
+        {
+            for (int i = 0; i + 2 < tris.Length; i += 3) { int t = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = t; }
+        }
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        bool created = mesh == null;
+        if (created) { mesh = new Mesh { name = name }; }
+        else { mesh.Clear(); }
+        mesh.indexFormat = v.Length > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+        mesh.vertices = v;
+        if (n != null && n.Length == v.Length) { mesh.normals = n; }
+        mesh.uv = src.uv;
+        mesh.triangles = tris;
+        if (n == null || n.Length != v.Length) { mesh.RecalculateNormals(); }
         mesh.RecalculateBounds();
-        string path = $"{MeshDir}/{name}.asset";
-        if (AssetDatabase.LoadAssetAtPath<Mesh>(path) != null) { AssetDatabase.DeleteAsset(path); }
-        AssetDatabase.CreateAsset(mesh, path);
+        if (created) { AssetDatabase.CreateAsset(mesh, path); }
+        else { EditorUtility.SetDirty(mesh); }
         return mesh;
     }
 

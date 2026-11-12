@@ -55,6 +55,7 @@ public static partial class ACO_PrefabBuilder
             }
             root.name = "ACO_Missile_MMP";
             ApplyMmpMissileModel(root);
+            ApplyMmpWander(root.GetComponent<ACO_Missile>());
             ACO_FxBuilder.StyleWeapon(root);
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PathOf("ACO_Missile_MMP"));
             Debug.Log($"[ACO] MMP 탄체 프리팹 생성 완료: {PathOf("ACO_Missile_MMP")}");
@@ -128,6 +129,32 @@ public static partial class ACO_PrefabBuilder
             EditorUtility.SetDirty(m);
         }
         return m;
+    }
+
+    /// MMP 비틀거림: 노리는 방향을 표적 쪽에서 최대 30도 흔들고(0.9Hz — 선회 140으로 쫓는다), 표적 400m 안에서 줄여 200m부터 곧게.
+    private static void ApplyMmpWander(ACO_Missile m)
+    {
+        if (m == null) { return; }
+        m.WanderAngle = 30f;
+        m.WanderFrequency = 0.9f;
+        m.WanderFadeDistance = 400f;
+    }
+
+    /// Setup Check(mmp-wander-2): 이미 만든 MMP 탄체에 비틀거림 값만 넣는다(다시 만들지 않는다).
+    public static void ApplyMmpWanderToPrefab()
+    {
+        string path = PathOf("ACO_Missile_MMP");
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            ACO_Missile m = root.GetComponent<ACO_Missile>();
+            if (m == null) { return; }
+            ApplyMmpWander(m);
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            Debug.Log("[ACO] MMP 탄체: 비틀거림(노리는 방향 최대 30도, 0.9Hz, 표적 400m 안에서 줄어듦)을 넣었습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
     /// Setup Check(mmp-missile-model-1): 이미 만든 MMP 탄체를 캔형 모델로 다시 만든다. 없으면 아무것도 안 한다(카탈로그가 처음 만들 때 캔형으로 만든다).

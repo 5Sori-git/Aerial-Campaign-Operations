@@ -22,6 +22,10 @@ namespace ACO
         public Transform Muzzle;
         [Tooltip("내가 탄 기체를 알려 준다(Bake가 넣는다)")]
         public ACO_RadarContacts Contacts;
+        [Tooltip("탄이 내 곁을 스치는 소리(Bake가 넣는다, 6-156)")]
+        public ACO_BulletFlyby Flyby;
+        [Tooltip("Bake가 넣는다 — 나를 조준하는 동안 RAILGUN 음성")]
+        public ACO_VoiceWarning Voice;
         [Tooltip("Bake가 넣는다 — 첫 사격 무전")]
         public ACO_PhaseRailgun Phase;
 
@@ -46,7 +50,7 @@ namespace ACO
         public float VolleyGap = 0.8f;
 
         [Header("폭발 지역")]
-        public float ZoneRadius = 170f;
+        public float ZoneRadius = 255f;   // 랜스 포대(170에서 1.5배 — 6-151). 육상전함 주포는 빌더가 480
         [Tooltip("폭발 지역이 남는 시간(초)")]
         public float ZoneTime = 3.5f;
         [Tooltip("지역 안에서 피해를 입는 간격(초)")]
@@ -55,7 +59,7 @@ namespace ACO
         [Tooltip("폭발을 가운데 둘레에 몇 곳 더 터뜨리는가(큰 폭발 지역이 넓게 보이게). 0 = 가운데만")]
         public int BurstSpread = 0;
         [Tooltip("폭발 지역이 남아 있는 동안 이 간격(초)으로 불꽃을 다시 뿜는다(오래 남는 폭발). 0 = 안 함")]
-        public float ZoneReburst = 0f;
+        public float ZoneReburst = 1.2f;
 
         [Header("연출 (프리팹 빌더가 넣는다 — 소형 레일건끼리 함께 쓴다)")]
         public ParticleSystem ShellParticle;
@@ -77,12 +81,15 @@ namespace ACO
         public float LaserLockWidth = 7f;
         [Tooltip("레이저 길이(m) — 탄착 지점을 지나 이만큼 뻗어 나간다")]
         public float LaserReach = 15000f;
-        [Tooltip("폭발 지역(피해 구)을 보여 주는 반투명 껍질 — 지역 칸마다 하나(MAX_ZONES개, 지름 1 구, ACO/ZoneShell). 시작할 때 월드로 떼어 낸다(배가 움직여도 지역은 그 자리)")]
+        [Tooltip("폭발 지역(피해 구)을 보여 주는 반투명 껍질 — 지역 칸마다 하나(MAX_ZONES개, ACO/ZoneShell). 시작할 때 월드로 떼어 낸다(배가 움직여도 지역은 그 자리)")]
         public Transform[] ZoneShells;
+        [Tooltip("껍질 메시의 반지름(크기 1일 때, m). 빌더가 쓰는 Unity 내장 Sphere.fbx(pSphere1)는 반지름 1이다 — 예전엔 지름 1로 잘못 알고 ×2를 해 껍질이 피해 반경의 두 배로 보였다")]
+        public float ShellMeshRadius = 1f;
         [Tooltip("껍질이 피해 반경까지 커지는 시간(초)")]
         public float ShellGrowTime = 0.25f;
-        [Tooltip("피해가 끝나기 전 껍질이 옅어지는 시간(초) — 피해가 끝나는 순간 다 사라진다")]
-        public float ShellFadeTime = 0.6f;
+        [HideInInspector] public float ShellFadeTime = 0.6f;   // 예전 값(끝나기 전에 옅어짐 — 이제 쓰지 않는다)
+        [Tooltip("피해가 끝난 뒤 껍질이 사라지는 시간(초) — 피해가 끝날 때까지는 온전히 보인다(옅어지는 동안 피해 없음)")]
+        public float ShellAfterFade = 0.3f;
         public AudioSource FireSound;
         public AudioSource BurstSound;
 
@@ -153,7 +160,22 @@ namespace ACO
             }
         }
 
-        /// 지역 k의 껍질: 터진 뒤 ShellGrowTime 동안 피해 반경까지 커지고, 끝나기 ShellFadeTime 전부터 옅어져 끝나는 순간 사라진다.
+        /// 터진 뒤 지난 시간 → 껍질·피해 반경 배율(ShellGrowTime 동안 0.02 → 1, 빠르게 시작해 부드럽게 멈춘다). 피해 반경도 같은 배율이라 보이는 만큼만 맞는다.
+        private float GrowAt(float age)
+        {
+            float grow = Mathf.Clamp01(age / Mathf.Max(ShellGrowTime, 0.01f));
+            grow = 1f - (1f - grow) * (1f - grow);
+            return Mathf.Max(grow, 0.02f);
+        }
+
+        /// 피해가 끝난 지역 k의 껍질: 온전한 크기로 ShellAfterFade 동안 옅어진다(피해 없음).
+        private void FadeShell(int k, float now)
+        {
+            Material m = _shellMats != null && k < _shellMats.Length ? _shellMats[k] : null;
+            if (m != null) { m.SetFloat("_Fade", Mathf.Clamp01(1f - (now - _zoneEnd[k]) / Mathf.Max(ShellAfterFade, 0.01f))); }
+        }
+
+        /// 지역 k의 껍질: 터진 뒤 ShellGrowTime 동안 피해 반경까지 커지고(피해 반경도 같이), 피해가 끝날 때까지 온전히 보인다 — 끝난 뒤 FadeShell.
         private void UpdateShell(int k, float now)
         {
             if (ZoneShells == null || k >= ZoneShells.Length || ZoneShells[k] == null) { return; }
@@ -164,17 +186,10 @@ namespace ACO
                 s.SetPositionAndRotation(_zonePos[k], Quaternion.identity);
                 s.gameObject.SetActive(true);
             }
-            float age = now - _zoneStart[k];
-            float grow = Mathf.Clamp01(age / Mathf.Max(ShellGrowTime, 0.01f));
-            grow = 1f - (1f - grow) * (1f - grow);
-            s.localScale = Vector3.one * (ZoneRadius * 2f * Mathf.Max(grow, 0.02f));
+            float grow = GrowAt(now - _zoneStart[k]);
+            s.localScale = Vector3.one * (ZoneRadius / Mathf.Max(ShellMeshRadius, 0.001f) * grow);
             Material m = _shellMats != null && k < _shellMats.Length ? _shellMats[k] : null;
-            if (m != null)
-            {
-                float left = _zoneEnd[k] - now;
-                float fade = Mathf.Clamp01(left / Mathf.Max(ShellFadeTime, 0.01f));
-                m.SetFloat("_Fade", Mathf.Min(fade, 0.35f + 0.65f * grow));
-            }
+            if (m != null) { m.SetFloat("_Fade", 0.35f + 0.65f * grow); }
         }
 
         private void EndShell(int k)
@@ -258,6 +273,12 @@ namespace ACO
             }
             if (Laser.enabled != on) { Laser.enabled = on; }
             if (!on) { return; }
+            // 나를 노리는 조준·고정이면 음성 경고
+            if (Voice != null && Contacts != null && Contacts.LocalVehicle != null && Site)
+            {
+                Transform t = Site.GetTargetTransform();
+                if (t != null && t.IsChildOf(Contacts.LocalVehicle.transform)) { Voice.Warn(ACO_VoiceWarning.W_RAILGUN); }
+            }
             // 레이저는 포신을 따라 나간다(포구 자식 Muzzle의 앞 = 포신 축). 표적 자리로 곧게 그리면 포탑이 도는 동안·고각 한계에서
             // 포신과 어긋나 보였다. 포신이 그 자리를 따라가므로(조준 중엔 예측 자리, 고정 뒤엔 LockAim) 다 돌면 그 자리를 지난다
             Vector3 from = Muzzle != null ? Muzzle.position : transform.position;
@@ -346,6 +367,7 @@ namespace ACO
             _zonePos[k] = from + dir * burstDistance;
             _zoneStart[k] = now + flight;
             _zoneEnd[k] = _zoneStart[k] + ZoneTime;
+            EndShell(k);   // 이 칸이 아직 사라지는 중이면 바로 끈다(새 자리로 옮겨 다시 켠다)
             _zoneOn[k] = true;
             _zoneBurst[k] = false;
             _shellFlying = true;
@@ -357,6 +379,7 @@ namespace ACO
             _shellDirect = close;
             _shellZone = k;
             if (Phase != null) { Phase.SayMiniFire(); }
+            if (Flyby != null) { Flyby.ReportRail(from, dir, burstDistance, speed, DirectHitRadius); }
             if (_volleyPending)
             {
                 // 둘째 발: 포신을 둘째 자리(표적이 VolleyGap초 더 간 자리)로 고정하고 VolleyGap초 뒤에 쏜다
@@ -417,12 +440,14 @@ namespace ACO
                 }
                 if (now >= _zoneEnd[k])
                 {
+                    // 피해는 끝났다 — 껍질만 ShellAfterFade 동안 사라진다
+                    if (_shellOn[k] && now < _zoneEnd[k] + ShellAfterFade) { FadeShell(k, now); continue; }
                     _zoneOn[k] = false;
                     EndShell(k);
                     continue;
                 }
                 UpdateShell(k, now);
-                HurtLocalVehicle(_zonePos[k], now);
+                HurtLocalVehicle(_zonePos[k], ZoneRadius * GrowAt(now - _zoneStart[k]), now);
             }
         }
 
@@ -499,11 +524,11 @@ namespace ACO
         }
 
         /// 폭발 지역 안의 내 기체(맞는 사람이 판정한다).
-        private void HurtLocalVehicle(Vector3 point, float now)
+        private void HurtLocalVehicle(Vector3 point, float radius, float now)
         {
             if (now < _nextHurt || Contacts == null || Contacts.LocalVehicle == null) { return; }
             SaccEntity e = Contacts.LocalVehicle;
-            if ((e.transform.position - point).sqrMagnitude > ZoneRadius * ZoneRadius) { return; }
+            if ((e.transform.position - point).sqrMagnitude > radius * radius) { return; }
             _nextHurt = now + ZoneTick;
             e.WeaponDamageVehicle(ZoneDamage, gameObject, 0);
         }

@@ -86,6 +86,16 @@ namespace ACO
         [Tooltip("타겟 기체 Animator의 정수 파라미터 이름")]
         public string MissileIncomingName = "missilesincoming";
 
+        [Header("비틀거림 (MMP — 0이면 끔)")]
+        [Tooltip("유도가 노리는 방향을 표적 쪽에서 이 각도(도)까지 흔든다 — 미사일은 선회 한계(TurnRate)로 그 흔들리는 방향을 쫓아 술 취한 듯 구불구불 난다. 0 = 곧게")]
+        public float WanderAngle = 0f;
+        [Tooltip("흔들림 빠르기(Hz) — 클수록 잘게 떤다(선회 한계보다 빠르면 폭이 줄어든다)")]
+        public float WanderFrequency = 1.2f;
+        [Tooltip("표적까지 이 거리(m) 안에서 흔들림이 줄어 절반 거리에서 0 — 마지막엔 곧게 꽂혀 명중률은 그대로")]
+        public float WanderFadeDistance = 400f;
+        /// 흔들림 씨앗(쏜 무장이 발사마다 넣는다 — 슬롯·표적 번호라 모든 화면이 같은 궤적을 그린다).
+        [System.NonSerialized] public float WanderSeed;
+
         [Header("명중 / 피해")]
         [Tooltip("근접 신관 반경(m)")]
         public float ProximityRadius = 9f;
@@ -94,6 +104,8 @@ namespace ACO
         public float Damage = 50f;
         [Tooltip("SAV 무기 타입. 2 = 미사일 — SAV 기체는 이 값일 때 피격 시 무작위 회전력(MissilePushForce)을 스스로 넣는다")]
         public byte WeaponType = 2;
+        [Tooltip("플레이어 기체(SAV)에 명중하면 그 기체에 보내는 SAV 확장 이벤트(비우면 없음). 레일건 탄 = SFEXT_G_MissileHit100 — SAV 소리 장치의 MissileHit 소리(타고 있는 사람에게)")]
+        public string HitExtensionEvent = "";
         /// NPC 무기가 SaccTarget에 준 피해의 무기 종류에 더하는 값 — 작전판이 아군 유닛의 격추를 플레이어 격추와 가른다.
         public const byte NPC_WEAPON_OFFSET = 100;
         /// NPC 런처(ACO_MissileLauncher)가 쏜 미사일(발사할 때마다 런처가 넣는다).
@@ -204,6 +216,7 @@ namespace ACO
 
         private float _speed;
         private float _lifeTimer;
+        private float _wanderAge;   // 비틀거림 시각(발사부터 — 화면마다 같은 궤적)
         private float _lockHoldTimer;
         private float _straightTimer;
         private float _coldTimer;
@@ -284,6 +297,13 @@ namespace ACO
         private Vector3 _decoyPos;
         private Vector3 _decoyVel;
         private float _decoyStart;
+        // 빗나가는 미끼(SHADE 코브라): 끌려간 점에서 터지지 않고 _decoyMiss(m)만큼 _decoyMissDir 쪽으로 비켜 지나간 뒤 곧게 난다
+        private float _decoyMiss;
+        private Vector3 _decoyMissDir;
+        // 햇빛에 속았다(MR. S 태양 이탈 — 6-167): 표적을 놓치고 태양 쪽으로 곧게 솟아오른다(터지지 않는다 — 수명에서 끝난다)
+        private bool _decoySun;
+        private Vector3 _decoySunDir;
+        private bool _decoyPassed;
         // SAV 플레어 지점: 기체 속도 일부를 이어받아 떨어진다(SAV 플레어는 리지드바디라 정확히 같진 않다 — 연출만).
         private const float SAV_FLARE_INHERIT = 0.8f;
         private const float SAV_FLARE_GRAVITY = 0.5f;
@@ -312,6 +332,7 @@ namespace ACO
             _speed = Mathf.Max(_speed, LaunchInheritSpeed);
             if (SnapAimAtLaunch && !cold && _target != null) { AimAtIntercept(_speed); }
             _lifeTimer = MaxLifetime;
+            _wanderAge = 0f;
             _lockHoldTimer = LockHoldTime;
             _straightTimer = FlyStraightTime;
             _coldTimer = cold ? ColdLaunchTime : 0f;
@@ -330,6 +351,9 @@ namespace ACO
             _decoyed = false;
             _decoyFlares = null;
             _decoySAV = null;
+            _decoyMiss = 0f;
+            _decoyPassed = false;
+            _decoySun = false;
             _missileIncoming = false;
             _hasLastTargetPos = false;
             _targetMoveDir = Vector3.zero;
@@ -540,11 +564,30 @@ namespace ACO
             //    SAV는 대응탄 투하를 모두에게 보내고 각자 FlareActiveTime 동안 개수를 올려 두므로 어느 화면에서나 같은 시각에 켜진다.
             if (!_decoyed && !_targetLost && !IgnoreCountermeasures)
             {
-                if (_targetFlares != null && _targetFlares.IsFlareActive())
+                if (_targetFlares != null && _targetFlares.IsSunGlare(transform.position))
+                {
+                    // 햇빛: 표적(MR. S)이 태양을 등지고 시선이 태양 쪽 원뿔 안 — 표적을 놓치고 태양으로 끌려간다.
+                    // 일반 "플레어에 속음" 무전은 내지 않는다(플레어가 아니다 — 에이스 전용 햇빛 대사가 맡는다). 뒤의 빗나감 무전도 없게 결과는 알린 것으로 둔다
+                    _outcomeReported = true;
+                    _decoyed = true;
+                    _decoySun = true;
+                    _decoySunDir = _targetFlares.GetSunDir();
+                    _targetFlares.ReportSunGlare();
+                    LoseTarget();
+                }
+                else if (_targetFlares != null && _targetFlares.IsFlareActive())
                 {
                     ReportOutcome(ACO_Chatter.EV_MISSILE_DECOYED);
                     _decoyed = true;
                     _decoyFlares = _targetFlares;
+                    _decoyMiss = _targetFlares.GetLureMiss();
+                    _decoyPassed = false;
+                    if (_decoyMiss > 0f)
+                    {
+                        // 비켜 갈 쪽: 지금 미사일이 표적에서 벗어나 있는 쪽(진행 방향에 수직) — 기체를 가로지르지 않게. 거의 정면 축 위면 위로
+                        Vector3 side = Vector3.ProjectOnPlane(transform.position - _target.position, transform.forward);
+                        _decoyMissDir = side.sqrMagnitude > 1f ? side.normalized : Vector3.up;
+                    }
                     LoseTarget();
                 }
                 else if (_targetSAV && SavCountermeasuresActive(_targetSAV))
@@ -647,8 +690,27 @@ namespace ACO
                 if (lead.sqrMagnitude > 0.000001f) { desired = lead.normalized; }
             }
 
+            if (WanderAngle > 0f) { desired = Wander(desired, toTarget.magnitude, dt); }
             Quaternion want = Quaternion.LookRotation(desired, transform.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnRate * dt);
+        }
+
+        /// 비틀거림(MMP): 유도가 노리는 방향을 노이즈 각도(최대 WanderAngle)만큼 비튼다 — 미사일은 선회 한계로 그 방향을 쫓아 구불구불 난다
+        /// (예전엔 유도 뒤에 기수를 조금 더 돌렸는데, 유도 선회(140)가 흔들림보다 빨라 매 프레임 바로잡혀 거의 곧았다). 표적 가까이에선 줄여 곧게 꽂는다.
+        /// 노이즈는 발사 뒤 시각과 WanderSeed(슬롯·표적)로만 정해져 모든 화면이 같다.
+        private Vector3 Wander(Vector3 desired, float dist, float dt)
+        {
+            _wanderAge += dt;
+            float fade = 1f;
+            if (WanderFadeDistance > 0f) { fade = Mathf.Clamp01((dist - WanderFadeDistance * 0.5f) / (WanderFadeDistance * 0.5f)); }
+            if (fade <= 0f) { return desired; }
+            float t = _wanderAge * WanderFrequency;
+            // 펄린 노이즈는 0.5 근처에 몰려 있어 2.5배 해서 거의 끝까지 쓴다
+            float yaw = Mathf.Clamp((Mathf.PerlinNoise(WanderSeed, t) - 0.5f) * 2.5f, -1f, 1f);
+            float pitch = Mathf.Clamp((Mathf.PerlinNoise(WanderSeed + 37.1f, t + 11.3f) - 0.5f) * 2.5f, -1f, 1f);
+            float a = WanderAngle * fade;
+            Vector3 up = Mathf.Abs(desired.y) > 0.95f ? transform.up : Vector3.up;
+            return Quaternion.LookRotation(desired, up) * (Quaternion.Euler(pitch * a, yaw * a, 0f) * Vector3.forward);
         }
 
         /// 시스키밍 한 프레임. 종말 거리에 들면 false(아래 보통 유도로 꽂힌다). 목표 고도 = 해수면 + SkimAltitude, 앞쪽(SKIM_LOOKAHEAD) 지형이 높으면 그 위로.
@@ -698,6 +760,11 @@ namespace ACO
         /// 속은 미사일: 플레어가 켜져 있는 동안 떨어지는 플레어를 직접 추적하고, 닿으면 피해 없이 터진다. 꺼지면 그대로 직진.
         private void TrackDecoy(float dt, float turnRate)
         {
+            if (_decoySun)
+            {
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(_decoySunDir, transform.up), turnRate * dt);
+                return;
+            }
             Vector3 flare;
             if (_decoyFlares != null)
             {
@@ -711,6 +778,15 @@ namespace ACO
                 flare = _decoyPos + _decoyVel * t + Physics.gravity * (0.5f * SAV_FLARE_GRAVITY * t * t);
             }
             else { return; }
+            if (_decoyMiss > 0f)
+            {
+                // 빗나가는 미끼: 끌려간 점 옆(_decoyMiss)을 노리고, 그 점을 지나치면 곧게 — 터지지 않는다(수명·지형에서 끝난다)
+                if (_decoyPassed) { return; }
+                Vector3 aim = flare + _decoyMissDir * _decoyMiss - transform.position;
+                if (Vector3.Dot(aim, transform.forward) <= 0f) { _decoyPassed = true; return; }
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(aim.normalized, transform.up), turnRate * dt);
+                return;
+            }
             Vector3 to = flare - transform.position;
             if (to.sqrMagnitude <= ProximityRadius * ProximityRadius)
             {
@@ -895,8 +971,10 @@ namespace ACO
         private void Intercept()
         {
             _intercepted = true;
-            ReportOutcome(ACO_Chatter.EV_MISSILE_INTERCEPTED);
-            if (Chatter && !ShooterJudgesHit && _targetEntity && _targetEntity.Piloting) { Chatter.Report(ACO_Chatter.EV_CIWS_SAVE, ""); }
+            bool silent = _icSite != null && _icSite.SilentIntercept;   // 가디언 드론·LUNA UAV는 요격 무전을 내지 않는다
+            if (silent) { _outcomeReported = true; }   // 결과는 났다 — 뒤에 빗나감 무전도 내지 않게
+            else { ReportOutcome(ACO_Chatter.EV_MISSILE_INTERCEPTED); }
+            if (Chatter && !silent && !ShooterJudgesHit && _targetEntity && _targetEntity.Piloting) { Chatter.Report(ACO_Chatter.EV_CIWS_SAVE, ""); }
             Explode(false);
         }
 
@@ -1108,6 +1186,7 @@ namespace ACO
                 else if (_targetEntity)
                 {
                     _targetEntity.WeaponDamageVehicle(Damage, gameObject, WeaponType);
+                    if (HitExtensionEvent.Length > 0) { _targetEntity.SendEventToExtensions(HitExtensionEvent); }   // 판정 화면 = 맞은 조종사 화면
                     ApplyImpact();
                 }
             }
@@ -1365,6 +1444,9 @@ namespace ACO
             _decoyed = false;
             _decoyFlares = null;
             _decoySAV = null;
+            _decoyMiss = 0f;
+            _decoyPassed = false;
+            _decoySun = false;
 
             if (PoolOwner)
             {
