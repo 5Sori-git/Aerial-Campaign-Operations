@@ -152,7 +152,7 @@ namespace ACO
             if (!alive && _wasAlive)
             {
                 if (Chatter != null) { Chatter.DropQueued(AceName()); }   // 밀린 기술 대사는 버린다
-                SayNow(LineDown.Replace("{n}", Number.ToString()), ClipAt(ClipDown, Number));   // 격추 대사는 나오던 대사를 끊고 바로
+                SayNow(Tr(LineDown).Replace("{n}", Number.ToString()), ClipAt(ClipDown, Number));   // 격추 대사는 나오던 대사를 끊고 바로
                 EndCobra();
             }
             _wasAlive = alive;
@@ -350,7 +350,7 @@ namespace ACO
                 bool a = m.IsAceAlive();
                 if (!a && _memberAlive[i] && m != this && _wasAlive && IsSpeaker())
                 {
-                    Say(LineMemberDown.Replace("{k}", m.Number.ToString()), ClipAt(ClipMemberDown, m.Number));
+                    Say(Tr(LineMemberDown).Replace("{k}", m.Number.ToString()), ClipAt(ClipMemberDown, m.Number));
                 }
                 _memberAlive[i] = a;
             }
@@ -392,6 +392,9 @@ namespace ACO
             MarkBanter();
             Say(LineFlare, ClipFlare);
         }
+
+        /// 번호가 들어가는 줄은 넣기 전에 자막 번역(6-175) — 나머지 줄은 Chatter가 띄울 때 번역한다.
+        private string Tr(string text) { return Chatter != null ? Chatter.Tr(text) : text; }
 
         private void Say(string text, AudioClip clip)
         {

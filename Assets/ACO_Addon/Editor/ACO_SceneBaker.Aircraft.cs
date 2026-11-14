@@ -216,11 +216,59 @@ public partial class ACO_SceneBaker
         hud.GunSpeed = gunSpeed; hud.GunGravity = gunGravity; hud.GunInherit = gunInherit; hud.GunRate = gunRate;
         if (!hud.HideSavHud) { hiddenParts.Clear(); }
         hud.HiddenSavHudParts = hiddenParts.ToArray();
+        LinkIls(hud);
         MarkChanged(hud);
         // 바뀐 게 없어도 매번 상태를 알린다(이미 숨겨 둔 SAV HUD는 "숨긴 상태")
         string savState = hud.HideSavHud ? "숨김" : "보임";
         Debug.Log($"[ACO] 비행 HUD: 플레이어 기체 {n}대 연결, SAV HUD(SAV_HUDController) {savHuds}개 {savState} 상태"
             + (hidden > 0 ? $" — 이번에 {hidden}개를 " + (hud.HideSavHud ? "숨겼습니다" : "다시 보이게 했습니다") : " — 바꾼 것 없음") + ".", hud);
+    }
+
+    /// ILS(6-201): 착함 와이어(이름이 ArrestingCable로 시작)를 착함 방향으로 줄 세워 가운데 것(4개면 선미에서 셋째)을 목표점으로,
+    /// 가장 먼 두 와이어를 이은 수평 방향(함수 쪽 — HomeBase 앞과 같은 쪽)을 착함 방향으로 넣는다. 와이어가 없으면 비운다(ILS 꺼짐).
+    private static void LinkIls(ACO_FlightHud hud)
+    {
+        var cables = new List<Transform>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(false)) { if (t.name.StartsWith("ArrestingCable")) { cables.Add(t); } }
+        }
+        Transform home = HomeBase();
+        Transform aim = null;
+        Vector3 dir = hud.IlsDir;
+        if (cables.Count >= 2)
+        {
+            Vector3 a = cables[0].position, b = cables[1].position;
+            float best = -1f;
+            foreach (Transform x in cables)
+            {
+                foreach (Transform y in cables)
+                {
+                    Vector3 d = y.position - x.position;
+                    d.y = 0f;
+                    if (d.sqrMagnitude > best) { best = d.sqrMagnitude; a = x.position; b = y.position; }
+                }
+            }
+            dir = b - a;
+            dir.y = 0f;
+            dir.Normalize();
+            if (home != null && Vector3.Dot(dir, home.forward) < 0f) { dir = -dir; }
+            Vector3 along = dir;
+            cables.Sort((p, q) => Vector3.Dot(p.position, along).CompareTo(Vector3.Dot(q.position, along)));
+            aim = cables[cables.Count / 2];
+        }
+        else if (cables.Count == 1 && home != null)
+        {
+            aim = cables[0];
+            dir = home.forward;
+            dir.y = 0f;
+            dir.Normalize();
+        }
+        if (hud.IlsAim != aim || (hud.IlsDir - dir).sqrMagnitude > 1e-6f) { hud.IlsAim = aim; hud.IlsDir = dir; }
+        if (aim == null) { Debug.LogWarning("[ACO] 비행 HUD ILS: 착함 와이어(이름이 ArrestingCable로 시작하는 오브젝트)를 찾지 못해 ILS가 나오지 않습니다.", hud); return; }
+        float heading = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+        if (heading < 0f) { heading += 360f; }
+        Debug.Log($"[ACO] 비행 HUD ILS: 와이어 {cables.Count}개 — 목표점 '{aim.name}', 착함 방위 {heading:0}°.", hud);
     }
 
     /// 좌석 재조정 ↔ 점수 HUD(안내 문구).
@@ -544,6 +592,7 @@ public partial class ACO_SceneBaker
         if (hud != null && hud.Contacts != contacts) { hud.Contacts = contacts; MarkChanged(hud); }
         int launchers = 0;
         int maps = 0;
+        Transform home = HomeBase();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (ACO_MissileLauncher c in root.GetComponentsInChildren<ACO_MissileLauncher>(true)) { if (c.Radar != contacts) { c.Radar = contacts; MarkChanged(c); launchers++; } }
@@ -552,6 +601,7 @@ public partial class ACO_SceneBaker
             {
                 bool changed = false;
                 if (m.Contacts != contacts) { m.Contacts = contacts; changed = true; }
+                if (m.HomeBase != home) { m.HomeBase = home; changed = true; }   // 항모 표시(작전 테이블의 HomeBase)
                 if (!m.WallMode && m.EntityControl == null) { m.EntityControl = m.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true); changed = true; }
                 if (changed) { MarkChanged(m); }
                 maps++;
@@ -814,6 +864,8 @@ public partial class ACO_SceneBaker
         vd.Projectors = pr;
         vd.Materials = mats;
         if (studio != null) { vd.DecalKey = studio.DecalKey; }
+        ACO_RoundelBuilder.Ensure(vd);   // 라운델 판(6-191)
+        ACO_HUDBuilder.LinkMarksDecal(entity.transform);   // 자유 비행 빈 기체 표시(6-194)
         MarkChanged(vd);
         Debug.Log($"[ACO] 데칼: '{entity.name}'에 데칼(프로젝터 2개)을 달았습니다.", go);
     }

@@ -12,12 +12,14 @@ namespace ACO
     /// 미션 생성기는 일반 배치에 쓰지 않는다 — MR. S 페이즈(ACO_PhaseMrS)만 내보낸다(OBJ_MRS).
     ///
     /// - 태양 이탈(AI 오너가 정하고 모두에게 알린다 — NetSunRun): 태양 방향으로 곧게(상승각은 비행 한계까지) 급가속.
-    ///   패턴 A(미사일 회피): 나를 쫓는 미사일이 SunTriggerDistance 안 → 쫓는 미사일이 모두 없어지거나 SunRunMaxTime까지.
-    ///   패턴 B(유인 반격): 꼬리(뒤 ±TailAngle) LureTailDistance 안에 플레이어 → LureRunTime 고정(쫓는 플레이어를 태양 속으로 끌고 간다).
+    ///   직진 시간은 기수가 태양 쪽 SunAlignAngle 안에 든 뒤부터 센다(꺾는 시간은 빼고 — 6-177). 고도 상한에선 태양 쪽 수평으로 계속.
+    ///   패턴 A(미사일 회피): 나를 쫓는 미사일이 SunTriggerDistance 안 → 직진 SunStraightMin초 뒤 쫓는 미사일이 없어지면, 늦어도 직진 SunRunMaxTime초.
+    ///   패턴 B(유인 반격): 꼬리(뒤 ±TailAngle) LureTailDistance 안에 플레이어 → 직진 LureRunTime초(쫓는 플레이어를 태양 속으로 끌고 간다).
+    ///   꺾는 데 SunAlignTimeout초가 지나도 정렬이 안 되면 그때부터 직진 시간을 센다.
     ///   두 패턴은 기동 간격(ManeuverCooldown — 반전이 끝난 때부터)을 같이 쓰고, B는 지난 기동 뒤 LureInterval(등장 뒤 LureFirstDelay부터).
-    /// - 햇빛(모든 화면 — 플레어 장치 BeginSunLure): 태양 이탈 동안 나를 쫓는 미사일의 시선(미사일 → 나)이 태양 방향과 SunGlareAngle 안이면 속아
-    ///   태양 쪽으로 솟아오른다(터지지 않는다). 판정은 플레어처럼 맞는 사람 화면. 태양 이탈을 할 수 있는 동안 태양을 등지고 따라올 수 있는 미사일엔
-    ///   플레어를 쓰지 않는다(SunHandled — 가까우면 마지막 플레어).
+    /// - 햇빛(모든 화면 — 플레어 장치 BeginSunLure, 오너가 NetSunAligned로 알린다): 태양 쪽으로 정렬돼 곧게 내빼는 동안 나를 쫓는 미사일은
+    ///   방향과 상관없이 모두 속아 태양 쪽으로 솟아오른다(터지지 않는다 — 6-177, 예전 원뿔 판정은 없앴다). 판정은 플레어처럼 맞는 사람 화면.
+    ///   태양 쪽으로 꺾는 동안과 반전 중엔 평소 플레어.
     /// - 반전(오너 — 조종 덮어쓰기): 태양 이탈이 끝나면 꼬리 ReverseTargetDistance 안의 가장 가까운 플레이어 쪽으로 선회력을 순간 크게(TurnBoost) 올려
     ///   순항 속도로 급선회해 돌아선다(일반 비행 그대로 — 동기화는 기체 움직임). A는 꼬리에 플레이어가 없으면 반전하지 않는다. B는 표적이 떨어져 나갔으면 사격 없이 돌아서기만.
     /// - 레일건(단발): 반전을 시작할 때 충전(모든 화면 — 포구 빛, 표적 화면에 RAILGUN WARNING). ChargeTime이 지나면 조준이 흐트러졌어도 바로 한 발
@@ -92,15 +94,21 @@ namespace ACO
         public float SunTriggerDistance = 2500f;
         [Tooltip("두 패턴이 같이 쓰는 기동 간격(초) — 반전이 끝난 때부터")]
         public float ManeuverCooldown = 20f;
-        [Tooltip("패턴 A 최대 시간(초)")]
+        [Tooltip("패턴 A 최대 직진 시간(초 — 태양 쪽으로 정렬된 뒤부터)")]
         public float SunRunMaxTime = 6f;
+        [Tooltip("패턴 A 최소 직진 시간(초) — 미사일이 먼저 없어져도 이만큼은 곧게 내뺀다")]
+        public float SunStraightMin = 3f;
+        [Tooltip("기수가 태양 쪽 이 각도(도) 안이면 직진으로 친다")]
+        public float SunAlignAngle = 15f;
+        [Tooltip("태양 쪽으로 꺾는 데 이 시간(초)이 지나도 정렬이 안 되면(지형 회피 등) 그때부터 직진 시간을 센다")]
+        public float SunAlignTimeout = 4f;
         [Tooltip("패턴 B: 꼬리 이 거리(m) 안에 플레이어가 붙으면")]
         public float LureTailDistance = 3000f;
         [Tooltip("패턴 B 간격(초) — 지난 기동 뒤")]
         public float LureInterval = 30f;
         [Tooltip("패턴 B 첫 기동: 등장 뒤(초)")]
         public float LureFirstDelay = 15f;
-        [Tooltip("패턴 B 태양 이탈 시간(초)")]
+        [Tooltip("패턴 B 직진 시간(초 — 태양 쪽으로 정렬된 뒤부터)")]
         public float LureRunTime = 5f;
         [Tooltip("꼬리 판정: 뒤쪽 이 각도(도) 안")]
         public float TailAngle = 60f;
@@ -109,13 +117,7 @@ namespace ACO
         public float SunAccelBoost = 15f;
         [Tooltip("태양 이탈 선회력 배율 — 태양 쪽으로 빨리 꺾어 곧게 내빼는 시간을 늘린다")]
         public float SunTurnBoost = 3f;
-        [Tooltip("햇빛 원뿔(도): 미사일 → 나 시선이 태양 방향과 이 안이면 속는다")]
-        public float SunGlareAngle = 20f;
-        [Tooltip("태양 이탈을 할 수 있는 동안 이 각도(도) 안에서 따라오는 미사일엔 플레어를 쓰지 않는다")]
-        public float SunHandledAngle = 90f;
-        [Tooltip("그래도 이 거리(m) 안으로 오면 플레어(마지막 수단)")]
-        public float LastFlareDistance = 700f;
-        [Tooltip("이 고도(m — 비행 MaxAltitude에서 뺀 값) 안이면 태양 이탈을 일찍 끝낸다")]
+        [Tooltip("이 고도(m — 비행 MaxAltitude에서 뺀 값) 안이면 더 오르지 않고 태양 쪽 수평으로 계속 내뺀다")]
         public float CeilingMargin = 300f;
 
         [Header("반전 · 레일건")]
@@ -148,6 +150,7 @@ namespace ACO
         private int _mode;              // 0 = 평소, 1 = 태양 이탈, 2 = 반전
         private int _pattern;           // 1 = A(미사일), 2 = B(유인)
         private float _modeStart;
+        private float _alignedAt;       // 태양 이탈: 태양 쪽으로 정렬된 시각(-1 = 아직)
         private float _nextManeuver;
         private float _nextLure;
         private float _check;
@@ -246,15 +249,7 @@ namespace ACO
             _check -= Time.deltaTime;
             if (_check > 0f) { return; }
             _check = 0.2f;
-            bool ready = Time.time >= _nextManeuver;
-            if (AI.Flares != null)
-            {
-                AI.Flares.SunHandled = ready;
-                AI.Flares.SunHandledDir = SunDir();
-                AI.Flares.SunHandledAngle = SunHandledAngle;
-                AI.Flares.SunHandledMinDistance = LastFlareDistance;
-            }
-            if (!ready) { return; }
+            if (Time.time < _nextManeuver) { return; }
             if (AI.Flares != null && AI.Flares.HasIncomingWithin(SunTriggerDistance)) { BeginSunRun(1); return; }
             if (Time.time >= _nextLure && TailPlayer(LureTailDistance) >= 0) { BeginSunRun(2); }
         }
@@ -264,6 +259,7 @@ namespace ACO
             _mode = 1;
             _pattern = pattern;
             _modeStart = Time.time;
+            _alignedAt = -1f;
             _glareBase = AI.Flares != null ? AI.Flares.GetSunGlareCount() : 0;
             _glareSaid = false;
             AI.SteerOverride = true;
@@ -275,15 +271,20 @@ namespace ACO
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSunRun), pattern);
         }
 
-        /// 모든 화면: 태양 이탈 시작 — 햇빛을 켠다(끝은 NetSunEnd, 못 받으면 시간이 지나 꺼진다).
+        /// 모든 화면: 태양 이탈 시작(태양 쪽으로 꺾기 — 햇빛은 아직, 정렬되면 NetSunAligned) — 대사만.
         [NetworkCallable]
         public void NetSunRun(int pattern)
         {
             if (!_wasAlive || AI == null) { return; }
-            float time = (pattern == 1 ? SunRunMaxTime : LureRunTime) + 0.3f;
-            if (AI.Flares != null) { AI.Flares.BeginSunLure(SunDir(), SunGlareAngle, time); }
             if (pattern == 1) { Banter(LineSunMissile, ClipSunMissile); }
             else { Banter(LineSunLure, ClipSunLure); }
+        }
+
+        /// 모든 화면: 태양 쪽으로 정렬돼 직진 시작 — 햇빛을 켠다(나를 쫓는 미사일 전부 속는다. 끝은 NetSunEnd, 못 받으면 가장 긴 직진 뒤 꺼진다).
+        public void NetSunAligned()
+        {
+            if (!_wasAlive || AI == null || AI.Flares == null) { return; }
+            AI.Flares.BeginSunLure(SunDir(), Mathf.Max(SunRunMaxTime, LureRunTime) + 0.5f);
         }
 
         public void NetSunEnd()
@@ -299,7 +300,21 @@ namespace ACO
         private void SunRunTick()
         {
             float t = Time.time - _modeStart;
-            AI.OverrideDirection = SunDir();
+            Vector3 dir = SunDir();
+            // 고도 상한: 더 오르지 않고 태양 쪽 수평으로(태양이 거의 머리 위면 지금 수평 방향)
+            if (AI.transform.position.y >= AI.Flight.MaxAltitude - CeilingMargin && dir.y > 0f)
+            {
+                Vector3 flat = new Vector3(dir.x, 0f, dir.z);
+                if (flat.sqrMagnitude < 0.01f) { flat = new Vector3(AI.transform.forward.x, 0f, AI.transform.forward.z); }
+                if (flat.sqrMagnitude > 0.000001f) { dir = flat.normalized; }
+            }
+            AI.OverrideDirection = dir;
+            if (_alignedAt < 0f && (Vector3.Angle(AI.transform.forward, dir) <= SunAlignAngle || t >= SunAlignTimeout))
+            {
+                _alignedAt = Time.time;
+                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSunAligned));   // 직진 시작 — 모든 화면에서 햇빛
+            }
+            float straight = _alignedAt >= 0f ? Time.time - _alignedAt : 0f;
             // 햇빛에 속은 첫 미사일(이 화면이 봤다) — 이번 이탈에 한 번 모두에게 알린다
             if (!_glareSaid && AI.Flares != null && AI.Flares.GetSunGlareCount() > _glareBase)
             {
@@ -307,9 +322,8 @@ namespace ACO
                 SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetGlare));
             }
             bool done;
-            if (_pattern == 1) { done = t >= SunRunMaxTime || (t >= 1f && (AI.Flares == null || !AI.Flares.HasIncomingWithin(100000f))); }
-            else { done = t >= LureRunTime; }
-            if (AI.transform.position.y >= AI.Flight.MaxAltitude - CeilingMargin) { done = true; }
+            if (_pattern == 1) { done = straight >= SunRunMaxTime || (straight >= SunStraightMin && (AI.Flares == null || !AI.Flares.HasIncomingWithin(100000f))); }
+            else { done = straight >= LureRunTime; }
             if (!done) { return; }
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetSunEnd));
             int target = TailPlayer(ReverseTargetDistance);
@@ -332,7 +346,6 @@ namespace ACO
             Vector3 back = -AI.transform.forward;
             back.y = 0f;
             _revDir = back.sqrMagnitude > 0.0001f ? back.normalized : -AI.transform.forward;
-            if (AI.Flares != null) { AI.Flares.SunHandled = false; }   // 반전 중엔 평소 플레어
             AI.SteerOverride = true;
             AI.OverrideSpeed = AI.Flight.CruiseSpeed;
             AI.Flight.SpeedBoost = 1f;
@@ -397,7 +410,6 @@ namespace ACO
                 AI.Flight.AccelBoost = 1f;
                 AI.Flight.TurnBoost = 1f;
             }
-            if (AI.Flares != null) { AI.Flares.SunHandled = false; }
             if (RailLauncher != null) { RailLauncher.ReleaseAim(); }
         }
 

@@ -261,10 +261,15 @@ namespace ACO
             TargetHealth.SendNetworkUpdate();
         }
 
-        /// 범위 피해 배율: 본체는 1, 부위는 PartSplashScale. 무기(ACO_Missile·ACO_Ordnance)가 범위 피해를 넣을 때 묻는다.
+        /// 범위 피해 배율: 본체는 1, 부위는 PartSplashScale × 그 부위의 저항(ACO_FortressPart.SplashScale — 6-182, 랜스 냉각탑).
+        /// 무기(ACO_Missile·ACO_Ordnance·지원 폭격)가 범위 피해를 넣을 때 묻는다. 직접 맞은 부위는 무기가 따로 거른다(묻지 않는다).
         public float GetSplashScale(SaccTarget target)
         {
-            return target == null || target == TargetHealth ? 1f : PartSplashScale;
+            if (target == null || target == TargetHealth) { return 1f; }
+            float scale = PartSplashScale;
+            ACO_FortressPart part = target.GetComponent<ACO_FortressPart>();
+            if (part != null) { scale *= Mathf.Clamp01(part.SplashScale); }
+            return scale;
         }
 
         /// 이 표적(본체)은 범위 피해를 받지 않는가 — CoreSplashImmune이고 본체일 때. 직접 맞은 표적은 무기가 따로 거른다.

@@ -28,10 +28,10 @@ namespace ACO
     /// - 보관: 내려서 비어 있는 기체가 보관 장소 밖에 IdleReturnTime(30초) 있으면 그 기체의 오너가 SAV 전체 리스폰(SendRespawn)으로
     ///   되돌린다 — 탄약·연료·체력도 다시 채워진다.
     /// - 참가자 기체의 파일럿 좌석은 시작할 때 DisableInteractive — 눌러서는 못 타고 LAUNCH로만 탄다(관전자 탑승 차단).
-    ///   생성기·미션 관리자를 눌러 미션을 시작하는 것도 끈다(명단을 거치지 않는 시작 방지).
+    ///   미션 관리자를 눌러 미션을 시작하는 것도 끈다(명단을 거치지 않는 시작 방지 — 생성기는 누르는 기능이 없다).
     /// - 지형: 브리핑(미션 전)에 명단에 있는 사람이 REROLL로 지형을 새로 만든다(RerollCooldown 30초, 리롤하면 READY·카운트다운이 풀린다).
-    ///   새 지형마다 생성기가 병력을 미리 배치하고(작전 테이블에 보인다), 미션은 그 지형·배치 그대로 시작한다 — 시작할 때 생성기의
-    ///   RegenerateTerrainEachMission을 끈다. 미션이 끝나면 참가자 기체가 모두 내린 뒤 새 지형 + 미리 배치(NewTerrainAfterMission).
+    ///   새 지형마다 생성기가 병력을 미리 배치하고(작전 테이블에 보인다), 미션은 그 지형·배치 그대로 시작한다(생성기는
+    ///   미션 시작 때 지형을 다시 만들지 않는다). 미션이 끝나면 참가자 기체가 모두 내린 뒤 새 지형 + 미리 배치(NewTerrainAfterMission).
     ///   월드를 연 오너가 첫 지형에도 미리 배치한다. 쿨타임·예약은 동기화해 오너가 바뀌어도 이어진다.
     /// - 관전: 미션 중 명단 밖 사람의 격납고 버튼은 LAUNCH 대신 SPECTATE — 누르면 갑판(SpectatePoint)으로 간다.
     /// - 귀환: 미션이 끝나면(성공/실패) ReturnDelay 뒤 모든 플레이어를 브리핑실(BriefingPoint)로 옮긴다(참가자 기체에 타고 있으면 내린 뒤).
@@ -226,19 +226,13 @@ namespace ACO
             }
             if (Manager)
             {
-                // 명단을 거치지 않는 시작(관리자·생성기를 눌러 시작)을 끈다.
+                // 명단을 거치지 않는 시작(관리자를 눌러 시작)을 끈다.
                 Manager.AllowInteract = false;
                 Manager.DisableInteractive = true;
                 if (Manager.Generator)
                 {
-                    Manager.Generator.AllowInteract = false;
-                    Manager.Generator.DisableInteractive = true;
-                    // 지형은 브리핑 리롤과 미션 뒤 갱신으로만 바꾼다 — 미션 시작 때 생성기가 다시 만들면 리롤한 지형이 사라진다.
-                    if (Manager.Generator.HexTerrain)
-                    {
-                        _terrain = Manager.Generator.HexTerrain;
-                        Manager.Generator.RegenerateTerrainEachMission = false;
-                    }
+                    // 지형은 브리핑 리롤과 미션 뒤 갱신으로만 바꾼다(생성기는 미션 시작 때 지형을 다시 만들지 않는다 — 6-188).
+                    if (Manager.Generator.HexTerrain) { _terrain = Manager.Generator.HexTerrain; }
                 }
             }
             EnsureRoster();
@@ -379,6 +373,15 @@ namespace ACO
         }
 
         // ───────────── 조회 ─────────────
+
+        /// 출격 명단에 든 인원(동기화 값 — 잠수함 페이즈의 일제 발사 발 수).
+        public int GetRosterCount()
+        {
+            if (_roster == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < _roster.Length; i++) { if (_roster[i] >= 0) { n++; } }
+            return n;
+        }
 
         public int GetSlotOf(int playerId)
         {
@@ -1459,8 +1462,10 @@ namespace ACO
                 info += "\n<size=80%>" + (locked ? "<color=#FFD24D>" + T("flow.btn.locked", "LOCKED") + "</color>" : (by != "" ? T1("flow.card.setby", "SET BY {0}", by) : T("flow.card.tapchange", "TAP - / + TO CHANGE"))) + "</size>";
                 SetTexts(PhaseInfoTexts, info);
                 string tby = PlayerName(_terrainBy);
-                string wx = Weather ? T1("flow.roster.weather", "WEATHER: {0}", WeatherName()) + "   " : "";
-                string terrain = TerrainName() + "\n<size=45%>" + wx + (tby != "" ? T1("flow.card.terrainby", "NEW TERRAIN BY {0}", tby) : T("flow.card.seetable", "SEE THE OPS TABLE")) + "</size>";
+                // 지형 이름 아래: 날씨(크게), 리롤한 사람이 있으면 그 아래 작게
+                string terrain = TerrainName();
+                if (Weather) { terrain += "\n<size=60%>" + T1("flow.roster.weather", "WEATHER: {0}", WeatherName()) + "</size>"; }   // 예전 45% → 60%(카드 높이 150에 세 줄이 들어가는 최대)
+                if (tby != "") { terrain += "\n<size=38%>" + T1("flow.card.terrainby", "NEW TERRAIN BY {0}", tby) + "</size>"; }
                 SetTexts(TerrainTexts, terrain);
             }
         }

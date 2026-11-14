@@ -308,8 +308,7 @@ namespace ACO
             if (_pollTimer > 0f) { return; }
             _pollTimer = PollInterval;
 
-            // 새 전체 배치가 생기면 새 미션으로 추적을 시작한다 — 관리자 요청뿐 아니라 생성기 자동 시작(GenerateOnStart)이나
-            // 생성기 클릭으로 시작해도 페이즈/점수/제한 시간이 돈다.
+            // 새 전체 배치가 생기면 새 미션으로 추적을 시작한다 — 미션 시작 번호(전체 배치 번호)가 오른 걸 보고 페이즈/점수/제한 시간을 돌린다.
             int fullDeploy = Generator.GetFullDeployCount();
             if (fullDeploy != _trackedFullDeploy)
             {
@@ -471,6 +470,14 @@ namespace ACO
         public void MarkModuleProgress()
         {
             _lastProgressMs = Networking.GetServerTimeInMilliseconds();
+            _cntChanged = true;
+        }
+
+        /// 모듈: 생성기 유닛이 아닌 표적(잠수함 SLCM 등)을 플레이어가 떨어뜨렸다 — 팀 점수에 더한다(지금 페이즈 배율). 관리자 오너의 Tick에서만 부른다.
+        public void AddModuleScore(int points)
+        {
+            if (points <= 0) { return; }
+            _teamScore += Mathf.RoundToInt(points * GetScoreMultiplier());
             _cntChanged = true;
         }
 

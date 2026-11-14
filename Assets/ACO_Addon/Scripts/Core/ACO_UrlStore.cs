@@ -15,7 +15,7 @@ namespace ACO
     public class ACO_UrlStore : UdonSharpBehaviour
     {
         public const int SLOT_COUNT = 16;
-        public const int SLOT_DECAL = 0;   // 데칼 이미지 0~3(DECAL_SLOTS)
+        public const int SLOT_DECAL = 0;   // 데칼 이미지 0~3(DECAL_SLOTS) — 0·1 데칼, 2 라운델(6-191), 3 비워 둠
         public const int DECAL_SLOTS = 4;
 
         [Tooltip("복원되면 알릴 데칼 스튜디오(Bake가 넣는다)")]

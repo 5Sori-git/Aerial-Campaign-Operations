@@ -36,6 +36,14 @@ namespace ACO
         [Tooltip("공역 테두리 고리(지름 1 = 공역 지름). 비워도 된다")]
         public Transform Border;
 
+        [Header("항모 (아군 기지, 고정 위치)")]
+        [Tooltip("Bake가 작전 테이블의 HomeBase(항모)를 넣는다. 비우면 그리지 않는다. 움직이지 않으니 지도 좌표는 공역이 정해질 때 한 번만 계산한다")]
+        public Transform HomeBase;
+        [Tooltip("항모 표시(속 빈 파란 마름모) 크기 — 점 크기 배수")]
+        public float HomeScale = 1.7f;
+        [Tooltip("마름모 속 색(바다 바탕에 가깝게)")]
+        public Color HomeInnerColor = new Color(0.03f, 0.06f, 0.1f, 1f);
+
         [Header("벽걸이")]
         [Tooltip("켜면 기체 없이 벽에 건 지도로 동작한다. 나 표시를 그리지 않는다")]
         public bool WallMode;
@@ -71,6 +79,11 @@ namespace ACO
         private bool _started;
         private bool _active;
         private float _timer;
+
+        private bool _homeSet;
+        private Vector3 _homeMap;
+        private Vector3 _homeCenter;
+        private float _homeK;
 
         private Mesh _blipMesh;
         private Vector3[] _v;
@@ -163,6 +176,14 @@ namespace ACO
             _center = _terrain != null ? _terrain.transform.position : (gen != null ? gen.transform.position : Vector3.zero);
             _k = 0.5f / Mathf.Max(worldRadius * Margin, 1f);
             if (Border != null) { Border.localScale = Vector3.one * (worldRadius * 2f * _k); }
+            // 항모는 움직이지 않는다 — 공역(중심 · 축척)이 바뀔 때만 지도 좌표를 다시 구한다
+            if (HomeBase != null && (!_homeSet || _homeK != _k || _homeCenter != _center))
+            {
+                _homeMap = ToMap(HomeBase.position);
+                _homeK = _k;
+                _homeCenter = _center;
+                _homeSet = true;
+            }
         }
 
         // ───────────── 점 ─────────────
@@ -172,6 +193,13 @@ namespace ACO
             _n = 0;
             float s = BlipSize * 0.5f;
             ACO_RadarContacts c = Contacts;
+            // 항모: 맨 먼저(유닛 · 나 아래에) 속 빈 파란 마름모
+            if (_homeSet && Mathf.Abs(_homeMap.x) <= 0.5f && Mathf.Abs(_homeMap.y) <= 0.5f)
+            {
+                float hs = s * HomeScale;
+                Diamond(_homeMap, hs, FriendlyColor);
+                Diamond(_homeMap, hs * 0.5f, HomeInnerColor);
+            }
             if (c.Targets != null)
             {
                 for (int i = 0; i < c.Count && _n < MAX_BLIPS - 1; i++)
@@ -273,6 +301,17 @@ namespace ACO
             _v[v + 1] = p + new Vector3(s, s, 0f);
             _v[v + 2] = p + new Vector3(s, -s, 0f);
             _v[v + 3] = p + new Vector3(-s, -s, 0f);
+            Fill(v, col);
+        }
+
+        private void Diamond(Vector3 p, float s, Color col)
+        {
+            if (_n >= MAX_BLIPS) { return; }
+            int v = _n * 4;
+            _v[v] = p + new Vector3(0f, s, 0f);
+            _v[v + 1] = p + new Vector3(s, 0f, 0f);
+            _v[v + 2] = p + new Vector3(0f, -s, 0f);
+            _v[v + 3] = p + new Vector3(-s, 0f, 0f);
             Fill(v, col);
         }
 

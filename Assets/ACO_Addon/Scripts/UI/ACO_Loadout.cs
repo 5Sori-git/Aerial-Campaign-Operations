@@ -92,12 +92,22 @@ namespace ACO
         public Color BuyColor = new Color(0.45f, 0.4f, 0.12f, 1f);
         public Color BuyDisabledColor = new Color(0.16f, 0.17f, 0.17f, 1f);
 
-        [Header("지원 (SUPPORT 줄 — 프리팹 빌더가 채운다)")]
-        [Tooltip("\"SUPPORT  < BUNKER BUSTER x3 >\" 글자")]
+        [Header("지원 (지원 구획 — 프리팹 빌더가 채운다, 6-180)")]
+        [Tooltip("고른 지원: 이름(금색) / 남은 횟수 두 줄")]
         public TextMeshProUGUI SupportText;
         [Tooltip("고른 지원 아이콘(CALL_* 순서는 SupportIcons, 없음이면 숨김)")]
         public Image SupportIcon;
         public Sprite[] SupportIcons;
+        [Tooltip("고르지 않았을 때 칸 가운데 안내(호출권이 있으면 노랑 '화살표로 고르세요', 없으면 흐리게 '지원 탭에서 구매'). 비면 SupportText에 쓴다")]
+        public TextMeshProUGUI SupportHint;
+        [Tooltip("선택 칸 테두리 — 호출권이 있는데 고르지 않았으면 SupportFrameColor ↔ SupportAlertColor로 천천히 깜빡인다")]
+        public Image SupportFrame;
+        public Color SupportFrameColor = new Color(0.22f, 0.36f, 0.3f, 1f);
+        public Color SupportAlertColor = new Color(1f, 0.82f, 0.3f, 1f);
+        public Color SupportEmptyColor = new Color(0.12f, 0.16f, 0.14f, 1f);
+        [Tooltip("깜빡임 빠르기(라디안/초)")]
+        public float SupportPulseSpeed = 3f;
+        private bool _supportAlert;
 
         [Header("번역 (6-166)")]
         [Tooltip("번역 장치. Bake가 넣는다")]
@@ -157,6 +167,12 @@ namespace ACO
         void Update()
         {
             if (!Progress) { return; }
+            // 지원: 호출권이 있는데 고르지 않았으면 테두리를 천천히 깜빡인다(6-180)
+            if (_supportAlert && SupportFrame)
+            {
+                float k = 0.5f + 0.5f * Mathf.Sin(Time.time * SupportPulseSpeed);
+                SupportFrame.color = Color.Lerp(SupportFrameColor, SupportAlertColor, k);
+            }
             // 저장 값을 불러오면 지난번에 고른 무장으로 돌아간다.
             if (!_restoredSeen && Progress.IsReady())
             {
@@ -267,19 +283,50 @@ namespace ACO
             return ACO_UiSound.KIND_CLICK;
         }
 
+        /// 지원 구획(6-180): 골랐으면 아이콘 + 이름(금색) / 남은 횟수, 안 골랐으면 칸 가운데 안내 — 호출권이 있으면 노랑 + 테두리 깜빡임, 없으면 흐리게.
         private void RefreshSupport()
         {
             if (!SupportText && !SupportIcon) { return; }
             int pick = Progress ? Progress.GetCallPick() : ACO_PlayerProgress.CALL_NONE;
-            string body;
-            if (pick < 0) { body = "<color=#8FA89A>" + T("load.none", "NONE") + "</color>"; }
-            else
+            string main = "";
+            string hint = "";
+            _supportAlert = false;
+            Color frame = SupportFrameColor;
+            if (pick >= 0)
             {
                 int count = Progress.GetCallCount(pick);
-                body = Progress.GetCallName(pick) + "  " + (count > 0 ? "<color=#FFD24D>x" + count + "</color>" : "<color=#FF5544>" + T("load.support.zero", "x0 - BUY IN THE SUPPORT TAB") + "</color>");
+                string sub = count > 0
+                    ? "<color=#8FA89A>" + T1("load.support.left", "{0} LEFT", count.ToString()) + "</color>"
+                    : "<color=#FF5544>" + T("load.support.out", "NONE LEFT - BUY IN THE SUPPORT TAB") + "</color>";
+                main = "<color=#FFD24D>" + Progress.GetCallName(pick) + "</color>\n<size=68%>" + sub + "</size>";
             }
-            string s = T("load.support", "SUPPORT") + "<pos=30%>" + body;
-            if (SupportText && SupportText.text != s) { SupportText.text = s; }
+            else
+            {
+                int owned = 0;
+                if (Progress) { for (int c = 0; c < ACO_PlayerProgress.CALL_COUNT; c++) { owned += Progress.GetCallCount(c); } }
+                if (owned > 0)
+                {
+                    hint = "<color=#FFD24D>" + T1("load.support.pick", "{0} CALLS OWNED - PICK ONE WITH THE ARROWS", owned.ToString()) + "</color>";
+                    _supportAlert = true;
+                }
+                else
+                {
+                    hint = "<color=#6F857A>" + T("load.support.empty", "NO CALLS - BUY THEM IN THE SUPPORT TAB (RIGHT)") + "</color>";
+                    frame = SupportEmptyColor;
+                }
+            }
+            if (SupportHint)
+            {
+                if (SupportText) { if (SupportText.text != main) { SupportText.text = main; } SetActive(SupportText.gameObject, main.Length > 0); }
+                if (SupportHint.text != hint) { SupportHint.text = hint; }
+                SetActive(SupportHint.gameObject, hint.Length > 0);
+            }
+            else if (SupportText)
+            {
+                string s = main.Length > 0 ? main : hint;   // 예전 패널(안내 칸 없음)
+                if (SupportText.text != s) { SupportText.text = s; }
+            }
+            if (SupportFrame && !_supportAlert && SupportFrame.color != frame) { SupportFrame.color = frame; }
             if (SupportIcon)
             {
                 Sprite icon = pick >= 0 && SupportIcons != null && pick < SupportIcons.Length ? SupportIcons[pick] : null;
@@ -287,6 +334,8 @@ namespace ACO
                 if (SupportIcon.enabled != (icon != null)) { SupportIcon.enabled = icon != null; }
             }
         }
+
+        private void SetActive(GameObject g, bool on) { if (g.activeSelf != on) { g.SetActive(on); } }
 
         private bool IsLocked()
         {

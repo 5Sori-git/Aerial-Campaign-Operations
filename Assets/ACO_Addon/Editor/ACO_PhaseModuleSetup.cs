@@ -206,6 +206,210 @@ public static class ACO_PhaseModuleSetup
         Debug.Log("[ACO] 육상전함 페이즈 모듈 Phase_LandShip을 미션 관리자 아래에 만들었습니다.", m);
     }
 
+    /// 잠수함 보스 페이즈(없으면 만든다 — Setup Check · Bake가 부른다, 6-202). 4·5번째 페이즈 — 모항 방어(SLCM) → 간헐 부상 → 완전 부상.
+    public static void EnsureSubmarine(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseSubmarine>(true) != null) { return; }
+        ACO_PrefabBuilder.EnsureSubmarinePrograms();
+        ACO_PhaseSubmarine m = Create<ACO_PhaseSubmarine>(manager, "Phase_Submarine");
+        Setup(m, "SUBMARINE - LEVIATHAN", "CARRIER LOST", 1, false, "", "", "");
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 2f, 2f };
+        m.ClearBonus = 10000;
+        ApplySubmarineTexts(m);
+        Debug.Log("[ACO] 잠수함 페이즈 모듈 Phase_Submarine을 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    // 잠수함 대사 표(6-202, 2판 6-205, 3판 6-209 — 페이즈가 넘어갈 때 항모 함장의 명령 + 승무원의 "Aye aye", 4판 6-211 — 시작은 소나 접촉 · CAP 지시, 발사 경보는 첫 발사 때, 5판 6-217 — 무인기 사출, 6판 6-219 — 사출 대사는 AWACS만) — 영어 원문. 번역은 Localization/ACO_Strings.tsv(radio.phasesubmarine.*), 음성은 Audio/AWACSVoiceLines/Submarine/Submarine_L01~26.
+    // 적 함장은 충각 단계부터 "항모 하나로 전쟁을 끝내 천만 명을 구한다"는 광기, 항모는 승조원 모두가 조종사를 믿고 버티는 목소리.
+    private static readonly int[] SubmarineLineEvent =
+    {
+        ACO_PhaseSubmarine.SIT_START, ACO_PhaseSubmarine.SIT_START,
+        ACO_PhaseSubmarine.SIT_FIRST_SALVO, ACO_PhaseSubmarine.SIT_FIRST_SALVO,
+        ACO_PhaseSubmarine.SIT_SALVO,
+        ACO_PhaseSubmarine.SIT_SPRINT,
+        ACO_PhaseSubmarine.SIT_CARRIER_HIT,
+        ACO_PhaseSubmarine.SIT_CARRIER_LOW,
+        ACO_PhaseSubmarine.SIT_SLCM_OUT, ACO_PhaseSubmarine.SIT_SLCM_OUT, ACO_PhaseSubmarine.SIT_SLCM_OUT, ACO_PhaseSubmarine.SIT_SLCM_OUT,
+        ACO_PhaseSubmarine.SIT_SONAR,
+        ACO_PhaseSubmarine.SIT_SURFACE,
+        ACO_PhaseSubmarine.SIT_REPAIR, ACO_PhaseSubmarine.SIT_REPAIR,
+        ACO_PhaseSubmarine.SIT_DIVE,
+        ACO_PhaseSubmarine.SIT_FINAL, ACO_PhaseSubmarine.SIT_FINAL, ACO_PhaseSubmarine.SIT_FINAL, ACO_PhaseSubmarine.SIT_FINAL,
+        ACO_PhaseSubmarine.SIT_TORPEDO,
+        ACO_PhaseSubmarine.SIT_SUNK, ACO_PhaseSubmarine.SIT_SUNK, ACO_PhaseSubmarine.SIT_SUNK,
+        ACO_PhaseSubmarine.SIT_CARRIER_LOST,
+        ACO_PhaseSubmarine.SIT_RAM_NEAR, ACO_PhaseSubmarine.SIT_RAM_NEAR, ACO_PhaseSubmarine.SIT_RAM_NEAR,
+        ACO_PhaseSubmarine.SIT_RAM_HIT, ACO_PhaseSubmarine.SIT_RAM_HIT,
+        ACO_PhaseSubmarine.SIT_RAM_REPAIR,
+        ACO_PhaseSubmarine.SIT_DRONE_FIRST,
+        ACO_PhaseSubmarine.SIT_DRONE,
+    };
+    private static readonly int[] SubmarineLineSpeaker =
+    {
+        ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ALLY, ACO_PhaseBoss.SPEAKER_ALLY_CREW,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ALLY, ACO_PhaseBoss.SPEAKER_ALLY_CREW,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_ALLY,
+        ACO_PhaseBoss.SPEAKER_ENEMY,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+        ACO_PhaseBoss.SPEAKER_AWACS,
+    };
+    private static readonly string[] SubmarineLineText =
+    {
+        "Sonar has a large submerged contact closing on the fleet! All aircraft, return to the carrier and fly CAP!",
+        "Periscope depth. There she is... the carrier. Flood all tubes.",
+        "All tubes, fire! Bury that carrier!",
+        "Vampire, vampire! Cruise missiles launched from the sub, bearing {left}! Splash them before they reach the carrier!",
+        "Vampire, vampire! Missiles inbound, bearing {left}!",
+        "Missiles are pulling up for a terminal dive! Splash them before they come down on the carrier!",
+        "We're hit! Damage control's on it. We'll hold. You just stop the next one!",
+        "Hull integrity critical... but nobody's left their post. Every one of us is counting on you!",
+        "Launch tubes are empty. Surface the boat. We finish this ourselves.",
+        "Its missiles are spent. It has to come up to fight. Watch for the sonar marks!",
+        "Missiles are done. Deck crew, clear the flight deck! Hangar, load ordnance for our pilots! We'll have a deck waiting for you. Go hunt that sub!",
+        "Aye aye, sir! Clearing the deck, ordnance coming up!",
+        "Sonar contact! It's surfacing inside the marked circle!",
+        "The sub has surfaced! Hit it before it dives!",
+        "Damaged mounts back online. Engage!",   // 6-209: 부상 때 3문만 수리 — "all mounts"를 뺐다
+        "It repaired its guns while it was under. Watch yourselves!",
+        "It's diving! Torpedo in the water, headed for the carrier!",
+        "Blow all ballast! Ramming speed! One carrier, and this war ends tomorrow. Ten million lives saved, and all it costs is ours! This isn't suicide. It's salvation!",
+        "It's going to ram the carrier! That captain's lost his mind. Sink it before it hits!",
+        "It's coming straight for us. Damage control teams, stand by! Our pilots will stop it. Helm, hold course!",
+        "Aye aye, sir! Holding course!",
+        "Torpedoes in the water! Sink it before it fires again!",
+        "No... so close... ten million people... they'll die because of you...!",
+        "Leviathan is sinking! Splash the sub!",
+        "It's down! The whole crew's cheering on the flight deck. Thank you, all of you!",
+        "We're going under! Abandon ship!",
+        "Do you see it? Peace, floating right there! History will remember us as saviors!",
+        "Two kilometers to the carrier! Stop that sub!",
+        "Nobody's running. We trust you!",
+        "For the ten million—!",
+        "Collision! It rammed us... we're going down!",
+        "Fix those guns! Weld the hatches shut if you have to! Today we save ten million!",
+        "The sub is launching drones! Watch your six!",   // 6-217: 부상 때 사출 무인기 — AWACS만(6-219: 적 "Drones away…"는 뺐다)
+        "More drones from the sub!",
+    };
+
+    /// 잠수함 페이즈 이름 · 배너 · 성공/실패 글자 · 화자 이름과 상황별 대사 표를 넣는다(음성은 비운다 — 자막만).
+    public static void ApplySubmarineTexts(ACO_PhaseSubmarine m)
+    {
+        m.PhaseName = "SUBMARINE - LEVIATHAN";
+        m.Description = "DEFEND THE CARRIER FROM THE SUBMARINE";
+        m.FailText = "CARRIER LOST";
+        m.StartText = "";   // 시작 대사는 대사 표(SIT_START)가 맡는다
+        m.SuccessText = "Leviathan confirmed destroyed. The carrier is safe. Outstanding work, all aircraft!";
+        m.FailChatterText = "The carrier is lost... All aircraft, divert to the nearest airfield.";
+        m.EnemyName = "LEVIATHAN";
+        m.AllyName = "CARRIER";
+        m.AllyCrewName = "CARRIER CREW";
+        m.LineEvent = (int[])SubmarineLineEvent.Clone();
+        m.LineSpeaker = (int[])SubmarineLineSpeaker.Clone();
+        m.LineText = (string[])SubmarineLineText.Clone();
+        m.LineClip = new AudioClip[SubmarineLineText.Length];
+        m.StartClip = null;
+        m.SuccessClip = null;
+        m.FailClip = null;
+        ACO_VoiceLines.ApplyPhase(m);   // 음성(Submarine/*) — 있는 것만
+        EditorUtility.SetDirty(m);
+    }
+
+    /// Setup Check submarine-ram-20-1: 씬 잠수함 모듈의 완전 부상(충각 돌격) 시작을 선체 50% → 20%로(체력 6000 → 12000과 함께 — 6-205).
+    public static void TuneSubmarineRam()
+    {
+        int n = 0;
+        foreach (ACO_PhaseSubmarine m in Object.FindObjectsOfType<ACO_PhaseSubmarine>(true))
+        {
+            Undo.RecordObject(m, "ACO submarine ram ratio");
+            m.FinalRatio = 0.2f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+            n++;
+        }
+        Debug.Log($"[ACO] 잠수함 모듈 {n}개: 충각 돌격을 선체 20%에서 시작합니다. 씬을 저장하세요.");
+    }
+
+    /// Setup Check submarine-ram-30-1(6-208): 씬 잠수함 모듈의 충각 돌격 시작을 선체 20 → 30%로.
+    public static void TuneSubmarineRam30()
+    {
+        int n = 0;
+        foreach (ACO_PhaseSubmarine m in Object.FindObjectsOfType<ACO_PhaseSubmarine>(true))
+        {
+            Undo.RecordObject(m, "ACO submarine ram ratio 30");
+            m.FinalRatio = 0.3f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+            n++;
+        }
+        Debug.Log($"[ACO] 잠수함 모듈 {n}개: 충각 돌격을 선체 30%에서 시작합니다. 씬을 저장하세요.");
+    }
+
+    /// Setup Check submarine-cycle-2(6-207): 씬 잠수함 모듈 — 잠항 25 → 15초, 격침 뒤 다 가라앉은 다음 2초(최대 35초)에 성공.
+    public static void TuneSubmarineCycle()
+    {
+        int n = 0;
+        foreach (ACO_PhaseSubmarine m in Object.FindObjectsOfType<ACO_PhaseSubmarine>(true))
+        {
+            Undo.RecordObject(m, "ACO submarine cycle");
+            m.SubmergedTime = 15f;
+            m.SurfaceRepairCount = 3;
+            m.ClearDelay = 2f;
+            m.ClearMaxWait = 35f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+            n++;
+        }
+        Debug.Log($"[ACO] 잠수함 모듈 {n}개: 잠항 15초, 부상 수리 3문, 다 가라앉은 뒤 성공. 씬을 저장하세요.");
+    }
+
+    /// Setup Check submarine-torpedo-500-1(6-212): 씬 잠수함 모듈의 어뢰 속도 150 → 500m/s(초공동 어뢰 — 명중이 늦어 피해가 늦게 들어갔다).
+    public static void TuneSubmarineTorpedo()
+    {
+        int n = 0;
+        foreach (ACO_PhaseSubmarine m in Object.FindObjectsOfType<ACO_PhaseSubmarine>(true))
+        {
+            Undo.RecordObject(m, "ACO submarine torpedo speed");
+            m.TorpedoSpeed = ACO_FxBuilder.TorpedoWakeSpeed;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+            n++;
+        }
+        Debug.Log($"[ACO] 잠수함 모듈 {n}개: 어뢰 속도 {ACO_FxBuilder.TorpedoWakeSpeed}m/s. 씬을 저장하세요.");
+    }
+
+    /// Setup Check submarine-lines-2 · 3 · 4: 씬 잠수함 모듈의 대사 표를 지금 판(4판 6-211)으로 바꾸고 음성을 넣는다(손으로 고친 대사는 덮어쓴다).
+    public static void TuneSubmarineTexts()
+    {
+        int n = 0;
+        foreach (ACO_PhaseSubmarine m in Object.FindObjectsOfType<ACO_PhaseSubmarine>(true))
+        {
+            Undo.RecordObject(m, "ACO submarine lines");
+            ApplySubmarineTexts(m);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
+            n++;
+        }
+        Debug.Log($"[ACO] 잠수함 대사 표({SubmarineLineText.Length}줄)와 음성을 모듈 {n}개에 넣었습니다. 씬을 저장하세요.");
+    }
+
     /// 분신 에이스 형제 페이즈(없으면 만든다). 3~5번째 페이즈의 공중 보스 — 슈퍼에이스 HEADS·TAILS 2기 편대, 실패 조건 없음.
     /// 예전 보너스 페이즈 모듈(Phase_Bonus_SuperAce)은 지우지 않고 끈다(보너스 후보가 없어지면 미션 끝 보너스가 나오지 않는다).
     public static void EnsureTwins(ACO_MissionManager manager)
@@ -449,6 +653,7 @@ public static class ACO_PhaseModuleSetup
         ACO_PhaseLuna luna = manager.GetComponentInChildren<ACO_PhaseLuna>(true);
         if (luna == null || !StrikeComplete(luna)) { missing.Add("Phase_Luna"); }
         if (manager.GetComponentInChildren<ACO_PhaseMrS>(true) == null) { missing.Add("Phase_MrS"); }
+        if (manager.GetComponentInChildren<ACO_PhaseSubmarine>(true) == null) { missing.Add("Phase_Submarine"); }
         return missing;
     }
 
@@ -475,6 +680,7 @@ public static class ACO_PhaseModuleSetup
         EnsureShade(manager);
         EnsureLuna(manager);
         EnsureMrS(manager);
+        EnsureSubmarine(manager);
         ApplyDefaultWeights(manager);
     }
 

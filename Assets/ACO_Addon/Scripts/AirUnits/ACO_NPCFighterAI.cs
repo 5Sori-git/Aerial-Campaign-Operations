@@ -29,6 +29,10 @@ namespace ACO
         [Tooltip("공격기: 켜면 미션 생성기가 일반 배치(증원·편대·호위 요격)에 쓰지 않고 지상·해상 호위 페이즈(콘보이·상륙전)에서만 내보낸다(OBJ_ATTACK). "
             + "노리는 대상은 TargetLayers(공격기 프리팹 = 아군 지상 26)")]
         public bool GroundAttacker = false;
+        [Tooltip("잠수함 사출 무인기(6-217): 켜면 미션 생성기가 일반 배치에 쓰지 않고 잠수함 부상 때 사출구에서만 띄운다(OBJ_SUB_DRONE)")]
+        public bool Drone = false;
+        [Tooltip("부활(스폰)할 때 처음부터 재생할 연출(무인기 사출 부스터 등) — 비면 없음")]
+        public ParticleSystem SpawnFx;
         [Tooltip("표적 마커·작전판에 숙련도와 함께 표시할 종류 약어 — \"FTR ACE\", \"ATK VET\"처럼. 전투기 FTR, 공격기 ATK")]
         public string MarkerLabel = "FTR";
 
@@ -463,16 +467,34 @@ namespace ACO
         private void ApplyTierVisuals()
         {
             bool carrier = _carrierBased && CarrierVisuals != null && CarrierVisuals.Length > 0;
-            SetVisuals(RookieVisuals, !carrier && _skillTier == SKILL_ROOKIE);
-            SetVisuals(VeteranVisuals, !carrier && _skillTier == SKILL_VETERAN);
-            SetVisuals(AceVisuals, !carrier && _skillTier == SKILL_ACE);
-            SetVisuals(CarrierVisuals, carrier);
+            // 고른 단계의 모델은 끄지 않는다 — 여러 단계가 같은 모델을 나눠 쓰면(잠수함 무인기 6-217: 세 단계 모두 같은 모델) 켠 것을 다음 단계가 다시 껐다.
+            // 모두 껐다 켜지도 않는다(켜져 있던 모델을 껐다 켜면 그 안의 연출이 다시 시작된다)
+            GameObject[] pick = carrier ? CarrierVisuals : (_skillTier == SKILL_ACE ? AceVisuals : (_skillTier == SKILL_VETERAN ? VeteranVisuals : RookieVisuals));
+            HideVisualsExcept(RookieVisuals, pick);
+            HideVisualsExcept(VeteranVisuals, pick);
+            HideVisualsExcept(AceVisuals, pick);
+            HideVisualsExcept(CarrierVisuals, pick);
+            SetVisuals(pick, true);
         }
 
         private bool _carrierBased;
 
         /// 이번 출격이 항모 발진인가(모든 클라이언트). ApplySkill 전에 부른다 — 외형은 ApplySkill이 고른다.
         public void SetCarrierBased(bool on) { _carrierBased = on; }
+
+        /// objects 중 keep에 없는 것만 끈다.
+        private void HideVisualsExcept(GameObject[] objects, GameObject[] keep)
+        {
+            if (objects == null) { return; }
+            for (int i = 0; i < objects.Length; i++)
+            {
+                GameObject o = objects[i];
+                if (!o) { continue; }
+                bool kept = false;
+                if (keep != null) { for (int j = 0; j < keep.Length; j++) { if (keep[j] == o) { kept = true; break; } } }
+                if (!kept) { o.SetActive(false); }
+            }
+        }
 
         private void SetVisuals(GameObject[] objects, bool on)
         {
@@ -504,6 +526,7 @@ namespace ACO
 
             if (Flight) { Flight.Speed = Flight.CruiseSpeed; }
             if (Net) { Net.ResetMotion(); }
+            if (SpawnFx) { SpawnFx.Clear(true); SpawnFx.Play(true); }   // 무인기 사출 부스터 등(6-217)
             _extendTimer = 0f;
             _engageTimer = 0f;
             _yieldTimer = 0f;

@@ -15,6 +15,7 @@ namespace ACO
     ///  - 기총 피퍼: 기수 앞 적기(PipperTargetAngle 안, GunRange 안 — 가장 기수 가까운 것) 거리에서 탄이 닿는 시간 t를 구하고,
     ///    피퍼 = 지금 쏜 탄의 t초 뒤 자리(탄속 + 내 속도 물려받기 + 중력) − 적기 속도 × t. 적기를 피퍼에 겹치면(지금 자리 + 속도 × t = 탄 자리) 맞는다. 적기가 없으면 PipperDefaultRange 거리의 탄 자리.
     ///  - 기체별 값(Bake가 Vehicles와 같은 순서로 채운다): SAV 비행·랜딩기어·플랩·후크·브레이크·기총·플레어, ACO 기본 미사일·특수무장 슬롯, 기총 탄속·중력·물려받기·발사 속도.
+    ///  - ILS(항모 ICLS, 6-201): 기어를 내리고 항모 뒤 접근 구역에 들면 HUD 가운데에 접근 축(세로) · 글라이드 슬로프(가로) 바와 아래 "ICLS 거리".
     ///  - 글자는 TextInterval마다만 바꾼다(문자열 만들기를 줄인다). 위치는 매 프레임.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_FlightHud : UdonSharpBehaviour
@@ -40,6 +41,10 @@ namespace ACO
         public float[] GunGravity;
         public float[] GunInherit;
         public float[] GunRate;
+        [Tooltip("ILS(항모 ICLS, 6-201) 접지 목표점 — 가운데 착함 와이어. Bake가 넣는다. 비우면 ILS를 그리지 않는다")]
+        public Transform IlsAim;
+        [Tooltip("착함 방향(수평, 선미 → 함수 — 각진 갑판 축). Bake가 와이어 줄로 잰다")]
+        public Vector3 IlsDir = Vector3.forward;
         [Tooltip("전파고도 레이캐스트 레이어(지면 + 물 — 바다는 트리거라 트리거도 맞힌다)")]
         public LayerMask GroundLayers = 2049 | 16;
         [Tooltip("Bake가 플레이어 기체의 SAV HUD를 숨긴다(SAV_HUDController의 자식 — bigstuff 등 — 을 끈다). 끄고 Bake하면 Bake가 껐던 것만 다시 켠다")]
@@ -101,6 +106,12 @@ namespace ACO
         public GameObject SlotGroup;
         public Transform[] SlotBars;
         public Transform[] SlotFills;
+        [Tooltip("ILS 바 묶음(HUD 가운데) — 세로 바 = 접근 축, 가로 바 = 글라이드 슬로프")]
+        public GameObject IlsGroup;
+        public Transform IlsLoc;
+        public Transform IlsGs;
+        [Tooltip("가운데 아래 \"ICLS 거리\"")]
+        public TextMeshPro IlsText;
 
         [Header("값")]
         public float HeadingScale = 0.35f;     // 단위/도
@@ -122,6 +133,23 @@ namespace ACO
         public float PipperTargetAngle = 12f;
         public float PipperDefaultRange = 700f;
         public float TextInterval = 0.1f;
+
+        [Header("ILS (6-201)")]
+        [Tooltip("글라이드 슬로프 각도(°) — 실제 항모 3.5")]
+        public float IlsGlide = 3.5f;
+        [Tooltip("접지 때 기체 기준점(트랜스폼)의 갑판 위 높이(m) — 글라이드 슬로프를 이만큼 올려 잰다(FA-18 주기 상태 0.94m)")]
+        public float IlsHeight = 1f;
+        [Tooltip("보이는 거리(m, 목표점까지 접근 축 방향) — 10NM")]
+        public float IlsRange = 18520f;
+        [Tooltip("접근 축에서 벗어나도 보이는 각도(°)")]
+        public float IlsSector = 35f;
+        [Tooltip("목표점 앞 이 거리(m) 안이면 숨긴다(목표점을 지났거나 바로 위 — 각도가 튄다)")]
+        public float IlsMinDistance = 20f;
+        [Tooltip("바가 끝까지 가는 벗어남(°): 좌우 · 상하")]
+        public float IlsLocFull = 4f;
+        public float IlsGsFull = 1.5f;
+        [Tooltip("바가 끝까지 갔을 때 가운데에서 떨어진 거리(판 단위)")]
+        public float IlsTravel = 4f;
 
         public const int SIGHT_NONE = 0;
         public const int SIGHT_GUN = 1;
@@ -161,6 +189,7 @@ namespace ACO
         private ACO_DFUNC_Missile _selectedAco;
         private bool _started;
         private Vector3 _ladderFlat = Vector3.forward;
+        private float _ilsDist = -1f;
 
         void Start()
         {
@@ -228,6 +257,7 @@ namespace ACO
             UpdateTape(AltTicks, AltLabels, _altVal, ft, 100f, 500, AltScale, false, 0);
             UpdateLadder(inv, fwd, vt.up, scale);
             UpdateVelocityMarker(inv, vel, scale);
+            UpdateIls(v, air, vt.position);
             UpdateThrottle(air);
             UpdateSelection(v);
             UpdatePipper(v, inv, head, vt, vel, scale);
@@ -268,6 +298,9 @@ namespace ACO
             UpdateTape(AltTicks, AltLabels, _altVal, 12000f, 100f, 500, AltScale, false, 0);
             UpdateLadder(inv, fwd, rot * Vector3.up, scale);
             UpdateVelocityMarker(inv, fwd * 230f, scale);
+            SetActive(IlsGroup, false);
+            if (IlsText) { SetActive(IlsText.gameObject, false); }
+            _ilsDist = -1f;
         }
 
         /// 내가 조종 중인 플레이어 기체(Vehicles 번호), 없으면 -1.
@@ -436,6 +469,54 @@ namespace ACO
             p.x = Mathf.Clamp(p.x, -LadderWindow.x, LadderWindow.x);
             p.y = Mathf.Clamp(p.y, -LadderWindow.y, LadderWindow.y);
             VelocityMarker.localPosition = new Vector3(p.x, p.y, 0f);
+        }
+
+        // ───────────── ILS(항모 ICLS, 6-201) ─────────────
+
+        /// 기어를 내리고 떠 있을 때, 목표점(가운데 와이어 + IlsHeight) 뒤 IlsMinDistance ~ IlsRange, 접근 축 ±IlsSector 안이면 바 두 개를 보인다.
+        /// 세로 바 = 접근 축이 있는 쪽(축 오른쪽에 있으면 왼쪽), 가로 바 = 글라이드 슬로프가 있는 쪽(높으면 아래). 끝까지 가면 깜빡인다.
+        private void UpdateIls(int v, SaccAirVehicle air, Vector3 pos)
+        {
+            if (!IlsGroup) { return; }
+            bool on = false;
+            float locN = 0f;
+            float gsN = 0f;
+            float along = 0f;
+            DFUNC_Gear gear = Gears != null && v < Gears.Length ? Gears[v] : null;
+            Vector3 dir = IlsDir;
+            dir.y = 0f;
+            if (IlsAim != null && gear != null && !gear.GearUp && air != null && !air.Taxiing && dir.sqrMagnitude > 0.001f)
+            {
+                dir = dir.normalized;
+                Vector3 rel = pos - (IlsAim.position + Vector3.up * IlsHeight);
+                along = -(rel.x * dir.x + rel.z * dir.z);           // 목표점 뒤(선미 쪽)로 떨어진 거리
+                float lateral = rel.x * dir.z - rel.z * dir.x;       // 접근 축 오른쪽 +
+                if (along > IlsMinDistance && along < IlsRange)
+                {
+                    float loc = Mathf.Atan2(lateral, along) * Mathf.Rad2Deg;
+                    if (Mathf.Abs(loc) <= IlsSector)
+                    {
+                        float gs = Mathf.Atan2(rel.y, along) * Mathf.Rad2Deg - IlsGlide;
+                        locN = -loc / Mathf.Max(IlsLocFull, 0.1f);
+                        gsN = -gs / Mathf.Max(IlsGsFull, 0.1f);
+                        on = true;
+                    }
+                }
+            }
+            SetActive(IlsGroup, on);
+            _ilsDist = on ? along : -1f;
+            if (!on) { return; }
+            bool blink = Time.time % 0.5f < 0.25f;
+            if (IlsLoc)
+            {
+                IlsLoc.localPosition = new Vector3(Mathf.Clamp(locN, -1f, 1f) * IlsTravel, 0f, 0f);
+                SetActive(IlsLoc.gameObject, Mathf.Abs(locN) <= 1f || blink);
+            }
+            if (IlsGs)
+            {
+                IlsGs.localPosition = new Vector3(0f, Mathf.Clamp(gsN, -1f, 1f) * IlsTravel, 0f);
+                SetActive(IlsGs.gameObject, Mathf.Abs(gsN) <= 1f || blink);
+            }
         }
 
         // ───────────── 스로틀·전파고도 ─────────────
@@ -684,6 +765,12 @@ namespace ACO
                 float hp = air.FullHealth > 0f ? Mathf.Clamp01(air.Health / air.FullHealth) : 0f;
                 if (HpText) { HpText.text = "HP " + Mathf.RoundToInt(hp * 100f) + "%"; }
                 if (HpFill) { Vector3 s = HpFill.localScale; s.x = Mathf.Max(hp, 0.001f); HpFill.localScale = s; }
+            }
+            if (IlsText)
+            {
+                bool ils = _ilsDist >= 0f;
+                SetActive(IlsText.gameObject, ils);
+                if (ils) { IlsText.text = "ICLS " + (Units != null ? Units.Distance(_ilsDist) : Mathf.RoundToInt(_ilsDist) + "m"); }
             }
             if (PipperRangeText)
             {

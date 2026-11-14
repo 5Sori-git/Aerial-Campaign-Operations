@@ -7,7 +7,7 @@ using VRC.Udon.Common.Interfaces;
 
 namespace ACO
 {
-    /// 디버그 패널(테스트용 — 공개 월드에 올릴 땐 AllowedPlayers에 이름을 넣거나 패널을 끈다).
+    /// 디버그 패널(테스트용). AllowedPlayers에 표시 이름이 있는 사람에게만 보인다 — 나머지는 들어올 때 화면(자식)을 모두 끈다(6-223). 비우면 아무에게도 안 보인다.
     ///  - 1페이즈 강제: 페이즈 모듈(미션 관리자 Modules)마다 P1 버튼 — 다음 미션부터 첫 페이즈가 그 모듈이다(가중치 무시, 다시 누르면 해제). 가중치는 에디터 표(ACO → Missions → Phase Weights)에서 정한다.
     ///  - 출현 확률: 전투기 에이스(생성기 AceChance)·베테랑(VeteranChance), 보너스 페이즈(슈퍼에이스 등 — 관리자 BonusPhaseChance).
     ///    페이즈를 고르고 적기를 놓는 건 관리자·생성기 오너라서 값은 네트워크 이벤트로 모든 클라이언트에 넣는다(늦게 들어온 사람은 인스펙터 값 — 디버그용).
@@ -41,7 +41,7 @@ namespace ACO
             "MOUNTAIN RANGE", "CANYON", "COAST", "VOLCANO", "REEF", "BASIN" };
 
         [Header("권한")]
-        [Tooltip("누를 수 있는 플레이어 표시 이름. 비우면 누구나 — 공개 월드에 올릴 땐 이름을 넣거나 패널을 끈다")]
+        [Tooltip("패널이 보이고 누를 수 있는 플레이어 표시 이름(VRChat 표시 이름 그대로, ClientSim은 \"[1] Local Player\"). 나머지에겐 패널이 아예 안 보인다. 비우면 아무에게도 안 보인다")]
         public string[] AllowedPlayers;
 
         [Header("표시 (프리팹 빌더가 채운다)")]
@@ -58,9 +58,31 @@ namespace ACO
 
         private float _timer;
         private int _terrainPick = -1;   // 고른 지형 프리셋(-1 = RANDOM) — GENERATE를 누르기 전까진 이 화면에만
+        private bool _shown;             // 등록된 사람으로 확인됐다 — 그 전엔 화면(자식)을 모두 꺼 둔다(6-223)
+        private bool _checked;           // 내 이름을 확인했다(로컬 플레이어가 준비된 뒤 한 번)
+
+        void Start()
+        {
+            // 처음엔 아무에게도 안 보인다 — 로컬 플레이어가 준비되면(Update) 등록된 사람에게만 켠다.
+            // 루트와 이 컴포넌트는 켜 둔다 — 다른 사람이 누른 값(Net* 네트워크 이벤트)은 안 보이는 사람에게도 들어가야 한다
+            SetScreen(false);
+        }
+
+        private void SetScreen(bool on)
+        {
+            _shown = on;
+            for (int i = 0; i < transform.childCount; i++) { transform.GetChild(i).gameObject.SetActive(on); }
+        }
 
         void Update()
         {
+            if (!_checked)
+            {
+                if (!Utilities.IsValid(Networking.LocalPlayer)) { return; }
+                _checked = true;
+                if (Allowed()) { SetScreen(true); }
+            }
+            if (!_shown) { return; }
             _timer -= Time.deltaTime;
             if (_timer > 0f) { return; }
             _timer = 0.5f;
@@ -216,7 +238,7 @@ namespace ACO
 
         private bool Allowed()
         {
-            if (AllowedPlayers == null || AllowedPlayers.Length == 0) { return true; }
+            if (AllowedPlayers == null || AllowedPlayers.Length == 0) { return false; }   // 아무도 등록하지 않았으면 아무에게도 안 보인다
             VRCPlayerApi local = Networking.LocalPlayer;
             if (!Utilities.IsValid(local)) { return false; }
             string me = local.displayName;

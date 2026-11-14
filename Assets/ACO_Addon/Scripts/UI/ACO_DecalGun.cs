@@ -73,6 +73,7 @@ namespace ACO
         /// 누르는 순간: 안개·분사 소리(늘), 샘플에 맞았으면 그 자리에 찍는다.
         public override void OnPickupUseDown()
         {
+            if (Studio != null && !Studio.IsDecalTab()) { return; }   // 라운델 탭(6-193): 아무 일도 없다 — 분사 · 소리 · 찍기 모두
             if (Mist) { Mist.Emit(MistCount); }
             if (StampSound && StampSound.clip) { StampSound.PlayOneShot(StampSound.clip); }
             if (Studio == null || Studio.SampleRoot == null) { return; }

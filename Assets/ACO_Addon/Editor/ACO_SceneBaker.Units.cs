@@ -269,15 +269,16 @@ public partial class ACO_SceneBaker
     /// 다른 함선 ×2. 아군 호위 유닛(ACO_EscortUnit, Hostile 아님)의 대공포(이름에 "AAGun") = 아군 요격: 아군 항공기·지상(25, 26), 사거리·반경 1.5km, 배수 1.
     /// 그 밖(지상 대공포·함포 등)은 요격하지 않는다. 기본값을 넣었으면 true. 어느 쪽이든 InterceptDefaultsApplied를 켠다.
     /// 적 CIWS 요격 수치의 판 번호. 수치를 바꾸면 올린다 — 씬·프리팹의 먼저 만든 CIWS에 Bake가 한 번 다시 넣는다.
-    public const int CiwsTuneVersion = 1;
+    public const int CiwsTuneVersion = 2;
 
-    /// 적 CIWS 요격 수치: AAM 최고 속도(600m/s)면 사거리를 1.5초에 지나 혼자서는 겨우 맞출 수 있고, 다음 발까지 쉰다 — 일제 사격이 뚫는다.
+    /// 적 CIWS 요격 수치(6-186): 빨리 잡고(반응 0.3 + 격추 0.6초) 오래 쉰다(5.5초). 사거리는 그대로 900m — 넓히면 함대의 CIWS 범위가 겹쳐 빈틈이 없어진다.
+    /// 쉬는 시간이 재장전 6초 - 격추 0.9초 = 5.1초보다 길어 혼자서도 한 발씩 계속 쏘면 다음 발이 쉬는 틈에 들어가 뚫리고, 일제 사격은 더 쉽게 뚫는다.
     public static void ApplyEnemyCiwsTune(ACO_AAGunSite aa)
     {
         aa.InterceptRange = 900f;
-        aa.InterceptReactionTime = 0.5f;
-        aa.InterceptKillTime = 1f;
-        aa.InterceptCooldown = 1.5f;
+        aa.InterceptReactionTime = 0.3f;
+        aa.InterceptKillTime = 0.6f;
+        aa.InterceptCooldown = 5.5f;
         aa.InterceptTuneVersion = CiwsTuneVersion;
     }
 
@@ -332,6 +333,7 @@ public partial class ACO_SceneBaker
         if (!hasCarrier) { missing.Add("NPC_Carrier"); }
         if (poolRoot.GetComponentInChildren<ACO_Railgun>(true) == null) { missing.Add("NPC_Railgun"); }
         if (poolRoot.GetComponentInChildren<ACO_LandShip>(true) == null) { missing.Add(ACO_PrefabBuilder.LandShipPrefab); }
+        if (poolRoot.GetComponentInChildren<ACO_Submarine>(true) == null) { missing.Add(ACO_PrefabBuilder.SubmarinePrefab); }
         return missing;
     }
 
@@ -361,8 +363,53 @@ public partial class ACO_SceneBaker
             case "NPC_Carrier": return ACO_PrefabBuilder.BuildCarrier();
             case "NPC_Railgun": return ACO_PrefabBuilder.BuildRailgun();
             case ACO_PrefabBuilder.LandShipPrefab: return ACO_PrefabBuilder.BuildLandShip();
+            case ACO_PrefabBuilder.SubmarinePrefab: return ACO_PrefabBuilder.BuildSubmarine();
         }
         return null;
+    }
+
+    /// 잠수함 ↔ 보스 페이즈(동기화된 단계 · 자리), 모항(HomeBase) · 명단(게임 진행) · 무전, 아군 요격 CIWS(순양함 — 돌입한 SLCM을 떨어뜨린다).
+    private static void BakeSubmarine()
+    {
+        ACO_Submarine sub = Object.FindObjectOfType<ACO_Submarine>(true);
+        ACO_PhaseSubmarine phase = Object.FindObjectOfType<ACO_PhaseSubmarine>(true);
+        if (sub == null) { return; }
+        if (phase == null) { Debug.LogWarning("[ACO] 잠수함: 페이즈 모듈(ACO_PhaseSubmarine)이 없습니다.", sub); return; }
+        if (sub.Phase != phase) { sub.Phase = phase; MarkChanged(sub); }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        Transform home = HomeBase();
+        ACO_GameFlow flow = Object.FindObjectOfType<ACO_GameFlow>(true);
+        if (phase.Chatter != chatter || phase.HomeBase != home || phase.Flow != flow)
+        {
+            phase.Chatter = chatter;
+            phase.HomeBase = home;
+            phase.Flow = flow;
+            MarkChanged(phase);
+        }
+        if (home == null) { Debug.LogWarning("[ACO] 잠수함: 모항(HomeBase)을 찾지 못했습니다 — SLCM이 원점을 노립니다.", phase); }
+        var sites = new List<ACO_AAGunSite>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_AAGunSite aa in root.GetComponentsInChildren<ACO_AAGunSite>(true))
+            {
+                if ((aa.InterceptProtectLayers.value & (1 << 26)) != 0 && !aa.transform.IsChildOf(sub.transform)) { sites.Add(aa); }
+            }
+        }
+        ACO_AAGunSite[] list = sites.ToArray();
+        if (!SameSites(sub.InterceptSites, list))
+        {
+            sub.InterceptSites = list;
+            MarkChanged(sub);
+            Debug.Log($"[ACO] 잠수함: 아군 요격 CIWS {list.Length}문을 SLCM 요격에 연결했습니다.");
+        }
+        // 보조 동체 소형 레일건(6-204): 폭발 지역 피해가 레이더(내 기체)를 본다
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        foreach (ACO_MiniRailgun mini in sub.GetComponentsInChildren<ACO_MiniRailgun>(true))
+        {
+            if (mini.Contacts == contacts) { continue; }
+            mini.Contacts = contacts;
+            MarkChanged(mini);
+        }
     }
 
 

@@ -53,8 +53,8 @@ namespace ACO
         public bool LockGearOnGround = true;
         [Tooltip("갑판 위 택싱 속도를 제한한다(이륙은 캐터펄트로만)")]
         public bool LimitDeckTaxi = true;
-        [Tooltip("갑판 택싱 최고 속도(m/s). 10 = 약 19kt")]
-        public float DeckTaxiSpeed = 10f;
+        [Tooltip("갑판 택싱 최고 속도(m/s). 5.14 = 10kt(사용자 요청 6-216 — 그 전 2.6 = 약 5kt, 처음 10 = 약 19kt)")]
+        public float DeckTaxiSpeed = 5.14f;
         [Tooltip("갑판 영역(SafeZones)을 읽는 진행도 — Bake가 채운다")]
         public ACO_PlayerProgress Progress;
 

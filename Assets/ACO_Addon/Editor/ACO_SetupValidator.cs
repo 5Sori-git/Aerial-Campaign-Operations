@@ -309,6 +309,33 @@ public partial class ACO_SetupValidator : EditorWindow
                     ACO_SceneBaker.BakeNeighbors();
                 });
             }
+            // 잠수함 사출 무인기(6-217 — 풀에 SubDronePoolSize기)
+            if (Object.FindObjectOfType<ACO_PhaseSubmarine>(true) != null)
+            {
+                int drones = 0;
+                if (gen.Fighters != null) { foreach (ACO_NPCFighterAI f in gen.Fighters) { if (f != null && f.Drone) { drones++; } } }
+                if (drones >= ACO_PrefabBuilder.SubDronePoolSize) { Add(g, OK, $"잠수함 무인기 {drones}기", gen); }
+                else
+                {
+                    ACO_MissionGenerator genRef3 = gen;
+                    int needDrones = ACO_PrefabBuilder.SubDronePoolSize - drones;
+                    Add(g, WARN, $"생성기 풀의 잠수함 무인기가 {drones}기입니다 — 잠수함이 부상할 때 무인기를 {(drones > 0 ? "적게" : "")} 사출{(drones > 0 ? "한다" : "하지 못한다")}. [고치기]는 NPC_SubDrone {needDrones}기를 풀 아래에 놓는다(없으면 NPC_Fighter 변형으로 만든다).", gen, () =>
+                    {
+                        Transform parent = genRef3.UnitPoolRoot != null ? genRef3.UnitPoolRoot : genRef3.transform;
+                        if (!ACO_PrefabBuilder.Exists(ACO_PrefabBuilder.SubDronePrefab)) { ACO_PrefabBuilder.BuildSubDrone(); }
+                        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ACO_PrefabBuilder.PathOf(ACO_PrefabBuilder.SubDronePrefab));
+                        if (prefab == null) { return; }
+                        for (int k = 0; k < needDrones; k++)
+                        {
+                            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+                            go.SetActive(false);
+                            Undo.RegisterCreatedObjectUndo(go, "ACO sub drone");
+                        }
+                        Debug.Log($"[ACO] NPC_SubDrone {needDrones}기를 생성기 풀에 넣었습니다.");
+                        ACO_SceneBaker.BakeNeighbors();
+                    });
+                }
+            }
 
             if (hasHeads && hasTails) { Add(g, OK, $"분신 에이스 형제: {names}", gen); }
             else
@@ -412,6 +439,14 @@ public partial class ACO_SetupValidator : EditorWindow
         Single<ACO_VoiceWarning>(g, "조종석 음성 경고(PULL UP·ALTITUDE·STALL·RAILGUN·LASER·DAMAGE·FLARES·BINGO·AMMO)", WARN, ACO_SceneBaker.CreateVoiceWarning);
         Single<ACO_Bgm>(g, "상황별 BGM(영상 플레이어 스트리밍 — URL은 직접 넣는다)", INFO, ACO_SceneBaker.CreateBgm);
         if (FindOne<ACO_Bgm>() != null && FindOne<ACO_BgmPanel>() == null) { Add(g, INFO, "BGM 패널(볼륨·켜기)이 없습니다(선택).", null, ACO_SceneBaker.CreateBgmPanel); }
+        // 6-220: BGM 패널을 브리핑실 모니터 화면 크기로 · 선원실 영상 플레이어 소리 토글
+        ACO_BgmPanel bgmPanel = FindOne<ACO_BgmPanel>();
+        if (bgmPanel != null && !ACO_SceneBaker.BgmPanelFitsMonitor(bgmPanel)) { Add(g, WARN, "BGM 패널이 브리핑실 모니터 화면(0.57 × 0.33m)과 크기 · 자리가 다릅니다 — [고치기]는 화면 크기 · 자리에 맞춰 놓는다(판 4 패널 기준).", bgmPanel, () => ACO_SceneBaker.FitBgmPanelToMonitor(bgmPanel)); }
+        if (ACO_SceneBaker.FindYamaAudio() != null && FindOne<ACO_VideoAudioToggle>() == null) { Add(g, WARN, "선원실 영상 플레이어(YamaPlayer) 소리 범위 토글이 없습니다 — [고치기]는 TV 아래 셋톱박스 앞면에 놓고 YamaPlayer 소리를 근처(NEAR) 3D로 맞춘다.", null, ACO_SceneBaker.CreateVideoAudioToggle); }
+        if (FindOne<ACO_Bgm>() != null && !ACO_SceneBaker.BgmGainsFit())
+        {
+            Add(g, INFO, "BGM 곡별 배율(6-176) 칸 수가 곡 수와 다릅니다(빈 칸은 1로 친다). [고치기] = 빈 칸을 1.0으로 채워 맞추기(넣은 값은 그대로).", FindOne<ACO_Bgm>(), ACO_SceneBaker.FitBgmGains);
+        }
 
         ACO_PlayerProgress progress = Single<ACO_PlayerProgress>(g, "진행도(재화·강화·해금)", ERROR, ACO_SceneBaker.CreatePlayerProgress);
         if (progress != null)
@@ -582,6 +617,25 @@ public partial class ACO_SetupValidator : EditorWindow
         if (map == null) { Add(g, INFO, "작전 테이블(3D 미니맵)이 없습니다(선택).", null, ACO_SceneBaker.CreateTacticalMap); }
         else if (map.HomeBase == null) { Add(g, WARN, "작전 테이블의 HomeBase(항모)가 비어 있습니다.", map); }
         else { Add(g, OK, "작전 테이블", map); }
+        foreach (ACO_HexTerrain terrain in Object.FindObjectsOfType<ACO_HexTerrain>(true))
+        {
+            int missing = 0;
+            if (terrain.ExcludeZones != null) { foreach (Collider c in terrain.ExcludeZones) { if (c == null) { missing++; } } }
+            if (terrain.ExcludeZones == null || terrain.ExcludeZones.Length == 0 || missing > 0)
+            {
+                Add(g, WARN, $"지형 '{terrain.name}'의 제외 구역(ExcludeZones — 스폰 지점)이 " + (missing > 0 ? $"{missing}칸 끊겨" : "비어") + " 있습니다 — 항모 둘레가 바다로 비지 않고 바닷길도 안 생겨 스폰 지점이 땅에 묻힐 수 있습니다. Bake가 작전 테이블의 HomeBase 콜라이더로 채웁니다.", terrain);
+            }
+        }
+        ACO_FlightHud flightHud = FindOne<ACO_FlightHud>();
+        if (flightHud != null && flightHud.IlsAim == null)
+        {
+            Add(g, WARN, "비행 HUD의 ILS 목표점(착함 와이어)이 비어 있어 착함 유도(ICLS)가 나오지 않습니다 — Bake가 이름이 ArrestingCable로 시작하는 와이어로 채웁니다.", flightHud);
+        }
+        ACO_PhaseSubmarine subPhase = FindOne<ACO_PhaseSubmarine>();
+        if (subPhase != null && (subPhase.HomeBase == null || subPhase.Generator == null || subPhase.Generator.Submarine == null || subPhase.Generator.Submarine.Phase != subPhase))
+        {
+            Add(g, WARN, "잠수함 페이즈(6-202)의 연결이 비어 있습니다(모항 · 생성기의 잠수함 · 잠수함 ↔ 모듈) — 유닛 풀에 NPC_Submarine이 있는지 보고 Bake 하세요.", subPhase);
+        }
         if (map != null && map.MapRoot != null && map.MapRoot.Find(ACO_RadarBuilder.TacticalNorthName) == null)
         {
             Add(g, WARN, "작전 테이블에 북쪽 표시가 없습니다.", map, () => ACO_RadarBuilder.EnsureTacticalNorthMark(map));
@@ -611,6 +665,12 @@ public partial class ACO_SetupValidator : EditorWindow
         else if (!ACO_LocalizationSetup.ManagerUpToDate(locManager))
         {
             Add(g, WARN, "번역 표(Localization/ACO_Strings.tsv)가 바뀌었는데 씬에 아직 안 들어갔습니다. [고치기] = 표 넣기 → 그 뒤 Bake(새 라벨 연결).", locManager, ACO_LocalizationSetup.ApplyTable);
+        }
+        // 무전 자막(6-175): 인스펙터 영어 대사가 표의 영어 칸과 다르면 그 줄만 영어로 나온다
+        int radioMissing = ACO_LocalizationSetup.MissingRadioLines().Count;
+        if (radioMissing > 0)
+        {
+            Add(g, INFO, $"번역 없는 무전 대사가 {radioMissing}줄 있습니다(새 대사이거나 인스펙터에서 영어를 고친 줄) — 한국어 · 일본어 자막에서 그 줄만 영어로 나옵니다. [고치기] = 콘솔에 목록 적기(번역 표에 radio.* 줄로 더하세요).", null, ACO_LocalizationSetup.LogMissingRadioLines);
         }
 
         ACO_TutorialPopup tutorial = FindOne<ACO_TutorialPopup>();

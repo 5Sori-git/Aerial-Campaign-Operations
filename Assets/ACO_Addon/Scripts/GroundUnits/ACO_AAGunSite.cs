@@ -703,7 +703,7 @@ namespace ACO
             return _icMissile != null && Time.time - _icLastTick < IC_HOLD;
         }
 
-        /// 이 CIWS가 이 미사일을 막을 수 있는가: 살아 있음, 지키는 레이어의 표적, 미사일이 요격 사거리 안, 표적이 자기 유닛이거나 방어 반경 안.
+        /// 이 CIWS가 이 미사일을 막을 수 있는가: 살아 있음, 지키는 레이어의 표적, 미사일이 요격 사거리 · 좌우 한계 안, 표적이 자기 유닛이거나 방어 반경 안.
         public bool CanIntercept(Vector3 missilePos, Transform target)
         {
             if (InterceptProtectLayers.value == 0 || _disabled || !gameObject.activeInHierarchy || !target) { return false; }
@@ -712,6 +712,7 @@ namespace ACO
             if (((1 << target.gameObject.layer) & InterceptProtectLayers.value) == 0) { return false; }
             Vector3 p = transform.position;
             if ((missilePos - p).sqrMagnitude > InterceptRange * InterceptRange) { return false; }
+            if (!InArc(missilePos)) { return false; }   // 좌우 한계 밖(선체 반대편) 미사일은 못 쏜다 — 6-186
             if (_defendedRoot && target.IsChildOf(_defendedRoot)) { return true; }
             return (target.position - p).sqrMagnitude <= DefenseRadius * DefenseRadius;
         }

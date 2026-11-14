@@ -13,6 +13,7 @@ namespace ACO
         public const int SPEAKER_ALLY = 2;
         public const int SPEAKER_CREW = 3;     // 적 선원(육상전함 — 적 채널)
         public const int SPEAKER_SYSTEM = 4;   // 적 자동 시스템 안내(육상전함 자동 사통 — 적 채널)
+        public const int SPEAKER_ALLY_CREW = 5;   // 아군 승무원(아군 지휘관의 명령에 대답 — 아군 채널, 6-209)
 
         [Header("대사 — 공통")]
         [Tooltip("Bake가 넣는다")]
@@ -29,6 +30,9 @@ namespace ACO
         [Tooltip("적 자동 시스템 대사의 이름·색(화자 4번)")]
         public string SystemName = "SYSTEM";
         public Color SystemColor = new Color(0.7f, 0.85f, 0.9f, 1f);
+        [Tooltip("아군 승무원 대사의 이름·색(화자 5번 — 아군 지휘관의 명령에 \"Aye aye\"로 대답)")]
+        public string AllyCrewName = "CREW";
+        public Color AllyCrewColor = new Color(0.6f, 0.88f, 1f, 1f);
         [Tooltip("음성이 이 시간(초)보다 오래 밀리면 버린다")]
         public float VoiceQueueDelay = 8f;
 
@@ -61,12 +65,13 @@ namespace ACO
                 AudioClip clip = clips != null && i < clips.Length ? clips[i] : null;
                 string text = texts[i];
                 if (string.IsNullOrEmpty(text) && clip == null) { continue; }
-                if (!string.IsNullOrEmpty(text)) { text = text.Replace("{left}", left); }
+                if (!string.IsNullOrEmpty(text) && text.Contains("{left}")) { text = Chatter.Tr(text).Replace("{left}", left); }   // 숫자가 들어가는 줄은 넣기 전에 번역(6-175)
                 int speaker = speakers != null && i < speakers.Length ? speakers[i] : SPEAKER_AWACS;
                 if (speaker == SPEAKER_ENEMY) { Chatter.SayVoice(EnemyName, EnemyColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
                 else if (speaker == SPEAKER_ALLY) { Chatter.SayVoice(AllyName, AllyColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ALLY); }
                 else if (speaker == SPEAKER_CREW) { Chatter.SayVoice(CrewName, CrewColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
                 else if (speaker == SPEAKER_SYSTEM) { Chatter.SayVoice(SystemName, SystemColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ENEMY); }
+                else if (speaker == SPEAKER_ALLY_CREW) { Chatter.SayVoice(AllyCrewName, AllyCrewColor, text, clip, VoiceQueueDelay, ACO_Chatter.CH_ALLY); }
                 else { Chatter.SayControl(text, clip, VoiceQueueDelay); }
             }
         }

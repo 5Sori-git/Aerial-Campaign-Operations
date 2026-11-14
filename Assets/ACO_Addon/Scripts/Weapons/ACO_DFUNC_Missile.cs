@@ -767,6 +767,8 @@ namespace ACO
                 Transform tr = Targets[i] != null ? Targets[i].transform : null;
                 while (tr != null)
                 {
+                    // 잠수함 SLCM(6-202)은 잠수함 아래에 있지만 따로 나는 미사일 — 함선 부위로 보면 SLCM끼리 락온 진행도가 이어졌다
+                    if (tr.GetComponent<ACO_Slcm>() != null) { break; }
                     ACO_Warship w = tr.GetComponent<ACO_Warship>();
                     if (w != null) { _targetShip[i] = w; break; }
                     tr = tr.parent;

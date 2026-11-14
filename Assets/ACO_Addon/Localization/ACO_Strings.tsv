@@ -53,7 +53,7 @@ set.lang.auto	자동	AUTO	自動
 prog.up.hull	기체 장갑	HULL ARMOR	機体装甲
 prog.updesc.hull	기체를 보강합니다. 더 많이 맞아도 버팁니다.	REINFORCED AIRFRAME. TAKES MORE HITS BEFORE GOING DOWN.	機体を補強し、より多くの被弾に耐えます。
 prog.up.mobility	기동성	MOBILITY	機動性
-prog.updesc.mobility	조종 반응이 빨라져 더 작게 선회하고 빠르게 롤합니다.	SHARPER CONTROL RESPONSE FOR TIGHTER TURNS AND FASTER ROLLS.	操縦の反応が鋭くなり、小さく旋回し素早くロールします。
+prog.updesc.mobility	조종 반응이 빨라져 더 작게 선회하고 빠르게 롤합니다. 후반 단계에서는 PSM이 가능해집니다.	SHARPER CONTROL RESPONSE FOR TIGHTER TURNS AND FASTER ROLLS. HIGHER LEVELS UNLOCK PSM.	操縦の反応が鋭くなり、小さく旋回し素早くロールします。高いレベルではPSMが可能になります。
 prog.up.engine	엔진	ENGINE	エンジン
 prog.updesc.engine	추력이 늘어 더 빠르게 상승하고 가속합니다.	MORE THRUST FOR FASTER CLIMBS AND ACCELERATION.	推力が増し、上昇と加速が速くなります。
 prog.up.fuel	연비	FUEL EFFICIENCY	燃費
@@ -160,6 +160,11 @@ shop.detail.nownext	현재 {0}   >   다음 {1}	NOW {0}   >   NEXT {1}	現在 {0
 shop.detail.maxed	최대 단계   {0}	MAX LEVEL   {0}	最大レベル   {0}
 shop.detail.need	{0} CR 부족	NEED {0} MORE CR	あと {0} CR 必要
 shop.detail.equipped	다음 미션에 장착됨	EQUIPPED FOR THE NEXT MISSION	次のミッションで装備
+shop.detail.aoa	받음각 한계 {0}   >   {1}	AOA LIMIT {0}   >   {1}	迎角制限 {0}   >   {1}
+shop.detail.aoa1	받음각 한계 {0}	AOA LIMIT {0}	迎角制限 {0}
+shop.detail.glimit	최대 하중 {0}   >   {1}	MAX LOAD {0}   >   {1}	最大荷重 {0}   >   {1}
+shop.detail.glimit1	최대 하중 {0}	MAX LOAD {0}	最大荷重 {0}
+shop.detail.aoaoff	제한 없음 (PSM)	NO LIMIT (PSM)	制限なし (PSM)
 shop.msg.select	먼저 항목을 고르세요	SELECT AN ITEM FIRST	先に項目を選んでください
 shop.msg.lock.upgrades	모두 준비 완료 - 강화 잠김	ALL READY - UPGRADES LOCKED	全員準備完了 - 強化はロック中
 shop.msg.lock.support	모두 준비 완료 - 지원 잠김	ALL READY - SUPPORT LOCKED	全員準備完了 - 支援はロック中
@@ -192,6 +197,11 @@ load.cat.3	기타	OTHER	その他
 load.none	없음	NONE	なし
 load.support	지원	SUPPORT	支援
 load.support.zero	x0 - 상점 지원 탭에서 구매	x0 - BUY IN THE SUPPORT TAB	x0 - 支援タブで購入
+load.hdr.support	지원	SUPPORT	支援
+load.support.left	남은 {0}회	{0} LEFT	残り{0}回
+load.support.out	남은 호출권 없음 — 지원 탭에서 구매	NONE LEFT - BUY IN THE SUPPORT TAB	残りなし — 支援タブで購入
+load.support.pick	호출권 {0}개 보유 — 화살표로 고르세요	{0} CALLS OWNED - PICK ONE WITH THE ARROWS	支援要請券{0}枚所持 — 矢印で選んでください
+load.support.empty	호출권 없음 · 오른쪽 지원 탭에서 구매	NO CALLS - BUY THEM IN THE SUPPORT TAB (RIGHT)	支援要請券なし · 右の支援タブで購入
 load.msg.locked	모두 준비 완료 - 로드아웃 잠김	ALL READY - LOADOUT LOCKED	全員準備完了 - ロードアウトはロック中
 load.locked	잠김: {0}	LOCKED: {0}	ロック中：{0}
 load.special	특수무장: {0}	SPECIAL WEAPON: {0}	特殊兵装：{0}
@@ -199,23 +209,23 @@ load.price	가격 {0} CR	PRICE {0} CR	価格 {0} CR
 load.noequip	장착한 특수무장이 없습니다	NO SPECIAL WEAPON EQUIPPED	特殊兵装が未装備です
 load.buy	구매 {0} CR	BUY {0} CR	購入 {0} CR
 load.owned	보유	OWNED	所持
-wpn.4AAM	다중 목표 공대공 미사일\n최대 네 대를 한 번에 락온하고 한 발씩 쏩니다. 락온 거리가 짧습니다.	MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. SHORT LOCK RANGE.	多目標空対空ミサイル\n最大4機を同時にロックし、1発ずつ発射します。ロック距離は短めです。
-wpn.UGB	무유도 폭탄\n자유 낙하 폭탄입니다. CCIP 조준점으로 겨누세요.	UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER.	無誘導爆弾\n自由落下爆弾です。CCIP照準で狙います。
+wpn.4AAM	다중 목표 공대공 미사일\n최대 네 대를 한 번에 락온하고 한 발씩 쏩니다. 일반 미사일보다 락온 거리가 깁니다.	MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. LONGER LOCK RANGE THAN STANDARD MISSILES.	多目標空対空ミサイル\n最大4機を同時にロックし、1発ずつ発射します。通常ミサイルよりロック距離が長めです。
+wpn.UGB	무유도 폭탄\n자유 낙하 폭탄입니다. CCIP 조준점으로 겨누세요. 폭탄 중 폭발이 가장 넓습니다.	UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER. THE WIDEST BLAST OF ANY BOMB.	無誘導爆弾\n自由落下爆弾です。CCIP照準で狙います。爆弾の中で最も爆発範囲が広いです。
 wpn.RKT	로켓 발사기\n지상 표적용 무유도 로켓 연사. 탄창이 크고 재장전이 빠릅니다.	ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD.	ロケットランチャー\n地上目標向けの無誘導ロケット連射。弾数が多く装填も速めです。
-wpn.LGB	레이저 유도 폭탄\n지상 표적을 락온하고 투하하면 폭탄이 스스로 날아갑니다. 폭발이 넓습니다.	LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE. THE BOMB STEERS ITSELF ONTO IT WITH A WIDE BLAST.	レーザー誘導爆弾\n地上目標をロックして投下すると自ら誘導します。爆発範囲が広めです。
-wpn.LGR	레이저 유도 로켓\n락온한 로켓이 비행 중 방향을 고치고 일반 로켓보다 강합니다. 재장전이 느립니다.	LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT AND HIT HARDER THAN PLAIN ROCKETS. SLOWER TO RELOAD.	レーザー誘導ロケット\nロックしたロケットが飛行中に修正し、通常ロケットより強力です。装填は遅めです。
+wpn.LGB	레이저 유도 폭탄\n지상 표적을 락온하고 투하하면 폭탄이 스스로 날아갑니다. 무유도 폭탄보다 폭발은 좁지만 더 강합니다.	LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. TIGHTER BLAST THAN UNGUIDED BOMBS, BUT HITS HARDER.	レーザー誘導爆弾\n地上目標をロックして投下すると自ら誘導します。無誘導爆弾より爆発範囲は狭いですが、威力は高めです。
+wpn.LGR	레이저 유도 로켓\n락온한 로켓이 비행 중 표적으로 방향을 고칩니다. 위력은 일반 로켓과 같고 재장전이 느립니다.	LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. SAME PUNCH AS PLAIN ROCKETS, BUT SLOWER TO RELOAD.	レーザー誘導ロケット\nロックしたロケットが飛行中に目標へ修正します。威力は通常ロケットと同じで、装填は遅めです。
 wpn.4AGM	다중 목표 공대지 미사일\n지상 표적 네 개를 락온하고 한 발씩 쏩니다.	MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH.	多目標空対地ミサイル\n地上目標を最大4つロックし、1発ずつ発射します。
 wpn.LAGM	장거리 공대지 미사일\n대공 사거리 밖에서 지상 표적을 치는 무거운 미사일. 락온 범위가 좁고 느립니다.	LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK.	長距離空対地ミサイル\n対空射程の外から地上目標を叩く重ミサイル。ロック範囲が狭く遅めです。
 wpn.LASM	장거리 대함 미사일\n해면을 스치듯 날아 고속으로 함선을 칩니다. 탄두가 무겁고 함선 CIWS가 막지 못합니다.	LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT.	長距離対艦ミサイル\n海面すれすれを高速で飛び艦船を撃ちます。弾頭が重く、艦のCIWSでは防げません。
 wpn.SCM	원거리 확산 미사일\n표적 위에서 열려 넓은 범위에 자탄을 뿌립니다. 탄수가 적고 재장전이 깁니다.	STAND-OFF CLUSTER MISSILE\nOPENS ABOVE THE TARGET AND SCATTERS BOMBLETS OVER A WIDE AREA. FEW ROUNDS, LONG RELOAD.	スタンドオフ・クラスターミサイル\n目標の上空で開き、広範囲に子弾をばらまきます。弾数が少なく装填が長めです。
 wpn.FLAK	근접 신관 로켓\n누르고 있는 동안 무유도 로켓을 쏘고, 적기 근처에서 터집니다.	PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT.	近接信管ロケット\n押している間、敵機の近くで炸裂する無誘導ロケットを発射します。
 wpn.LAAM	장거리 공대공 미사일\n시야 밖의 적기도 락온합니다. 락온 범위가 좁고 느립니다.	LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK.	長距離空対空ミサイル\n視界外の敵機もロックできます。ロック範囲が狭く遅めです。
-wpn.SASM	공중 제압 미사일\n큰 근접 폭발로 주변 적기까지 휘말리게 합니다. 락온 거리가 짧습니다.	AERIAL SUPPRESSION AAM\nLARGE PROXIMITY BLAST THAT ALSO CATCHES NEARBY AIRCRAFT. SHORT LOCK RANGE.	空中制圧ミサイル\n大きな近接爆発で周囲の敵機も巻き込みます。ロック距離は短めです。
+wpn.SASM	공중 제압 미사일\n근접 신관이 매우 넓어 빗나가 스쳐 지나가도 터지며 피해를 줍니다. 락온 거리가 짧습니다.	AERIAL SUPPRESSION AAM\nA VERY WIDE PROXIMITY FUSE - EVEN A MISSILE THAT SLIPS PAST STILL BURSTS AND DAMAGES. SHORT LOCK RANGE.	空中制圧ミサイル\n近接信管が非常に広く、すり抜けても炸裂してダメージを与えます。ロック距離は短めです。
 wpn.QAAM	고기동 공대공 미사일\n넓고 빠른 락온과 뛰어난 선회력으로 근접전에 강합니다. 사거리가 짧습니다.	QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE.	高機動空対空ミサイル\n広く速いロックと高い旋回性能で格闘戦に強いミサイル。射程は短めです。
 wpn.ECM	전자전 포드\n잠시 주변을 교란합니다. 적의 락온과 미사일을 끊고 대공포 조준을 흐트러뜨립니다.	ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS.	電子戦ポッド\n一時的に周囲を妨害します。敵のロックとミサイルを外し、対空砲の照準を乱します。
 wpn.HVAA	고속 공대공 미사일\n매우 빨라 피하기 어렵지만 크게 선회합니다.	HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE.	高速空対空ミサイル\n非常に速く振り切りにくいが、旋回は大回りです。
-wpn.CCAA	대응책 무시 공대공 미사일\n플레어를 무시합니다. 빠르고 강하지만 사거리가 짧고 락온이 느리며 크게 선회합니다.	COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. FAST AND HARD-HITTING, BUT SHORT-RANGED, SLOW TO LOCK AND TURNS WIDE.	対抗手段無効空対空ミサイル\nフレアを無視します。速く強力ですが、射程が短くロックが遅く旋回は大回りです。
-wpn.HPAA	고위력 공대공 미사일\n큰 탄두와 넓은 근접 신관.	HIGH-POWER AAM\nOVERSIZED WARHEAD WITH A WIDE PROXIMITY FUSE.	高威力空対空ミサイル\n大型弾頭と広い近接信管。
+wpn.CCAA	대응책 무시 공대공 미사일\n플레어를 무시합니다. 락온이 좁고 느리며 크게 선회합니다.	COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. NARROW, SLOW LOCK AND TURNS WIDE.	対抗手段無効空対空ミサイル\nフレアを無視します。ロックは狭く遅めで、旋回は大回りです。
+wpn.HPAA	고위력 공대공 미사일\n대형 탄두로 다른 공대공 미사일보다 피해가 훨씬 큽니다. 폭발 범위도 넓습니다. 재장전이 깁니다.	HIGH-POWER AAM\nHEAVY WARHEAD THAT HITS FAR HARDER THAN OTHER AAMS, WITH A WIDER BLAST AS A BONUS. LONG RELOAD.	高威力空対空ミサイル\n大型弾頭で他の空対空ミサイルより大幅に強力です。爆発範囲も広めです。装填は長めです。
 wpn.ADAM	지역 제압 공중 탄약\n투하된 뒤 가장 가까운 적기를 쫓습니다. 폭발이 크고 탄수가 적습니다.	AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS.	広域制圧空中弾\n投下後、最も近い敵機を追います。爆発が大きく弾数は少なめです。
 wpn.MMP	마이크로 미사일 포드\n공중·지상 표적을 최대 여덟 개 락온하고 마이크로 미사일 16발을 나눠 쏩니다. 탄두가 가볍고 사거리가 짧습니다.	MICRO-MISSILE POD\nLOCKS UP TO EIGHT AIR OR GROUND TARGETS AND SPLITS 16 MICRO-MISSILES BETWEEN THEM. LIGHT WARHEADS, SHORT REACH.	マイクロミサイルポッド\n空中・地上目標を最大8つロックし、16発のマイクロミサイルを分けて撃ちます。弾頭は軽く射程は短めです。
 wpn.RGP	레일건 포드\n극초음속 탄으로 아주 먼 거리에서도 강하게 칩니다. 좁고 즉각적인 락온으로 겨누며, 발사 사이 충전이 깁니다.	RAIL GUN POD\nHYPERSONIC SLUG THAT HITS HARD AT VERY LONG RANGE. A NARROW INSTANT LOCK AIMS IT. LONG CHARGE BETWEEN SHOTS.	レールガンポッド\n極超音速弾で非常に遠距離でも強力に撃ち抜きます。狭く即時のロックで狙い、発射間の充電が長めです。
@@ -322,7 +332,6 @@ flow.card.about	약 {0}분 - 뒤 페이즈일수록 점수가 높습니다	ABOUT
 flow.card.setby	{0} 님이 정함	SET BY {0}	{0} が設定
 flow.card.tapchange	- / +를 눌러 바꾸세요	TAP - / + TO CHANGE	- / + で変更
 flow.card.terrainby	{0} 님이 만든 새 지형	NEW TERRAIN BY {0}	{0} による新しい地形
-flow.card.seetable	작전 테이블을 보세요	SEE THE OPS TABLE	作戦テーブルを参照
 flow.slot.fallback	{0}번 자리	SLOT {0}	枠{0}
 flow.slot.openlocked	빈 자리 - 잠김	OPEN - LOCKED	空き - ロック中
 flow.slot.openinuse	빈 자리 - 기체 사용 중	OPEN - AIRCRAFT IN USE	空き - 機体使用中
@@ -386,7 +395,7 @@ log.scoretitle	점수	SCORE	スコア
 log.mytitle	내 미션	MY MISSION	自分のミッション
 log.hiscore	최고 기록	HIGH SCORE	ハイスコア
 bgm.title	BGM	BGM	BGM
-bgm.hint	이 설정은 나에게만 들립니다	ONLY YOU HEAR THESE SETTINGS	この設定は自分にだけ適用されます
+bgm.hint	로컬 설정입니다(나에게만 적용)	LOCAL SETTINGS (APPLY ONLY TO YOU)	ローカル設定です(自分にだけ適用)
 bgm.playing	재생 중\n{0}	NOW PLAYING\n{0}	再生中\n{0}
 bgm.loading	불러오는 중\n{0}	LOADING\n{0}	読み込み中\n{0}
 bgm.none	음악 없음	NO MUSIC	音楽なし
@@ -394,6 +403,8 @@ bgm.off	BGM 꺼짐	BGM OFF	BGM オフ
 bgm.volume	음량  {0}%	VOLUME  {0}%	音量  {0}%
 bgm.dyn.on	상황별 BGM  켜짐	DYNAMIC BGM  ON	ダイナミックBGM  オン
 bgm.dyn.off	상황별 BGM  꺼짐	DYNAMIC BGM  OFF	ダイナミックBGM  オフ
+video.sound.near	영상 소리  근처	VIDEO SOUND  NEAR	動画の音  近く
+video.sound.global	영상 소리  글로벌	VIDEO SOUND  GLOBAL	動画の音  グローバル
 tac.title	TAC 네임 (콜사인)	TAC NAME (CALLSIGN)	TACネーム（コールサイン）
 tac.hint	다른 조종사에게 내 기체 위에 보입니다  -  A-Z 0-9 공백 -  (최대 12자)	SHOWN ABOVE YOUR AIRCRAFT TO OTHER PILOTS  -  A-Z 0-9 SPACE -  (MAX 12)	他のパイロットに自機の上に表示されます  -  A-Z 0-9 スペース -  （最大12文字）
 tac.set	설정	SET	設定
@@ -429,7 +440,7 @@ decal.flipped	뒤집힘	FLIPPED	反転
 decal.others	남의 데칼: {0}	OTHERS' DECALS: {0}	他人のデカール：{0}
 decal.hidden	숨김	HIDDEN	非表示
 decal.shown	보임	SHOWN	表示
-decal.msg.start	데칼 1 또는 2를 고르고 이미지 URL을 붙여 넣은 뒤 불러오기를 누르세요	PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD	デカール1か2を選び、画像URLを貼り付けて読み込みを押してください
+decal.msg.start	탭을 고르고 이미지 URL을 붙여 넣은 뒤 불러오기를 누르세요	PICK A TAB, PASTE AN IMAGE URL AND PRESS LOAD	タブを選び、画像URLを貼り付けて読み込みを押してください
 decal.msg.restored	저장된 이미지를 되살렸습니다 - 불러오는 중...	SAVED IMAGES RESTORED - LOADING...	保存した画像を復元しました - 読み込み中...
 decal.msg.nourl	URL이 없습니다	NO URL	URLがありません
 decal.msg.gunreturned	데칼 건을 되돌렸습니다	DECAL GUN RETURNED	デカールガンを戻しました
@@ -446,6 +457,19 @@ decal.msg.downloading	이미지 받는 중...	DOWNLOADING IMAGE...	画像をダ�
 decal.msg.retrying	이미지 다시 받는 중...	RETRYING IMAGE...	画像を再試行中...
 decal.msg.failed	이미지 실패: {0} - 불러오기를 눌러 다시 시도하세요(허용 호스트: IMGUR, GITHUB… 또는 신뢰하지 않는 URL 허용을 켜세요)	IMAGE FAILED: {0} - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)	画像の読み込み失敗：{0} - 読み込みを押して再試行（許可ホスト：IMGUR、GITHUB… または信頼されていないURLを許可）
 decal.timeout	시간 초과	TIMED OUT	タイムアウト
+decal.roundelspots	고정 자리: 동체 양옆, 왼쪽 날개 위, 오른쪽 날개 아래	FIXED: FUSELAGE SIDES, LEFT WING TOP, RIGHT WING BOTTOM	固定位置：胴体両側、左翼上面、右翼下面
+decal.msg.roundelcleared	라운델 지움	ROUNDEL CLEARED	ラウンデルを消去しました
+decal.msg.roundelloaded	라운델 이미지 불러옴 - 샘플 기체에 보입니다	ROUNDEL IMAGE LOADED - SHOWN ON THE SAMPLE AIRCRAFT	ラウンデル画像を読み込みました - サンプル機に表示されます
+decal.roundel.failed	실패 - 불러오기를 눌러 다시 시도	FAILED - PRESS LOAD TO TRY AGAIN	失敗 - 読み込みを押して再試行
+decal.roundel.shown	표시 중	SHOWN	表示中
+decal.roundel.loading	불러오는 중...	LOADING...	読み込み中...
+decal.roundel.none	없음	NONE	なし
+decal.roundel.state	라운델: {0}	ROUNDEL: {0}	ラウンデル：{0}
+decal.btn.roundelclear	라운델 지우기	CLEAR ROUNDEL	ラウンデル消去
+decal.tabhint.roundel	불러온 이미지가 고정 자리에 바로 보입니다(투명 PNG 권장)	SHOWN AT THE FIXED SPOTS RIGHT AWAY (TRANSPARENT PNG)	読み込んだ画像が固定位置にすぐ表示されます（透過PNG推奨）
+decal.tabhint.decal	데칼 건을 잡고 샘플 기체를 겨눠 방아쇠를 당기세요	AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT AND PULL THE TRIGGER	デカールガンでサンプル機を狙って引き金を引いてください
+decal.tab.roundel	라운델	ROUNDEL	ラウンデル
+decal.tab.decal	데칼	DECAL	デカール
 spec.power	전원	POWER	電源
 spec.target	대상 (자리)	TARGET (SLOT)	対象（枠）
 spec.shot	촬영	SHOT	ショット
@@ -465,3 +489,294 @@ spec.shot.5	조종석	COCKPIT	コックピット
 spec.shot.6	조종사	PILOT	パイロット
 spec.shot.7	미사일	MISSILE	ミサイル
 spec.shot.8	표적	TARGET	ターゲット
+# 무전 자막 (6-175, ACO_Chatter가 영어 원문으로 찾는다) — 영어 칸은 인스펙터 대사와 글자 하나까지 같아야 한다. 키는 이름표일 뿐(radio.출처.번호). 발사 코드 · 셰이드 응답은 번역하지 않는다
+radio.mrs.01	자네들은 우리 가문이 삼백 년을 지켜 온 땅을 짓밟고 있네. 내 손으로 직접 배웅해 주지.	You trespass on land my family has held for three centuries. I shall see you off it myself.	我が家が三百年守ってきた地に踏み入るとは。私自らお見送りしよう。
+radio.mrs.02	따라올 용기가 있다면, 빛 속으로 따라오게.	Follow me into the light, if you dare.	その勇気があるなら、光の中までついて来たまえ。
+radio.mrs.03	태양은 언제나 우리 가문의 편이었지.	The sun has always favoured my house.	太陽は常に我が家の味方だった。
+radio.mrs.04	자네 미사일이 태양에 고개를 숙이는군. 마땅히 그래야지.	Your missile bows to the sun. As it should.	君のミサイルは太陽にひれ伏した。当然のことだ。
+radio.mrs.05	예의를 지키게, 젊은이. 신사의 등 뒤를 쏘는 법은 없네.	Manners, young one. One does not shoot a gentleman in the back.	礼儀を知りたまえ、若いの。紳士の背中を撃つものではない。
+radio.mrs.06	유감이지만, 너무 느리군.	Too slow, I'm afraid.	残念だが、遅すぎる。
+radio.mrs.07	자네 같은 조종사는 어느 세대에나 있었지. 그리고 나는 그들을 하나도 빠짐없이 떨어뜨렸네.	There are pilots like you in every generation. And I've felled every last one of them.	君のようなパイロットはどの世代にもいた。そして私は、その一人残らずを墜としてきた。
+radio.mrs.08	아아... 이제 다음 세대에게 물려줄 때가 온 모양이군.	Ah... it seems the time has come to pass it on to the next generation.	ああ……どうやら、次の世代に託す時が来たようだ。
+radio.mrs.09	순식간에 반전했다! 태양 쪽으로 쫓아가지 마라!	He turned on a dime! Don't chase him into the sun!	一瞬で反転した！太陽に向かって追うな！
+radio.mrs.10	명중했지만 치명상이 아니다! 엔진과 조종석을 계속 우리 사선에서 비켜 내고 있다. 기동으로 손상을 통제하고 있어!	He's hit, but nothing vital! He keeps turning his engines and cockpit away from our fire. He's doing damage control by flying!	命中したが致命傷じゃない！エンジンとコクピットを射線から外し続けている。機動でダメージコントロールしているのか！
+radio.phasemrs.01	신규 접촉, 적기 하나, 기종 불명! 태양을 등지고 온다. 미사일 조심해라!	New contact, single bandit, unknown type! He's coming out of the sun. Watch your missiles!	新たな反応、敵機一、機種不明！太陽を背にして来るぞ。ミサイルに注意しろ！
+radio.phasemrs.02	적 에이스 격추! 훌륭한 비행이었다, 전 항공기!	The enemy ace is down! Outstanding flying, all aircraft!	敵エース撃墜！見事な飛行だ、全機！
+radio.lunaace.01	거기 가만히 있어. 금방 끝내 줄게... 아름답게.	Stay right there. I'll make it quick... and beautiful.	そこでじっとしてて。すぐに終わらせてあげる……綺麗にね。
+radio.lunaace.02	아직이야. 넌 나한테 손 못 대.	Not yet. You don't get to touch me.	まだよ。あなたには触れさせない。
+radio.lunaace.03	오늘 밤 도시가 참 밝네. 더 밝게 만들어 줄게.	The city is so bright tonight. Let me make it brighter.	今夜の街はとても明るいわね。もっと明るくしてあげる。
+radio.lunaace.04	이게... 추락하는 기분이구나...	So this... is what falling feels like...	これが……墜ちるってことなのね……
+radio.shadeace.01	셰이드 편대, 교전. 그림자나 쫓게 해 줘라.	Shade flight, engage. Let them chase shadows.	シェイド隊、交戦。影でも追わせておけ。
+radio.shadeace.02	오버슈트. 네 실수다.	Overshoot. Your mistake.	オーバーシュート。お前のミスだ。
+radio.shadeace.03	셰이드, 산개 후 교차!	Shades, break and cross!	シェイド、ブレイクしてクロス！
+radio.shadeace.04	그림자를 잡았군.	You locked a shadow.	影をロックしたな。
+radio.shadeace.05	셰이드 {k} 격추. 대열 좁혀.	Shade {k} is down. Close it up.	シェイド{k}がやられた。間隔を詰めろ。
+radio.shadeace.06	셰이드 {n}... 어둠 속으로.	Shade {n}... going dark.	シェイド{n}……闇に還る。
+radio.phaserailgun.01	랜스 가동. 너희 기지의 수명은 몇 분 남지 않았다.	The Lance is online. Your base has minutes to live.	ランス起動。貴様らの基地の命はあと数分だ。
+radio.phaserailgun.02	사령부가 무력화되기 전에 막아야 한다! 먼저 대공망을 제압하라!	We must stop it before it neutralizes HQ! Suppress their air defense first!	司令部が無力化される前に止めるんだ！まず防空網を制圧しろ！
+radio.phaserailgun.03	포대 절반이 당했다! 놈들을 주포에 접근시키지 마라!	Half the batteries are down! Keep them off the gun!	砲台の半数がやられた！奴らを主砲に近づけるな！
+radio.phaserailgun.04	적 대공망이 약해지고 있다. 계속 밀어붙여라!	Their air defenses are thinning out. Keep pushing!	敵の防空網が薄くなってきた。押し続けろ！
+radio.phaserailgun.05	놈들이 포대를 돌파했다. 냉각탑을 사수하라!	They are through the batteries. Protect the coolant towers!	奴らが砲台を突破した。冷却塔を守れ！
+radio.phaserailgun.06	대공망 제압! 냉각탑을 쳐라, 충전 속도가 느려진다!	Air defenses down! Hit the coolant towers, that will slow its charge!	防空網制圧！冷却塔を叩け、チャージが遅くなる！
+radio.phaserailgun.07	냉각수 압력 저하! 보정하라!	Coolant pressure dropping! Compensate!	冷却圧低下！補正しろ！
+radio.phaserailgun.08	냉각탑 파괴! {left}개 남았다! 충전이 느려지고 있다!	Tower down! {left} left! Its charge is slowing!	冷却塔撃破！残り{left}！チャージが遅れている！
+radio.phaserailgun.09	포대 복구 완료. 사격 재개.	Batteries restored. Resume fire.	砲台復旧。射撃再開。
+radio.phaserailgun.10	적 포대 일부가 복구됐다. 조심해라!	Some of their guns are back online. Watch yourselves!	敵の砲台の一部が復旧した。気をつけろ！
+radio.phaserailgun.11	전 비행대, 랜스를 엄호하라!	All squadrons, cover the Lance!	全飛行隊、ランスを援護せよ！
+radio.phaserailgun.12	적 전투기가 주포 상공으로 긴급 발진하고 있다!	Enemy fighters scrambling over the gun!	敵戦闘機が主砲上空にスクランブル！
+radio.phaserailgun.13	냉각탑 전멸! 코어 온도 급상승!	All towers destroyed! Core temperature is spiking!	冷却塔全滅！コア温度が急上昇！
+radio.phaserailgun.14	냉각탑 전부 파괴! 충전할 때 코어가 열을 뺀다. 장갑이 열리길 기다렸다가 쳐라!	All towers down! The core vents when it charges. Wait for the armor to open and hit it!	冷却塔全滅！チャージ時にコアが排熱する。装甲が開くのを待って叩け！
+radio.phaserailgun.15	다시 충전하고 있다.	It is charging again.	再びチャージしている。
+radio.phaserailgun.16	발사 30초 전! 사선에서 벗어나라!	Thirty seconds to firing! Stay out of the line of fire!	発射まで30秒！射線から離れろ！
+radio.phaserailgun.17	임계 온도 도달! 장갑을 열고 직접 배열한다!	Critical temperature reached! Opening armor to vent heat directly!	臨界温度到達！装甲を開放し直接排熱する！
+radio.phaserailgun.18	장갑이 열렸다! 코어 노출, 지금 쳐라!	Armor is open! Core exposed, hit it now!	装甲が開いた！コア露出、今だ！
+radio.phaserailgun.19	사령부 피격! 몇 발 더는 못 버틴다!	Impact on the HQ We cannot take many more of those!	司令部に着弾！これ以上はもたない！
+radio.phaserailgun.20	사령부 대파! 한 발만 더 맞으면 끝장이다!	HQ is critically damaged! One more direct hit will destroy them	司令部が大破！あと一発直撃すれば終わりだ！
+radio.phaserailgun.21	코어 격리 붕괴 중! 상관없다, 발사하라!	Core containment failing! Fire anyway!	コア封じ込め崩壊中！構わん、撃て！
+radio.phaserailgun.22	코어에 균열이 생겼다! 계속 쳐라!	The core is cracking! Keep hitting it!	コアに亀裂が入った！叩き続けろ！
+radio.phaserailgun.23	안 돼... 코어가 임계에 도달한다!	No... The core is going critical!	馬鹿な……コアが臨界に！
+radio.phaserailgun.24	코어 파괴! 떨어져라, 폭발한다!	Core destroyed! Get clear, it is going up!	コア破壊！離れろ、爆発するぞ！
+radio.phaserailgun.25	소형 포가 너희 앞을 겨누고 있다! 직선 비행 하지 말고 계속 선회해라!	Those smaller guns are leading you! Do not fly straight, keep turning!	小型砲が未来位置を狙っている！直進するな、旋回し続けろ！
+radio.phaserailgun.26	너희 사령부는 전멸했다! 지금 항복하라! 아니면 파멸뿐이다	Your headquarters is wiped out! Surrender now! or be destroyed	貴様らの司令部は壊滅した！今すぐ降伏しろ！さもなくば消えろ
+radio.phaserailgun.27	전략 레일건 탐지, 아군 사령부를 조준하고 있다! 대지 무장을 챙겨라!	Strategic railgun detected, and it is locked on our Command! Bring air-to-ground ordnance!	戦略レールガンを探知、我が司令部を狙っている！対地兵装を用意しろ！
+radio.phaserailgun.28	랜스 격파. 전 항공기, 수고했다.	The Lance is down. All aircraft, good job.	ランス撃破。全機、よくやった。
+radio.phaserailgun.29	기지를 잃었다. 전 부대, 철수하라.	The base is gone. All units, withdraw.	基地が失われた。全部隊、撤退せよ。
+radio.supportmanager.01	표적 지정 확인. 폭격기 진입한다.	Copy your mark. Bomber inbound.	マーク確認。爆撃機、進入する。
+radio.supportmanager.02	폭탄 투하.	Bomb away.	爆弾投下。
+radio.supportmanager.03	탄착. 표적에 유효타.	Impact. Good effect on target.	着弾。目標に効果あり。
+radio.supportmanager.04	급유 드론 이동 중. 자세 유지하라.	Tanker drone en route. Hold steady.	給油ドローン、向かっている。姿勢を保て。
+radio.supportmanager.05	접속.	Contact.	コンタクト。
+radio.supportmanager.06	급유 완료. 이탈해도 좋다.	Transfer complete. Clear to break.	給油完了。離脱してよし。
+radio.supportmanager.07	브레이크어웨이, 브레이크어웨이. 급유기 귀환한다.	Breakaway, breakaway. Tanker is returning.	ブレイクアウェイ、ブレイクアウェイ。給油機、帰投する。
+radio.supportmanager.08	가디언 드론 배치 완료. 미사일 방어 가동.	Guardian drone on station. Missile defense active.	ガーディアンドローン配置完了。ミサイル防御、作動中。
+radio.supportmanager.09	가디언 드론 귀환한다.	Guardian drone returning to base.	ガーディアンドローン、帰投する。
+radio.phaseshade.01	적기 넷, 밀집 다이아몬드. 셰이드 비행대다... 너희 바로 앞에서 실속 기동을 한다. 꼬리에 오래 붙지 마라, 놈들은 어느 방향으로든 쏠 수 있다!	Four bandits, tight diamond. Shade squadron... They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!	敵機四、密集ダイヤモンド。シェイド飛行隊だ……目の前で失速機動をしてくるぞ。後ろに張り付くな、奴らはどの方向にも撃てる！
+radio.phaseshade.02	셰이드 비행대 전멸! 훌륭한 비행이었다, 전 항공기!	Shade squadron is wiped out! Outstanding flying, all aircraft!	シェイド飛行隊全滅！見事な飛行だ、全機！
+radio.borderless.01	아직 발 디딜 국경이 남아 있다면, 잡아 봐.	Catch me if you can still find a border to stand on.	まだ立つべき国境が残っているなら、捕まえてみろ。
+radio.borderless.02	저 아래의 국경은 전부 전쟁이 그은 선이다. 나는 그 모두를 지울 한 발을 쏘러 왔다.	Every border down there was drawn by a war. I'm here to fire the shot that erases them all.	眼下の国境はすべて戦争が引いた線だ。私はそれを全て消す一発を撃ちに来た。
+radio.borderless.03	너희는 또 선을 긋겠지... 그리고 그걸 두고 싸우겠지... 영원히...	You'll just draw the lines again... and fight over them... forever...	お前たちはまた線を引く……そしてそれを巡って争う……永遠に……
+radio.borderless.04	있지도 않은 선을 겨누고 있군.	You're aiming at a line that isn't there.	存在しない線を狙っているな。
+radio.phasetwins.01	미확인기 둘, 밀집 편대... 에이스다, 형제처럼 난다. 기만체에 주의해라. 진짜를 록온했는지 확인해!	Two bogeys in tight formation... They're aces, and they fly like brothers. Expect decoys. Make sure you're locking the real one!	不明機二、密集編隊……エースだ、兄弟のように飛んでいる。デコイに注意しろ。本物をロックしているか確かめろ！
+radio.phasetwins.02	에이스 둘 다 격추! 앞면이든 뒷면이든 이제 상관없지. 잘했다!	Both aces are down! Heads or tails, it doesn't matter now. Good work!	エース二機とも撃墜！表でも裏でも、もう関係ない。よくやった！
+radio.phasetimesensitive.01	신규 TEL 발견! 발사 준비 중이다. 지상에 있을 때 쳐라!	New TEL spotted! It is setting up to fire. Hit it on the ground!	新たなTELを発見！発射準備中だ。地上にいるうちに叩け！
+radio.phasetimesensitive.02	발사 탐지! 미사일 비행 중! 대기권을 벗어나기 전에 요격하라!	Launch detected! Missile in the air! Intercept it before it leaves the atmosphere!	発射を探知！ミサイル飛翔中！大気圏を出る前に迎撃しろ！
+radio.phasetimesensitive.03	곧 사거리를 벗어난다! 지금 쏴라!	It is almost out of reach! Take the shot now!	射程外に出るぞ！今撃て！
+radio.phasetimesensitive.04	TEL 지상 격파. 잘 잡았다.	TEL destroyed on the ground. Good kill.	TELを地上で撃破。いいキルだ。
+radio.phasetimesensitive.05	미사일 요격! 스플래시 원!	Missile intercepted! Splash one!	ミサイル迎撃！スプラッシュワン！
+radio.phasetimesensitive.06	긴급 임무! 적 TEL이 이동 중이다. 시간이 촉박하다, 절대 발사하게 두지 마라!	Priority tasking! Enemy TELs are on the move. We have a narrow window, so do not let them launch!	最優先任務！敵TELが移動中だ。猶予はわずかだ、発射させるな！
+radio.phasetimesensitive.07	발사대 전부 파괴. 위협 제거. 훌륭했다, 조종사들!	All launchers destroyed. Threat eliminated. Outstanding work, pilots!	発射機全滅。脅威排除。見事だ、パイロット諸君！
+radio.phasetimesensitive.08	요격 실패. 탄두가 날아가고 있다. 신이시여, 그들을 도우소서.	Intercept failed. The warhead is on its way. God help them.	迎撃失敗。弾頭が向かっている。神よ、彼らを救いたまえ。
+radio.chatter.01	새 목표다. HUD를 확인하라.	New objective. Check your HUD.	新たな目標だ。HUDを確認しろ。
+radio.chatter.02	목표 달성.	Objective complete.	目標達成。
+radio.chatter.03	목표 실패.	Objective failed.	目標失敗。
+radio.chatter.04	임무 완수. 전 항공기, 기지로 귀환하라.	Mission accomplished. All aircraft, return to base.	任務完了。全機、帰投せよ。
+radio.chatter.05	시간 초과. 임무 실패. 전 부대, 철수하라.	Time's up. Mission failed. All units, withdraw.	時間切れだ。任務失敗。全部隊、撤退せよ。
+radio.chatter.06	적 증원 접근 중!	Enemy reinforcements inbound!	敵増援、接近中！
+radio.chatter.07	레이더 접촉 - 다수의 미확인기 접근 중.	Radar contact - multiple bogeys approaching.	レーダーコンタクト、複数の不明機が接近中。
+radio.chatter.08	스코프에 적이 더 있다. 포기할 생각이 없군.	More hostiles on the scope. They're not giving up.	スコープに敵機が増えた。諦める気はないようだ。
+radio.chatter.09	스플래시 원! 잘 잡았다, {name}.	Splash one! Good kill, {name}.	スプラッシュワン！いいキルだ、{name}。
+radio.chatter.10	목표 파괴.	Target destroyed.	目標破壊。
+radio.chatter.11	적기 격추. 그대로 계속해라.	Enemy down. Keep it up.	敵機撃墜。その調子だ。
+radio.chatter.12	{name}, 한 기 잡았다!	{name} got one!	{name}が一機仕留めた！
+radio.chatter.13	잘 잡았다, {name}.	Good kill, {name}.	いいキルだ、{name}。
+radio.chatter.14	미사일 빗나감. 재교전하라.	Missile missed. Re-engage.	ミサイル外れた。再交戦しろ。
+radio.chatter.15	빗나갔다. 더 붙어라.	That one went wide. Get closer.	外れたぞ。もっと近づけ。
+radio.chatter.16	플레어다! 미사일이 기만당했다.	Flares! Your missile was decoyed.	フレアだ！ミサイルが欺瞞された。
+radio.chatter.17	대응책이다. 플레어가 다 타고 나서 쏴라.	Countermeasures. Wait for the flares to burn out.	妨害手段だ。フレアが燃え尽きるのを待て。
+radio.chatter.18	플레어, 플레어!	Flares, flares!	フレア、フレア！
+radio.chatter.19	대응책 전개!	Deploying countermeasures!	妨害手段展開！
+radio.chatter.20	미사일 경보! 브레이크, 브레이크!	Missile alert! Break, break!	ミサイル警報！ブレイク、ブレイク！
+radio.chatter.21	미사일 접근, 회피하라!	Missile inbound, evade!	ミサイル接近、回避しろ！
+radio.chatter.22	미사일 날아온다! 세게 당겨!	Incoming missile! Pull hard!	ミサイル来るぞ！思い切り引け！
+radio.chatter.23	피격당했다! 격납고로 돌아가 재출격하라.	You're hit! Return to the hangar and relaunch.	被弾した！格納庫に戻って再出撃しろ。
+radio.chatter.24	격추당했다. 돌아가서 다른 기체를 받아라.	You've been shot down. Head back and get another plane.	撃墜された。戻って別の機体に乗れ。
+radio.chatter.25	{name} 격추당했다. 빈자리를 메워라!	{name} has been shot down. Cover the gap!	{name}が撃墜された。穴を埋めろ！
+radio.chatter.26	공격받고 있다! 지원 요청한다!	We're taking fire! Requesting assistance!	攻撃を受けている！支援を要請する！
+radio.chatter.27	수송기 피습! 놈들 좀 떼어 줘!	Transport under attack! Get them off us!	輸送機が攻撃を受けている！奴らを追い払ってくれ！
+radio.chatter.28	피격됐다! 서둘러!	We've been hit! Hurry!	被弾した！急いでくれ！
+radio.chatter.29	수송기가 공격받고 있다. 주변을 정리하라!	The transport is under fire. Clear the area!	輸送機が攻撃を受けている。周辺を掃討しろ！
+radio.chatter.30	메이데이, 메이데이... 추락한다!	Mayday, mayday... we're going down!	メーデー、メーデー……墜ちる！
+radio.chatter.31	미사일..! 플레어! 플레어!	Missile..! Flare! Flare!	ミサイル……！フレア！フレア！
+radio.chatter.32	대응책 사출 - 회피 중!	Countermeasures away - we're evading!	妨害手段射出、回避中！
+radio.chatter.33	수송대 피습 - 적을 쓸어 줘!	Convoy under attack - clear those hostiles!	輸送隊が攻撃を受けている、敵を排除してくれ！
+radio.chatter.34	수송대 차량을 잃었다!	We lost a convoy vehicle!	輸送隊の車両がやられた！
+radio.chatter.35	연막 터뜨린다! 엄호해 줘! 가, 가!	Popping smoke! Cover us! move! move!	スモーク展開！援護してくれ！行け、行け！
+radio.chatter.36	연막 전개 - 놈들 록온이 풀렸다!	Smoke screen deployed - they've lost their lock!	煙幕展開、奴らのロックが外れた！
+radio.chatter.37	미사일 요격당했다! 적 CIWS가 떨어뜨렸다.	Missile intercepted! Their CIWS shot it down.	ミサイルが迎撃された！敵のCIWSに落とされた。
+radio.chatter.38	CIWS가 미사일을 잡았다 - 기관포를 먼저 부수거나 한꺼번에 퍼부어라.	CIWS got your missile - take out the guns or saturate them.	CIWSにミサイルを落とされた。機関砲を潰すか、飽和攻撃しろ。
+radio.chatter.39	미사일 요격!	Missile intercepted!	ミサイル迎撃！
+radio.chatter.40	아군 CIWS가 그 미사일을 격추했다. 엄호받고 있다.	Friendly CIWS splashed that missile. You're covered.	友軍のCIWSがミサイルを撃墜した。守られているぞ。
+radio.chatter.41	미사일 격추 - 함대 포가 엄호 중이다!	Missile down - the fleet's guns have you covered!	ミサイル撃墜、艦隊の砲が援護している！
+radio.chatter.42	전 항공기, 작전 개시. 건투를 빈다.	All aircraft, the operation has begun. Good hunting.	全機、作戦開始。幸運を祈る。
+radio.chatter.43	발진 허가 확인. 캐터펄트 사출 허가.	Launch authorization confirmed. Clear for cat-launch.	発艦許可確認。カタパルト射出を許可する。
+radio.chatter.44	갑판 요원의 유도에 따라 발진 절차를 시작하라.	Follow the deck crew's guidance and initiate launch procedures.	甲板員の誘導に従い、発艦手順を開始せよ。
+radio.phasedestroy.01	다수의 적기가 작전 구역에 진입! 구역을 소탕하고 제공권을 확보하라!	Multiple bandits entering the AO! Sweep the area and establish air control!	複数の敵機が作戦空域に侵入！空域を掃討し、制空権を確保せよ！
+radio.phasedestroy.02	적 공세 격퇴! 전선을 지켜 내고 당분간 공역을 확보했다.	Enemy wave repelled! We’ve held the line and secured the airspace for now.	敵の波状攻撃を撃退！戦線を守り、ひとまず空域を確保した。
+radio.twins.01	헤즈 앤 테일즈, 현장 도착. 너희가 어느 면으로 떨어질지 볼까.	Heads and Tails, on station. Let's see which side you land on.	ヘッズ・アンド・テイルズ、配置についた。お前たちがどちらの面に落ちるか見せてもらおう。
+radio.twins.02	한 명당 한 번씩 던져 주지. 앞면이면 내가 이긴다.	One toss for each of you. Heads, I win.	一人につき一投だ。表なら、私の勝ち。
+radio.twins.03	동전엔 두 면이 있지. 넌 틀린 쪽을 골랐다.	Every coin has two faces. You picked the wrong one.	コインには二つの面がある。お前は外れを選んだ。
+radio.twins.04	내가 제대로 상대해 주지. 즐겁진 않을 거다.	You've earned my full attention. You won't enjoy it.	本気で相手をしてやろう。楽しくはないぞ。
+radio.twins.05	테일즈... 나 없이... 던지기를 끝내라...	Tails... finish the toss... without me...	テイルズ……私抜きで……トスを終わらせろ……
+radio.twins.06	테일즈...? 내 동생을 데려갔군. 게임은 끝났다. 이제 이기기만 하면 된다.	Tails...? You took my little brother. The game is over. Now I just win.	テイルズ……？弟を奪ったな。ゲームは終わりだ。あとは勝つだけだ。
+radio.twins.07	테일즈. 뒤집어.	Tails. Flip.	テイルズ、フリップ。
+radio.twins.08	동전은 아직 공중에 있다.	Coin's still in the air.	コインはまだ宙にある。
+radio.phaseamphibious.01	LCAC 출발. 건십이 앞서 진입한다. 해안을 정리하고 호버크래프트를 지켜라.	LCACs are away. Gunships are moving in ahead of them. Clear the beach and keep those hovercraft alive.	LCAC発進。ガンシップが先行している。海岸を掃討し、ホバークラフトを守れ。
+radio.phaseamphibious.02	상륙정이 해안에 닿았다. 병력이 상륙한다.	The landing craft are on the beach. Troops are going ashore.	上陸艇が海岸に到達。部隊が上陸する。
+radio.phaseamphibious.03	상륙정 전멸. 상륙 작전 실패.	All landing craft are down. The assault has failed.	上陸艇全滅。上陸作戦は失敗した。
+radio.phasedestroy.03	레이더에 고위협 신호 탐지. 적 에이스 비행대다. 정신 바짝 차려라!	High-threat signature detected on radar. It's an enemy ace squadron. Stay sharp out there!	レーダーに高脅威反応。敵エース部隊だ。気を引き締めろ！
+radio.phasedestroy.04	적 에이스 부대 전기 격추 확인! 적의 사기를 꺾었다. 훌륭했다!	Confirming splash on the entire enemy ace unit! you broke the enemy's spirit. Outstanding work!	敵エース部隊の全機撃墜を確認！敵の士気を砕いた。見事だ！
+radio.phaseluna.01	도시에 불이 켜졌어. 이제 하늘이 떨어지기만 하면 돼.	The city is lit. All that is left is for the sky to fall.	街に灯がともった。あとは空が落ちるだけ。
+radio.phaseluna.02	작은 달들아, 떠올라. 저것들을 내게서 떼어 놔.	Little moons, rise. Keep them away from me.	小さな月たち、昇りなさい。あの子たちを私に近づけないで。
+radio.phaseluna.03	요격 드론을 띄웠다! 주변 미사일을 격추할 거다. 드론부터 잡거나, 한꺼번에 퍼부어라!	She has launched interceptor drones! They will shoot down missiles near her. Kill the drones first, or fire everything at once!	迎撃ドローンを放った！周囲のミサイルを撃ち落とすぞ。先にドローンを落とすか、一斉に撃ち込め！
+radio.phaseluna.04	드론 전멸! 무방비 상태다, 지금 쳐라!	All drones are down! She is wide open, hit her now!	ドローン全滅！がら空きだ、今叩け！
+radio.phaseluna.05	다시, 작은 달들아. 떠올라.	Again, little moons. Rise.	もう一度、小さな月たち。昇りなさい。
+radio.phaseluna.06	드론 2차 편대를 띄우고 있다!	She is launching a second wave of drones!	ドローンの第二波を放っている！
+radio.phaseluna.07	타격까지 2분!	Two minutes until the strike!	攻撃まで2分！
+radio.phaseluna.08	2분. 올려다봐, 그리고 너희가 얼마나 작은지 기억해.	Two minutes. Look up, and remember how small you are.	あと2分。見上げて、自分がどれだけ小さいか思い出して。
+radio.phaseluna.09	1분! 격추해라!	One minute! Bring her down!	1分！撃墜しろ！
+radio.phaseluna.10	1분. 빛은 절대 빗나가지 않아.	One minute. The light never misses.	あと1分。光は決して外さない。
+radio.phaseluna.11	30초! 지금 해치워라!	Thirty seconds! Do it now!	30秒！今やれ！
+radio.phaseluna.12	30초. 눈을 감아.	Thirty seconds. Close your eyes.	あと30秒。目を閉じて。
+radio.phaseluna.13	루나 격추! 빔이 사라졌다... 타격이 표적을 잃었다!	LUNA is down! The beam is gone... the strike has lost its target!	ルナ撃墜！ビームが消えた……攻撃は目標を見失った！
+radio.phaseluna.14	도시에 착탄... 사라졌다.	Impact on the city... It is gone.	街に着弾……消えてしまった。
+radio.phaseluna.15	그리고 밤은 고요해져.	And the night falls quiet.	そして、夜は静かになる。
+radio.phaseluna.16	전 항공기. 적 에이스가 도시 상공을 선회하며 레이저로 표적을 지시하고 있다. 궤도에서 뭔가 떨어진다. 저지하라!	All aircraft. An enemy ace is circling over the city, and she is painting it with a laser. Something is coming down from orbit. Stop her!	全機。敵エースが街の上空を旋回し、レーザーで目標を照射している。軌道上から何かが降ってくる。阻止しろ！
+radio.phaseluna.17	타격이 도시를 빗나갔다! 훌륭했다, 전 항공기!	The strike missed the city! Outstanding work, all aircraft!	攻撃は街を外れた！見事だ、全機！
+radio.phaseluna.18	도시가 피격됐다... 전 부대, 철수하라.	The city has been hit... All units, withdraw.	街が被弾した……全部隊、撤退せよ。
+radio.phasefortress.01	이 도시는 끝났다. 너희가 띄우는 그 무엇도 이 함을 막을 수 없다.	This city is finished. Nothing you fly can stop this ship.	この街は終わりだ。貴様らの機体では、この艦は止められん。
+radio.phasefortress.02	적 대공망이 약해지고 있다. 그대로 계속해라!	Their air defenses are thinning out. Keep it up!	敵の防空網が薄くなってきた。その調子だ！
+radio.phasefortress.03	적 대공망 제압! 엔진을 노려서 저놈의 속도를 떨어뜨려라!	Their air defenses are down! Go for the engines, slow that thing down!	防空網制圧！エンジンを狙え、奴の速度を落とせ！
+radio.phasefortress.04	적기가 엔진에 붙었다. 전 부서, 포대를 수리하라!	Enemy aircraft at the engines. All stations, repair the batteries!	敵機がエンジンに取り付いた。全部署、砲台を修理せよ！
+radio.phasefortress.05	엔진 하나를 잃었다! 침로 유지!	We have lost an engine! Hold course!	エンジンを一基失った！針路を維持しろ！
+radio.phasefortress.06	엔진 파괴! {left}개 남았다!	Engine down! {left} left!	エンジン撃破！残り{left}！
+radio.phasefortress.07	전 비행대, 긴급 발진! 함을 지켜라!	All squadrons, scramble! Protect the ship!	全飛行隊、スクランブル！艦を守れ！
+radio.phasefortress.08	요새에서 적 전투기가 발진하고 있다!	Enemy fighters launching from the fortress!	要塞から敵戦闘機が発進している！
+radio.phasefortress.09	떨어질 거라면 놈들 위로 떨어진다. 침로를 도시로!	If we fall, we fall on them. Set course for the city!	墜ちるなら奴らの上にだ。針路を街へ！
+radio.phasefortress.10	엔진 전부 파괴, 하지만 도시로 선회하고 있다! 비상 출력 때문에 코어가 노출됐다—지금 쳐라!	All engines down, but it's turning for the city! The core is exposed for emergency output—hit it now!	エンジン全滅、だが街へ旋回している！非常出力でコアが露出した、今叩け！
+radio.phasefortress.11	코어 내구도 50%! 우리만 죽을 순 없다—스로틀 최대로!	Core integrity at 50%! We're not going down alone—push the throttle to maximum!	コア耐久50%！我々だけで墜ちるものか、スロットル最大！
+radio.phasefortress.12	코어가 무너지고 있다! 계속 쳐라!	The core is failing! Keep hitting it!	コアが崩壊しつつある！叩き続けろ！
+radio.phasefortress.13	도시까지 5킬로미터!	Five kilometers to the city!	街まで5キロ！
+radio.phasefortress.14	3킬로미터! 지금 떨어뜨려라!	Three kilometers! Bring it down, now!	3キロ！今すぐ落とせ！
+radio.phasefortress.15	이제 아무도 우리를 못 막는다!	Nothing can stop us now!	もう誰にも止められん！
+radio.phasefortress.16	1킬로미터! 가진 걸 전부 퍼부어라!	One kilometer! Hit it with everything you have!	1キロ！ありったけを叩き込め！
+radio.phasefortress.17	말도 안 돼... 코어가... 이렇게 죽을 순 없다! 안 돼! 안 돼! 안 돼!	Impossible... The core... We can't die like this! No! No! No!	馬鹿な……コアが……こんな所で死ねるか！やめろ！やめろ！やめろ！
+radio.phasefortress.18	코어 파괴! 추락한다!	Core destroyed! It is going down!	コア破壊！墜ちていくぞ！
+radio.phasefortress.19	추락 확인. 요새는 사라졌다.	Impact confirmed. The fortress is gone.	墜落を確認。要塞は消滅した。
+radio.phasefortress.20	요새가 도시에 추락했다... 우리가 너무 늦었다.	The fortress has hit the city... We were too late.	要塞が街に墜ちた……間に合わなかった。
+radio.phasefortress.21	열권에서 거대한 반응이 하강 중! 식별 중... 확인,\n코드네임 아크엔젤! 거대 비행 요새다—먼저 대공 체계를 무력화하라!	A massive contact is descending from the thermosphere! Identifying... Confirmed, \ncode name Archangel! It's a giant flying fortress—neutralize its air defense system first!	熱圏から巨大な反応が降下中！識別中……確認、\nコードネーム・アークエンジェル！巨大空中要塞だ、まず防空システムを無力化しろ！
+radio.phasefortress.22	도시를 지켜 냈다. 끝내주는 솜씨였다, 다들.	We saved the city. Hell of a job, guys	街を守り抜いた。最高の仕事だったぞ、みんな。
+radio.phasefortress.23	도시를 잃었다. 희생자가 엄청날 거다. 전 부대, 후퇴하라.	The city is lost. The body count must be catastrophic. All units, retreat	街は失われた。犠牲者は計り知れない。全部隊、後退せよ。
+radio.phaseescort.01	전 편대, 수송기 주위에 방어 대형을 갖춰라! 고가치 자산에 적을 접근시키지 마라!	All flights, take up defense formation around the transport! Keep all hostiles away from the high-value asset!	全編隊、輸送機の周囲に防御陣形を取れ！高価値目標に敵を近づけるな！
+radio.phaseescort.02	수송기가 목적지에 무사히 도착했다! 자산 피해 없음. 훌륭했다!	Transport has safely reached destination! Zero casualties on the asset. Outstanding work!	輸送機が無事目的地に到着！被害ゼロ。見事だ！
+radio.phaseescort.03	수송기를 잃었다. 임무 실패. 기지로 귀환하라.	We lost the transport. Mission failed. Return to base.	輸送機を失った。任務失敗。帰投せよ。
+radio.phaseborderless.01	미확인기 하나, 빠르게 접근 중. 지향성 에너지 무기를 탑재했다. 기수 앞에 머물지 마라!	Single bogey, closing fast. It is carrying a directed-energy weapon. Do not sit in front of its nose!	不明機一、高速接近中。指向性エネルギー兵器を搭載している。機首の前に居座るな！
+radio.phaseborderless.02	발사 권한 확인. 탄두 하나가 이 전쟁을 끝낸다... 모든 국경과 함께.	Launch authority confirmed. One warhead ends this war... and every border with it.	発射権限確認。一発の弾頭がこの戦争を終わらせる……すべての国境と共に。
+radio.phaseborderless.03	지상 발사 탐지! 탄도 미사일이 사일로에서 상승 중. 목표는 아군 기지다!	Ground launch detected! A ballistic missile is climbing out of a silo. Its target is our base!	地上発射を探知！弾道ミサイルがサイロから上昇中。目標は我々の基地だ！
+radio.phaseborderless.04	탄두가 저 에이스의 사격 통제에 묶여 있다. 에이스를 격추하면 미사일도 같이 죽는다!	The warhead is slaved to that ace's fire control. Shoot the ace down and the missile dies with it!	弾頭はあのエースの射撃管制に連動している。エースを落とせばミサイルも死ぬ！
+radio.phaseborderless.05	강력한 재밍! 정면에서만 록온할 수 있다. 정면으로 붙되, 레이저 조심해라!	Heavy jamming! You can only get a lock from its front. Go head-on, and watch that laser!	強力なジャミング！正面からしかロックできない。ヘッドオンで行け、レーザーに注意しろ！
+radio.phaseborderless.06	아직도 너희 깃발이 목숨 걸 가치가 있다고 믿는다면, 정면으로 와라.	Come at me head-on, if you still think your flag is worth dying for.	まだ自分の旗に命を懸ける価値があると思うなら、正面から来い。
+radio.phaseborderless.07	착탄까지 2분!	Two minutes to impact!	着弾まで2分！
+radio.phaseborderless.08	2분. 그 뒤엔 다툴 나라도 남지 않는다.	Two minutes. After that, there will be no nations left to fight over.	あと2分。その後には、争うべき国など残らない。
+radio.phaseborderless.09	1분! 저 에이스를 떨어뜨려라!	One minute! Bring that ace down!	1分！あのエースを落とせ！
+radio.phaseborderless.10	왜 계속 싸우지? 1분 뒤면, 너희가 이기든 지든 이 전쟁은 끝난다.	Why keep fighting? In one minute, this war ends whether you win or not.	なぜ戦い続ける？あと1分で、勝とうが負けようがこの戦争は終わる。
+radio.phaseborderless.11	30초! 지금 아니면 끝이다!	Thirty seconds! It is now or never!	30秒！今しかない！
+radio.phaseborderless.12	30초. 너희가 나누라고 배운 세상을 마지막으로 봐 둬라.	Thirty seconds. Take one last look at the world they taught you to divide.	あと30秒。分けろと教えられた世界を、最後に見ておけ。
+radio.phaseborderless.13	에이스 격추! 미사일이 유도를 잃었다... 고층 대기에서 폭발했다!	The ace is down! The missile lost guidance... it detonated in the upper atmosphere!	エース撃墜！ミサイルが誘導を失った……高層大気で爆発した！
+radio.phaseborderless.14	착탄... 기지가 사라졌다.	Impact... The base is gone.	着弾……基地が消えた。
+radio.phaseborderless.15	끝났다. 이제 국경도... 전쟁도 없다.	It's done. No more borders... no more war.	終わった。もう国境も……戦争もない。
+radio.phaseborderless.16	전 항공기. 적 에이스 한 기가 접근 중. 저 기체는 뭔가 이상하다. 신중하게 교전하라.	All aircraft. A single enemy ace is inbound. Something about that aircraft is not right. Engage with caution.	全機。敵エース一機が接近中。あの機体は何かがおかしい。慎重に交戦せよ。
+radio.phaseborderless.17	에이스 격추, 미사일도 사라졌다. 훌륭했다, 전 항공기!	The ace is down and the missile is gone. Outstanding work, all aircraft!	エース撃墜、ミサイルも消えた。見事だ、全機！
+radio.phaseborderless.18	미사일이 기지에 떨어졌다... 전 부대, 철수하라.	The missile hit the base... All units, withdraw.	ミサイルが基地に着弾した……全部隊、撤退せよ。
+radio.twins.09	형, 이번엔 나한테도 좀 남겨 줘!	Brother, save a few for me this time!	兄貴、今度は少し残しといてよ！
+radio.twins.10	받아! ...어라, 다 못 받아? 아쉽네!	Catch! ...Oh, can't catch them all? Shame!	ほら、キャッチ！……あれ、全部は取れない？残念！
+radio.twins.11	어느 게 나게? 자, 동전 던져 봐!	Guess which one's me! Go on, flip for it!	どれが僕か当ててみな！ほら、コインで決めなよ！
+radio.twins.12	야! 그거 진짜 아팠다고!	Hey! That actually hurt!	ちょっと！今のは本当に痛かったぞ！
+radio.twins.13	헤즈... 내가 잘못 골랐나 봐...	Heads... I called it wrong...	ヘッズ……読み、外しちゃった……
+radio.twins.14	우리 형을 떨어뜨렸어?! 동전 던지기는 끝이야... 너희 전부 떨어뜨려 줄게!	You shot down my brother?! No more coin tosses... I'm taking every one of you down!	兄貴を落としたのか！？もうコイントスはなしだ……全員まとめて落としてやる！
+radio.twins.15	골라 봐, 조종사들!	Call it, pilots!	さあ選びな、パイロットども！
+radio.twins.16	오, 반짝반짝! 네 미사일은 저게 더 좋은가 봐!	Ooh, shiny! Your missile likes those better!	おっ、キラキラ！君のミサイルはそっちがお好みみたいだね！
+radio.phasequota.01	작전 구역 전체를 소탕하라. 보이는 적은 모두 파괴하라!	Clear the entire operation area. Destroy every hostile element in sight!	作戦区域全体を掃討せよ。視界に入る敵はすべて破壊しろ！
+radio.phasequota.02	목표 할당량 초과 달성! 적 방어를 완전히 무너뜨렸다.	Target quotas exceeded! You’ve completely crushed their defenses.	目標ノルマ超過達成！敵の防衛を完全に粉砕した。
+radio.phaselandship.01	전 포대, 사격 개시. 도시까지 길을 갈아엎어라.	All batteries, open fire. Grind a path to the city.	全砲台、撃ち方始め。街まで道を切り拓け。
+radio.phaselandship.02	장갑판 파괴! 뒤쪽 궤도가 드러났다!	Armor plate down! The track behind it is exposed!	装甲板撃破！その奥の履帯が露出した！
+radio.phaselandship.03	궤도 절반을 잃었다! 계속 전진, 남은 궤도에 전력을 몰아라!	Half our tracks are gone! Keep moving, full power to the rest!	履帯の半分を失った！前進を続けろ、残りに全出力を回せ！
+radio.phaselandship.04	궤도 절반 파괴! 속도가 떨어지고 있다. 궤도 {left}개 남았다!	Half its tracks are destroyed! It is losing speed. {left} tracks left!	履帯の半分を破壊！速度が落ちている。残り履帯{left}！
+radio.phaselandship.05	배기구 노출! 궤도 사이 안쪽에서 파랗게 빛나고 있다. 부숴서 저놈을 불구로 만들어라!	Exhaust vents exposed! They're tucked inside the track wells, glowing blue. Destroy them and cripple that thing!	排気口露出！履帯の間の奥で青く光っている。破壊して奴を無力化しろ！
+radio.phaselandship.06	배기 덕트 노출! 당장 봉쇄하라!	Exhaust ducts exposed! Seal them, now!	排気ダクト露出！今すぐ塞げ！
+radio.phaselandship.07	코어 노출! 가진 걸 전부 퍼부어라!	The core is exposed! Hit it with everything you have!	コア露出！ありったけを叩き込め！
+radio.phaselandship.08	원자로 과열! 코어 셔터를 열어라!	Reactor overheating! Open the core shutters!	原子炉過熱！コアシャッターを開け！
+radio.phaselandship.09	원자로 출력을 포대로 돌려라. 전부 다. 당장!	Reroute reactor power to the batteries. All of them. Now!	原子炉の出力を砲台に回せ。全部だ。今すぐ！
+radio.phaselandship.10	원자로 출력을 포대로 돌리고 있다! 포대가 전부 살아났다! 코어에 집중해라!	It's feeding reactor power to its guns! Every battery is back! Stay on the core!	原子炉の出力を砲に回している！砲台が全部復活した！コアに集中しろ！
+radio.phaselandship.11	코어 내구도 50퍼센트! 버텨라!	Core integrity at fifty percent! Hold together!	コア耐久50パーセント！持ちこたえろ！
+radio.phaselandship.12	도시까지 3킬로미터!	Three kilometers to the city!	街まで3キロ！
+radio.phaselandship.13	곧 도시 경계에 닿는다! 지금 막아라!	It is almost at the city limits! Stop it now!	もうすぐ市街地に入るぞ！今止めろ！
+radio.phaselandship.14	500미터! 격파해라!	Five hundred meters! Bring it down!	500メートル！撃破しろ！
+radio.phaselandship.15	계속 쏴라! 계속 쏴-	Keep firing! Keep fir-	撃ち続けろ！撃ち続け――
+radio.phaselandship.16	코어 파괴! 전함이 폭발한다!	Core destroyed! The battleship is going up!	コア破壊！戦艦が爆発するぞ！
+radio.phaselandship.17	도시에 도달했다. 포격 개시.	We have reached the city. Commence bombardment.	街に到達した。砲撃開始。
+radio.phaselandship.18	도시 안으로 들어갔다... 도시를 포격하고 있다!	It is inside the city... It is shelling the city!	街の中に入った……街を砲撃している！
+radio.phaselandship.19	응급 수리반, 포대를 복구하라!	Damage control, bring the batteries back online!	ダメコン班、砲台を復旧させろ！
+radio.phaselandship.20	적 포 일부가 복구됐다. 조심해라!	Some of its guns are back online. Watch yourselves!	敵の砲の一部が復旧した。気をつけろ！
+radio.phaselandship.21	적 육상 전함이 도시로 진격하고 있다. 도착하기 전에 장갑을 벗기고, 궤도를 끊고, 원자로를 파괴하라!	An enemy land battleship is advancing on the city. Strip its armor, cut its tracks and kill the reactor before it arrives!	敵の陸上戦艦が街へ進撃している。到着前に装甲を剥がし、履帯を断ち、原子炉を破壊せよ！
+radio.phaselandship.22	원자로 파괴! 육상 전함은 끝났다. 훌륭했다, 전 항공기!	Reactor destroyed! The land battleship is finished. Outstanding work, all aircraft!	原子炉破壊！陸上戦艦は終わりだ。見事だ、全機！
+radio.phaselandship.23	도시가 함락됐다... 전 부대, 철수하라.	The city has fallen... All units, withdraw.	街が陥落した……全部隊、撤退せよ。
+radio.phasesubmarine.01	소나에 대형 수중 접촉물 포착, 함대로 접근 중! 전 기체, 항모로 돌아가 상공 초계(CAP)에 들어가라!	Sonar has a large submerged contact closing on the fleet! All aircraft, return to the carrier and fly CAP!	ソナーが大型の水中目標を探知、艦隊に接近中! 全機、空母へ戻り上空警戒(CAP)につけ!
+radio.phasesubmarine.02	잠망경 심도. 저기 있군… 항모다. 전 발사관 주수.	Periscope depth. There she is... the carrier. Flood all tubes.	潜望鏡深度。いたぞ……空母だ。全発射管、注水。
+radio.phasesubmarine.03	뱀파이어, 뱀파이어! 미사일 접근, 방위 {left}!	Vampire, vampire! Missiles inbound, bearing {left}!	ヴァンパイア、ヴァンパイア! ミサイル接近、方位{left}!
+radio.phasesubmarine.04	미사일이 급강하하려고 고도를 올린다! 항모에 내리꽂히기 전에 격추하라!	Missiles are pulling up for a terminal dive! Splash them before they come down on the carrier!	ミサイルが急降下に備えて高度を上げている! 空母に突っ込む前に撃墜しろ!
+radio.phasesubmarine.05	피격! 손상 통제반 투입. 여긴 버틴다, 다음 발만 막아 줘!	We're hit! Damage control's on it. We'll hold. You just stop the next one!	被弾! ダメージコントロール班が対処中だ。こっちは持ちこたえる、君たちは次の一発だけ止めてくれ!
+radio.phasesubmarine.06	선체 손상 위험 수준… 그래도 다들 자리를 지키고 있다. 모두 너희만 믿는다!	Hull integrity critical... but nobody's left their post. Every one of us is counting on you!	船体損傷が危険域…だが持ち場を離れた者は一人もいない。全員が君たちを信じている!
+radio.phasesubmarine.07	발사관이 다 비었다. 부상한다. 우리 손으로 끝장을 낸다.	Launch tubes are empty. Surface the boat. We finish this ourselves.	発射管は全て空だ。浮上する。我々の手で決着をつける。
+radio.phasesubmarine.08	미사일을 다 쐈다. 이제 싸우려면 떠오를 수밖에 없어. 소나 표시를 주시해!	Its missiles are spent. It has to come up to fight. Watch for the sonar marks!	ミサイルを撃ち尽くした。戦うには浮上するしかない。ソナーの表示を見逃すな!
+radio.phasesubmarine.09	소나 접촉! 표시된 원 안에서 떠오른다!	Sonar contact! It's surfacing inside the marked circle!	ソナー探知! 表示された円の中に浮上してくる!
+radio.phasesubmarine.10	잠수함 부상! 다시 잠수하기 전에 두들겨!	The sub has surfaced! Hit it before it dives!	潜水艦が浮上した! また潜る前に叩け!
+radio.phasesubmarine.11	손상 포좌 복구 완료. 교전 개시!	Damaged mounts back online. Engage!	損傷した砲座、復旧完了。交戦開始!
+radio.phasesubmarine.12	물속에서 무장을 고쳐 왔다. 조심해!	It repaired its guns while it was under. Watch yourselves!	潜っている間に武装を直してきた。気をつけろ!
+radio.phasesubmarine.13	잠수한다! 어뢰 발사, 항모로 향한다!	It's diving! Torpedo in the water, headed for the carrier!	潜航した! 魚雷発射、空母へ向かっている!
+radio.phasesubmarine.14	메인 탱크 블로우! 충각 속도! 저 항모만 가라앉히면 전쟁은 내일 끝난다. 천만 명이 산다. 대가는 우리 목숨뿐이다! 이건 자살이 아니다, 구원이다!	Blow all ballast! Ramming speed! One carrier, and this war ends tomorrow. Ten million lives saved, and all it costs is ours! This isn't suicide. It's salvation!	メインタンクブロー! 衝角突撃! あの空母さえ沈めれば、戦争は明日終わる。一千万の命が救われるんだ、代償は我々の命だけだ! これは自殺ではない、救済だ!
+radio.phasesubmarine.15	항모를 들이받을 셈이다! 저 함장 제정신이 아니야. 부딪히기 전에 가라앉혀!	It's going to ram the carrier! That captain's lost his mind. Sink it before it hits!	空母に体当たりする気だ! あの艦長は正気じゃない。ぶつかる前に沈めろ!
+radio.phasesubmarine.16	어뢰 발사! 다음 발 쏘기 전에 가라앉혀!	Torpedoes in the water! Sink it before it fires again!	魚雷発射! 次を撃たれる前に沈めろ!
+radio.phasesubmarine.17	안 돼… 조금만 더 가면… 천만 명이… 너희 때문에 죽는 거다…!	No... so close... ten million people... they'll die because of you...!	そんな…あと少しで…一千万人が…貴様らのせいで死ぬんだ…!
+radio.phasesubmarine.18	리바이어던이 가라앉는다! 잠수함 격침!	Leviathan is sinking! Splash the sub!	リヴァイアサンが沈んでいく! 潜水艦撃沈!
+radio.phasesubmarine.19	침몰한다! 총원 퇴함!	We're going under! Abandon ship!	沈むぞ! 総員退艦!
+radio.phasesubmarine.20	리바이어던 격침 확인. 항모는 무사하다. 모두 훌륭했다!	Leviathan confirmed destroyed. The carrier is safe. Outstanding work, all aircraft!	リヴァイアサンの撃沈を確認。空母は無事だ。全機、見事だった!
+radio.phasesubmarine.21	항모를 잃었다… 전 기체, 가장 가까운 비행장으로 회항하라.	The carrier is lost... All aircraft, divert to the nearest airfield.	空母を失った…全機、最寄りの飛行場へ退避せよ。
+radio.phasesubmarine.22	항모까지 2킬로미터! 저 잠수함을 막아!	Two kilometers to the carrier! Stop that sub!	空母まで2キロ! あの潜水艦を止めろ!
+radio.phasesubmarine.23	충돌! 들이받혔다… 침몰한다!	Collision! It rammed us... we're going down!	衝突! 体当たりされた…沈むぞ!
+radio.phasesubmarine.24	포를 고쳐! 해치를 용접해서라도 막아! 오늘 우리가 천만 명을 구한다!	Fix those guns! Weld the hatches shut if you have to! Today we save ten million!	砲を直せ! ハッチを溶接してでも塞げ! 今日、我々が一千万人を救うのだ!
+radio.phasesubmarine.25	놈이 가라앉았다! 비행갑판이 환호성으로 떠들썩하다. 모두 고맙다!	It's down! The whole crew's cheering on the flight deck. Thank you, all of you!	沈んだぞ! 飛行甲板は歓声で沸いている。みんな、ありがとう!
+radio.phasesubmarine.26	보이나? 저기 평화가 떠 있다! 역사는 우리를 구원자로 기억할 거다!	Do you see it? Peace, floating right there! History will remember us as saviors!	見えるか? あそこに平和が浮かんでいる! 歴史は我々を救世主として記憶するだろう!
+radio.phasesubmarine.27	도망친 사람은 하나도 없다. 믿는다!	Nobody's running. We trust you!	逃げ出した者は一人もいない。信じているぞ!
+radio.phasesubmarine.28	천만 명을 위하여—!	For the ten million—!	一千万人のために―!
+radio.phasesubmarine.29	미사일은 다 막았다. 갑판 요원, 비행갑판 정리! 격납고, 조종사들 무장 준비! 너희가 돌아올 갑판은 우리가 지킨다. 가서 저 잠수함을 사냥해!	Missiles are done. Deck crew, clear the flight deck! Hangar, load ordnance for our pilots! We'll have a deck waiting for you. Go hunt that sub!	ミサイルは全て凌いだ。甲板要員、飛行甲板を空けろ! 格納庫、パイロットの武装を用意しろ! 君たちが戻る甲板は我々が守る。あの潜水艦を狩ってこい!
+radio.phasesubmarine.30	아이아이 서! 갑판 정리 중, 무장 올립니다!	Aye aye, sir! Clearing the deck, ordnance coming up!	アイアイサー! 甲板を空けます、武装も上げます!
+radio.phasesubmarine.31	놈이 정면으로 온다. 손상 통제반, 대기! 우리 조종사들이 막아 낸다. 조타, 침로 유지!	It's coming straight for us. Damage control teams, stand by! Our pilots will stop it. Helm, hold course!	奴が正面から来る。ダメージコントロール班、待機! 我々のパイロットが止めてくれる。操舵、針路そのまま!
+radio.phasesubmarine.32	아이아이 서! 침로 유지!	Aye aye, sir! Holding course!	アイアイサー! 針路そのまま!
+radio.phasesubmarine.33	전 발사관, 발사! 저 항모를 수장시켜라!	All tubes, fire! Bury that carrier!	全発射管、発射! あの空母を海に沈めろ!
+radio.phasesubmarine.34	뱀파이어, 뱀파이어! 잠수함에서 순항미사일 발사, 방위 {left}! 항모에 닿기 전에 떨어뜨려라!	Vampire, vampire! Cruise missiles launched from the sub, bearing {left}! Splash them before they reach the carrier!	ヴァンパイア、ヴァンパイア! 潜水艦から巡航ミサイル発射、方位{left}! 空母に届く前に撃ち落とせ!
+radio.phasesubmarine.35	잠수함이 무인기를 사출한다! 후방 주의!	The sub is launching drones! Watch your six!	潜水艦が無人機を射出している! 後方に注意!
+radio.phasesubmarine.36	무인기 발진. 놈들을 떼어 내라.	Drones away. Keep them off my back.	無人機、発進。奴らを引き剥がせ。
+radio.phasesubmarine.37	잠수함에서 무인기 추가 사출!	More drones from the sub!	潜水艦から無人機、追加射出!
+radio.phaseintercept.01	적 폭격기가 도시로 향하고 있다! 도착하기 전에 요격하라!	Enemy bombers are heading for the city! Intercept them before they arrive!	敵爆撃機が街へ向かっている！到着前に迎撃しろ！
+radio.phaseintercept.02	폭격기 전멸! 도시는 무사하다.	All bombers down! The city is safe.	爆撃機全滅！街は無事だ。
+radio.phaseintercept.03	도시가 폭격당했다... 임무 실패. 전 부대, 철수하라.	The city has been bombed... Mission failed. All units, withdraw.	街が爆撃された……任務失敗。全部隊、撤退せよ。
+radio.phasedestroy.05	전 편대, 강화 구조물을 우선 공격하라. 주목표를 무력화하라!	All flights, prioritize the hardened structures. Neutralize the primary target!	全編隊、強化構造物を優先せよ。主目標を無力化しろ！
+radio.phasedestroy.06	주목표 전부 파괴. 위협 제거. 모두 훌륭했다.	All primary targets destroyed. Threat eliminated. Excellent work out there, everyone.	主目標をすべて破壊。脅威排除。皆、見事だった。
+radio.phaseconvoy.01	수송대가 적 지역을 통과하고 있다. 움직임을 주시하며 길을 열어라!	The convoy is moving through hostile territory. Keep an eye on their movement and clear the road!	輸送隊が敵地を通過中だ。動きを見守り、道を切り拓け！
+radio.phaseconvoy.02	수송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete,  well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
+radio.phaseconvoy.03	수송대를 잃었다. 임무 실패. 기지로 귀환하라.	The convoy is gone. Mission failed. Return to base.	輸送隊が全滅した。任務失敗。帰投せよ。
+radio.phasefleet.01	적 함대 사정권 진입. 전 포대, 사격 개시!	Enemy fleet in range. All batteries, commence firing!	敵艦隊、射程に入った。全砲門、撃ち方始め！
+radio.phasefleet.02	항모 함대 사정권! 전 함, 사격 개시!	Carrier fleets are in range! All ships, open fire!	空母艦隊、射程内！全艦、撃て！
+radio.phasefleet.03	전 함재기 발진! 기함을 찾아 격침하라!	Launch all aircraft! Find that flagship and sink it!	全艦載機発艦！旗艦を見つけて沈めろ！
+radio.phasefleet.04	적 항모가 함재기를 발진시키고 있다!	Enemy carrier is launching aircraft!	敵空母が艦載機を発艦させている！
+radio.phasefleet.05	적 기함이 불타고 있다! 화력을 집중하라!	Their flagship is burning! Concentrate fire!	敵旗艦が炎上中！砲火を集中しろ！
+radio.phasefleet.06	전방 격벽 침수! 전 응급 수리반, 각자 위치로!	Flooding in the forward bulkhead! All damage control parties, report to your stations!	前部隔壁に浸水！全ダメコン班、配置につけ！
+radio.phasefleet.07	한 번만 더 일제사격하면 가라앉는다!	One more salvo and she goes down!	あと一斉射で沈むぞ！
+radio.phasefleet.08	기함 대파! 더는 못 버틴다!	Flagship is critical! We cannot take much more!	旗艦が危険な状態だ！これ以上はもたない！
+radio.phasefleet.09	항모 피격! 응급 수리, 당장!	The carrier is hit! Damage control, now!	空母被弾！ダメコン急げ！
+radio.phasefleet.10	항모가 불타고 있다! 끝장내라!	The carrier is burning! Finish it!	空母が炎上している！とどめを刺せ！
+radio.phasefleet.11	전방에 적 항모 전단. 아군 함대가 포격 거리로 접근 중이다. 함대를 지원해 항모를 격침하라!	Enemy carrier group ahead. Our fleet is closing to gun range. Support them and sink that carrier!	前方に敵空母打撃群。味方艦隊が砲撃距離へ接近中。艦隊を支援し、空母を沈めろ！
+radio.phasefleet.12	항모가 가라앉는다! 적 함대가 이탈하고 있다!	The carrier is going down! The enemy fleet is breaking off!	空母が沈んでいく！敵艦隊が離脱していく！
+radio.phasefleet.13	기함을 잃었다... 전 부대, 철수하라.	The flagship is lost... All units, withdraw.	旗艦を失った……全部隊、撤退せよ。
+radio.phasedestroy.07	SAM 기지와 대공포 진지에 집중하라!\n적 대공망을 뚫고 길을 열어라!	Focus on the SAM sites and Tripple A installations!\nClear a path through their air defense network!	SAMサイトと対空砲陣地に集中しろ！\n敵防空網を突破し、道を開け！
+radio.phasedestroy.08	적 대공망 무력화! 훌륭했다, 회랑이 열렸다!	Enemy air defenses offline! Excellent work, the corridor is open!	敵防空網沈黙！見事だ、回廊が開いた！

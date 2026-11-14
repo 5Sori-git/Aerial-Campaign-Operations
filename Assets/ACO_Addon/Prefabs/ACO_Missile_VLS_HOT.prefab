@@ -40079,7 +40079,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   serializationData:
-    SerializedFormat: 2
+    SerializedFormat: 0
     SerializedBytes: 
     ReferencedUnityObjects: []
     SerializedBytesString: 
@@ -40123,6 +40123,7 @@ MonoBehaviour:
   Dispenser: {fileID: 0}
   Damage: 50
   WeaponType: 2
+  HitExtensionEvent: 
   SplashLayers:
     serializedVersion: 2
     m_Bits: 131072
@@ -50104,8 +50105,12 @@ PrefabInstance:
         type: 3}
       propertyPath: serializationData.Prefab
       value: 
-      objectReference: {fileID: 8532077980109621165, guid: 000dddd54bcbcf644b6c3c4a04177a1a,
+      objectReference: {fileID: 0}
+    - target: {fileID: 8532077980109621165, guid: 000dddd54bcbcf644b6c3c4a04177a1a,
         type: 3}
+      propertyPath: serializationData.SerializedFormat
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

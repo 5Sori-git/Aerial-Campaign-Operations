@@ -254,6 +254,17 @@ public static class ACO_VoiceLines
             if (luna.LineText != null && luna.LineText.Length == 15) { c |= FillArray(ref luna.LineClip, 15, "Luna/Luna_L{0:00}", 0, 15, 2); }
         }
         else if (m is ACO_PhaseMrS) { c |= Common(m, "MrS/MrS_", false); }
+        else if (m is ACO_PhaseSubmarine sub)
+        {
+            c |= Common(m, "Submarine/Submarine_", true);
+            // 대사 표 6판(6-219) 34줄 — 4판(6-211) 32줄 뒤에 무인기 사출 N09 · N11(AWACS만 — N10 적 대사는 뺐다). 4판 — 2판 음성 L03~L26 사이에 새 줄 N01~N04(3판 — SLCM 소진 · 완전 부상의 항모 함장 · 승무원), 앞 4줄은 N05~N08(시작 소나 접촉 · 첫 발사). 예전 L01 · L02는 쓰지 않는다
+            if (sub.LineText != null && sub.LineText.Length == SubmarineV4Clips.Length)
+            {
+                if (sub.LineClip == null || sub.LineClip.Length != SubmarineV4Clips.Length) { sub.LineClip = new AudioClip[SubmarineV4Clips.Length]; c = true; }
+                for (int i = 0; i < SubmarineV4Clips.Length; i++) { c |= Fill(ref sub.LineClip[i], "Submarine/Submarine_" + SubmarineV4Clips[i]); }
+            }
+            else if (sub.LineText != null && sub.LineText.Length == 26) { c |= FillArray(ref sub.LineClip, 26, "Submarine/Submarine_L{0:00}", 0, 26); }
+        }
         if (c)
         {
             EditorUtility.SetDirty(m);
@@ -261,6 +272,13 @@ public static class ACO_VoiceLines
         }
         return c;
     }
+
+    private static readonly string[] SubmarineV4Clips =
+    {
+        "N05", "N06", "N07", "N08", "L03", "L04", "L05", "L06", "L07", "L08", "N01", "N02", "L09", "L10", "L11", "L12", "L13",
+        "L14", "L15", "N03", "N04", "L16", "L17", "L18", "L19", "L20", "L21", "L22", "L23", "L24", "L25", "L26",
+        "N09", "N11",
+    };
 
     private static bool Common(ACO_PhaseModule m, string prefix, bool fail)
     {

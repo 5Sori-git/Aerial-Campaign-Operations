@@ -50,6 +50,10 @@ namespace ACO
         public AudioSource SkyBurstSound;
         [Tooltip("미사일이 보이지 않는 높이일 때 자폭을 그리는 높이(m)")]
         public float BurstAltitude = 18000f;
+        [Tooltip("대기권 밖(미사일이 숨은 높이)에서 자폭할 때만 퍼지는 거대한 링(지면과 나란한 평면, 자식에 두 번째 링). 낮은 곳 자폭엔 없다")]
+        public ParticleSystem SkyRing;
+        [Tooltip("격추하고 이만큼(초) 뒤에 자폭한다(그동안 미사일은 계속 난다)")]
+        public float BurstDelay = 3f;
 
         [Header("착탄 (지평선 너머)")]
         public ParticleSystem HorizonFlash;
@@ -64,6 +68,10 @@ namespace ACO
 
         private bool _shown;
         private bool _burstDone;
+        private bool _burstPending;
+        private float _burstAt;
+        private Vector3 _pendSilo;
+        private Vector3 _pendDir;
         private bool _impactDone;
         private bool _launchFxDone;
         private float _skyLeft;
@@ -89,6 +97,8 @@ namespace ACO
         {
             if (!_init) { Init(); }
             UpdateSkyFlash(Time.deltaTime);
+            // 격추 뒤 BurstDelay초: 페이즈가 그 사이 끝나도 터진다
+            if (_burstPending && Time.time >= _burstAt) { Burst(); }
             if (Phase == null || !Phase.IsLive())
             {
                 if (_shown) { Show(false); }
@@ -98,6 +108,7 @@ namespace ACO
             {
                 Show(true);
                 _burstDone = false;
+                _burstPending = false;
                 _impactDone = false;
                 _launchFxDone = false;
             }
@@ -131,18 +142,19 @@ namespace ACO
             }
             if (down)
             {
-                if (!_burstDone && now - impactMs < 0)
+                // 격추: BurstDelay초 뒤 자폭(사용자 요청 "격추하고 몇 초 뒤에"). 그때까지 미사일은 계속 난다(아래 비행)
+                if (!_burstDone && !_burstPending && now - impactMs < 0)
                 {
-                    _burstDone = true;
-                    Vector3 p = _lastMissilePos;
-                    if (p.y - silo.y > VisibleAltitude || p == Vector3.zero) { p = silo + dir * (BurstAltitude * Pitchover) + Vector3.up * BurstAltitude; }
-                    if (SkyBurst) { SkyBurst.transform.position = p; SkyBurst.Play(); }
-                    if (SkyBurstSound) { SendCustomEventDelayedSeconds(nameof(_PlayBurstSound), 2.5f); }
-                    _flashPoint = p;
-                    _skyLeft = SkyFlashTime;
+                    _burstPending = true;
+                    _burstAt = Time.time + BurstDelay;
+                    _pendSilo = silo;
+                    _pendDir = dir;
                 }
-                PlaceMissile(basePos, Vector3.up, false, false);
-                return;
+                if (_burstDone || now - impactMs >= 0)
+                {
+                    PlaceMissile(basePos, Vector3.up, false, false);
+                    return;
+                }
             }
             if (now - impactMs >= 0)
             {
@@ -172,6 +184,24 @@ namespace ACO
             Vector3 v = next - pos;
             bool visible = alt <= VisibleAltitude;
             PlaceMissile(pos, v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.up, visible, visible);
+        }
+
+        /// 자폭: 미사일이 지금 보이면(상승 초반 · 재진입) 그 자리에서 보통 폭발, 대기권 밖이라 숨어 있으면 BurstAltitude에서 폭발 + 거대한 링.
+        /// (예전엔 마지막으로 보였던 자리 — 늘 VisibleAltitude 바로 아래라 높이 판정에 걸리지 않아 30km 높이 · 수평 10km 넘는 곳에서 터져 안개에 묻혔다)
+        private void Burst()
+        {
+            _burstPending = false;
+            _burstDone = true;
+            bool seen = Missile != null && Missile.gameObject.activeSelf && _lastMissilePos != Vector3.zero;
+            Vector3 p = seen ? _lastMissilePos : _pendSilo + _pendDir * (BurstAltitude * Pitchover) + Vector3.up * BurstAltitude;
+            if (SkyBurst) { SkyBurst.transform.position = p; SkyBurst.Play(); }
+            if (!seen && SkyRing) { SkyRing.transform.position = p; SkyRing.Play(); }
+            if (SkyBurstSound) { SendCustomEventDelayedSeconds(nameof(_PlayBurstSound), 2.5f); }
+            _flashPoint = p;
+            _skyLeft = SkyFlashTime;
+            if (Missile && Missile.gameObject.activeSelf) { Missile.gameObject.SetActive(false); }
+            if (Flame && Flame.activeSelf) { Flame.SetActive(false); }
+            SetTrail(false);
         }
 
         private void PlaceMissile(Vector3 pos, Vector3 up, bool visible, bool flying)

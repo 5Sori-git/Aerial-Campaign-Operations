@@ -524,6 +524,47 @@ def i_sup_guardian(c):
         seg(c, (cx + r0 * math.cos(a), cy + r0 * math.sin(a)), (cx + r1 * math.cos(a), cy + r1 * math.sin(a)), 3.5)
 
 
+def i_sup_radio(c):
+    # 지원(탭 · 로드아웃 지원 구획): 휴대 무전기 + 안테나 끝에서 퍼지는 전파
+    rrect(c, 30, 40, 68, 94, 7)
+    seg(c, (40, 40), (40, 18), 6)
+    fill_circle(c, 40, 17, 4)
+    rrect(c, 37, 48, 61, 62, 3, 4)
+    for y in (71, 79, 87):
+        seg(c, (38, y), (60, y), 4)
+    for r in (13, 23):
+        arc(c, 40, 18, r, -38, 38, 5)
+
+
+def dashed_path(c, pts, dash=7.0, gap=5.0, w=5.0):
+    """꺾은선 pts를 따라 길이 기준 점선."""
+    on, left = True, dash
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        L = math.hypot(b[0] - a[0], b[1] - a[1]); t = 0.0
+        while t < L:
+            e = min(t + left, L)
+            if on:
+                seg(c, (a[0] + (b[0] - a[0]) * t / L, a[1] + (b[1] - a[1]) * t / L),
+                    (a[0] + (b[0] - a[0]) * e / L, a[1] + (b[1] - a[1]) * e / L), w)
+            left -= e - t; t = e
+            if left <= 1e-6:
+                on = not on; left = dash if on else gap
+
+
+def i_free_flight(c):
+    # 자유 비행: 아래 왼쪽에서 S자로 굽이치며 올라온 점선 궤적 + 그 끝에서 오른쪽 위로 날아오르는 기체
+    def p(t): return (10 + 44 * t, 92 - 38 * t - 8 * math.sin(2 * math.pi * t))
+    pts = [p(i / 40.0) for i in range(41)]
+    dashed_path(c, pts, 7.0, 5.5, 5.5)
+    (x0, y0), (x1, y1) = pts[-2], pts[-1]
+    ang = math.degrees(math.atan2(y1 - y0, x1 - x0)) + 90   # JET은 기수가 위(-y)
+    d = math.hypot(x1 - x0, y1 - y0); ux, uy = (x1 - x0) / d, (y1 - y0) / d
+    s = 0.42
+    cx, cy = x1 + ux * (44 * s + 4), y1 + uy * (44 * s + 4)
+    fill_poly(c, xform([(x - 50, y - 50) for x, y in JET], cx, cy, ang, s))
+
+
 def i_cm_pod(c):
     # 대응탄 포드: 원통 포드 + 아래로 떨어지는 플레어 셋(꼬리 곡선)
     rrect(c, 20, 18, 80, 40, 10)
@@ -805,6 +846,7 @@ ICONS = [
     ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm), ("weapon_mmp", i_w_mmp), ("weapon_rgp", i_w_rgp),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
     ("sup_strike", i_sup_strike), ("sup_tanker", i_sup_tanker), ("sup_guardian", i_sup_guardian),
+    ("sup_radio", i_sup_radio), ("free_flight", i_free_flight),
     ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),
     ("power", i_power), ("screen", i_screen), ("target", i_target), ("camera", i_camera), ("score", i_score),

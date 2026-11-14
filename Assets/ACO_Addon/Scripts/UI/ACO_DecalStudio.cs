@@ -21,6 +21,9 @@ namespace ACO
     ///    SIZE ±(×1.15), ROTATE ±(15°), FLIP(좌우), MIRROR(1을 기체 좌우 대칭 자리에 2로 — 좌우도 뒤집어 밖에서 바로 읽힌다), CLEAR(고른 데칼 끄기).
     ///    자리는 샘플 기준 상대값(위치·회전·크기·뒤집기·켜짐)으로 플레이어 영구 저장에 기종(DecalKey)별로 남는다 — 확정·조정할 때마다 바로.
     ///  - HIDE OTHERS: 다른 사람 기체의 데칼을 내 화면에서 숨긴다(저장됨).
+    ///  - 탭(6-193): [데칼] [라운델]. URL 칸 · LOAD · 안내 줄 · 이미지 창은 같이 쓰고, LOAD는 지금 탭에 넣는다(데칼 탭 = 고른 데칼 1/2, 라운델 탭 = 라운델).
+    ///    라운델(6-191): 라운델 탭에서 LOAD하면 라운델 이미지(URL 저장소 2번 칸)가 되고, 자리는 고정이다(동체 양옆, 왼쪽 날개 위, 오른쪽 날개 아래 — 기체에 붙은 판).
+    ///    라운델 지우기 = 라운델 이미지 지우기(안 보인다). 라운델 탭에서는 데칼 건을 쏴도 아무 일도 없다(분사 · 소리도 없음).
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_DecalStudio : UdonSharpBehaviour
     {
@@ -33,6 +36,12 @@ namespace ACO
         public const int ACT_CLEAR = 6;
         public const int ACT_HIDE_OTHERS = 7;
         public const int ACT_RESET_GUN = 8;
+        public const int ACT_TAB = 9;              // step 0 = 데칼 탭, 1 = 라운델 탭
+        public const int ACT_ROUNDEL_CLEAR = 10;
+        /// 이미지 칸 2 = 라운델(URL 저장소 SLOT_DECAL + 2).
+        public const int ROUNDEL = 2;
+        public const int TAB_DECAL = 0;
+        public const int TAB_ROUNDEL = 1;
         private const int CACHE = 16;
         private const string KEY_PREFIX = "aco_decal_";
         private const string KEY_HIDE = "aco_decal_hide_others";
@@ -52,6 +61,17 @@ namespace ACO
         public TextMeshProUGUI SelectText;
         public TextMeshProUGUI SizeText;
         public TextMeshProUGUI HideText;
+        [Header("탭 (6-193 — 프리팹 빌더)")]
+        [Tooltip("탭 내용 묶음 — 0 데칼, 1 라운델")]
+        public GameObject[] TabPages;
+        [Tooltip("탭 버튼 배경 — 고른 탭은 밝게")]
+        public Image[] TabButtons;
+        public Color TabOn = new Color(0.16f, 0.55f, 0.28f, 1f);
+        public Color TabOff = new Color(0.05f, 0.16f, 0.09f, 1f);
+        [Tooltip("탭 옆 안내 한 줄(탭마다 다르다)")]
+        public TextMeshProUGUI TabHintText;
+        [Tooltip("라운델 탭: 라운델 상태(없음 · 불러오는 중 · 표시 중 · 실패)")]
+        public TextMeshProUGUI RoundelStateText;
         [Tooltip("불러온 이미지를 보여 주는 작은 창")]
         public RawImage LoadedImage;
         [Tooltip("이미지가 아직 없을 때 보이는 글자")]
@@ -63,6 +83,8 @@ namespace ACO
         public ACO_DecalGun Gun;
         [Tooltip("실기체 데칼 전부(Bake) — HIDE OTHERS를 바꾸면 바로 다시 그린다")]
         public ACO_VehicleDecal[] VehicleDecals;
+        [Tooltip("격납고 샘플 기체의 라운델 판(실기체와 같은 자리 — Setup Check가 만든다)")]
+        public Renderer[] PreviewRoundels;
 
         [Header("값")]
         public float MinSize = 0.2f;
@@ -76,6 +98,7 @@ namespace ACO
 
         private VRCUrl[] _urls = new VRCUrl[] { VRCUrl.Empty, VRCUrl.Empty };
         private int _selected;
+        private int _tab;
         private bool _restored;
         private bool _hideOthers;
         // 자리(샘플 기준) — 0·1
@@ -97,13 +120,16 @@ namespace ACO
         private string _downloadingUrl = "";   // 칸이 다른 이미지로 다시 쓰여도 늦게 온 응답을 알아본다
         private float _downloadStart;
         private int _evictNext;
+        private VRCUrl _roundelUrl = VRCUrl.Empty;
+        private Material _previewRoundelMat;
 
         void Start()
         {
             _downloader = new VRCImageDownloader();
             for (int i = 0; i < 2; i++) { _rot[i] = Quaternion.identity; _size[i] = 1f; }
             ApplyPreview();
-            Msg("decal.msg.start", "PICK DECAL 1 OR 2, PASTE AN IMAGE URL AND PRESS LOAD", "", false);
+            ApplyTab();
+            Msg("decal.msg.start", "PICK A TAB, PASTE AN IMAGE URL AND PRESS LOAD", "", false);
         }
 
         public override void OnPlayerRestored(VRCPlayerApi player)
@@ -138,6 +164,12 @@ namespace ACO
                 Request(u);
                 any = true;
             }
+            if (!HasRoundel() && store != null && store.Has(ACO_UrlStore.SLOT_DECAL + ROUNDEL))
+            {
+                _roundelUrl = store.Get(ACO_UrlStore.SLOT_DECAL + ROUNDEL);
+                Request(_roundelUrl);
+                any = true;
+            }
             if (!any) { return; }
             ApplyPreview();
             Msg("decal.msg.restored", "SAVED IMAGES RESTORED - LOADING...", "", false);
@@ -160,9 +192,10 @@ namespace ACO
             {
                 VRCUrl u = UrlInput != null ? UrlInput.GetUrl() : VRCUrl.Empty;
                 if (u == null || string.IsNullOrEmpty(u.Get())) { Msg("decal.msg.nourl", "NO URL", "", true); return ACO_UiSound.KIND_DENY; }
-                _urls[_selected] = u;
+                int slot = Target();
+                if (slot == ROUNDEL) { _roundelUrl = u; } else { _urls[slot] = u; }
                 // 다음 접속에도 쓰게 저장(복원 뒤에만 — 저장소가 스스로 막는다)
-                if (_store != null) { _store.Set(ACO_UrlStore.SLOT_DECAL + _selected, u); }
+                if (_store != null) { _store.Set(ACO_UrlStore.SLOT_DECAL + slot, u); }
                 int c = Find(u.Get());
                 if (c >= 0 && _cacheState[c] == 3)
                 {
@@ -188,6 +221,14 @@ namespace ACO
                 Msg("decal.msg.gunreturned", "DECAL GUN RETURNED", "", false);
                 return ACO_UiSound.KIND_CLICK;
             }
+            if (action == ACT_TAB)
+            {
+                _tab = step == TAB_ROUNDEL ? TAB_ROUNDEL : TAB_DECAL;
+                ApplyTab();
+                ApplyLoadedImage();
+                UpdateTexts("");
+                return ACO_UiSound.KIND_CLICK;
+            }
             if (action == ACT_SELECT)
             {
                 _selected = _selected == 0 ? 1 : 0;
@@ -204,6 +245,15 @@ namespace ACO
                 return ACO_UiSound.KIND_CLICK;
             }
             if (!_restored) { Msg("common.loadingsave", "LOADING SAVE DATA...", "", true); return ACO_UiSound.KIND_DENY; }
+            if (action == ACT_ROUNDEL_CLEAR)
+            {
+                _roundelUrl = VRCUrl.Empty;
+                if (_store != null) { _store.Set(ACO_UrlStore.SLOT_DECAL + ROUNDEL, VRCUrl.Empty); }
+                ApplyPreview();
+                UpdateTexts("");
+                Msg("decal.msg.roundelcleared", "ROUNDEL CLEARED", "", false);
+                return ACO_UiSound.KIND_CLICK;
+            }
             int k = _selected;
             if (action == ACT_CLEAR)
             {
@@ -246,6 +296,7 @@ namespace ACO
         public bool PlaceAt(Vector3 point, Vector3 normal, Vector3 gunUp)
         {
             if (SampleRoot == null) { return false; }
+            if (_tab == TAB_ROUNDEL) { return false; }   // 라운델 탭에선 아무 일도 없다(건도 분사하지 않는다 — IsDecalTab)
             Vector3 fwd = -normal;
             Vector3 up = Vector3.ProjectOnPlane(gunUp, fwd);
             if (up.sqrMagnitude < 0.0001f) { up = Vector3.ProjectOnPlane(Vector3.up, fwd); }
@@ -268,14 +319,33 @@ namespace ACO
         private void ApplyPreview()
         {
             for (int i = 0; i < 2; i++) { ApplyPreviewOne(i, _on[i]); }
+            ApplyPreviewRoundel();
             ApplyLoadedImage();
+        }
+
+        /// 샘플 기체의 라운델 판: 받아 둔 이미지가 있으면 켠다(판 머티리얼은 처음 켤 때 하나를 복제해 같이 쓴다).
+        private void ApplyPreviewRoundel()
+        {
+            if (PreviewRoundels == null || PreviewRoundels.Length == 0) { return; }
+            Texture2D tex = GetTexture(_roundelUrl);
+            bool show = tex != null;
+            if (show)
+            {
+                if (_previewRoundelMat == null && PreviewRoundels[0] != null)
+                {
+                    _previewRoundelMat = PreviewRoundels[0].material;
+                    for (int i = 1; i < PreviewRoundels.Length; i++) { if (PreviewRoundels[i]) { PreviewRoundels[i].sharedMaterial = _previewRoundelMat; } }
+                }
+                if (_previewRoundelMat != null) { _previewRoundelMat.SetTexture("_MainTex", tex); }
+            }
+            for (int i = 0; i < PreviewRoundels.Length; i++) { if (PreviewRoundels[i]) { PreviewRoundels[i].enabled = show; } }
         }
 
         /// 작은 창: 받아 둔 이미지를 비율대로 보인다. 아직 없으면 지금 보이는 것을 그대로 둔다.
         private void ApplyLoadedImage()
         {
             if (!LoadedImage) { return; }
-            Texture2D tex = GetTexture(GetUrl(_selected));
+            Texture2D tex = GetTexture(GetUrl(Target()));
             if (tex == null)
             {
                 if (LoadedImage.texture == null)
@@ -343,6 +413,21 @@ namespace ACO
         {
             if (SelectText) { SelectText.text = T1("decal.editing", "EDITING: DECAL {0}", (_selected + 1).ToString()) + (_on[_selected] ? "" : "  <color=#7FBF8A>" + T("decal.notplaced", "(NOT PLACED)") + "</color>"); }
             if (SizeText) { SizeText.text = _on[_selected] ? T1("decal.size", "SIZE {0} m", _size[_selected].ToString("0.0")) + (_flip[_selected] ? "  " + T("decal.flipped", "FLIPPED") : "") : T("decal.sizenone", "SIZE -"); }
+            if (TabHintText)
+            {
+                TabHintText.text = _tab == TAB_ROUNDEL
+                    ? T("decal.tabhint.roundel", "SHOWN AT THE FIXED SPOTS RIGHT AWAY (TRANSPARENT PNG)")
+                    : T("decal.tabhint.decal", "AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT AND PULL THE TRIGGER");
+            }
+            if (RoundelStateText)
+            {
+                string st;
+                if (!HasRoundel()) { st = "<color=#7FBF8A>" + T("decal.roundel.none", "NONE") + "</color>"; }
+                else if (GetTexture(_roundelUrl) != null) { st = T("decal.roundel.shown", "SHOWN"); }
+                else if (IsFailed(_roundelUrl)) { st = "<color=#FF5544>" + T("decal.roundel.failed", "FAILED") + "</color>"; }
+                else { st = T("decal.roundel.loading", "LOADING..."); }
+                RoundelStateText.text = T1("decal.roundel.state", "ROUNDEL: {0}", st);
+            }
             if (HideText) { HideText.text = T1("decal.others", "OTHERS' DECALS: {0}", _hideOthers ? "<color=#FF5544>" + T("decal.hidden", "HIDDEN") + "</color>" : T("decal.shown", "SHOWN")); }
             if (StatusText && _msgKey.Length > 0)
             {
@@ -399,10 +484,36 @@ namespace ACO
 
         private bool HasUrl(int i) { return _urls[i] != null && !string.IsNullOrEmpty(_urls[i].Get()); }
 
-        /// 데칼 i의 이미지 — 자기 이미지가 없으면 다른 데칼의 이미지.
-        public VRCUrl GetUrl(int i) { return HasUrl(i) ? _urls[i] : _urls[1 - i]; }
+        /// 데칼 i의 이미지 — 자기 이미지가 없으면 다른 데칼의 이미지. i = ROUNDEL이면 라운델 이미지(없으면 빈 값 — 데칼 이미지를 빌리지 않는다).
+        public VRCUrl GetUrl(int i)
+        {
+            if (i == ROUNDEL) { return _roundelUrl; }
+            return HasUrl(i) ? _urls[i] : _urls[1 - i];
+        }
 
-        private void LoadedText() { Msg("decal.msg.loaded", "DECAL {0} IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT", (_selected + 1).ToString(), false); }
+        private bool HasRoundel() { return _roundelUrl != null && !string.IsNullOrEmpty(_roundelUrl.Get()); }
+
+        /// 내 라운델 이미지(없으면 빈 값) — ACO_VehicleDecal이 탑승할 때 읽는다.
+        public VRCUrl GetRoundelUrl() { return _roundelUrl; }
+
+        /// LOAD가 넣을 이미지 칸: 데칼 탭 = 고른 데칼(0·1), 라운델 탭 = 라운델(2).
+        private int Target() { return _tab == TAB_ROUNDEL ? ROUNDEL : _selected; }
+
+        /// 데칼 건이 쓸 수 있는 탭인가(라운델 탭이면 건은 아무것도 하지 않는다).
+        public bool IsDecalTab() { return _tab == TAB_DECAL; }
+
+        /// 탭 내용 · 탭 버튼 색.
+        private void ApplyTab()
+        {
+            if (TabPages != null) { for (int i = 0; i < TabPages.Length; i++) { if (TabPages[i]) { TabPages[i].SetActive(i == _tab); } } }
+            if (TabButtons != null) { for (int i = 0; i < TabButtons.Length; i++) { if (TabButtons[i]) { TabButtons[i].color = i == _tab ? TabOn : TabOff; } } }
+        }
+
+        private void LoadedText()
+        {
+            if (_tab == TAB_ROUNDEL) { Msg("decal.msg.roundelloaded", "ROUNDEL IMAGE LOADED - SHOWN ON THE SAMPLE AIRCRAFT", "", false); return; }
+            Msg("decal.msg.loaded", "DECAL {0} IMAGE LOADED - AIM THE DECAL GUN AT THE SAMPLE AIRCRAFT", (_selected + 1).ToString(), false);
+        }
 
         public bool HideOthers() { return _hideOthers; }
 
@@ -470,9 +581,9 @@ namespace ACO
         /// 패널이 고른 이미지가 먼저, 그다음 앞 칸부터.
         private int NextPending()
         {
-            for (int s = 0; s < 2; s++)
+            for (int s = 0; s < 3; s++)
             {
-                VRCUrl u = _urls[s == 0 ? _selected : 1 - _selected];
+                VRCUrl u = GetUrl((Target() + s) % 3);   // 지금 탭 · 고른 칸이 먼저
                 int mine = u != null ? Find(u.Get()) : -1;
                 if (mine >= 0 && _cacheState[mine] == 1) { return mine; }
             }
@@ -514,7 +625,7 @@ namespace ACO
         private bool IsCurrent(string url)
         {
             for (int i = 0; i < 2; i++) { if (HasUrl(i) && url == _urls[i].Get()) { return true; } }
-            return false;
+            return HasRoundel() && url == _roundelUrl.Get();
         }
 
         /// 지금 받는 이미지의 응답이면 대기열을 넘긴다(시간 초과 뒤 늦게 온 응답이 다음 받기를 끊지 않게).

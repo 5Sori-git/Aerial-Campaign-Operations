@@ -40,6 +40,7 @@ namespace ACO
         public UdonSharpBehaviour[] Listeners;
 
         private DataDictionary _index;
+        private DataDictionary _radio;
         private int _setting = SET_AUTO;
         private int _lang = -1;
         private bool _ready;
@@ -59,7 +60,27 @@ namespace ACO
             {
                 if (!string.IsNullOrEmpty(Keys[i])) { _index.SetValue(Keys[i], i); }
             }
+            // 무전 자막(6-175): radio.* 줄은 영어 원문으로 찾는다(대사가 인스펙터 영어 그대로 오기 때문)
+            _radio = new DataDictionary();
+            for (int i = 0; i < n; i++)
+            {
+                if (Keys[i] == null || !Keys[i].StartsWith("radio.") || En == null || i >= En.Length || string.IsNullOrEmpty(En[i])) { continue; }
+                _radio.SetValue(En[i].Trim(), i);
+            }
             Apply(Resolve());
+        }
+
+        /// 무전 자막 번역(6-175): 영어 대사 → 지금 언어. 표에 없거나 그 언어 칸이 비면 받은 글자 그대로.
+        public string Radio(string en)
+        {
+            Init();
+            if (string.IsNullOrEmpty(en) || _lang == LANG_EN || _radio == null) { return en; }
+            DataToken t;
+            if (!_radio.TryGetValue(en.Trim(), TokenType.Int, out t)) { return en; }
+            int i = t.Int;
+            string[] src = _lang == LANG_KO ? Ko : Ja;
+            string s = src != null && i < src.Length ? src[i] : null;
+            return string.IsNullOrEmpty(s) ? en : s;
         }
 
         /// 지금 언어(LANG_*).

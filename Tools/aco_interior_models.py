@@ -2270,7 +2270,7 @@ def corridor_room():
     put("Int_Junction", bay(1), Y0 + 0.02, 1.15)
     put("Int_Plate_7", bay(1), Y0 + 0.02, 0.9)
     put("Int_ValveBank", bay(3) - 0.7, Y0 + 0.02, 1.2)
-    put_picture(put, 2, bay(4), Y0 + 0.02, 1.75, 0)
+    put_picture(put, 4, bay(4), Y0 + 0.02, 1.75, 0)   # 브리핑실과 겹치지 않는 사진(6-222)
     put("Int_Breaker", bay(5), Y0 + 0.02, 1.62)
     put("Int_VestRack", bay(7) - 0.55, Y0 + 0.02, 1.9)
     put("Int_Socket", bay(8), Y0 + 0.02, 0.5)
@@ -2287,7 +2287,7 @@ def corridor_room():
     put("Int_Plate_10", bay(2), Y1 - 0.02, 1.75, 180)
     put("Int_Speaker", bay(2), Y1 - 0.02, 2.14, 180)
     put("Int_CableCoil", bay(5), Y1 - 0.02, 1.7, 180)
-    put_picture(put, 3, bay(6), Y1 - 0.02, 1.75, 180)
+    put_picture(put, 6, bay(6), Y1 - 0.02, 1.75, 180)
     put("Int_Plate_4", hangar_x, Y1 - 0.02, 2.27, 180)
     # 양 끝
     put("Int_Plate_3", X1 - 0.02, west, 2.27, 90)

@@ -576,14 +576,15 @@ MonoBehaviour:
     m_Bits: 1610612736
   InterceptRange: 900
   DefenseRadius: 600
-  InterceptReactionTime: 0.5
-  InterceptKillTime: 0.7
+  InterceptReactionTime: 0.3
+  InterceptKillTime: 0.6
   OtherDefenseFactor: 2
   EcmHub: {fileID: 0}
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
-  InterceptCooldown: 3
-  InterceptTuneVersion: 1
+  InterceptCooldown: 5.5
+  SilentIntercept: 0
+  InterceptTuneVersion: 2
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -681,6 +682,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3682277537577671764}
   Muzzle: {fileID: 8738750369649034484}
   VisualParticle: {fileID: 3155020420510238389}
+  Laser: {fileID: 0}
   FireSound: {fileID: 1510325581613597937}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0

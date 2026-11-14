@@ -24,6 +24,40 @@ public static class ACO_PrefabTuning
         public Action Apply;
     }
 
+    /// icbm-ring-1: 씬의 탄도미사일 사이트 연출을 다시 맞춘다(링 추가, 섬광 · 불덩이 크기).
+    private static void ApplyIcbmRing()
+    {
+        int n = 0;
+        foreach (ACO.ACO_IcbmSite site in UnityEngine.Object.FindObjectsOfType<ACO.ACO_IcbmSite>(true))
+        {
+            ACO_FxBuilder.BuildIcbmFx(site);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(site.gameObject.scene);
+            n++;
+        }
+        UnityEngine.Debug.Log($"[ACO] 탄도미사일 자폭 링: 사이트 {n}곳에 링을 넣었습니다." + (n == 0 ? " (레이저 에이스 페이즈 모듈이 씬에 없습니다)" : " 씬을 저장하세요."));
+    }
+
+    /// deck-taxi-5kt-1 · deck-taxi-10kt-1: 플레이어 기체 프리팹의 갑판 택싱 최고 속도(지금 10노트 = 5.14m/s — 6-216, 처음엔 5노트 2.6m/s).
+    public const float DeckTaxiSpeed = 5.14f;
+    public static void TuneDeckTaxi()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            int n = 0;
+            foreach (ACO_VehicleAutomation a in root.GetComponentsInChildren<ACO_VehicleAutomation>(true))
+            {
+                if (Mathf.Approximately(a.DeckTaxiSpeed, DeckTaxiSpeed)) { continue; }
+                a.DeckTaxiSpeed = DeckTaxiSpeed;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            Debug.Log($"[ACO] 갑판 택싱 속도: {path}의 {n}곳을 {DeckTaxiSpeed}m/s(약 {Mathf.RoundToInt(DeckTaxiSpeed * 1.944f)}노트)로 바꿨습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
     /// 씬의 보스 페이즈 모듈(공중 요새·랜스 포대) 방공 수리 값. 모듈은 프리팹이 아니라 씬 오브젝트라 씬을 고친다.
     private static void TuneBossRepairs()
     {
@@ -189,6 +223,29 @@ public static class ACO_PrefabTuning
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(m.gameObject.scene);
         }
         Debug.Log("[ACO] 랜스 포대: 코어 열림 30초, 첫 충전은 공격할 때(최대 180초 대기)로 맞췄습니다. 씬을 저장하세요.");
+    }
+
+    /// vls-missile-hot-1(6-215): NPC 프리팹 런처(ACO_MissileLauncher.AAM)가 ACO_Missile_VLS를 가리키면 ACO_Missile_VLS_HOT으로.
+    private static void TuneVlsMissileHot()
+    {
+        GameObject oldVls = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabDir + "/ACO_Missile_VLS.prefab");
+        GameObject hot = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabDir + "/" + ACO_PrefabBuilder.VlsMissileDefault + ".prefab");
+        if (oldVls == null || hot == null) { Debug.LogWarning("[ACO] VLS 미사일 바꾸기: ACO_Missile_VLS 또는 " + ACO_PrefabBuilder.VlsMissileDefault + " 프리팹이 없습니다."); return; }
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_MissileLauncher l in root.GetComponentsInChildren<ACO_MissileLauncher>(true))
+            {
+                if (l.AAM != oldVls) { continue; }
+                l.AAM = hot;
+                Mark(l);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] VLS 미사일 바꾸기: 런처 {n}개를 {ACO_PrefabBuilder.VlsMissileDefault}로 바꿨습니다.");
     }
 
     /// 해상 유닛(함선·항공모함·구축함·육상전함) 부위의 범위 피해 배율을 0.2로, LASM 무장은 부위에도 그대로 주게 한다.
@@ -555,6 +612,16 @@ public static class ACO_PrefabTuning
         new Entry { Id = "luna-rail-burst-1", Text = "LUNA 레일건: 조준 레이저를 없애고(경고는 조종석 음성 RAILGUN WARNING 그대로) 0.3초 간격 3연사로 쏩니다 — 뒤 발일수록 표적 진행 방향으로 0.6초씩 더 앞을 겨눠 흩뿌립니다(NPC_Luna 런처)", Apply = ACO_PrefabBuilder.ApplyLunaRailBurst },
         new Entry { Id = "bullet-hit-sound-1", Text = "내 기체 피격음을 SaccFlight 기본 Hit.wav에서 금속판에 총알이 맞는 소리 4개(ElevenLabs — 맞을 때마다 무작위, 음높이도 SAV가 조금씩 바꾼다)로 바꿉니다. 기체 프리팹(SoundController.BulletHit)을 고칩니다", Apply = TuneBulletHitSound },
         new Entry { Id = "hangar-texts-1", Text = "특수무장 정의 20종의 설명을 새 문구(부제 + 브리핑식 한두 문장)로 바꿉니다. 뒤에 Bake(격납고 목록·기본 수치 줄이 따라간다). 격납고 패널은 프리팹 판 ACO_Hangar 6으로 다시 만드세요", Apply = ACO_SpecialWeaponCatalog.RewriteDescriptions },
+        new Entry { Id = "hangar-texts-2", Text = "특수무장 설명 7종을 지금 수치에 맞게 고칩니다(4AAM 락온 거리, UGB 가장 넓은 폭발, LGB 좁지만 강함, LGR 위력 = 로켓, SASM 스쳐도 피해, CCAA, HPAA 대형 탄두). 뒤에 Bake", Apply = ACO_SpecialWeaponCatalog.RewriteDescriptions },
+        new Entry { Id = "carrier-part-models-1", Text = "항모 CIWS · VLS의 임시 외형(상자 · 포신)을 숨깁니다 — 선체 모델에 포대와 해치가 그려져 있습니다. 히트박스 · 락온 · 사격 · 파괴 연출은 그대로", Apply = () => EditPrefabs(root => root.name == "NPC_Carrier" && ACO_PrefabBuilder.HideCarrierPartModels(root)) },
+        new Entry { Id = "carrier-vls-1", Text = "항모에 VLS 4개를 붙입니다 — 모델에 그려진 VLS 해치(양현 포대 옆) 자리, 다른 적 함선과 같은 대공 미사일 발사기. 뒤에 Bake", Apply = TuneCarrierVls },
+        new Entry { Id = "ciws-intercept-2", Text = "적 CIWS 요격을 빠르게 하고 오래 쉬게 합니다(반응 0.3 · 격추 0.6 · 쉼 5.5초, 사거리 900m 그대로) — 혼자서도 계속 쏘면 뚫리고 일제 사격은 더 쉽게 뚫립니다", Apply = TuneCiws },
+        new Entry { Id = "carrier-ciws-arc-1", Text = "항모 CIWS 4개가 바깥쪽 200°만 맡습니다 — 쉬는 자세를 바깥쪽으로 돌리고, 선체 반대편 미사일은 요격하지 않습니다", Apply = TuneCarrierCiwsArc },
+        new Entry { Id = "carrier-ciws-1", Text = "항모 CIWS 4개를 모델에 그려진 포대(양현 스폰슨) 자리로 옮깁니다 — 앞쪽 둘이 갑판 밖 허공에 떠 있었습니다", Apply = TuneCarrierCiws },
+        new Entry { Id = "lance-cooler-splash-1", Text = "랜스 냉각탑 4개에 범위 피해 저항(0.45)을 넣습니다 — 지원 폭격 한 방에 넷이 다 깨지던 것을 두 번쯤에. 직접 맞힌 탄은 그대로", Apply = TuneLanceCoolerSplash },
+        new Entry { Id = "g-limit-psm-1", Text = "플레이어 기체: G 손상을 끄고(최대 50G는 리미터가), G 리미터 시작을 한계 − 10G로(40G면 30G — 덜 끊기게), 기동성 강화 하중 +10G, 조종석 실속음 · 받음각 삐 · G 손상음을 끄고 G 경고음은 ±30G부터 계속(이 기체 전용 클립 복사본). 하이알파 해금(8 · 10단계)은 스크립트 값", Apply = TuneGLimitPsm },
+        new Entry { Id = "ace-extend-1", Text = "에이스(트윈즈 · 보더리스 · 루나 · MR. S)의 최대 이탈 시간을 15초 → 6초로 줄입니다(꼬리를 물린 채 곧게 도망가는 시간). 셰이드(10초)와 일반 NPC(15초)는 그대로", Apply = TuneAceExtend },
+        new Entry { Id = "premium-price-1", Text = "특전 무기 MMP · RGP 가격을 50,000 CR로 올립니다(이미 산 사람은 그대로). 뒤에 Bake", Apply = ACO_SpecialWeaponCatalog.TunePremiumPrices },
         new Entry { Id = "landship-maingun-radius-1", Text = "소형 레일건 폭발 지역 반경을 1.5배로 넓힙니다 — 육상전함 주포 320m → 480m, 랜스 포대 170m → 255m", Apply = TuneLandShipMainGunRadius },
         new Entry { Id = "mini-railgun-reburst-1", Text = "랜스 포대 소형 레일건 폭발 지역에서도 1.2초마다 불꽃을 다시 뿜어 피해가 끝날 때까지 불이 보이게 합니다(육상전함 주포와 같게 — 예전엔 끝나기 1~2초 전에 불이 꺼졌다)", Apply = TuneMiniRailgunReburst },
         new Entry { Id = "mini-railgun-lay-1", Text = "소형 레일건(랜스 포대·육상전함 주포): 3.5초 뒤 자리를 노리고 고정하자마자 쏩니다 — 폭발이 표적 앞에 먼저 생겨 남습니다. 폭발 지역 유지 시간은 육상전함 주포 5초, 랜스 포대 4.5초", Apply = TuneMiniRailgunLay },
@@ -584,6 +651,13 @@ public static class ACO_PrefabTuning
         new Entry { Id = "luna-snipe-often-1", Text = "LUNA(NPC_Luna) 저격(거리를 벌렸다 급선회로 돌아서 레일건)을 더 자주: 교전 6초 뒤 처음(15초였다), 그 뒤 20초마다(40초), 꼬리에 붙으면 지난 저격 8초 뒤부터(15초)", Apply = ACO_PrefabBuilder.ApplyLunaSnipeTimingToPrefab },
         new Entry { Id = "guardian-forward-1", Text = "씬의 지원 관리자: 가디언 드론 자리를 더 앞으로 — 앞 12m → 25m(옆 18m·위 2m는 그대로). 직접 바꾼 값은 그대로 둡니다", Apply = TuneGuardianForward },
         new Entry { Id = "tanker-max-speed-1", Text = "씬의 지원 관리자: 급유 드론 최고 속도 제한을 400kt → 1000kt로 넉넉하게(최저 180kt는 그대로). 직접 바꾼 값은 그대로 둡니다", Apply = TuneTankerMaxSpeed },
+        new Entry { Id = "submarine-torpedo-500-1", Text = "씬의 잠수함 페이즈 모듈: 어뢰 속도 150 → 500m/s(초공동 어뢰 — 6~14km면 40~95초 → 12~28초 뒤 명중). 어뢰 항적은 잠수함 프리팹을 다시 만들면 빠르기에 맞춰집니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTorpedo },
+        new Entry { Id = "submarine-lines-4", Text = "잠수함 대사 표 4판(6-211): 시작 대사를 소나 대형 수중 접촉 · 항모로 돌아가 CAP(AWACS)와 잠망경 심도(적)로, 발사 경보(\"All tubes, fire!\" · \"Vampire, vampire!…\")는 첫 일제 발사 때로 옮깁니다. 32줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
+        new Entry { Id = "submarine-lines-3", Text = "잠수함 대사 표 3판(6-209): SLCM 소진 · 완전 부상 때 항모 함장의 명령(\"Deck crew, clear the flight deck!…\" · \"Helm, hold course!\")과 아군 승무원의 대답(\"Aye aye, sir!…\" — 새 화자 5번 CARRIER CREW)을 넣습니다. 30줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
+        new Entry { Id = "submarine-ram-30-1", Text = "씬의 잠수함 페이즈 모듈: 충각 돌격을 선체 20% → 30%에서 시작합니다(돌진까지 8400, 돌진 중 남은 3600)", Apply = ACO_PhaseModuleSetup.TuneSubmarineRam30 },
+        new Entry { Id = "submarine-cycle-2", Text = "씬의 잠수함 페이즈 모듈: 잠항 25 → 15초(한 주기 80 → 70초), 부상할 때 부서진 무장 중 무작위 3문만 되살림(충각 돌격 수리는 그대로 모두), 격침 뒤 물속으로 다 가라앉은 다음 2초(최대 35초)에 성공 — 예전엔 10초 만에 풀로 거둬 물 위에서 사라졌다", Apply = ACO_PhaseModuleSetup.TuneSubmarineCycle },
+        new Entry { Id = "submarine-ram-20-1", Text = "씬의 잠수함 페이즈 모듈: 완전 부상(충각 돌격)을 선체 50% → 20%에서 시작합니다(선체 체력은 프리팹이 6000 → 12000 — Create Prefabs로 NPC_Submarine을 다시 만드세요)", Apply = ACO_PhaseModuleSetup.TuneSubmarineRam },
+        new Entry { Id = "submarine-lines-2", Text = "잠수함 대사 표 2판(6-205): 적 함장이 충각 단계부터 광기(\"항모 하나로 전쟁을 끝내 천만 명을 구한다\" — 충각 · 2km 접근 · 충돌 · 수리 · 격침), 항모는 승조원 모두가 조종사를 믿는 목소리(피격 · 위기 · 2km 접근 · 격침 환호). 26줄과 음성(AWACS · 적 · 항모, ElevenLabs v4)을 넣습니다. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
         new Entry { Id = "landship-lines-3", Text = "육상전함 대사 표 3판: 적 함장은 원래 대사로 되돌리고(선원·시스템 대사는 뺌) AWACS는 2판 그대로, 총력 복구 \"Reroute reactor power to the batteries. All of them. Now!\" + AWACS \"It's feeding reactor power to its guns!…\", 코어 폭발 \"Keep firing! Keep fir-\" + 비명(말이 끊기는 곳이 대폭발에 맞게 늦춰 나온다). 음성도 넣습니다", Apply = ACO_VoiceLines.ApplyLandShipV3 },
         new Entry { Id = "landship-lines-2", Text = "육상전함 대사 표를 2판으로 바꿉니다: 평범하던 함장이 배가 타들어 가며 선원을 격벽에 가두고, 선원이 무력화되자 자동 사격 통제로 포대를 전부 되살리는 흐름(함장·선원·시스템·AWACS — 배기구는 궤도 안쪽 푸른 빛이라고 알려 줌). 예전 표 칸은 버리고 음성을 넣습니다", Apply = ACO_VoiceLines.ApplyLandShipV2 },
         new Entry { Id = "ace-flare-lines-1", Text = "에이스 플레어 대사(평소 플레어 — 25초에 한 번, 분신·교차 플레어엔 없음): HEADS \"Coin's still in the air.\", TAILS \"Ooh, shiny! Your missile likes those better!\", 레이저 에이스 \"You're aiming at a line that isn't there.\", SHADE \"You locked a shadow.\"(편대 간격). 형제 글자와 음성 칸을 채웁니다(빈 칸만)", Apply = ACO_VoiceLines.ApplyAll },
@@ -600,6 +674,26 @@ public static class ACO_PrefabTuning
         new Entry { Id = "cm-upgrade-1", Text = "씬의 진행도(ACO_PlayerProgress): 기체 강화 4번 자리를 안정성 → 대응탄 수(COUNTERMEASURES — 플레어 최대 수, 단계마다 한 발씩, 1단계 1500)로 바꿉니다(저장 키도 새로)", Apply = TuneCountermeasureUpgrade },
         new Entry { Id = "railgun-arm-1", Text = "씬의 랜스 포대 페이즈 모듈: 코어 장갑이 발사 30초 전부터 열리고(25초였다), 공격을 시작할 때까지 첫 충전을 기다립니다(공격이 없으면 180초 뒤)", Apply = TuneRailgunArm },
         new Entry { Id = "rail-hit-sound-1", Text = "레일건 탄(ACO_Missile_LunaRail — LUNA · MR. S)이 플레이어 기체에 맞으면 SAV의 MissileHit 소리가 납니다(타고 있는 사람에게)", Apply = TuneRailHitSound },
+        new Entry { Id = "screen-fade-sort-1", Text = "화면 암전 구의 그리기 순서를 맨 위(32767)로 — 튜토리얼 버튼 · 팝업 · 애프터버너 불꽃이 암전 위로 비치던 것을 고칩니다. 고친 뒤 씬 저장", Apply = TuneScreenFadeSort },
+        new Entry { Id = "generator-collider-1", Text = "미션 생성기 오브젝트의 박스 콜라이더(월드 원점, 1m)를 지웁니다 — 예전 '눌러서 미션 시작'용으로 남아 있던 보이지 않는 충돌 상자. 고친 뒤 씬 저장", Apply = RemoveGeneratorCollider },
+        new Entry { Id = "flap-hull-1", Text = "플레이어 기체 뒷전 플랩 윗면에 헐넘버를 넣습니다(실기처럼 — 플랩을 내리면 뒤 · 옆에서 보인다). 왼쪽 플랩은 왼쪽, 오른쪽 플랩은 오른쪽(바깥쪽) 맞춤, 길면 줄어든다. 격납고 샘플에도", Apply = ACO_HUDBuilder.InstallFlapMarks },
+        new Entry { Id = "roundel-1", Text = "플레이어 기체 · 격납고 샘플에 라운델 판 4장(동체 양옆, 접히는 왼쪽 날개 윗면 · 오른쪽 날개 아랫면 — 비스듬히)을 넣습니다. 이미지는 데칼 스튜디오 ROUNDEL에서 URL로 — 없으면 안 보입니다", Apply = ACO_RoundelBuilder.Install },
+        new Entry { Id = "roundel-2", Text = "동체 라운델을 캐노피 아래 앞동체(기수 헐넘버 뒤, LEX 아래 — 실기 사진처럼)로 옮깁니다. 라운델 판을 자리 표대로 다시 굽습니다", Apply = ACO_RoundelBuilder.Rebuild },
+        new Entry { Id = "mark-fit-1", Text = "기수 헐넘버 · 플랩 헐넘버 글자를 기체 표면 곡면에 붙입니다(판 아래 표면을 재서 글자 셰이더가 휜다 — 뜸 · 묻힘 최대 6 · 9cm → 약 1cm, VR에서 떠 보이지 않게)", Apply = ACO_MarkSurfaceFit.FitAll },
+        new Entry { Id = "marks-keep-1", Text = "자유 비행에서 내린 빈 기체에도 마지막 조종사의 헐넘버 · 콜사인 · 킬마크가 남습니다(데칼 · 라운델처럼 — 그 사람이 월드를 나가면 숨김). 기체 표시를 데칼에 잇습니다", Apply = ACO_HUDBuilder.InstallFlapMarks },
+        new Entry { Id = "canopy-thin-1", Text = "FA-18E 조종석 앞을 가로지르는 캐노피 앞 프레임 · 앞유리 아치를 가늘게(폭 ×0.65 — 15cm → 약 10cm). 원본 FBX는 그대로, 복사본 메시를 끼웁니다(되돌리기: 메뉴 ACO > FA-18E Canopy Frame > Restore Original)", Apply = ACO_CanopyThin.Apply },
+        new Entry { Id = "canopy-thin-3", Text = "FA-18E 앞 아치 볼트: 양쪽 대칭(한쪽 자리를 거울로), 짙은 회색 전용 재질(검은 쪽 아치에서도 보인다), 음영은 아치 면과 볼트 면의 중간(옆면이 검게 죽지 않고 입체감). 미리보기 기체에도", Apply = ACO_CanopyThin.Apply },
+        new Entry { Id = "canopy-thin-2", Text = "FA-18E 캐노피 앞 프레임 · 아치 다시 만들기: 아치 볼트 옆면이 검게 보이던 것을 아치 면과 같은 밝기로(반투명 HUD 글자 뒤로 육각 테두리가 진하게 비쳤다), 얇게 하며 드러난 앞유리 끝을 프레임 속으로 다시 넣는다(아치를 따라 유리가 떨어져 보였다). 미리보기 기체에도", Apply = ACO_CanopyThin.Apply },
+        new Entry { Id = "canopy-thin-preview-1", Text = "격납고 미리보기 기체(PreviewRoot)에도 가늘게 만든 캐노피 앞 프레임 · 아치(볼트 포함) 메시를 끼웁니다. 고친 뒤 씬 저장", Apply = ACO_CanopyThin.ApplyPreview },
+        new Entry { Id = "cockpit-display-1", Text = "FA-18E 조종석 UFC(스크래치패드) · 연료계 화면 그림을 깔끔하게 다시 그립니다(각진 사각 테두리 · 가는 선). 원본 텍스처는 그대로, 복사본 텍스처 · 머티리얼을 끼웁니다(되돌리기: 메뉴 ACO > FA-18E Cockpit Displays > Restore Original)", Apply = ACO_CockpitTexture.Apply },
+        new Entry { Id = "icbm-ring-1", Text = "레이저 에이스 페이즈 탄도미사일: 대기권 밖 자폭 때 거대한 링(반경 15km, 두 겹)을 더하고 섬광 · 불덩이를 키웁니다(씬의 IcbmSite)", Apply = ApplyIcbmRing },
+        new Entry { Id = "submarine-lines-6", Text = "잠수함 대사 표 6판(6-219): 무인기 사출 대사는 AWACS만 — 적 \"Drones away. Keep them off my back.\"을 뺍니다. 34줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
+        new Entry { Id = "submarine-lines-5", Text = "잠수함 대사 표 5판(6-217): 부상 때 무인기 사출 대사(AWACS \"The sub is launching drones!…\" · 적 \"Drones away…\" · 그 뒤 \"More drones from the sub!\")를 더합니다. 35줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
+        new Entry { Id = "deck-taxi-10kt-1", Text = "갑판 택싱 최고 속도를 약 5노트(2.6m/s) → 10노트(5.14m/s)로 올립니다(6-216) — 플레이어 기체 프리팹", Apply = TuneDeckTaxi },
+        new Entry { Id = "vls-missile-hot-1", Text = "NPC 프리팹의 VLS 미사일이 예전 ACO_Missile_VLS(비례항법)를 가리키면 기본값 ACO_Missile_VLS_HOT으로 바꿉니다(6-215 — 지금은 적 항모 NPC_Carrier의 VLS 4기)", Apply = TuneVlsMissileHot },
+        new Entry { Id = "hangar-decor-2", Text = "격납고 꾸미기 다시 만들기(6-214): 거치대 무장끼리 겹치거나 날개가 거치대에 걸리던 것을 — 표면 겹침 검사로 앞뒤로 엇갈려 놓고, 맞는 자리가 없는 무장은 뺍니다. Hanger 아래 HangarDecor를 지우고 다시 만듭니다. 고친 뒤 씬 저장", Apply = ACO_HangarDecor.Build },
+        new Entry { Id = "hangar-decor-1", Text = "격납고 패널 쪽을 EEI 지원 장비로 꾸밉니다 — 무장을 올린 거치대 7대, 견인 트랙터(1대는 소품 기체 기수에 물림), 포드 거치대 4개. Hanger 아래 HangarDecor를 지우고 다시 만듭니다. 고친 뒤 씬 저장", Apply = ACO_HangarDecor.Build },
+        new Entry { Id = "deck-taxi-5kt-1", Text = "갑판 택싱 최고 속도를 약 5노트(2.6m/s)로 낮춥니다(예전 10m/s = 약 19노트) — 플레이어 기체 프리팹", Apply = TuneDeckTaxi },
         new Entry { Id = "deco-model-1", Text = "도시, 마을, 항구, 비행장, 등대, 레이더, 통신탑, 유적을 새 모델로 다시 만듭니다. 프리팹을 손으로 고쳤다면 그 내용은 사라집니다", Apply = ACO_DecoBuilder.InstallModels },
     };
 
@@ -635,7 +729,7 @@ public static class ACO_PrefabTuning
             {
                 bool dirty = false;
                 if (!aa.InterceptDefaultsApplied) { ACO_SceneBaker.ApplyInterceptDefaults(aa); dirty = true; }
-                if (aa.InterceptTuneVersion < ACO_SceneBaker.CiwsTuneVersion && (aa.InterceptProtectLayers.value & (1 << 29)) != 0)
+                if (aa.InterceptTuneVersion < ACO_SceneBaker.CiwsTuneVersion && aa.MarkerLabel == "CIWS" && (aa.InterceptProtectLayers.value & (1 << 29)) != 0)
                 {
                     ACO_SceneBaker.ApplyEnemyCiwsTune(aa);
                     dirty = true;
@@ -731,6 +825,302 @@ public static class ACO_PrefabTuning
         entity.AAMTargetsLayer |= FriendlyShips;
         Mark(entity);
         return true;
+    }
+
+    /// ace-extend-1: 에이스(트윈즈 · 보더리스 · 루나 · MR. S)의 최대 이탈 시간 15 → 6초 — 꼬리를 물린 채 곧게 도망가는 시간을 줄인다.
+    /// 셰이드(치고 빠지기 10초 — 코브라가 있다)와 일반 NPC(15초)는 그대로. 씬 인스턴스가 덮어쓴 값은 지워 프리팹 값을 따르게.
+    private static readonly string[] AceExtendPrefabs = { "NPC_Heads", "NPC_Tails", "NPC_Borderless", "NPC_Luna", "NPC_MrS" };
+    private const float AceMaxExtend = 6f;
+
+    public static void TuneAceExtend()
+    {
+        EditPrefabs(root =>
+        {
+            if (Array.IndexOf(AceExtendPrefabs, root.name) < 0) { return false; }
+            bool changed = false;
+            foreach (ACO_NPCFighterAI ai in root.GetComponentsInChildren<ACO_NPCFighterAI>(true))
+            {
+                if (Mathf.Approximately(ai.MaxExtendDuration, AceMaxExtend)) { continue; }
+                ai.MaxExtendDuration = AceMaxExtend;
+                changed = true;
+            }
+            return changed;
+        });
+        foreach (ACO_NPCFighterAI ai in FindInScene<ACO_NPCFighterAI>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(ai);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src != null && Array.IndexOf(AceExtendPrefabs, src.name) >= 0) { Revert(ai, "MaxExtendDuration"); }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// carrier-ciws-1(6-183): 항모 CIWS 4개를 쿠즈네초프 모델에 그려진 포대 자리로 옮긴다(앞쪽 둘이 갑판 밖 허공에 떠 있었다). 씬에서 옮긴 값은 지운다.
+    public static void TuneCarrierCiws()
+    {
+        EditPrefabs(root =>
+        {
+            if (root.name != "NPC_Carrier") { return false; }
+            bool changed = false;
+            for (int i = 0; i < ACO_PrefabBuilder.CarrierCiwsNames.Length; i++)
+            {
+                Transform t = root.transform.Find("Body/" + ACO_PrefabBuilder.CarrierCiwsNames[i]);
+                if (t == null || (t.localPosition - ACO_PrefabBuilder.CarrierCiwsSpots[i]).sqrMagnitude < 0.0001f) { continue; }
+                t.localPosition = ACO_PrefabBuilder.CarrierCiwsSpots[i];
+                changed = true;
+            }
+            return changed;
+        });
+        foreach (ACO_Warship ship in FindInScene<ACO_Warship>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(ship);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src == null || src.name != "NPC_Carrier") { continue; }
+            foreach (string n in ACO_PrefabBuilder.CarrierCiwsNames)
+            {
+                Transform t = ship.transform.Find("Body/" + n);
+                if (t != null) { Revert(t, "m_LocalPosition"); }
+            }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// generator-collider-1(6-188): 미션 생성기의 콜라이더를 지운다(누르는 기능을 지웠다 — 원점에 보이지 않는 충돌 상자만 남아 있었다).
+    public static void RemoveGeneratorCollider()
+    {
+        foreach (ACO_MissionGenerator g in FindInScene<ACO_MissionGenerator>())
+        {
+            foreach (Collider c in g.GetComponents<Collider>()) { Undo.DestroyObjectImmediate(c); }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// screen-fade-sort-1(6-187): 씬 화면 암전 구의 sorting order를 맨 위로.
+    public static void TuneScreenFadeSort()
+    {
+        foreach (ACO_ScreenFader f in FindInScene<ACO_ScreenFader>())
+        {
+            if (f.FadeRenderer == null || f.FadeRenderer.sortingOrder == ACO_HUDBuilder.ScreenFadeSortingOrder) { continue; }
+            Undo.RecordObject(f.FadeRenderer, "Screen fade sorting order");
+            f.FadeRenderer.sortingOrder = ACO_HUDBuilder.ScreenFadeSortingOrder;
+            EditorUtility.SetDirty(f.FadeRenderer);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// carrier-ciws-arc-1(6-186): 항모 CIWS를 바깥쪽 200°로 묶는다. 씬에서 바꾼 YawArc · 포탑 회전은 지운다.
+    public static void TuneCarrierCiwsArc()
+    {
+        EditPrefabs(root => root.name == "NPC_Carrier" && ACO_PrefabBuilder.ApplyCarrierCiwsArc(root));
+        foreach (ACO_Warship ship in FindInScene<ACO_Warship>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(ship);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src == null || src.name != "NPC_Carrier") { continue; }
+            foreach (string n in ACO_PrefabBuilder.CarrierCiwsNames)
+            {
+                Transform t = ship.transform.Find("Body/" + n);
+                ACO_AAGunSite aa = t != null ? t.GetComponent<ACO_AAGunSite>() : null;
+                if (aa == null) { continue; }
+                Revert(aa, "YawArc");
+                if (aa.TurretYaw != null) { Revert(aa.TurretYaw, "m_LocalRotation"); }
+            }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// carrier-vls-1(6-184): 항모에 모델 해치 자리의 VLS 4개를 붙인다(예전엔 CIWS 4개뿐 — 모델에 그려진 VLS 해치가 비어 있었다).
+    public static void TuneCarrierVls()
+    {
+        EditPrefabs(root => root.name == "NPC_Carrier" && ACO_PrefabBuilder.EnsureCarrierVls(root));
+    }
+
+    /// lance-cooler-splash-1(6-182): 랜스 냉각탑 4개에 범위 피해 저항(ACO_FortressPart.SplashScale) — 지원 폭격 한 방에 넷이 다 깨지지 않게.
+    public static void TuneLanceCoolerSplash()
+    {
+        EditPrefabs(root =>
+        {
+            if (root.name != "NPC_Railgun") { return false; }
+            bool changed = false;
+            foreach (ACO_FortressPart p in root.GetComponentsInChildren<ACO_FortressPart>(true))
+            {
+                if (!p.name.StartsWith("Cooler_") || Mathf.Approximately(p.SplashScale, ACO_PrefabBuilder.LanceCoolerSplashScale)) { continue; }
+                p.SplashScale = ACO_PrefabBuilder.LanceCoolerSplashScale;
+                changed = true;
+            }
+            return changed;
+        });
+        foreach (ACO_FortressPart p in FindInScene<ACO_FortressPart>()) { if (p.name.StartsWith("Cooler_")) { Revert(p, "SplashScale"); } }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// g-limit-psm-1(6-179): 플레이어 기체(ACO_VehicleUpgrades가 붙은 프리팹)의 하중 · 경고음.
+    ///  - G 손상 끔(GDamage 0), MaxGs 52(강화 하중 상한 = MaxGs − 2 = 50), G 리미터 시작 = 한계 − 10(40G면 30G — 구간을 넓혀 덜 끊기게), 강화 하중 보너스 +10G.
+    ///  - 조종석 실속음(StallTone) · 받음각 삐(AoAWarning) · G 손상음(GDamageWarning)은 AudioSource를 꺼 둔다(애니메이터가 오브젝트를 켜도 소리 없음).
+    ///  - G 경고음: 원본 클립(Pit-bool, 다른 기체도 쓴다)은 두고 복사본(Generated/ACO_FA18_Gs.anim — ±30G 넘으면 계속)을 오버라이드 컨트롤러로 이 기체에만.
+    private const string AcoGsClipPath = "Assets/ACO_Addon/Generated/ACO_FA18_Gs.anim";
+    private const string AcoAnimOverridePath = "Assets/ACO_Addon/Generated/ACO_FA18.overrideController";
+    private const float GWarnFrom = 30f;
+    private static readonly string[] MutedBeeps = { "StallTone", "AoAWarning", "GDamageWarning" };
+
+    /// 씬 플레이어 기체(ACO_VehicleUpgrades가 붙은)의 프리팹 경로들.
+    private static List<string> PlayerAircraftPrefabPaths()
+    {
+        var paths = new List<string>();
+        foreach (ACO_VehicleUpgrades u in FindInScene<ACO_VehicleUpgrades>())
+        {
+            string p = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(u.gameObject);
+            if (!string.IsNullOrEmpty(p) && !paths.Contains(p)) { paths.Add(p); }
+        }
+        return paths;
+    }
+
+    /// 6-189: 기체 Rigidbody 아래의 non-convex MeshCollider — 내 기체(non-kinematic)에선 Unity가 무시하고 오류만 남기고,
+    /// 남의 기체(kinematic)에선 실제로 작동해 화면마다 충돌 모양이 다르다. 데칼 스튜디오 미리보기 외형(데칼 건용 콜라이더 포함)을
+    /// 복사해 넣으면 따라 들어온다. 히트박스(convex)는 건드리지 않는다.
+    private static List<MeshCollider> NonConvexUnderBody(GameObject root)
+    {
+        var list = new List<MeshCollider>();
+        foreach (MeshCollider mc in root.GetComponentsInChildren<MeshCollider>(true))
+        {
+            if (mc.convex) { continue; }
+            if (mc.GetComponentInParent<Rigidbody>(true) == null) { continue; }
+            list.Add(mc);
+        }
+        return list;
+    }
+
+    /// Setup Check: 플레이어 기체 프리팹의 non-convex MeshCollider 수.
+    public static int PlayerAircraftNonConvexColliders()
+    {
+        int n = 0;
+        foreach (string path in PlayerAircraftPrefabPaths())
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset != null) { n += NonConvexUnderBody(asset).Count; }
+        }
+        return n;
+    }
+
+    /// Setup Check [고치기]: 플레이어 기체 프리팹의 non-convex MeshCollider를 지운다(씬 기체는 프리팹을 따른다).
+    public static void RemovePlayerAircraftNonConvexColliders()
+    {
+        foreach (string path in PlayerAircraftPrefabPaths())
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                List<MeshCollider> list = NonConvexUnderBody(root);
+                if (list.Count == 0) { continue; }
+                foreach (MeshCollider mc in list) { Object.DestroyImmediate(mc); }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[ACO] {Path.GetFileName(path)}: 기체 안의 non-convex MeshCollider {list.Count}개를 지웠습니다(무장 외형 · 표시 — 히트박스는 그대로).");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+    }
+
+    public static void TuneGLimitPsm()
+    {
+        var paths = new List<string>();
+        foreach (ACO_VehicleUpgrades u in FindInScene<ACO_VehicleUpgrades>())
+        {
+            string p = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(u.gameObject);
+            if (!string.IsNullOrEmpty(p) && !paths.Contains(p)) { paths.Add(p); }
+        }
+        foreach (string path in paths)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (SaccAirVehicle sav in root.GetComponentsInChildren<SaccAirVehicle>(true)) { sav.GDamage = 0f; sav.MaxGs = 52f; }
+                foreach (DFUNC_Limits lim in root.GetComponentsInChildren<DFUNC_Limits>(true)) { lim.GLimiter_Begin_Pos = lim.GLimiter_Pos - 10f; }
+                foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true)) { up.LimiterGBonus = 10f; }
+                foreach (AudioSource a in root.GetComponentsInChildren<AudioSource>(true))
+                {
+                    if (Array.IndexOf(MutedBeeps, a.name) >= 0) { a.enabled = false; }
+                }
+                foreach (Animator an in root.GetComponentsInChildren<Animator>(true))
+                {
+                    AnimatorOverrideController ov = EnsureGsOverride(an.runtimeAnimatorController);
+                    if (ov != null) { an.runtimeAnimatorController = ov; }
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"[ACO] 하중 · 경고음(6-179): {Path.GetFileName(path)} — G 손상 끔, 리미터 시작 = 한계 − 10G, 강화 +10G, 실속음 · 받음각 삐 · G 손상음 끔, G 경고 ±{GWarnFrom}G부터 계속.");
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        foreach (SaccAirVehicle sav in FindInScene<SaccAirVehicle>()) { Revert(sav, "GDamage", "MaxGs"); }
+        foreach (DFUNC_Limits lim in FindInScene<DFUNC_Limits>()) { Revert(lim, "GLimiter_Begin_Pos"); }
+        foreach (ACO_VehicleUpgrades up in FindInScene<ACO_VehicleUpgrades>()) { Revert(up, "LimiterGBonus"); }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// 원본 컨트롤러에 G 경고 클립(이름 끝이 _Gs)이 있으면, 그 클립만 ACO 복사본으로 바꾼 오버라이드 컨트롤러를 만든다(이미 오버라이드면 그대로 갱신).
+    private static AnimatorOverrideController EnsureGsOverride(RuntimeAnimatorController current)
+    {
+        if (current == null) { return null; }
+        RuntimeAnimatorController baseCtrl = current is AnimatorOverrideController o0 ? o0.runtimeAnimatorController : current;
+        AnimationClip src = null;
+        foreach (AnimationClip c in baseCtrl.animationClips) { if (c != null && c.name.EndsWith("_Gs")) { src = c; break; } }
+        if (src == null) { return null; }
+
+        AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(AcoGsClipPath);
+        if (clip == null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(AcoGsClipPath));
+            clip = Object.Instantiate(src);
+            AssetDatabase.CreateAsset(clip, AcoGsClipPath);
+        }
+        WriteGWarnCurves(clip, src.length);
+        EditorUtility.SetDirty(clip);
+
+        var ov = AssetDatabase.LoadAssetAtPath<AnimatorOverrideController>(AcoAnimOverridePath);
+        if (ov == null)
+        {
+            ov = new AnimatorOverrideController(baseCtrl);
+            AssetDatabase.CreateAsset(ov, AcoAnimOverridePath);
+        }
+        ov.runtimeAnimatorController = baseCtrl;
+        ov[src] = clip;
+        EditorUtility.SetDirty(ov);
+        AssetDatabase.SaveAssets();
+        return ov;
+    }
+
+    /// G 경고 클립: 애니메이터 "Gs" = G × 0.005 + 0.5(정규화 시간). ±GWarnFrom G를 넘으면 G 경고음 계속(볼륨 0.2), G 손상음은 늘 꺼짐.
+    private static void WriteGWarnCurves(AnimationClip clip, float length)
+    {
+        float neg = (0.5f - 0.005f * GWarnFrom) * length;
+        float pos = (0.5f + 0.005f * GWarnFrom) * length;
+        float eps = length * 0.0005f;
+        foreach (EditorCurveBinding b in AnimationUtility.GetCurveBindings(clip))
+        {
+            string obj = b.path.Substring(b.path.LastIndexOf('/') + 1);
+            if (obj != "GWarning" && obj != "GDamageWarning") { continue; }
+            bool warn = obj == "GWarning";
+            bool active = b.propertyName == "m_IsActive";
+            float on = active ? 1f : 0.2f;
+            AnimationCurve c;
+            if (!warn) { c = Stepped(new Keyframe(0f, 0f), new Keyframe(length, 0f)); }
+            else
+            {
+                c = Stepped(new Keyframe(0f, on), new Keyframe(neg, on), new Keyframe(neg + eps, 0f),
+                            new Keyframe(pos - eps, 0f), new Keyframe(pos, on), new Keyframe(length, on));
+            }
+            AnimationUtility.SetEditorCurve(clip, b, c);
+        }
+    }
+
+    private static AnimationCurve Stepped(params Keyframe[] keys)
+    {
+        var c = new AnimationCurve(keys);
+        for (int i = 0; i < c.length; i++)
+        {
+            AnimationUtility.SetKeyLeftTangentMode(c, i, AnimationUtility.TangentMode.Constant);
+            AnimationUtility.SetKeyRightTangentMode(c, i, AnimationUtility.TangentMode.Constant);
+        }
+        return c;
     }
 
     // ───────────── 공통 ─────────────

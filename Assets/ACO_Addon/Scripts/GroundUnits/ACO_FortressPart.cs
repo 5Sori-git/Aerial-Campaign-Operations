@@ -24,6 +24,8 @@ namespace ACO
         public GameObject[] HideOnDeath;
         [Tooltip("파괴 시 켤 오브젝트(연기 등)")]
         public GameObject[] ShowOnDeath;
+        [Tooltip("범위 피해 저항(6-182): 이 부위가 받는 범위 피해에 곱한다(함선 PartSplashScale 위에 더). 1 = 그대로. 탄이 직접 닿으면 그대로 받는다. 랜스 냉각탑 0.45 — 지원 폭격 두 번쯤에 깨진다")]
+        [Range(0f, 1f)] public float SplashScale = 1f;
 
         // 함선이 SetProgramVariable로 넣는다
         [System.NonSerialized] public bool MissionRevive;

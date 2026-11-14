@@ -89,6 +89,115 @@ public partial class ACO_SceneBaker
         if (first != null && linked > 0) { Debug.Log($"[ACO] 관전 패널: 플레이어 기체 {vehicles.Count}대, 미사일 무장 {linked}개를 연결했습니다.", first); }
     }
 
+    // ───────────── 6-220: 선원실 영상 플레이어 소리 토글 · BGM 패널 크기 ─────────────
+    // 브리핑실 모니터 화면(메시 Briefing/screen에서 잰 값): 가운데 · 크기(m). 패널은 화면보다 4mm 앞(뷰어 쪽 -z)
+    private static readonly Vector3 BgmMonitorCenter = new Vector3(0.95f, -249.03f, 3.074f);
+    private const float BgmMonitorW = 0.57f;
+    // 선원실 셋톱박스 앞면 가운데(박스 x 19.06~19.54, y −249.815~−249.745, 앞면 z 0.265) — 토글은 3mm 앞
+    private static readonly Vector3 SetTopFront = new Vector3(19.30f, -249.78f, 0.261f);
+
+    /// YamaPlayer 소리(첫 오디오 소스 — 컨트롤러의 _audioSources). 씬에 없으면 null.
+    public static AudioSource FindYamaAudio()
+    {
+        foreach (MonoBehaviour b in Object.FindObjectsOfType<MonoBehaviour>(true))
+        {
+            if (b == null || b.GetType().Name != "Controller" || b.GetType().Namespace == null || !b.GetType().Namespace.Contains("YamaStream")) { continue; }
+            var so = new SerializedObject(b);
+            SerializedProperty arr = so.FindProperty("_audioSources");
+            if (arr == null) { continue; }
+            for (int i = 0; i < arr.arraySize; i++) { var a = arr.GetArrayElementAtIndex(i).objectReferenceValue as AudioSource; if (a != null) { return a; } }
+        }
+        return null;
+    }
+
+    private static AudioSource[] FindYamaAudios()
+    {
+        var list = new List<AudioSource>();
+        foreach (MonoBehaviour b in Object.FindObjectsOfType<MonoBehaviour>(true))
+        {
+            if (b == null || b.GetType().Name != "Controller" || b.GetType().Namespace == null || !b.GetType().Namespace.Contains("YamaStream")) { continue; }
+            var so = new SerializedObject(b);
+            SerializedProperty arr = so.FindProperty("_audioSources");
+            if (arr == null) { continue; }
+            for (int i = 0; i < arr.arraySize; i++) { var a = arr.GetArrayElementAtIndex(i).objectReferenceValue as AudioSource; if (a != null && !list.Contains(a)) { list.Add(a); } }
+        }
+        return list.ToArray();
+    }
+
+    /// 토글 ↔ YamaPlayer 소리(Bake).
+    private static void BakeVideoAudioToggle()
+    {
+        AudioSource[] audios = FindYamaAudios();
+        foreach (ACO_VideoAudioToggle t in Object.FindObjectsOfType<ACO_VideoAudioToggle>(true))
+        {
+            bool same = t.Targets != null && t.Targets.Length == audios.Length;
+            for (int i = 0; same && i < audios.Length; i++) { same = t.Targets[i] == audios[i]; }
+            if (same) { continue; }
+            t.Targets = audios;
+            MarkChanged(t);
+            Debug.Log($"[ACO] 영상 소리 토글: YamaPlayer 소리 {audios.Length}개를 연결했습니다.", t);
+        }
+    }
+
+    /// Setup Check [고치기]: 셋톱박스 앞면에 토글을 놓고, YamaPlayer 소리를 NEAR 3D로(VRC 공간 음향은 오디오 소스 거리 곡선을 쓰게 — 2D/3D 전환이 그대로 먹게).
+    public static void CreateVideoAudioToggle()
+    {
+        string path = $"Assets/ACO_Addon/Prefabs/{ACO_HUDBuilder.VideoAudioTogglePrefab}.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreateVideoAudioTogglePrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        AudioSource yama = FindYamaAudio();
+        if (prefab == null || yama == null) { return; }
+        Transform parent = yama.transform.parent != null ? yama.transform.parent.parent : null;   // YamaPlayer와 같은 부모(BOARD)
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        Undo.RegisterCreatedObjectUndo(go, "ACO video audio toggle");
+        go.transform.SetPositionAndRotation(SetTopFront, Quaternion.Euler(0f, 180f, 0f));
+        foreach (AudioSource a in FindYamaAudios())
+        {
+            Undo.RecordObject(a, "ACO video audio");
+            a.spatialBlend = 1f;
+            a.rolloffMode = AudioRolloffMode.Linear;
+            a.minDistance = 5f;
+            a.maxDistance = 10f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(a);
+            foreach (Component c in a.GetComponents<Component>())
+            {
+                if (c == null || c.GetType().Name != "VRCSpatialAudioSource") { continue; }
+                var so = new SerializedObject(c);
+                SerializedProperty curve = so.FindProperty("UseAudioSourceVolumeCurve");
+                SerializedProperty spat = so.FindProperty("EnableSpatialization");
+                if (curve != null) { curve.boolValue = true; }
+                if (spat != null) { spat.boolValue = false; }
+                so.ApplyModifiedProperties();
+            }
+        }
+        BakeVideoAudioToggle();
+        BakeUiSound();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] 영상 소리 토글을 선원실 셋톱박스 앞에 놓고 YamaPlayer 소리를 NEAR(3D, 5~10m)로 맞췄습니다. 씬을 저장하세요.", go);
+    }
+
+    /// BGM 패널 캔버스가 모니터 화면 크기 · 자리인가(1cm · 1mm 안).
+    public static bool BgmPanelFitsMonitor(ACO_BgmPanel panel)
+    {
+        RectTransform canvas = panel.GetComponentInChildren<Canvas>(true) != null ? panel.GetComponentInChildren<Canvas>(true).GetComponent<RectTransform>() : null;
+        if (canvas == null) { return true; }
+        float w = canvas.sizeDelta.x * canvas.lossyScale.x;
+        return Mathf.Abs(w - BgmMonitorW) < 0.01f && (panel.transform.position - BgmMonitorCenter).sqrMagnitude < 0.000001f;
+    }
+
+    /// Setup Check [고치기]: 패널 루트 배율을 캔버스 폭이 모니터 화면 폭이 되게, 자리를 화면 가운데(4mm 앞)로.
+    public static void FitBgmPanelToMonitor(ACO_BgmPanel panel)
+    {
+        RectTransform canvas = panel.GetComponentInChildren<Canvas>(true).GetComponent<RectTransform>();
+        Undo.RecordObject(panel.transform, "ACO bgm panel fit");
+        float k = BgmMonitorW / Mathf.Max(canvas.sizeDelta.x * canvas.localScale.x, 1e-6f);
+        panel.transform.localScale = Vector3.one * k;
+        panel.transform.position = BgmMonitorCenter;
+        PrefabUtility.RecordPrefabInstancePropertyModifications(panel.transform);
+        EditorSceneManager.MarkSceneDirty(panel.gameObject.scene);
+        Debug.Log($"[ACO] BGM 패널을 모니터 화면에 맞췄습니다(배율 {k:0.000}, 폭 {BgmMonitorW}m). 씬을 저장하세요.", panel);
+    }
+
     /// 패널 버튼 효과음: 씬에 하나 만들고(없으면) 모든 패널 버튼에 연결한다.
     private static void BakeUiSound()
     {
@@ -106,6 +215,7 @@ public partial class ACO_SceneBaker
             foreach (ACO_LogScrollButton c in root.GetComponentsInChildren<ACO_LogScrollButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_TacName c in root.GetComponentsInChildren<ACO_TacName>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_BgmPanel c in root.GetComponentsInChildren<ACO_BgmPanel>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_VideoAudioToggle c in root.GetComponentsInChildren<ACO_VideoAudioToggle>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_DecalButton c in root.GetComponentsInChildren<ACO_DecalButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_Teleporter c in root.GetComponentsInChildren<ACO_Teleporter>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
         }
@@ -312,6 +422,39 @@ public partial class ACO_SceneBaker
         }
     }
 
+    /// 아군 기지(항모) — 작전 테이블의 HomeBase 하나로 정한다(HUD 마커 · 조종석/벽걸이 지도가 같이 쓴다). 없으면 null.
+    private static Transform HomeBase()
+    {
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_TacticalMap map in root.GetComponentsInChildren<ACO_TacticalMap>(true)) { if (map.HomeBase != null) { return map.HomeBase; } }
+        }
+        return null;
+    }
+
+    /// 지형 제외 구역(스폰 지점 — 둘레 바다 + 작전 지역 밖까지 바닷길)이 비었거나 끊긴 칸이 있으면 기지(HomeBase)의 콜라이더로 채운다.
+    /// (6-198: 예전엔 미션 생성기의 1m 상자였는데 생성기 콜라이더를 지우면서 끊겨 섬이 항모 자리까지 솟고 바닷길이 사라졌다)
+    private static void LinkTerrainExclude(Transform home)
+    {
+        Collider zone = home != null ? home.GetComponent<Collider>() : null;
+        if (zone == null) { return; }
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_HexTerrain t in root.GetComponentsInChildren<ACO_HexTerrain>(true))
+            {
+                bool broken = t.ExcludeZones == null || t.ExcludeZones.Length == 0;
+                if (!broken) { foreach (Collider c in t.ExcludeZones) { if (c == null) { broken = true; } } }
+                if (!broken) { continue; }
+                var list = new List<Collider>();
+                if (t.ExcludeZones != null) { foreach (Collider c in t.ExcludeZones) { if (c != null && c != zone) { list.Add(c); } } }
+                list.Insert(0, zone);
+                t.ExcludeZones = list.ToArray();
+                MarkChanged(t);
+                Debug.Log($"[ACO] 지형 '{t.name}': 제외 구역(스폰 지점)에 기지 '{zone.name}'를 넣었습니다 — 둘레 바다 · 바닷길이 다시 생깁니다.", t);
+            }
+        }
+    }
+
     /// 머리·시야에 붙는 HUD 오버레이를 UI 레이어(5)로 — VRChat 카메라(사진·스트림)에 찍히지 않는다(카메라에서 "UI"를 켜야 찍힌다),
     /// 상호작용 레이저도 막지 않는다. 대상: 점수 HUD·표적 마커(ACO_HUD), HUD 레이더, RWR, 무전 자막 패널, 화면 페이드 구, 물속 물빛 구.
     /// UI 레이어는 VRChat 레이저 포인터가 무시하므로(메뉴를 열었을 때만 누른다) 누르는 패널(격납고·콘솔·HUD 설정·디버그 패널·작전판)은 옮기지 않고,
@@ -392,7 +535,7 @@ public partial class ACO_SceneBaker
         {
             if (p.AllowedPlayers == null || p.AllowedPlayers.Length == 0)
             {
-                Debug.LogWarning($"[ACO] 디버그 패널 '{p.name}'은 누구나 누를 수 있습니다(AllowedPlayers 비어 있음) — 공개 월드에 올릴 땐 이름을 넣거나 패널을 끄세요.", p);
+                Debug.LogWarning($"[ACO] 디버그 패널 '{p.name}'의 AllowedPlayers가 비어 있어 아무에게도 보이지 않습니다 — 쓸 사람의 VRChat 표시 이름을 넣으세요(6-223).", p);
             }
         }
     }

@@ -16,6 +16,7 @@ namespace ACO
     ///   기동성 강화는 양력과 리미터 한계도 함께 올린다(안정성 강화를 합쳤다 — 회전만 세지면 받음각이 튀어 실속하기 쉬웠다): 강화 비율 t(= 단계 / 최대 단계)만큼
     ///   Lift × (1 + LiftBonus·t) + ExtraVelLift에 LiftBonus·t를 더함(내릴 때 뺀다), SAV 리미터(DFUNC_Limits)의 받음각·하중 한계를 LimiterAoABonus·t도, LimiterGBonus·t G 올린다
     ///   (시작점과 한계를 같이 올린다 — 리미터가 구간 폭을 시작할 때 한 번만 재므로). 받음각 한계는 실속각의 LimiterAoAMaxRatio, 하중 한계는 MaxGs − 2를 넘지 않는다.
+    ///   후반 단계는 하이알파를 연다(6-179): HighAlphaLevels 칸마다(기본 8 · 9 · 10단계) 리미터 받음각 한계(40° · 55° · 해제), 실속각, 실속 뒤 조종력, TVC(피치 · 요 · 롤).
     /// - 소모품(진행도 CONS_*, 사 둔 것만): 장갑판 = 체력 배수, 연료탱크 = 연료 용량(SaccAirVehicle.FullFuel — 남은 연료는 같은 비율로),
     ///   대응탄 포드 = SAV 플레어(DFUNC_Flares.FullFlares, 채워서 시작), 탄약 증량 = 특수무장(대공·대지·폭탄 계열) 탄수 배수. 내릴 때 되돌린다.
     /// - 무장(Weapons, ACO_DFUNC_Missile): 무장 인스펙터에서 고른 계열(UpgradeFamily)의 강화로 ACO_DFUNC_Missile.ApplyUpgrades. None이면 그대로.
@@ -60,9 +61,23 @@ namespace ACO
         [Tooltip("기동성 최대 단계에서 리미터 받음각 한계를 이만큼(도) 올린다(시작점도 같이)")]
         public float LimiterAoABonus = 5f;
         [Tooltip("기동성 최대 단계에서 리미터 하중 한계를 이만큼(G) 올린다(시작점도 같이)")]
-        public float LimiterGBonus = 5f;
+        public float LimiterGBonus = 10f;
         [Tooltip("올린 받음각 한계가 실속각(MaxAngleOfAttackPitch)의 이 비율을 넘지 않는다")]
         [Range(0.5f, 0.95f)] public float LimiterAoAMaxRatio = 0.8f;
+
+        [Header("하이알파 해금 (기동성 강화 후반 — 6-179, 칸마다 한 단계: 그 기동성 단계 이상이면 그 칸 값)")]
+        [Tooltip("이 기동성 단계부터(오름차순)")]
+        public int[] HighAlphaLevels = new int[] { 8, 9, 10 };
+        [Tooltip("리미터 받음각 한계(도 — 시작점은 한계 − 원래 구간 폭). 0 이하 = 받음각 제한 끔(하중 제한은 그대로)")]
+        public float[] HighAlphaAoALimit = new float[] { 40f, 55f, 0f };
+        [Tooltip("SAV MaxAngleOfAttackPitch(실속각) — 넘으면 양력 · 조종력이 줄어 속도가 떨어진다(하이알파의 대가)")]
+        public float[] HighAlphaStall = new float[] { 30f, 33f, 35f };
+        [Tooltip("SAV HighPitchAoaMinControl — 실속각을 넘었을 때 남는 피치 조종력(기본 0.2)")]
+        public float[] HighAlphaControl = new float[] { 0.4f, 0.5f, 0.6f };
+        [Tooltip("SAV TVC — 엔진이 켜져 있으면 속도 · 받음각과 상관없이 남는 최소 조종력(피치 · 요 · 롤)")]
+        public float[] HighAlphaPitchTvc = new float[] { 0.3f, 0.45f, 0.6f };
+        public float[] HighAlphaYawTvc = new float[] { 0f, 0.2f, 0.4f };
+        public float[] HighAlphaRollTvc = new float[] { 0f, 0.15f, 0.3f };
 
         [Header("소모품 외형 (CONS_* 순서: 장갑판, 대응탄 포드, 탄약 증량, 연료탱크 — 비워도 된다)")]
         [Tooltip("사 둔 소모품으로 탑승하면 켜고(모든 플레이어 화면) 내리면 끈다. 여러 개면 빈 부모로 묶어 부모를 넣는다")]
@@ -113,6 +128,12 @@ namespace ACO
         private float _baseAoA;
         private float _baseGBegin;
         private float _baseG;
+        private bool _baseNoAoALimit;
+        private float _baseStall;
+        private float _baseStallControl;
+        private float _basePitchTvc;
+        private float _baseYawTvc;
+        private float _baseRollTvc;
         private float _velLiftAdded;   // ExtraVelLift에 더해 둔 값(플랩도 같은 값을 더하고 빼므로 곱하지 않고 더한 만큼만 되돌린다)
         private float _burstUntil;
         private bool _bursting;
@@ -323,28 +344,123 @@ namespace ACO
         }
 
         /// SAV 리미터(DFUNC_Limits) 한계를 기동성 강화 비율 t만큼 올린다(t = 0이면 원래 값). 시작점과 한계를 같은 양만큼 — 리미터가 구간 폭을 시작할 때만 잰다.
-        private void ApplyLimiter(float t)
+        /// 하이알파(6-179): 해금 칸이면 받음각 한계를 그 칸 값으로(실속각 비율 제한 없이), 0 이하면 받음각 제한을 끈다(하중 제한은 그대로).
+        private void ApplyLimiter(float t, int level)
+        {
+            if (!FindLimits() || !AirVehicle) { return; }
+            int tier = HighAlphaTier(level);
+            float tierLimit = tier >= 0 ? At(HighAlphaAoALimit, tier, 0f) : 0f;
+            bool aoaOff = tier >= 0 && tierLimit <= 0f;
+            float aoaShift;
+            if (tier >= 0 && !aoaOff) { aoaShift = Mathf.Max(tierLimit - _baseAoA, 0f); }
+            else if (aoaOff) { aoaShift = 0f; }
+            else
+            {
+                float aoaMax = BaseStall() * LimiterAoAMaxRatio;   // 원래 실속각 기준(하이알파가 올린 값이 아니라)
+                aoaShift = Mathf.Clamp(LimiterAoABonus * t, 0f, Mathf.Max(aoaMax - _baseAoA, 0f));
+            }
+            float gShift = Mathf.Clamp(LimiterGBonus * t, 0f, Mathf.Max(AirVehicle.MaxGs - 2f - _baseG, 0f));
+            _limits.AoALimiter_Begin = _baseAoABegin + aoaShift;
+            _limits.AoALimiter = _baseAoA + aoaShift;
+            _limits.GLimiter_Begin_Pos = _baseGBegin + gShift;
+            _limits.GLimiter_Pos = _baseG + gShift;
+            _limits.DisableAoALimiter = aoaOff ? true : _baseNoAoALimit;
+        }
+
+        /// 상점 미리보기(6-179): 기동성 단계 level의 리미터 받음각 한계(도). 0 = 받음각 제한 없음(PSM). ApplyLimiter와 같은 계산.
+        public float GetAoALimitAt(int level)
+        {
+            if (!FindLimits() || Progress == null) { return 0f; }
+            int maxLevel = Progress.GetMaxLevel();
+            float t = maxLevel > 0 ? Mathf.Clamp01(level / (float)maxLevel) : 0f;
+            int tier = HighAlphaTier(level);
+            if (tier >= 0)
+            {
+                float lim = At(HighAlphaAoALimit, tier, 0f);
+                return lim <= 0f ? 0f : Mathf.Max(lim, _baseAoA);
+            }
+            float aoaMax = BaseStall() * LimiterAoAMaxRatio;
+            return _baseAoA + Mathf.Clamp(LimiterAoABonus * t, 0f, Mathf.Max(aoaMax - _baseAoA, 0f));
+        }
+
+        /// 상점 미리보기(6-179): 기동성 단계 level의 리미터 하중 한계(G).
+        public float GetGLimitAt(int level)
+        {
+            if (!FindLimits() || Progress == null || !AirVehicle) { return 0f; }
+            int maxLevel = Progress.GetMaxLevel();
+            float t = maxLevel > 0 ? Mathf.Clamp01(level / (float)maxLevel) : 0f;
+            return _baseG + Mathf.Clamp(LimiterGBonus * t, 0f, Mathf.Max(AirVehicle.MaxGs - 2f - _baseG, 0f));
+        }
+
+        /// 원래 실속각(하이알파가 올리기 전).
+        private float BaseStall() { return _baseSet ? _baseStall : (AirVehicle ? AirVehicle.MaxAngleOfAttackPitch : 25f); }
+
+        /// 리미터를 찾고 원래 값을 한 번 적어 둔다(강화를 적용하기 전에 불러야 원래 값이다 — 처음 탑승 전 상점 미리보기도 여기서).
+        private bool FindLimits()
         {
             if (!_limitsSearched)
             {
                 _limitsSearched = true;
-                if (EntityControl) { _limits = EntityControl.GetComponentInChildren<DFUNC_Limits>(true); }
+                SaccEntity entity = EntityControl;
+                // 기체가 아직 시작 전이면(EntityControl은 SAV가 시작할 때 넣는다 — 상점 미리보기) SAV 비행 스크립트의 부모에서 찾는다
+                if (!entity && AirVehicle) { entity = AirVehicle.GetComponentInParent<SaccEntity>(); }
+                if (entity) { _limits = entity.GetComponentInChildren<DFUNC_Limits>(true); }
                 if (_limits)
                 {
                     _baseAoABegin = _limits.AoALimiter_Begin;
                     _baseAoA = _limits.AoALimiter;
                     _baseGBegin = _limits.GLimiter_Begin_Pos;
                     _baseG = _limits.GLimiter_Pos;
+                    _baseNoAoALimit = _limits.DisableAoALimiter;
                 }
             }
-            if (!_limits || !AirVehicle) { return; }
-            float aoaMax = AirVehicle.MaxAngleOfAttackPitch * LimiterAoAMaxRatio;
-            float aoaShift = Mathf.Clamp(LimiterAoABonus * t, 0f, Mathf.Max(aoaMax - _baseAoA, 0f));
-            float gShift = Mathf.Clamp(LimiterGBonus * t, 0f, Mathf.Max(AirVehicle.MaxGs - 2f - _baseG, 0f));
-            _limits.AoALimiter_Begin = _baseAoABegin + aoaShift;
-            _limits.AoALimiter = _baseAoA + aoaShift;
-            _limits.GLimiter_Begin_Pos = _baseGBegin + gShift;
-            _limits.GLimiter_Pos = _baseG + gShift;
+            return _limits != null;
+        }
+
+        /// 기동성 단계 level에 맞는 하이알파 칸(없으면 -1) — HighAlphaLevels 중 level 이하인 가장 높은 칸.
+        private int HighAlphaTier(int level)
+        {
+            int tier = -1;
+            if (HighAlphaLevels == null) { return tier; }
+            for (int i = 0; i < HighAlphaLevels.Length; i++) { if (HighAlphaLevels[i] > 0 && level >= HighAlphaLevels[i]) { tier = i; } }
+            return tier;
+        }
+
+        private float At(float[] values, int i, float fallback)
+        {
+            return values != null && i >= 0 && i < values.Length ? values[i] : fallback;
+        }
+
+        /// 하이알파(6-179): 기동성 단계에 따라 SAV 실속각 · 고받음각 조종력 · TVC(엔진이 켜져 있으면 남는 최소 조종력)를 올린다. level 0이면 원래 값.
+        /// SAV는 엔진을 켤 때 TVC를 *Start 값으로 되돌리므로 그 값도 같이 바꾼다(엔진이 꺼져 있으면 지금 값은 0 그대로).
+        private void ApplyHighAlpha(int level)
+        {
+            if (!AirVehicle) { return; }
+            int tier = HighAlphaTier(level);
+            float stall = _baseStall;
+            float control = _baseStallControl;
+            float pitchTvc = _basePitchTvc;
+            float yawTvc = _baseYawTvc;
+            float rollTvc = _baseRollTvc;
+            if (tier >= 0)
+            {
+                stall = Mathf.Max(At(HighAlphaStall, tier, _baseStall), _baseStall);
+                control = Mathf.Max(At(HighAlphaControl, tier, _baseStallControl), _baseStallControl);
+                pitchTvc = Mathf.Max(At(HighAlphaPitchTvc, tier, 0f), _basePitchTvc);
+                yawTvc = Mathf.Max(At(HighAlphaYawTvc, tier, 0f), _baseYawTvc);
+                rollTvc = Mathf.Max(At(HighAlphaRollTvc, tier, 0f), _baseRollTvc);
+            }
+            AirVehicle.MaxAngleOfAttackPitch = stall;
+            AirVehicle.HighPitchAoaMinControl = control;
+            AirVehicle.SetProgramVariable("PitchThrustVecMultiStart", pitchTvc);
+            AirVehicle.SetProgramVariable("YawThrustVecMultiStart", yawTvc);
+            AirVehicle.SetProgramVariable("RollThrustVecMultiStart", rollTvc);
+            if (AirVehicle._EngineOn)
+            {
+                AirVehicle.PitchThrustVecMulti = pitchTvc;
+                AirVehicle.YawThrustVecMulti = yawTvc;
+                AirVehicle.RollThrustVecMulti = rollTvc;
+            }
         }
 
         private void Apply(bool on)
@@ -365,6 +481,11 @@ namespace ACO
                     _baseFuelConsumption = AirVehicle.FuelConsumption;
                     _baseLift = AirVehicle.Lift;
                     _baseFullFuel = AirVehicle.FullFuel;
+                    _baseStall = AirVehicle.MaxAngleOfAttackPitch;
+                    _baseStallControl = AirVehicle.HighPitchAoaMinControl;
+                    _basePitchTvc = (float)AirVehicle.GetProgramVariable("PitchThrustVecMultiStart");
+                    _baseYawTvc = (float)AirVehicle.GetProgramVariable("YawThrustVecMultiStart");
+                    _baseRollTvc = (float)AirVehicle.GetProgramVariable("RollThrustVecMultiStart");
                 }
                 // 체력 = 강화 × 장갑판
                 float hull = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_HULL) * Progress.GetConsumableFactor(ACO_PlayerProgress.CONS_ARMOR) : 1f;
@@ -409,7 +530,9 @@ namespace ACO
                 AirVehicle.ExtraVelLift += velLiftDelta - _velLiftAdded;
                 _velLiftAdded = velLiftDelta;
 
-                ApplyLimiter(t);
+                int mobilityLevel = on ? Progress.GetLevel(ACO_PlayerProgress.UP_MOBILITY) : 0;
+                ApplyHighAlpha(mobilityLevel);
+                ApplyLimiter(t, mobilityLevel);
             }
 
             // 기총 피해: 탄 파티클의 덤 피해 배수(충돌은 조종사 화면에서만 일어난다)

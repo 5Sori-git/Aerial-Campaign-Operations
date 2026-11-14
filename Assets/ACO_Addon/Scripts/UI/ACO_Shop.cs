@@ -39,7 +39,7 @@ namespace ACO
         [Tooltip("강화 설명(강화 ID 순서, 30개)")]
         public string[] UpgradeDescriptions = new string[] {
             "REINFORCED AIRFRAME. TAKES MORE HITS BEFORE GOING DOWN.",
-            "SHARPER CONTROL RESPONSE FOR TIGHTER TURNS AND FASTER ROLLS.",
+            "SHARPER CONTROL RESPONSE FOR TIGHTER TURNS AND FASTER ROLLS. HIGHER LEVELS UNLOCK PSM.",
             "MORE THRUST FOR FASTER CLIMBS AND ACCELERATION.",
             "LOWER FUEL BURN. STAY IN THE FIGHT LONGER.",
             "EXTRA FLARE CARTRIDGES IN THE DISPENSER.",
@@ -90,6 +90,8 @@ namespace ACO
 
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 진행도를 넣는다")]
         public ACO_PlayerProgress Progress;
+        [Tooltip("Bake가 넣는다 — 기동성 상세 칸의 받음각 · 하중 한계를 계산할 플레이어 기체 강화 스크립트(6-179). 비면 그 두 줄은 없다")]
+        public ACO_VehicleUpgrades MobilityPreview;
 
         [Header("게임 진행")]
         [Tooltip("빌드 시 ACO_SceneBaker가 넣는다. 모두 READY해 출격 카운트다운이 시작되면 강화 구매를 막는다")]
@@ -475,12 +477,37 @@ namespace ACO
                 desc = T("prog.updesc." + Progress.GetUpgradeSaveId(id), Pick(UpgradeDescriptions, id));
                 string now = Progress.GetUpgradeEffectAt(id, lv);
                 stats = cost < 0 ? T1("shop.detail.maxed", "MAX LEVEL   {0}", now) : T2("shop.detail.nownext", "NOW {0}   >   NEXT {1}", now, Progress.GetUpgradeEffectAt(id, lv + 1));
+                if (id == ACO_PlayerProgress.UP_MOBILITY && MobilityPreview != null) { stats += "\n" + MobilityLimits(lv, cost < 0); }
                 if (cost >= 0) { need = cost - credits; }
             }
             string s = "<b>" + title + "</b>\n<size=85%>" + desc + "</size>\n<color=" + statColor + ">" + stats + "</color>";
             if (need > 0) { s += "\n<color=#FF5544><size=85%>" + T1("shop.detail.need", "NEED {0} MORE CR", need.ToString("N0")) + "</size></color>"; }
             SetDetail(s);
         }
+
+        /// 기동성 상세 칸 두 줄(6-179): 받음각 한계 · 최대 하중 — 지금 > 다음(최대 단계면 지금 값만). 받음각 한계가 크게 뛰는 단계(하이알파)는 다음 값을 노랑으로.
+        private string MobilityLimits(int lv, bool maxed)
+        {
+            float aNow = MobilityPreview.GetAoALimitAt(lv);
+            float gNow = MobilityPreview.GetGLimitAt(lv);
+            if (maxed)
+            {
+                return T1("shop.detail.aoa1", "AOA LIMIT {0}", AoaText(aNow)) + "\n" + T1("shop.detail.glimit1", "MAX LOAD {0}", GText(gNow));
+            }
+            float aNext = MobilityPreview.GetAoALimitAt(lv + 1);
+            float gNext = MobilityPreview.GetGLimitAt(lv + 1);
+            string next = AoaText(aNext);
+            bool jump = (aNext <= 0f && aNow > 0f) || (aNow > 0f && aNext - aNow > 5f);
+            if (jump) { next = "<color=#FFD24D>" + next + "</color>"; }
+            return T2("shop.detail.aoa", "AOA LIMIT {0}   >   {1}", AoaText(aNow), next) + "\n" + T2("shop.detail.glimit", "MAX LOAD {0}   >   {1}", GText(gNow), GText(gNext));
+        }
+
+        private string AoaText(float deg)
+        {
+            return deg <= 0f ? T("shop.detail.aoaoff", "NO LIMIT (PSM)") : deg.ToString("0.#") + "°";
+        }
+
+        private string GText(float g) { return Mathf.RoundToInt(g).ToString() + "G"; }
 
         private void SetDetail(string s)
         {

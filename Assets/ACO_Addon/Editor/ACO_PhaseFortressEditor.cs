@@ -48,6 +48,16 @@ public class ACO_PhaseFortressEditor : Editor
         "등장", "UAV 전개 (1차)", "UAV 전멸", "UAV 재전개 (2차)", "폭격 2분 전", "폭격 1분 전", "폭격 30초 전",
         "LUNA 격추 (폭격 빗나감)", "도시 착탄",
     };
+    // ACO_PhaseSubmarine.SIT_* 순서(6-202 · 6-203)
+    private static readonly string[] SubmarineSituations =
+    {
+        "등장", "일제 발사 ({left} = 방위)", "종말 상승 시작 (한 번)", "항모 피격", "항모 위기", "SLCM 소진", "소나 원",
+        "부상", "부상 (무장 수리됨)", "잠항 · 어뢰", "완전 부상 (충각 돌격 시작)", "어뢰 (대비책 — 돌격 길이 막혔을 때)", "격침",
+        "항모 침몰 (SLCM · 어뢰)", "돌격 접근 경고", "충돌 (항모 격침)", "돌격 중 무장 수리",
+    };
+    private static readonly string[] SubmarineSpeakers = { "적 함장", "AWACS", "항모", "-", "-", "항모 승무원" };
+    private bool _showBgm2 = true;
+    private bool _showBgm3 = true;
     private static readonly string[] Speakers = { "적", "AWACS" };
     private static readonly string[] FleetSpeakers = { "적", "AWACS", "함대장" };
     private static readonly string[] LandShipSpeakers = { "적 함장", "AWACS", "-", "선원", "시스템" };
@@ -61,15 +71,32 @@ public class ACO_PhaseFortressEditor : Editor
         if (t is ACO_PhaseLandShip) { return LandShipSituations; }
         if (t is ACO_PhaseBorderless) { return BorderlessSituations; }
         if (t is ACO_PhaseLuna) { return LunaSituations; }
+        if (t is ACO_PhaseSubmarine) { return SubmarineSituations; }
         return Situations;
+    }
+
+    private static string[] SpeakersFor(Object t)
+    {
+        if (t is ACO_PhaseFleet) { return FleetSpeakers; }
+        if (t is ACO_PhaseLandShip) { return LandShipSpeakers; }
+        if (t is ACO_PhaseSubmarine) { return SubmarineSpeakers; }
+        return Speakers;
     }
 
     public override void OnInspectorGUI()
     {
         if (UdonSharpGUI.DrawDefaultUdonSharpBehaviourHeader(target)) { return; }
         serializedObject.Update();
-        DrawPropertiesExcluding(serializedObject, "m_Script", Arrays[0], Arrays[1], Arrays[2], Arrays[3], "BgmUrls", "BgmNames");
-        ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "이 페이즈 전용 BGM (비우면 보스 기본 풀)", ref _showBgm);
+        DrawPropertiesExcluding(serializedObject, "m_Script", Arrays[0], Arrays[1], Arrays[2], Arrays[3], "BgmUrls", "BgmNames", "BgmGains",
+            "BgmUrls2", "BgmNames2", "BgmGains2", "BgmUrls3", "BgmNames3", "BgmGains3");
+        if (target is ACO_PhaseSubmarine)
+        {
+            // 단계별 곡(6-203): 비운 단계는 앞 단계 곡을 잇는다
+            ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "BgmGains", "BGM 1단계 — SLCM 방어 (비우면 보스 기본 풀)", ref _showBgm);
+            ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls2", "BgmNames2", "BgmGains2", "BGM 2단계 — 간헐 부상 (비우면 1단계 곡을 잇는다)", ref _showBgm2);
+            ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls3", "BgmNames3", "BgmGains3", "BGM 3단계 — 완전 부상 · 충각 돌격 (비우면 앞 단계 곡을 잇는다)", ref _showBgm3);
+        }
+        else { ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "BgmGains", "이 페이즈 전용 BGM (비우면 보스 기본 풀)", ref _showBgm); }
 
         SerializedProperty events = serializedObject.FindProperty(Arrays[0]);
         SerializedProperty speakers = serializedObject.FindProperty(Arrays[1]);
@@ -96,7 +123,7 @@ public class ACO_PhaseFortressEditor : Editor
                         SerializedProperty sit = events.GetArrayElementAtIndex(i);
                         SerializedProperty who = speakers.GetArrayElementAtIndex(i);
                         sit.intValue = EditorGUILayout.Popup(sit.intValue, SituationsFor(target));
-                        who.intValue = EditorGUILayout.Popup(who.intValue, target is ACO_PhaseFleet ? FleetSpeakers : (target is ACO_PhaseLandShip ? LandShipSpeakers : Speakers), GUILayout.Width(76f));
+                        who.intValue = EditorGUILayout.Popup(who.intValue, SpeakersFor(target), GUILayout.Width(76f));
                         using (new EditorGUI.DisabledScope(i == 0))
                         {
                             if (GUILayout.Button("▲", GUILayout.Width(24f))) { moveUp = i; }

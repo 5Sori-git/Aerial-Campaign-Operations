@@ -16553,15 +16553,15 @@ MonoBehaviour:
     m_Bits: 1610612736
   InterceptRange: 900
   DefenseRadius: 600
-  InterceptReactionTime: 0.5
-  InterceptKillTime: 1
+  InterceptReactionTime: 0.3
+  InterceptKillTime: 0.6
   OtherDefenseFactor: 2
   EcmHub: {fileID: 0}
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
-  InterceptCooldown: 1.5
+  InterceptCooldown: 5.5
   SilentIntercept: 0
-  InterceptTuneVersion: 1
+  InterceptTuneVersion: 2
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
@@ -21605,6 +21605,13 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  BurstCount: 1
+  BurstGap: 0.3
+  RailFlyby: 0
+  Flyby: {fileID: 0}
+  RailFlybySpeed: 4000
+  RailFlybyRange: 6000
+  RailFlybyHitRadius: 10
   Hatches: []
   HatchAngle: 110
   HatchHoldTime: 4

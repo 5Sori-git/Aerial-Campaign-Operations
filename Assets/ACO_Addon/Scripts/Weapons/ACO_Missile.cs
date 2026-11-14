@@ -251,7 +251,7 @@ namespace ACO
 
         // CIWS 요격: 주변 CIWS(0.1초마다 고른다)와 지금 나를 쏘는 CIWS
         private const float IC_SCAN_INTERVAL = 0.1f;
-        private const float IC_SCAN_RANGE_SQ = 4000f * 4000f;   // 이보다 먼 CIWS는 묻지도 않는다(요격 사거리보다 넉넉히)
+        private const float IC_SCAN_RANGE_SQ = 1700f * 1700f;   // 이보다 먼 CIWS는 묻지도 않는다 — 가장 긴 요격 사거리(아군 호위 1.5km) + 200m(6-186)
         private ACO_AAGunSite[] _icNear = new ACO_AAGunSite[4];
         private int _icNearCount;
         private float _icScanTimer;
@@ -564,9 +564,9 @@ namespace ACO
             //    SAV는 대응탄 투하를 모두에게 보내고 각자 FlareActiveTime 동안 개수를 올려 두므로 어느 화면에서나 같은 시각에 켜진다.
             if (!_decoyed && !_targetLost && !IgnoreCountermeasures)
             {
-                if (_targetFlares != null && _targetFlares.IsSunGlare(transform.position))
+                if (_targetFlares != null && _targetFlares.IsSunLureActive())
                 {
-                    // 햇빛: 표적(MR. S)이 태양을 등지고 시선이 태양 쪽 원뿔 안 — 표적을 놓치고 태양으로 끌려간다.
+                    // 햇빛: 표적(MR. S)이 태양 쪽으로 곧게 내빼는 중 — 방향과 상관없이 표적을 놓치고 태양으로 끌려간다(6-177).
                     // 일반 "플레어에 속음" 무전은 내지 않는다(플레어가 아니다 — 에이스 전용 햇빛 대사가 맡는다). 뒤의 빗나감 무전도 없게 결과는 알린 것으로 둔다
                     _outcomeReported = true;
                     _decoyed = true;

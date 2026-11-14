@@ -90,6 +90,16 @@ namespace ACO
         public VRCUrl[] BgmUrls;
         [Tooltip("BgmUrls와 같은 순서의 곡 이름 — BGM 패널에 표시(비우면 URL). 인스펙터에서 URL 옆에 넣는다")]
         public string[] BgmNames;
+        [Tooltip("BgmUrls와 같은 순서의 곡별 볼륨 배율(6-176 — 작은 음원 보정). 비거나 0 이하면 1. 플레이어 볼륨 × 배율이 1을 넘으면 1")]
+        public float[] BgmGains;
+        [Tooltip("2단계 곡 풀(6-203 — 단계가 있는 보스: GetBgmStage가 1일 때). 비우면 앞 단계 곡을 이어서 튼다")]
+        public VRCUrl[] BgmUrls2;
+        public string[] BgmNames2;
+        public float[] BgmGains2;
+        [Tooltip("3단계 곡 풀(GetBgmStage가 2일 때 — 잠수함 완전 부상). 비우면 앞 단계 곡을 이어서 튼다")]
+        public VRCUrl[] BgmUrls3;
+        public string[] BgmNames3;
+        public float[] BgmGains3;
 
         // ───────────── 오너 (관리자가 부른다) ─────────────
 
@@ -150,6 +160,9 @@ namespace ACO
         public virtual int GetClearBonus() { return ClearBonus; }
         /// 보스 페이즈인가 — 전용 곡(BgmUrls)이 없으면 ACO_Bgm의 보스 기본 풀을 튼다.
         public virtual bool IsBossPhase() { return false; }
+
+        /// 지금 BGM 단계(0 = BgmUrls, 1 = BgmUrls2, 2 = BgmUrls3 — 6-203). 동기화된 값으로만 정해 모든 화면이 같은 순간에 바꾼다. 기본 0.
+        public virtual int GetBgmStage() { return 0; }
 
         /// 무전 대사: which 0 = 시작, 1 = 성공, 2 = 실패. 비면 "".
         public string GetChatterText(int which)

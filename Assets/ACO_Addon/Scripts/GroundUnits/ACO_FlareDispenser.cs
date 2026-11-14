@@ -69,12 +69,6 @@ namespace ACO
         /// 주인 스크립트(SHADE 코브라)가 뒤에서 오는 미사일을 맡는다 — 켜져 있으면 꼬리(뒤 ±RearHandledAngle)에서 오는 미사일엔 플레어로 반응하지 않는다(오너가 매번 넣는다).
         [System.NonSerialized] public bool RearHandled;
         [System.NonSerialized] public float RearHandledAngle = 60f;
-        // 태양 이탈(MR. S — 6-167): 오너 에이스가 태양 이탈을 할 수 있는 동안 넣는다. 태양을 등지고 따라올 수 있는 미사일
-        // (미사일 → 나 시선이 태양 방향과 SunHandledAngle 안)은 SunHandledMinDistance보다 멀면 플레어를 굴리지 않고 둔다(가까우면 마지막 플레어).
-        [System.NonSerialized] public bool SunHandled;
-        [System.NonSerialized] public Vector3 SunHandledDir = Vector3.up;
-        [System.NonSerialized] public float SunHandledAngle = 90f;
-        [System.NonSerialized] public float SunHandledMinDistance = 700f;
 
         private ACO_Missile[] _incoming = new ACO_Missile[MAX_INCOMING];
         private bool[] _decided = new bool[MAX_INCOMING];   // 그 미사일에 대응할지 이미 정했다(미사일당 한 번만 굴린다)
@@ -120,31 +114,20 @@ namespace ACO
         // ───────────── 햇빛(MR. S 태양 이탈 — 모든 화면) ─────────────
         private float _sunUntil = -100f;
         private Vector3 _sunDir = Vector3.up;
-        private float _sunCos = 1f;
         private int _sunGlared;
 
-        /// 모든 화면: duration초 동안 햇빛을 켠다 — 나를 쫓는 미사일의 시선(미사일 → 나)이 태양 방향(sunDir — 나에서 태양 쪽)과 halfAngle도 안이면 속는다.
-        public void BeginSunLure(Vector3 sunDir, float halfAngle, float duration)
+        /// 모든 화면: duration초 동안(보통 EndSunLure로 끈다) 햇빛을 켠다 — 켜져 있는 동안 나를 쫓는 미사일은 방향과 상관없이 모두 속아 태양(sunDir — 나에서 태양 쪽)으로 간다(6-177).
+        public void BeginSunLure(Vector3 sunDir, float duration)
         {
             if (TargetHealth != null && TargetHealth.Health <= 0f) { return; }
             _sunDir = sunDir.sqrMagnitude > 0.000001f ? sunDir.normalized : Vector3.up;
-            _sunCos = Mathf.Cos(Mathf.Clamp(halfAngle, 0f, 90f) * Mathf.Deg2Rad);
             _sunUntil = Time.time + Mathf.Max(duration, 0f);
         }
 
         public void EndSunLure() { _sunUntil = -100f; }
 
+        /// 미사일이 매 프레임 읽는다: 햇빛이 켜져 있는가(켜져 있으면 나를 쫓는 미사일은 모두 속는다).
         public bool IsSunLureActive() { return Time.time < _sunUntil; }
-
-        /// 미사일이 매 프레임 읽는다: 햇빛이 켜져 있고 이 미사일에서 본 내가 태양 원뿔 안인가.
-        public bool IsSunGlare(Vector3 missilePos)
-        {
-            if (Time.time >= _sunUntil) { return false; }
-            Vector3 los = transform.position - missilePos;
-            float m = los.magnitude;
-            if (m < 1f) { return false; }
-            return Vector3.Dot(los / m, _sunDir) >= _sunCos;
-        }
 
         /// 햇빛에 속은 미사일이 날아갈 방향(태양 쪽).
         public Vector3 GetSunDir() { return _sunDir; }
@@ -266,9 +249,6 @@ namespace ACO
                 if ((m.transform.position - me).sqrMagnitude > reactSq) { continue; }
                 // 뒤에서 오는 미사일을 주인 스크립트가 맡으면(코브라 준비됨) 굴리지 않고 둔다 — 못 맡게 되면 다음 확인 때 굴린다
                 if (RearHandled && Vector3.Angle(-transform.forward, m.transform.position - me) <= RearHandledAngle) { continue; }
-                // 태양 이탈이 맡는 미사일(태양을 등지고 따라오는, 아직 먼 것)도 같다
-                if (SunHandled && (m.transform.position - me).sqrMagnitude > SunHandledMinDistance * SunHandledMinDistance
-                    && Vector3.Angle(me - m.transform.position, SunHandledDir) <= SunHandledAngle) { continue; }
                 _decided[i] = true;
                 if (Random.value > FlareChance) { continue; }
                 SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetFlare));

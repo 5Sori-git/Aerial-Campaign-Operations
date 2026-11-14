@@ -482,6 +482,54 @@ public static class ACO_InteriorBuilder
         finally { EditorApplication.delayCall += () => PrefabUtility.UnloadPrefabContents(contents); }
     }
 
+    private const string PhotoModule = "Int_Photo_";
+
+    /// 격실마다 합친 사진 렌더러(photo00 ...)만 레이아웃대로 다시 만든다(6-222 — 복도 사진 교체).
+    /// 사진은 라이트 프로브를 받고 벽 라이트맵 메시는 건드리지 않으므로 빛을 다시 굽지 않아도 된다.
+    public static void UpdatePhotos()
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null || !File.Exists(MeshAsset))
+        {
+            Build();
+            return;
+        }
+        Dictionary<string, List<Piece>> modules = ReadModules(AssetDatabase.LoadAssetAtPath<GameObject>(ModelFbx));
+        List<KeyValuePair<string, List<Placement>>> rooms = ReadLayout(modules);
+        GameObject contents = PrefabUtility.LoadPrefabContents(PrefabPath);
+        try
+        {
+            foreach (KeyValuePair<string, List<Placement>> room in rooms)
+            {
+                Transform roomObject = contents.transform.Find(room.Key);
+                if (roomObject == null) { continue; }
+                for (int i = roomObject.childCount - 1; i >= 0; i--)
+                {
+                    Transform child = roomObject.GetChild(i);
+                    if (!IsPhotoObject(child.name)) { continue; }
+                    MeshFilter filter = child.GetComponent<MeshFilter>();
+                    if (filter != null && filter.sharedMesh != null && AssetDatabase.GetAssetPath(filter.sharedMesh) == MeshAsset)
+                    {
+                        UnityEngine.Object.DestroyImmediate(filter.sharedMesh, true);
+                    }
+                    UnityEngine.Object.DestroyImmediate(child.gameObject);
+                }
+                List<Placement> photos = room.Value.FindAll(p => p.Module.StartsWith(PhotoModule, StringComparison.Ordinal));
+                bool created = true;    // 메시 파일이 이미 있다 — 새 사진 메시는 거기에 더한다
+                BuildRenderers(roomObject, room.Key, photos, modules, ref created);
+            }
+            AssetDatabase.SaveAssets();
+            PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
+            ACO_PrefabVersions.Stamp(PrefabName);
+            Debug.Log("[ACO] 함내 격실의 액자 사진을 레이아웃대로 다시 만들었습니다(빛은 다시 굽지 않아도 됩니다).");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(contents); }
+    }
+
+    private static bool IsPhotoObject(string name)
+    {
+        return name.Length == 7 && name.StartsWith("photo", StringComparison.Ordinal) && char.IsDigit(name[5]) && char.IsDigit(name[6]);
+    }
+
     // ───────────── 기능부 ─────────────
 
     private static void BuildSystems(Transform root, List<KeyValuePair<string, List<Placement>>> rooms, Dictionary<string, List<Bounds>> volumes, Dictionary<string, List<Piece>> modules)

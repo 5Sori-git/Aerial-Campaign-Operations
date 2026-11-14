@@ -125,6 +125,20 @@ public partial class ACO_SetupValidator
         {
             Add(g, WARN, $"데칼 샘플 기체 메시 {noColliders}개에 데칼 건용 콜라이더가 없습니다.", null, ACO_SceneBaker.AddDecalSampleColliders);
         }
+        if (ACO_MarkSurfaceFit.Unfitted())
+        {
+            Add(g, WARN, "기체 헐넘버 · 플랩 헐넘버 판이 표면 곡면에 맞춰지지 않았습니다(평판 — 둥근 기수 · 기운 플랩에서 뜨거나 묻힌다, 6-192). 판을 옮겼으면 다시 맞추세요.", null, ACO_MarkSurfaceFit.FitAll);
+        }
+        if (ACO_RoundelBuilder.Missing())
+        {
+            Add(g, WARN, "플레이어 기체 · 격납고 샘플에 라운델 판(6-191)이 없거나 연결되지 않았습니다.", null, ACO_RoundelBuilder.Install);
+        }
+        int nonConvex = ACO_PrefabTuning.PlayerAircraftNonConvexColliders();
+        if (nonConvex > 0)
+        {
+            Add(g, WARN, $"플레이어 기체 프리팹에 non-convex MeshCollider {nonConvex}개(무장 외형 · 표시 — 미리보기 외형을 복사하면 따라 들어온다). 내 기체에선 무시되고 오류만, 남의 기체에선 충돌체가 된다(6-189).",
+                null, ACO_PrefabTuning.RemovePlayerAircraftNonConvexColliders);
+        }
         List<ACO_RWR> rwrs = FindAll<ACO_RWR>();
         if (rwrs.Count > 1)
         {

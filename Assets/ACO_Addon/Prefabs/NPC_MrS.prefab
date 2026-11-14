@@ -5389,7 +5389,7 @@ MonoBehaviour:
   CruiseSpeed: 140
   MaxSpeed: 320
   MinSpeed: 70
-  Acceleration: 40
+  Acceleration: 30
   MaxBoost: 2.8
   LowSpeedLimit: 0
   BankPerYawError: 2.5
@@ -5414,6 +5414,9 @@ MonoBehaviour:
   SinkLeadTime: 0.8
   MaxAltitude: 12192
   CeilingSettleTime: 4
+  FieldRadius: 25000
+  FieldSoftMargin: 1500
+  FieldTurnBoost: 2.5
 --- !u!114 &3226486356511748291
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5500,7 +5503,7 @@ MonoBehaviour:
   MaxLeadTime: 3
   BreakOffDistance: 350
   ReEngageDistance: 1400
-  MaxExtendDuration: 15
+  MaxExtendDuration: 6
   ExtendClimbAngle: 20
   ExtendAltitudeAboveTarget: 300
   ExtendAfterMissile: 0
@@ -20351,10 +20354,13 @@ MonoBehaviour:
   Muzzle: {fileID: 3108539488942427253}
   ChargeFx: {fileID: 3960195012631514229}
   ChargeSound: {fileID: 2202632684013208701}
-  SunTriggerDistance: 2500
-  ManeuverCooldown: 20
+  SunTriggerDistance: 2000
+  ManeuverCooldown: 30
   SunRunMaxTime: 10
-  LureTailDistance: 3000
+  SunStraightMin: 3
+  SunAlignAngle: 15
+  SunAlignTimeout: 4
+  LureTailDistance: 2000
   LureInterval: 30
   LureFirstDelay: 15
   LureRunTime: 5
@@ -20362,18 +20368,15 @@ MonoBehaviour:
   SunBoost: 4
   SunAccelBoost: 15
   SunTurnBoost: 3
-  SunGlareAngle: 30
-  SunHandledAngle: 90
-  LastFlareDistance: 100
   CeilingMargin: 300
   ReverseTargetDistance: 8000
-  ReverseTurnBoost: 5
+  ReverseTurnBoost: 10
   ReverseAccelBoost: 15
   ReverseTurnMaxTime: 1.5
   ChargeTime: 1
   FireWaitTime: 1
-  FireAngle: 11
-  GimbalAngle: 10
+  FireAngle: 20
+  GimbalAngle: 15
   RailSlugSpeed: 4000
 --- !u!114 &6786357287088672984
 MonoBehaviour:
@@ -40882,6 +40885,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: ACO_WaterSpray
+      objectReference: {fileID: 0}
+    - target: {fileID: 7583968231662430673, guid: 8be1b1e6f154776419bfccc1ba6c6eb7,
+        type: 3}
+      propertyPath: EmissionModule.enabled
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

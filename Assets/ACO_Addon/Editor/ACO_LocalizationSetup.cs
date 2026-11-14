@@ -117,6 +117,62 @@ public static class ACO_LocalizationSetup
         Debug.Log($"[ACO] 번역 표 {t.Keys.Count}줄을 넣었습니다({TablePath}). 라벨 연결은 Bake가 합니다.", m);
     }
 
+    /// 무전 자막(6-175): 씬 · 프리팹의 무전 대사 중 번역 표(radio.*의 영어 칸)에 없는 줄. 발사 코드(LaunchTexts) · 셰이드 응답(LineReply)은 번역하지 않으니 뺀다.
+    /// 대사 칸: 무전기(ACO_Chatter) · 페이즈 모듈 · 에이스 · 지원 호출 스크립트의 Line* · *Text(s) · Awacs* 문자열(배열 포함).
+    public static List<string> MissingRadioLines()
+    {
+        Table t = Load();
+        var known = new HashSet<string>();
+        for (int i = 0; i < t.Keys.Count; i++)
+        {
+            if (t.Keys[i].StartsWith("radio.") && !string.IsNullOrEmpty(t.En[i])) { known.Add(t.En[i].Trim()); }
+        }
+        var objs = new List<MonoBehaviour>();
+        foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects()) { objs.AddRange(r.GetComponentsInChildren<MonoBehaviour>(true)); }
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/ACO_Addon/Prefabs" }))
+        {
+            GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+            if (go != null) { objs.AddRange(go.GetComponentsInChildren<MonoBehaviour>(true)); }
+        }
+        var missing = new List<string>();
+        var seen = new HashSet<string>();
+        foreach (MonoBehaviour mb in objs)
+        {
+            if (mb == null) { continue; }
+            System.Type ty = mb.GetType();
+            bool radio = ty == typeof(ACO_Chatter) || typeof(ACO_PhaseModule).IsAssignableFrom(ty) || typeof(ACO_AceBase).IsAssignableFrom(ty) || ty == typeof(ACO_SupportManager);
+            if (!radio) { continue; }
+            foreach (System.Reflection.FieldInfo f in ty.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                string fn = f.Name;
+                if (fn == "LaunchTexts" || fn == "LineReply" || fn == "PhaseName" || fn == "Description" || fn == "FailText" || fn == "LaunchFormat") { continue; }
+                if (!(fn.StartsWith("Line") || fn.EndsWith("Text") || fn.EndsWith("Texts") || fn.StartsWith("Awacs"))) { continue; }
+                object v = f.GetValue(mb);
+                if (v is string s) { CheckRadio(s, known, seen, missing); }
+                else if (v is string[] arr) { foreach (string s2 in arr) { CheckRadio(s2, known, seen, missing); } }
+            }
+        }
+        return missing;
+    }
+
+    private static void CheckRadio(string s, HashSet<string> known, HashSet<string> seen, List<string> missing)
+    {
+        if (string.IsNullOrEmpty(s)) { return; }
+        s = s.Trim();
+        if (s.Length < 2 || !seen.Add(s) || known.Contains(s)) { return; }
+        missing.Add(s);
+    }
+
+    /// 번역 없는 무전 대사를 콘솔에 모두 적는다(Setup Check [고치기] — 표에 줄을 더하는 건 사람이 한다).
+    public static void LogMissingRadioLines()
+    {
+        List<string> m = MissingRadioLines();
+        var sb = new StringBuilder();
+        sb.AppendLine($"[ACO] 번역 없는 무전 대사 {m.Count}줄 — {TablePath}에 radio.* 줄로 더하세요(영어 칸 = 아래 글자 그대로, 줄바꿈은 \\n):");
+        foreach (string s in m) { sb.AppendLine(s.Replace("\n", "\\n")); }
+        Debug.Log(sb.ToString());
+    }
+
     /// 패널 글꼴(LiberationSans)의 보조 글꼴에 Pretendard(한글, 그 뒤에 일본어 보조가 붙어 있다)가 있는가.
     public static bool PanelFallbackReady()
     {

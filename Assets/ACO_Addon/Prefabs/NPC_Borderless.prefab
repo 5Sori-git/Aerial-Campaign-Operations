@@ -10713,7 +10713,7 @@ MonoBehaviour:
   InterceptCooldown: 0
   SilentIntercept: 0
   InterceptTuneVersion: 0
-  InterceptDefaultsApplied: 0
+  InterceptDefaultsApplied: 1
   SleepMargin: 3000
   SleepCheckInterval: 1
   HideOnDeath: []
@@ -16185,6 +16185,11 @@ MonoBehaviour:
   MaxAvoidClimbAngle: 55
   AltitudeSettleTime: 2
   SinkLeadTime: 0.8
+  MaxAltitude: 12192
+  CeilingSettleTime: 4
+  FieldRadius: 25000
+  FieldSoftMargin: 1500
+  FieldTurnBoost: 2.5
 --- !u!114 &8445897334085623599
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16271,7 +16276,7 @@ MonoBehaviour:
   MaxLeadTime: 3
   BreakOffDistance: 350
   ReEngageDistance: 1400
-  MaxExtendDuration: 15
+  MaxExtendDuration: 6
   ExtendClimbAngle: 20
   ExtendAltitudeAboveTarget: 300
   ExtendAfterMissile: 0

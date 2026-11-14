@@ -25565,6 +25565,11 @@ MonoBehaviour:
   MaxAvoidClimbAngle: 55
   AltitudeSettleTime: 2
   SinkLeadTime: 0.8
+  MaxAltitude: 12192
+  CeilingSettleTime: 4
+  FieldRadius: 25000
+  FieldSoftMargin: 1500
+  FieldTurnBoost: 2.5
 --- !u!114 &6278370924422732886
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25650,7 +25655,7 @@ MonoBehaviour:
   MaxLeadTime: 3
   BreakOffDistance: 350
   ReEngageDistance: 1400
-  MaxExtendDuration: 15
+  MaxExtendDuration: 6
   ExtendClimbAngle: 20
   ExtendAltitudeAboveTarget: 300
   ExtendAfterMissile: 0

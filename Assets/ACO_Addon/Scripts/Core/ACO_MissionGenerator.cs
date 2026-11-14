@@ -14,19 +14,17 @@ namespace ACO
     /// 전체 배치 요청은 대기열 하나로 합쳐 지형이 다 세워진 뒤 한 번만 한다(QueueDeploy) — 지형 대기 루프는 늘 하나, 미션 요청이 미리 배치보다
     /// 우선이고, 미리 배치는 명시적인 미션 요청 없이는 절대 미션이 되지 않는다(전체 배치 번호 = 미션 시작 신호).
     ///
-    /// 흐름: 월드 시작 시 풀을 숨긴다(HidePoolOnStart) → 트리거로 RequestStartMission() → 전체 배치
-    ///       → 미션 중 이벤트로 RequestReinforce(지상 수, 전투기 수) → 파괴된 유닛 중 일부만 다시 배치.
+    /// 흐름: 월드 시작 시 풀을 숨긴다(HidePoolOnStart) → 게임 진행이 브리핑 미리 배치 · RequestStartMission() → 전체 배치
+    ///       → 미션 관리자가 페이즈마다 목표 배치(RequestDeployObjective 등) · 목표 지점 증원(ReinforceAt).
     ///
-    /// 전체 배치(미션 시작):
-    ///  - 고가치 표적(공장/벙커 등)을 지면에 놓고, 그 주위에 방공 호위(SAM/대공포) 링을 두른다
-    ///  - 나머지 지상 유닛은 4~8대 그룹(콘보이 또는 부대)
-    ///  - 전투기는 2기/4기 편대마다 임무(지상군·표적 엄호 또는 CAP 지점 초계)를 받고, 그 근처 "공역 안"에서 스폰
-    /// 부분 재배치(증원): 지상 그룹은 같은 규칙, 전투기는 임무를 받고 "공역 밖"에서 진입한다.
+    /// 전체 배치(미션 시작) = 배경 병력만(6-188 — 예전의 '고가치 표적까지 한꺼번에 까는 방식'은 지웠다):
+    ///  - 지상 유닛 BackgroundGround대를 4~8대 그룹(콘보이 또는 부대)으로, 함대 BackgroundShipGroups조, 전차 순찰 BackgroundTankPlatoons소대
+    ///  - 전투기 BackgroundFighters기를 2기/4기 편대로 — 지상군 엄호(없으면 공역 안 무작위 집결)를 받고 그 근처 "공역 안"에서 스폰
+    /// 목표 지점 증원: 지상 그룹은 같은 규칙, 전투기는 임무를 받고 "공역 밖"에서 진입한다.
     ///
     /// 유닛마다 배치 번호(serial)와 배치 시각을 동기화하고, 클라이언트는 번호가 바뀐 유닛만 적용한다.
     /// 늦게 들어온 클라이언트는 자기가 들어오기 전에 배치된 유닛은 위치만 맞추고 부활시키지 않는다 — 생사는 SaccTarget 동기화가 맞춘다.
     ///
-    /// 페이즈 모드(PhasedMode, 미션 관리자 페이즈용): 전체 배치는 배경 병력(BackgroundGround/BackgroundFighters)만 놓고,
     /// 페이즈 목표는 관리자가 RequestDeployObjective(종류, 태그, ...)로 그때그때 배치한다. 목표로 놓인 유닛은 태그(동기화)를 달아
     /// 관리자/마커가 "지금 목표인 유닛"을 알 수 있다. 태그 0 = 일반 유닛.
     ///
@@ -54,9 +52,7 @@ namespace ACO
         [Tooltip("안전지대 경계에서 이만큼(m) 더 떨어져야 스폰한다 — 지상 유닛과 적 함선(함대 순항 원 전체) 모두. 대공 무기가 항모·기지에서 막 이륙한 기체를 노리지 않게 넉넉히")]
         public float SafeZoneMargin = 5000f;
 
-        [Header("고가치 표적 (공장/벙커 등)")]
-        [Tooltip("전체 배치 때 놓을 고가치 표적 수. 음수면 풀 전체")]
-        public int HighValueCount = 2;
+        [Header("고가치 표적 (공장/벙커 등 — 페이즈 목표 배치)")]
         [Tooltip("고가치 표적끼리 최소 거리(m)")]
         public float HighValueMinSeparation = 8000f;
         [Tooltip("고가치 표적 주위에 방공 호위(SAM/대공포) 링을 두를 확률")]
@@ -77,8 +73,6 @@ namespace ACO
         public float ClusterRadius = 150f;
         [Tooltip("부대 배치 시 유닛 사이 최소 간격(m)")]
         public float MinUnitSpacing = 25f;
-        [Tooltip("전체 배치 때 쓸 최대 지상 유닛 수(방공 호위 포함). 음수면 풀 전체")]
-        public int MaxGroundUnits = -1;
 
         [Header("지면 판정")]
         public LayerMask GroundLayers = 2049;
@@ -236,20 +230,14 @@ namespace ACO
         [Header("전투기 편대")]
         [Tooltip("편대가 4기일 확률. 나머지는 2기 편대")]
         [Range(0f, 1f)] public float FourShipChance = 0.5f;
-        [Tooltip("전체 배치 때 쓸 최대 전투기 수. 음수면 풀 전체")]
-        public int MaxFighters = -1;
         [Tooltip("편대 대형 간격(m)")]
         public float FormationSpacing = 150f;
 
         [Header("전투기 임무")]
-        [Tooltip("초계(CAP) 지점. 각 지점의 위치(고도 포함) 상공에서 선회 대기한다")]
-        public Transform[] CapPoints;
-        [Tooltip("편대가 CAP 대신 아군 지상군/고가치 표적 상공 엄호를 맡을 확률(엄호할 대상이 있을 때)")]
-        [Range(0f, 1f)] public float CoverGroundChance = 0.5f;
         [Tooltip("지상 엄호 고도 = 지상 유닛 고도 + 이 범위의 무작위 값(m)")]
         public float CoverAltitudeMin = 1500f;
         public float CoverAltitudeMax = 3000f;
-        [Tooltip("엄호/CAP 대상이 없을 때의 집결 지점은 공역 경계에서 이만큼(m) 안쪽 범위에서 고른다")]
+        [Tooltip("엄호 대상이 없을 때의 집결 지점은 공역 경계에서 이만큼(m) 안쪽 범위에서 고른다")]
         public float IngressInset = 20000f;
 
         [Header("전투기 스폰 위치")]
@@ -312,20 +300,13 @@ namespace ACO
         [Tooltip("목표 지점 증원 전투기는 공역 경계 중 목표에 가장 가까운 쪽 바깥에서, 목표 좌표에서 이만큼(m) 옆으로 흩어져 진입한다")]
         public float FocusEntrySpread = 10000f;
 
-        [Header("부분 재배치 (Reinforce)")]
-        [Tooltip("RequestReinforceDefault()가 쓰는 지상 유닛 수(UI 버튼처럼 인자 없이 부를 때)")]
-        public int ReinforceGroundCount = 6;
-        [Tooltip("RequestReinforceDefault()가 쓰는 전투기 수")]
-        public int ReinforceFighterCount = 2;
         [Tooltip("파괴된 유닛이 모자라면 이번 배치에서 쓰지 않던(꺼져 있는) 풀 유닛도 쓴다")]
         public bool ReinforceAlsoUsesUnused = false;
 
-        [Header("페이즈 모드 (미션 관리자 페이즈)")]
-        [Tooltip("켜면 전체 배치(미션 시작)에서 고가치 표적을 놓지 않고 배경 병력만 놓는다. 목표는 미션 관리자가 페이즈마다 배치한다")]
-        public bool PhasedMode = true;
-        [Tooltip("페이즈 모드 전체 배치의 지상 유닛 수(나머지 풀은 페이즈 목표용으로 남긴다). 음수면 MaxGroundUnits")]
+        [Header("배경 병력 (미션 시작 전체 배치 — 목표는 미션 관리자가 페이즈마다 배치)")]
+        [Tooltip("전체 배치의 지상 유닛 수(나머지 풀은 페이즈 목표용으로 남긴다). 음수면 풀 전체")]
         public int BackgroundGround = 12;
-        [Tooltip("페이즈 모드 전체 배치의 전투기 수. 음수면 MaxFighters")]
+        [Tooltip("전체 배치의 전투기 수. 음수면 풀 전체")]
         public int BackgroundFighters = 4;
         [Tooltip("목표 배치 시 시설 링 반경 = DefenseRadius x 이 값(방공망 제압 페이즈)")]
         public float SiteRadiusScale = 1.5f;
@@ -333,9 +314,6 @@ namespace ACO
         [Header("지형 (선택)")]
         [Tooltip("육각 기둥 지형. 있으면 지형이 다 세워진 뒤 유닛을 배치한다")]
         public ACO_HexTerrain HexTerrain;
-        [Tooltip("켜면 미션 시작(전체 배치) 때 새 씨앗으로 지형을 다시 만든다. 끄면 지금 지형 그대로 배치한다. "
-            + "게임 진행(ACO_GameFlow)이 있으면 시작할 때 끈다 — 지형은 브리핑 리롤과 미션 뒤 자동 갱신으로 바뀐다")]
-        public bool RegenerateTerrainEachMission = true;
         [Tooltip("지형이 이 시간(초) 안에 안 세워지면 그냥 배치한다(안전장치)")]
         public float TerrainWaitTimeout = 30f;
         [Tooltip("지형 장식(도시/마을/비행장/랜드마크, Bake가 자동 연결). 건물 자리에는 유닛을 놓지 않고, 둘레를 주둔지로 쓴다")]
@@ -348,10 +326,6 @@ namespace ACO
         public int ApplyPerFrame = 25;
         [Tooltip("월드에 들어오면 풀 유닛을 모두 숨긴다(미션 시작 트리거 전까지 보이지 않게)")]
         public bool HidePoolOnStart = true;
-        [Tooltip("오너가 월드에 들어왔을 때 배치가 없으면 자동으로 미션을 시작한다")]
-        public bool GenerateOnStart = false;
-        [Tooltip("이 오브젝트를 Interact(클릭)하면 오너에게 미션 시작(전체 배치)을 요청한다(콜라이더 필요)")]
-        public bool AllowInteract = true;
 
         [Header("풀 (빌드 시 자동 수집)")]
         [Tooltip("이 아래의 NPC를 미션에 쓴다. 비우면 이 오브젝트 아래")]
@@ -368,6 +342,8 @@ namespace ACO
         public ACO_Railgun Railgun;
         [Tooltip("육상전함(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
         public ACO_LandShip LandShip;
+        [Tooltip("잠수함 LEVIATHAN(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
+        public ACO_Submarine Submarine;
         [Tooltip("육상전함이 멈추는 자리: 도시 가장자리에서 이만큼(m) 바깥")]
         public float LandShipStopMargin = 900f;
         [Tooltip("육상전함 항로 경유점의 옆 흩뜨림(항로 길이 비율) — 작을수록 크게 돈다")]
@@ -409,6 +385,9 @@ namespace ACO
         public float CarrierLaunchHeight = 40f;
         [Tooltip("공중 요새 측면 해치에서 나온 적기가 교전 전에 곧게 나가는 거리(m)")]
         public float HatchLaunchRun = 1500f;
+        [Tooltip("잠수함 사출 무인기가 교전 전에 곧게 나가는 거리(m) · 그 집결 고도(m)")]
+        public float DroneLaunchRun = 1200f;
+        public float DroneLaunchAltitude = 500f;
         [Tooltip("호위 대상(ACO_EscortUnit — 아군 수송기 등)")]
         public ACO_EscortUnit[] EscortUnits;
 
@@ -443,8 +422,6 @@ namespace ACO
         [UdonSynced] private int[] _fighterTimeMs = new int[0];
         [UdonSynced] private byte[] _fighterTier = new byte[0];
         [UdonSynced] private bool[] _fighterCarrier = new bool[0];
-        // 주요 목표 = 이번 미션에 배치된 고가치 표적, 배치 순서대로(HVT 인덱스)
-        [UdonSynced] private int[] _objectiveOrder = new int[0];
         // 페이즈 목표 태그(0 = 일반). 마지막으로 배치한 목표 태그의 유닛은 증원이 재사용하지 않는다(_protectTag).
         [UdonSynced] private short[] _groundTag = new short[0];
         [UdonSynced] private short[] _hvtTag = new short[0];
@@ -526,6 +503,10 @@ namespace ACO
         public const int OBJ_LUNA = 16;
         /// 태양 에이스 MR. S 1기(태그, 호위 없음), focus 쪽으로 진입 — MR. S 페이즈(ACO_PhaseMrS)만 쓴다.
         public const int OBJ_MRS = 17;
+        /// 잠수함 LEVIATHAN(태그) — focus = 숨는 자리(깊이). 잠수함 페이즈(ACO_PhaseSubmarine)만 쓴다. 자세는 모듈이 동기화한다.
+        public const int OBJ_SUBMARINE = 18;
+        /// 잠수함 사출 무인기(6-217) count기: focus = 사출구 자리, minDist = 나가는 방위각(도). 풀의 Drone 전투기만 쓴다(일반 배치에 안 쓴다).
+        public const int OBJ_SUB_DRONE = 19;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -579,11 +560,9 @@ namespace ACO
         void Start()
         {
             MarkJoinTime();
-            DisableInteractive = !AllowInteract;
 
             // 유닛들의 Start가 한 번 돈 뒤에 숨겨야 나중에 다시 켜도 정상 동작한다.
             if (HidePoolOnStart) { SendCustomEventDelayedFrames(nameof(HidePoolIfIdle), 2); }
-            if (GenerateOnStart && Networking.IsOwner(gameObject)) { SendCustomEventDelayedFrames(nameof(GenerateIfEmpty), 3); }
             SendCustomEventDelayedSeconds(nameof(_AskState), STATE_ASK_SECONDS);
         }
 
@@ -610,11 +589,6 @@ namespace ACO
             if (_hasJoinTime) { return; }
             _hasJoinTime = true;
             _joinTimeMs = Networking.GetServerTimeInMilliseconds();
-        }
-
-        public override void Interact()
-        {
-            if (AllowInteract) { RequestStartMission(); }
         }
 
         // ───────────── 진입점 (누구나 호출 → 오너가 실행) ─────────────
@@ -699,28 +673,6 @@ namespace ACO
             Publish("자유 비행: 병력 철수", 0, 0, 0, 0, 0);
         }
 
-        /// RequestStartMission과 같다(이전 이름).
-        public void RequestGenerate() { RequestStartMission(); }
-
-        /// 파괴된 NPC 중 지상 groundCount대, 전투기 fighterCount기를 같은 규칙으로 다시 배치한다. 고가치 표적은 건드리지 않는다.
-        public void RequestReinforce(int groundCount, int fighterCount)
-        {
-            if (Networking.IsOwner(gameObject)) { Reinforce(groundCount, fighterCount); }
-            else { SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.Owner, nameof(NetReinforce), groundCount, fighterCount); }
-        }
-
-        /// 인자 없이 부르는 버전(UI 버튼/SendCustomEvent용). 수는 인스펙터의 ReinforceGroundCount/ReinforceFighterCount.
-        public void RequestReinforceDefault()
-        {
-            RequestReinforce(ReinforceGroundCount, ReinforceFighterCount);
-        }
-
-        [NetworkCallable]
-        public void NetReinforce(int groundCount, int fighterCount)
-        {
-            Reinforce(groundCount, fighterCount);
-        }
-
         /// 목표 지점 증원: 지상 그룹은 focus 주변(FocusGroundRadius)에, 전투기는 focus 상공 엄호 임무로 공역 밖(목표 쪽 경계)에서 진입.
         /// 숙련도 확률은 호출자가 정한다(웨이브가 거듭될수록 올리는 용도).
         public void RequestReinforceAt(Vector3 focus, int groundCount, int fighterCount, float veteranChance, float aceChance)
@@ -770,24 +722,13 @@ namespace ACO
             ReleaseTag(tag);
         }
 
-        public void GenerateIfEmpty()
-        {
-            if (_deployCount == 0) { RedeployAll(); }
-        }
-
         // ───────────── 배치 (오너) ─────────────
 
-        /// 미션 전체 배치(오너). RegenerateTerrainEachMission이면 새 지형을 만들고 그 지형을 기다린다.
+        /// 미션 전체 배치(오너) — 지금 지형 그대로. 지형은 게임 진행의 브리핑 리롤 · 미션 뒤 갱신으로만 바뀐다(6-188).
         public void RedeployAll()
         {
             if (!Networking.IsOwner(gameObject)) { return; }
-            int seed = 0;
-            if (HexTerrain != null && RegenerateTerrainEachMission)
-            {
-                seed = Random.Range(1, int.MaxValue);
-                HexTerrain.RequestGenerate(seed);
-            }
-            QueueDeploy(DEPLOY_MISSION, seed);
+            QueueDeploy(DEPLOY_MISSION, 0);
         }
 
         /// 전체 배치 요청을 대기열에 합친다. 지형이 다 세워진 뒤에 한 번만 배치한다 — 지면/바다 판정이 새 지형을 봐야 한다.
@@ -880,35 +821,23 @@ namespace ACO
             // 함선은 지상 그룹/방공 링에 쓰지 않는다(아래 함대 배치에서 바다에 놓는다).
             _groundOrder = ShuffledLand();
             _groundNext = 0;
-            _groundBudget = MaxGroundUnits < 0 ? _groundOrder.Length : Mathf.Min(MaxGroundUnits, _groundOrder.Length);
+            _groundBudget = BackgroundGround < 0 ? _groundOrder.Length : Mathf.Min(BackgroundGround, _groundOrder.Length);
 
-            _objectiveOrder = new int[0];
             _protectTag = 0;
             _markTag = 0;
             _focusActive = false;
             _vetChance = PhaseChance(PhaseVeteranChance, VeteranChance);
             _aceChance = PhaseChance(PhaseAceChance, AceChance);
-            // 페이즈 모드: 고가치 표적은 페이즈 목표로 남겨 두고, 배경 병력만 놓는다.
+            // 배경 병력만 놓는다 — 고가치 표적은 페이즈 목표로 남겨 둔다.
             int hvtCount = 0;
-            int defensePlaced = 0;
-            if (!PhasedMode)
-            {
-                hvtCount = PlaceHighValueTargets(now);
-                defensePlaced = _lastPlaced;
-            }
-            else if (BackgroundGround >= 0)
-            {
-                _groundBudget = Mathf.Min(_groundBudget, BackgroundGround);
-            }
 
             PlaceGround(_groundOrder, _groundNext, _groundBudget, now);
             int groups = _lastGroups;
-            int groundPlaced = _lastPlaced + defensePlaced;
+            int groundPlaced = _lastPlaced;
             groundPlaced += PlaceShipGroups(BackgroundShipGroups, now);
             groundPlaced += PlacePatrolPlatoons(BackgroundTankPlatoons, now);
 
-            int fighterBudget = MaxFighters < 0 ? _fighterUsed.Length : Mathf.Min(MaxFighters, _fighterUsed.Length);
-            if (PhasedMode && BackgroundFighters >= 0) { fighterBudget = Mathf.Min(fighterBudget, BackgroundFighters); }
+            int fighterBudget = BackgroundFighters < 0 ? _fighterUsed.Length : Mathf.Min(BackgroundFighters, _fighterUsed.Length);
             int[] regular = RegularFighterOrder();
             PlaceFighters(regular, regular.Length, fighterBudget, now, FullDeploySpawnInside);
 
@@ -921,12 +850,6 @@ namespace ACO
             _previewSeed = 0;
             _fullDeployCount++;
             Publish("미션 시작", hvtCount, groups, groundPlaced, _lastGroups, _lastPlaced);
-        }
-
-        public void Reinforce(int groundCount, int fighterCount)
-        {
-            _focusActive = false;
-            DoReinforce("증원", groundCount, fighterCount, PhaseChance(PhaseVeteranChance, VeteranChance), PhaseChance(PhaseAceChance, AceChance));
         }
 
         public void ReinforceAt(Vector3 focus, int groundCount, int fighterCount, float veteranChance, float aceChance)
@@ -1133,68 +1056,6 @@ namespace ACO
         }
 
         // ───────────── 고가치 표적 + 방공 호위 ─────────────
-
-        /// 고가치 표적을 서로 떨어뜨려 지면에 놓고, 확률에 따라 주위에 방공 호위 링을 두른다(_groundOrder에서 꺼내 쓴다).
-        /// 반환: 놓은 표적 수. 호위로 놓은 지상 유닛 수는 _lastPlaced.
-        private int PlaceHighValueTargets(int now)
-        {
-            int poolCount = _hvtUsed.Length;
-            int budget = HighValueCount < 0 ? poolCount : Mathf.Min(HighValueCount, poolCount);
-            int[] order = Shuffled(poolCount);
-            int placed = 0;
-            int defensePlaced = 0;
-
-            for (int n = 0; n < poolCount && placed < budget; n++)
-            {
-                if (IsReservedHvt(HighValueTargets[order[n]])) { continue; }   // 공중 요새·항모는 전용 페이즈만
-                ACO_Warship ship = HighValueTargets[order[n]] != null ? HighValueTargets[order[n]].GetComponent<ACO_Warship>() : null;
-                bool found = false;
-                float x = 0f;
-                float z = 0f;
-                for (int attempt = 0; attempt < MaxPlacementAttempts && !found; attempt++)
-                {
-                    if (ship == null && PickGarrisonPoint(Vector3.zero, 0f, -1f))
-                    {
-                        x = _garrisonX;
-                        z = _garrisonZ;
-                    }
-                    else
-                    {
-                        x = Random.Range(AreaMin.x, AreaMax.x);
-                        z = Random.Range(AreaMin.y, AreaMax.y);
-                    }
-                    if (!FarFromPlacedHvts(x, z)) { continue; }
-                    if (ship != null ? !SampleSea(x, z, FleetRadius(ship)) : !SampleGround(x, z)) { continue; }
-                    found = true;
-                }
-                // 자리가 없으면(바다가 없는데 함선 등) 다음 후보로 넘어간다.
-                if (!found) { continue; }
-
-                Vector3 center = new Vector3(x, _sampleY, z);
-                MarkHvt(order[n], true, center, HvtRotation(ship != null), now);
-                AppendObjective(order[n]);
-                placed++;
-                if (ship != null) { PlaceEscorts(LEADER_HVT + order[n], center, YawRot(_hvtYaw[order[n]]), EscortCount, now); }
-
-                if (ship == null && Random.value < DefenseChance) { defensePlaced += PlaceDefenseRing(center, now); }
-            }
-
-            _lastPlaced = defensePlaced;
-            return placed;
-        }
-
-        private bool FarFromPlacedHvts(float x, float z)
-        {
-            float minSq = HighValueMinSeparation * HighValueMinSeparation;
-            for (int i = 0; i < _hvtUsed.Length; i++)
-            {
-                if (!_hvtUsed[i]) { continue; }
-                float dx = _hvtPos[i].x - x;
-                float dz = _hvtPos[i].z - z;
-                if (dx * dx + dz * dz < minSq) { return false; }
-            }
-            return true;
-        }
 
         /// 표적 주위 원 위에 고르게 방공 유닛을 놓는다(지면을 못 찾은 자리는 건너뛴다). 바깥을 바라보게 둔다.
         private int PlaceDefenseRing(Vector3 center, int now)
@@ -1951,7 +1812,7 @@ namespace ACO
         }
 
         /// 편대 임무 지점을 _taskPoint에 넣는다.
-        /// 엄호: 지금 배치돼 있고 살아 있는 지상 유닛/고가치 표적 중 하나의 상공. CAP: CapPoints 중 하나. 둘 다 없으면 공역 안 무작위.
+        /// 엄호: 지금 배치돼 있고 살아 있는 지상 유닛/고가치 표적 중 하나의 상공. 없으면 공역 안 무작위.
         private void PickTaskPoint()
         {
             if (_focusActive)
@@ -1960,47 +1821,14 @@ namespace ACO
                 return;
             }
 
-            int capCount = CountValidCapPoints();
-            bool hasCover = CountCoverCandidates() > 0;
-            bool doCover = hasCover && (capCount == 0 || Random.value < CoverGroundChance);
-
-            if (doCover)
+            int coverCount = CountCoverCandidates();
+            if (coverCount > 0)
             {
-                Vector3 ground = PickCoverCandidate(Random.Range(0, CountCoverCandidates()));
+                Vector3 ground = PickCoverCandidate(Random.Range(0, coverCount));
                 _taskPoint = new Vector3(ground.x, ground.y + Random.Range(CoverAltitudeMin, CoverAltitudeMax), ground.z);
                 return;
             }
-            if (capCount > 0)
-            {
-                _taskPoint = PickCapPoint(Random.Range(0, capCount));
-                return;
-            }
             _taskPoint = RandomIngressPoint();
-        }
-
-        private int CountValidCapPoints()
-        {
-            int n = 0;
-            if (CapPoints == null) { return 0; }
-            for (int i = 0; i < CapPoints.Length; i++) { if (CapPoints[i] != null) { n++; } }
-            return n;
-        }
-
-        private Vector3 PickCapPoint(int nth)
-        {
-            for (int i = 0; i < CapPoints.Length; i++)
-            {
-                if (CapPoints[i] == null) { continue; }
-                if (nth == 0)
-                {
-                    // CAP 지점을 실수로 지면 높이에 두면 그 고도에서 스폰/선회하므로, 스폰 최저 고도 아래로는 내리지 않는다.
-                    Vector3 p = CapPoints[i].position;
-                    p.y = Mathf.Max(p.y, SpawnAltitudeMin);
-                    return p;
-                }
-                nth--;
-            }
-            return RandomIngressPoint();
         }
 
         private int CountCoverCandidates()
@@ -2153,14 +1981,6 @@ namespace ACO
             else if (best == dMinZ) { z = AreaMin.y - push; x = Mathf.Clamp(focus.x + spread, AreaMin.x, AreaMax.x); }
             else { z = AreaMax.y + push; x = Mathf.Clamp(focus.x + spread, AreaMin.x, AreaMax.x); }
             return new Vector3(x, 0f, z);
-        }
-
-        private void AppendObjective(int hvtIndex)
-        {
-            int[] grown = new int[_objectiveOrder.Length + 1];
-            for (int i = 0; i < _objectiveOrder.Length; i++) { grown[i] = _objectiveOrder[i]; }
-            grown[_objectiveOrder.Length] = hvtIndex;
-            _objectiveOrder = grown;
         }
 
         // ───────────── 호위 대상 (오너) ─────────────
@@ -3209,6 +3029,8 @@ namespace ACO
             else if (kind == OBJ_TEL) { placed = DeployTel(tag, focus, minDist, maxDist, now); label = "목표 배치(TEL)"; }
             else if (kind == OBJ_RAILGUN) { placed = DeployRailgun(tag, tier, focus, now); label = "목표 배치(랜스 포대)"; }
             else if (kind == OBJ_LANDSHIP) { placed = DeployLandShip(tag, tier, focus, now); label = "목표 배치(육상전함)"; }
+            else if (kind == OBJ_SUBMARINE) { placed = DeploySubmarine(tag, focus, now); label = "목표 배치(잠수함)"; }
+            else if (kind == OBJ_SUB_DRONE) { placed = DeploySubDrone(tag, count, tier, focus, minDist, now); label = "잠수함 무인기 사출"; }
             else if (kind == OBJ_SITE) { placed = DeploySite(tag, count, focus, minDist, maxDist, now); label = "목표 배치(방공 시설)"; }
             else if (kind == OBJ_GROUND) { placed = DeploySingles(tag, count, focus, minDist, maxDist, now); label = "목표 배치(시한 표적)"; }
             else if (kind == OBJ_HUNT) { placed = DeployHunt(tag, count, focus, minDist, maxDist, now); label = "목표 배치(사냥터)"; }
@@ -3232,8 +3054,8 @@ namespace ACO
         /// 목표 종류(OBJ_*)가 놓이는 분류(CAT_*).
         private int ObjectiveCategory(int kind)
         {
-            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LANDSHIP) { return CAT_HVT; }
-            if (kind == OBJ_FLIGHT || kind == OBJ_TWINS || kind == OBJ_BORDERLESS || kind == OBJ_SHADE || kind == OBJ_LUNA || kind == OBJ_MRS || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT) { return CAT_FIGHTER; }
+            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LANDSHIP || kind == OBJ_SUBMARINE) { return CAT_HVT; }
+            if (kind == OBJ_FLIGHT || kind == OBJ_TWINS || kind == OBJ_BORDERLESS || kind == OBJ_SHADE || kind == OBJ_LUNA || kind == OBJ_MRS || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT || kind == OBJ_SUB_DRONE) { return CAT_FIGHTER; }
             return CAT_GROUND;
         }
 
@@ -3471,12 +3293,17 @@ namespace ACO
 
         private bool IsReservedHvt(UdonSharpBehaviour unit)
         {
-            return IsFortressUnit(unit) || IsRailgunUnit(unit) || IsLandShipUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
+            return IsFortressUnit(unit) || IsRailgunUnit(unit) || IsLandShipUnit(unit) || IsSubmarineUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
         }
 
         private bool IsLandShipUnit(UdonSharpBehaviour unit)
         {
             return LandShip != null && unit != null && unit == (UdonSharpBehaviour)LandShip.Warship;
+        }
+
+        private bool IsSubmarineUnit(UdonSharpBehaviour unit)
+        {
+            return Submarine != null && unit != null && unit == (UdonSharpBehaviour)Submarine.Warship;
         }
 
         private bool IsRailgunUnit(UdonSharpBehaviour unit)
@@ -3896,6 +3723,42 @@ namespace ACO
             return 1;
         }
 
+        // ───────────── 잠수함 ─────────────
+
+        private int SubmarineIndex()
+        {
+            if (Submarine == null || HighValueTargets == null) { return -1; }
+            for (int i = 0; i < HighValueTargets.Length; i++) { if (IsSubmarineUnit(HighValueTargets[i])) { return i; } }
+            return -1;
+        }
+
+        /// 잠수함을 쓸 수 있는가(풀에 있고, 이미 살아서 돌고 있지 않다).
+        public bool CanDeploySubmarine()
+        {
+            EnsureArrays();
+            int i = SubmarineIndex();
+            return i >= 0 && i < _hvtUsed.Length && (!_hvtUsed[i] || IsDestroyed(HighValueTargets[i].GetComponent<SaccTarget>()));
+        }
+
+        /// 잠수함 배치: 깊이 숨는 자리. 자세(발사 · 부상 · 완전 부상)는 모듈이 동기화한다.
+        private int DeploySubmarine(int tag, Vector3 at, int now)
+        {
+            if (!CanDeploySubmarine()) { return 0; }
+            _markTag = tag;
+            MarkHvt(SubmarineIndex(), true, at, Quaternion.Euler(0f, 0.5f, 0f), now);
+            return 1;
+        }
+
+        /// 고가치 표적 i를 지금 표적 마커 · 레이더에서 숨기는가 — 잠수함이 물속이면(락온 마커 · 히트박스도 꺼져 있다).
+        public bool IsHvtHidden(int i)
+        {
+            if (Submarine == null || HighValueTargets == null || i < 0 || i >= HighValueTargets.Length) { return false; }
+            return IsSubmarineUnit(HighValueTargets[i]) && !Submarine.IsExposed();
+        }
+
+        /// (x, z)가 배치 · 항로에 쓰는 바다인가(NPC 경계 안, 바다 콜라이더 또는 수심 MinSeaDepth 이상) — 잠수함 페이즈가 발사 · 부상 자리를 고른다.
+        public bool IsSeaPoint(float x, float z) { return IsSeaAt(x, z); }
+
         private Vector3[] _lsRoute;
         private int _lsCount;
         private int _lsSite = -1;
@@ -4067,13 +3930,13 @@ namespace ACO
         /// 보스 페이즈 전용 에이스(ACO_AceBase가 붙은 전투기) — 일반 배치·증원·호위에 쓰지 않는다.
         private bool IsReservedAce(ACO_NPCFighterAI f)
         {
-            return f.Ace != null;
+            return f.Ace != null || f.Drone;   // 잠수함 무인기(6-217)도 일반 배치 · 증원에 쓰지 않는다
         }
 
         /// 일반 배치에 쓰지 않는 전투기(보스 에이스 = 그 에이스 페이즈, 공격기 = 지상·해상 호위 페이즈).
         private bool IsReservedFighterSlot(int i)
         {
-            return Fighters != null && i < Fighters.Length && Fighters[i] != null && (Fighters[i].Ace != null || Fighters[i].GroundAttacker);
+            return Fighters != null && i < Fighters.Length && Fighters[i] != null && (Fighters[i].Ace != null || Fighters[i].GroundAttacker || Fighters[i].Drone);
         }
 
         /// kind 에이스 페이즈를 열 수 있는가(풀에 쉬고 있는 그 종류 에이스가 있다).
@@ -4231,6 +4094,52 @@ namespace ACO
         }
 
         /// 공중 요새 측면 해치 출격: 해치 자리에서 yaw 방향으로 나가 HatchLaunchRun만큼 곧게 간 뒤 교전한다.
+        /// 잠수함 사출 무인기(6-217): 사출구 자리(갑판 위)에서 yaw 방향으로 — 저고도라 비행 제어의 지면 회피가 곧바로 솟구치게 한다. 집결 = DroneLaunchRun 앞, DroneLaunchAltitude.
+        private int DeploySubDrone(int tag, int count, int tier, Vector3 hatch, float yaw, int now)
+        {
+            if (Fighters == null) { return 0; }
+            Quaternion heading = Quaternion.Euler(0f, yaw, 0f);
+            Vector3 task = hatch + heading * Vector3.forward * DroneLaunchRun;
+            task.y = DroneLaunchAltitude;
+            _markTag = tag;
+            int placed = 0;
+            for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length && placed < count; i++)
+            {
+                ACO_NPCFighterAI f = Fighters[i];
+                if (f == null || !f.Drone) { continue; }
+                if (_fighterUsed[i] && !IsDestroyed(f.TargetHealth)) { continue; }
+                MarkFighter(i, true, hatch, heading, task, tier >= 0 ? Mathf.Clamp(tier, 0, 2) : RollTier(), now);
+                placed++;
+            }
+            return placed;
+        }
+
+        /// 떠 있는(배치됐고 격추되지 않은) 잠수함 무인기 수(6-217 — 모듈 오너가 사출 상한을 본다).
+        public int CountActiveDrones()
+        {
+            if (Fighters == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
+            {
+                ACO_NPCFighterAI f = Fighters[i];
+                if (f != null && f.Drone && _fighterUsed[i] && !IsDestroyed(f.TargetHealth)) { n++; }
+            }
+            return n;
+        }
+
+        /// 지금 사출할 수 있는(안 쓰거나 격추된) 잠수함 무인기 수.
+        public int CountFreeDrones()
+        {
+            if (Fighters == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < _fighterUsed.Length && i < Fighters.Length; i++)
+            {
+                ACO_NPCFighterAI f = Fighters[i];
+                if (f != null && f.Drone && (!_fighterUsed[i] || IsDestroyed(f.TargetHealth))) { n++; }
+            }
+            return n;
+        }
+
         private int DeployHatchLaunch(int tag, int count, int tier, Vector3 hatch, float yaw, int now)
         {
             int[] cands = new int[_fighterUsed.Length];
@@ -4544,14 +4453,6 @@ namespace ACO
             if (minX > maxX) { minX = (AreaMin.x + AreaMax.x) * 0.5f; maxX = minX; }
             if (minZ > maxZ) { minZ = (AreaMin.y + AreaMax.y) * 0.5f; maxZ = minZ; }
             return new Vector3(Random.Range(minX, maxX), Random.Range(SpawnAltitudeMin, SpawnAltitudeMax), Random.Range(minZ, maxZ));
-        }
-
-        private int[] Shuffled(int count)
-        {
-            int[] order = new int[count];
-            for (int i = 0; i < count; i++) { order[i] = i; }
-            ShuffleRange(order, 0, count);
-            return order;
         }
 
         private void ShuffleRange(int[] list, int start, int end)

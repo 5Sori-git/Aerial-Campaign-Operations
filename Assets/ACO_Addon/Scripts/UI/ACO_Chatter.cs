@@ -71,6 +71,8 @@ namespace ACO
         public Transform Panel;
         [Tooltip("자막 글자. 한국어 대사를 쓰려면 한글 TMP 폰트 에셋을 넣는다")]
         public TextMeshPro SubtitleText;
+        [Tooltip("번역 장치(Bake) — 무전 자막 본문만 번역한다(6-175). 비면 영어 그대로")]
+        public ACO_Localization Loc;
         [Tooltip("머리 기준 위치(m): 오른쪽(+X), 위(+Y), 앞(+Z) — 기본은 시야 아래쪽 가운데")]
         public Vector3 HeadOffset = new Vector3(0f, -0.2f, 0.9f);
         [Tooltip("머리 회전을 따라가는 빠르기")]
@@ -339,7 +341,7 @@ namespace ACO
             _lastLine[ev] = line;
             int speaker = LineSpeaker != null && line < LineSpeaker.Length ? LineSpeaker[line] : 0;
             AudioClip clip = LineClip != null && line < LineClip.Length ? LineClip[line] : null;
-            Enqueue(SpeakerName(speaker), SpeakerColor(speaker), LineText[line].Replace("{name}", name != null ? name : ""), clip, MaxQueueDelay, SpeakerChannel(speaker), ev < EV_KILL);
+            Enqueue(SpeakerName(speaker), SpeakerColor(speaker), Tr(LineText[line]).Replace("{name}", name != null ? name : ""), clip, MaxQueueDelay, SpeakerChannel(speaker), ev < EV_KILL);
         }
 
         /// 발사 무전(쏜 사람 화면 — ACO_DFUNC_Missile이 발사 입력 한 번에 한 번 부른다): [AWACS] 내 콜사인, 코드(6-158 — 말하는 쪽이 관제기), 음성은 관제기 채널.
@@ -573,11 +575,14 @@ namespace ACO
         private void Show(string who, Color color, string text, AudioClip clip, int channel)
         {
             Start();
+            // 본문만 지금 언어로(6-175) — 화자 이름 · 음성은 그대로. 표시 시간은 영어 기준: 한글 · 일본어는 글자 수가 영어의 절반쯤이라 2배로 센다
+            string shown = Tr(text);
+            int chars = shown != text ? text.Length : (HasWide(text) ? text.Length * 2 : text.Length);   // 이미 번역돼 온 줄({name} 등)은 넓은 글자로 판단
             if (SubtitleText)
             {
-                SubtitleText.text = text.Length > 0 ? "<color=#" + Hex(color) + ">[" + who + "]</color> " + text : "";
+                SubtitleText.text = shown.Length > 0 ? "<color=#" + Hex(color) + ">[" + who + "]</color> " + shown : "";
             }
-            float duration = Mathf.Max(MinDisplayTime, text.Length * SecondsPerChar);
+            float duration = Mathf.Max(MinDisplayTime, chars * SecondsPerChar);
             float tail = 0f;
             if (clip && Voice)
             {
@@ -598,6 +603,22 @@ namespace ACO
             _showUntil = Time.time + duration;
             _nextAt = _showUntil + tail + Gap;
         }
+
+        /// 무전 자막 본문 번역(6-175): 영어 원문 → 지금 언어(표에 없으면 그대로). 이름 · 숫자가 들어가는 줄은 넣기 전에 이걸로 문장 틀을 바꾼다.
+        public string Tr(string text)
+        {
+            return Loc != null && text != null ? Loc.Radio(text) : text;
+        }
+
+        /// 한글 · 가나 · 한자가 있는가(표시 시간 계산용).
+        private bool HasWide(string text)
+        {
+            for (int i = 0; i < text.Length; i++) { if (text[i] >= '⺀') { return true; } }
+            return false;
+        }
+
+        /// 번역 장치가 언어를 바꾸면 부른다 — 자막은 띄울 때마다 번역하므로 할 일이 없다.
+        public void LocalizationChanged() { }
 
         private float Chance(int ev) { return EventChance != null && ev < EventChance.Length ? EventChance[ev] : 1f; }
         private float Cooldown(int ev) { return EventCooldown != null && ev < EventCooldown.Length ? EventCooldown[ev] : 0f; }

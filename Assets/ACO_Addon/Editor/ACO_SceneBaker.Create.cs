@@ -344,6 +344,53 @@ public partial class ACO_SceneBaker
         EditorSceneManager.MarkSceneDirty(go.scene);
     }
 
+    /// BGM 곡별 배율(6-176) 칸 수가 모든 곡 풀(ACO_Bgm 셋 + 페이즈 모듈 전용 곡)의 URL 수와 같은가.
+    public static bool BgmGainsFit()
+    {
+        foreach (ACO_Bgm b in Object.FindObjectsOfType<ACO_Bgm>(true))
+        {
+            if (Len(b.LobbyGains) != Len(b.LobbyUrls) || Len(b.BossGains) != Len(b.BossUrls) || Len(b.PhaseGains) != Len(b.PhaseUrls)) { return false; }
+        }
+        foreach (ACO_PhaseModule m in Object.FindObjectsOfType<ACO_PhaseModule>(true))
+        {
+            if (Len(m.BgmGains) != Len(m.BgmUrls)) { return false; }
+        }
+        return true;
+    }
+
+    private static int Len(System.Array a) { return a != null ? a.Length : 0; }
+
+    /// 배율 칸을 곡 수에 맞춘다 — 늘어난 칸은 1.0, 넣은 값은 그대로(넘치는 칸은 버린다).
+    public static void FitBgmGains()
+    {
+        foreach (ACO_Bgm b in Object.FindObjectsOfType<ACO_Bgm>(true))
+        {
+            Undo.RecordObject(b, "ACO BGM gains");
+            b.LobbyGains = Fit(b.LobbyGains, Len(b.LobbyUrls));
+            b.BossGains = Fit(b.BossGains, Len(b.BossUrls));
+            b.PhaseGains = Fit(b.PhaseGains, Len(b.PhaseUrls));
+            PrefabUtility.RecordPrefabInstancePropertyModifications(b);
+            EditorUtility.SetDirty(b);
+        }
+        foreach (ACO_PhaseModule m in Object.FindObjectsOfType<ACO_PhaseModule>(true))
+        {
+            if (Len(m.BgmGains) == Len(m.BgmUrls)) { continue; }
+            Undo.RecordObject(m, "ACO BGM gains");
+            m.BgmGains = Fit(m.BgmGains, Len(m.BgmUrls));
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] BGM 곡별 배율 칸을 곡 수에 맞췄습니다(새 칸 1.0).");
+    }
+
+    private static float[] Fit(float[] a, int n)
+    {
+        var r = new float[n];
+        for (int i = 0; i < n; i++) { r[i] = a != null && i < a.Length ? a[i] : 1f; }
+        return r;
+    }
+
     /// 상황별 BGM(로컬 전용 — 씬에 하나): VRC Unity Video Player(작은 렌더 텍스처, 자동 재생·반복 끔) + 2D AudioSource + ACO_Bgm(같은 오브젝트 — 영상 이벤트).
     /// URL은 ACO_Bgm(대기실·보스 기본)과 각 페이즈 모듈 BgmUrls에 직접 넣는다.
     public static void CreateBgm()

@@ -1519,8 +1519,14 @@ public static partial class ACO_PrefabBuilder
         return BuildShipPrefab(DestroyerSpec(), LoadOrBuildVlsMissile());
     }
 
+    /// 함선 VLS 미사일 기본값 = ACO_Missile_VLS_HOT(사용자 — 6-215. 직접 추적 핫 런치, 손으로 맞춘 연출). 없으면 예전 ACO_Missile_VLS(비례항법)를 쓰거나 만든다.
+    public const string VlsMissileDefault = "ACO_Missile_VLS_HOT";
+
     private static GameObject LoadOrBuildVlsMissile()
     {
+        GameObject hot = AssetDatabase.LoadAssetAtPath<GameObject>(PathOf(VlsMissileDefault));
+        if (hot != null) { return hot; }
+        Debug.LogWarning("[ACO] " + VlsMissileDefault + " 프리팹이 없어 ACO_Missile_VLS를 씁니다.");
         GameObject vls = AssetDatabase.LoadAssetAtPath<GameObject>(PathOf("ACO_Missile_VLS"));
         return vls != null ? vls : BuildVlsMissilePrefab();
     }

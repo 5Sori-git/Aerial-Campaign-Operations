@@ -34,11 +34,11 @@ public static class ACO_SpecialWeaponCatalog
     // 격납고 설명(6-151 — 부제 \n 한두 문장, 브리핑식, 정확한 수치는 쓰지 않는다). 정의를 새로 만들 때와 Setup Check hangar-texts-1이 쓴다
     private static readonly System.Collections.Generic.Dictionary<string, string> Descriptions = new System.Collections.Generic.Dictionary<string, string>
     {
-        { "4AAM", "MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. SHORT LOCK RANGE." },
-        { "UGB", "UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER." },
+        { "4AAM", "MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. LONGER LOCK RANGE THAN STANDARD MISSILES." },
+        { "UGB", "UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER. THE WIDEST BLAST OF ANY BOMB." },
         { "RKT", "ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD." },
-        { "LGB", "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE. THE BOMB STEERS ITSELF ONTO IT WITH A WIDE BLAST." },
-        { "LGR", "LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT AND HIT HARDER THAN PLAIN ROCKETS. SLOWER TO RELOAD." },
+        { "LGB", "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. TIGHTER BLAST THAN UNGUIDED BOMBS, BUT HITS HARDER." },
+        { "LGR", "LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. SAME PUNCH AS PLAIN ROCKETS, BUT SLOWER TO RELOAD." },
         { "4AGM", "MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH." },
         { "LAGM", "LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK." },
         { "LASM", "LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT." },
@@ -46,12 +46,12 @@ public static class ACO_SpecialWeaponCatalog
         { "MMP", "MICRO-MISSILE POD\nLOCKS UP TO EIGHT AIR OR GROUND TARGETS AND SPLITS 16 MICRO-MISSILES BETWEEN THEM. LIGHT WARHEADS, SHORT REACH." },
         { "RGP", "RAIL GUN POD\nHYPERSONIC SLUG THAT HITS HARD AT VERY LONG RANGE. A NARROW INSTANT LOCK AIMS IT. LONG CHARGE BETWEEN SHOTS." },
         { "FLAK", "PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT." },
-        { "SASM", "AERIAL SUPPRESSION AAM\nLARGE PROXIMITY BLAST THAT ALSO CATCHES NEARBY AIRCRAFT. SHORT LOCK RANGE." },
+        { "SASM", "AERIAL SUPPRESSION AAM\nA VERY WIDE PROXIMITY FUSE - EVEN A MISSILE THAT SLIPS PAST STILL BURSTS AND DAMAGES. SHORT LOCK RANGE." },
         { "LAAM", "LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK." },
         { "QAAM", "QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE." },
         { "HVAA", "HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE." },
-        { "CCAA", "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. FAST AND HARD-HITTING, BUT SHORT-RANGED, SLOW TO LOCK AND TURNS WIDE." },
-        { "HPAA", "HIGH-POWER AAM\nOVERSIZED WARHEAD WITH A WIDE PROXIMITY FUSE." },
+        { "CCAA", "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. NARROW, SLOW LOCK AND TURNS WIDE." },
+        { "HPAA", "HIGH-POWER AAM\nHEAVY WARHEAD THAT HITS FAR HARDER THAN OTHER AAMS, WITH A WIDER BLAST AS A BONUS. LONG RELOAD." },
         { "ADAM", "AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS." },
         { "ECM", "ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS." },
     };
@@ -103,9 +103,9 @@ public static class ACO_SpecialWeaponCatalog
                 Projectile = null, Desc = "ELECTRONIC WARFARE POD\n5KM JAMMING FOR 10S - BREAKS ENEMY MISSILES AND LOCKS, DISRUPTS AA GUNS" },
             new Example { Id = "SCM", Name = "SCM", Order = 170, Price = 14000, Icon = "weapon_scm", Preset = ApplySCM,
                 Projectile = P + "ACO_Missile_SCM.prefab", Desc = "STAND-OFF CLUSTER MISSILE\nBURSTS ABOVE THE TARGET - SCATTERS BOMBLETS OVER A WIDE AREA" },
-            new Example { Id = "MMP", Name = "MMP", Order = 190, Price = 17000, Icon = "weapon_mmp", Preset = ApplyMMP,
+            new Example { Id = "MMP", Name = "MMP", Order = 190, Price = 50000, Icon = "weapon_mmp", Preset = ApplyMMP,
                 Projectile = P + "ACO_Missile_MMP.prefab", Desc = "MICRO-MISSILE POD\nLOCKS UP TO 8 AIR OR GROUND TARGETS - 16 MISSILES SPLIT AMONG THEM" },
-            new Example { Id = "RGP", Name = "RGP", Order = 200, Price = 18000, Icon = "weapon_rgp", Preset = ApplyRGP,
+            new Example { Id = "RGP", Name = "RGP", Order = 200, Price = 50000, Icon = "weapon_rgp", Preset = ApplyRGP,
                 Projectile = P + "ACO_Missile_RGP.prefab", Desc = "RAIL GUN POD\nHYPERSONIC SLUG - INSTANT NARROW LOCK AIMS IT, 10 KM, RECHARGES IN 8 S" },
             new Example { Id = "FLAK", Name = "FLAK", Order = 140, Price = 9000, Icon = "weapon_flak", Preset = ApplyFLAK,
                 Projectile = P + "ACO_Rocket.prefab", Desc = "PROXIMITY-FUSED AIR-TO-AIR ROCKETS\nUNGUIDED - BURSTS NEAR ANY ENEMY AIRCRAFT" },
@@ -445,6 +445,29 @@ public static class ACO_SpecialWeaponCatalog
         }
         SyncLoadouts();
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// Setup Check(premium-price-1): 특전 무기(MMP · RGP) 정의 프리팹의 가격을 카탈로그 가격(50000)으로. 이미 산 사람은 그대로(보유만 저장). 뒤에 Bake.
+    public static void TunePremiumPrices()
+    {
+        foreach (Example e in Examples())
+        {
+            if (e.Id != "MMP" && e.Id != "RGP") { continue; }
+            string defPath = $"{Folder}/ACO_Special_{e.Id}.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(defPath) == null) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(defPath);
+            try
+            {
+                ACO_SpecialWeaponDef def = root.GetComponent<ACO_SpecialWeaponDef>();
+                if (def != null && def.Price != e.Price)
+                {
+                    def.Price = e.Price;
+                    PrefabUtility.SaveAsPrefabAsset(root, defPath);
+                    Debug.Log($"[ACO] 특수무장 {e.Id} 가격을 {e.Price} CR로 바꿨습니다. Bake 하세요.");
+                }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
     }
 
     /// Setup Check(other-extra-ammo-1): 이미 만든 MMP·RGP가 EXTRA AMMO 소모품(탄수 ×1.5)을 받게 한다 — 정의 프리팹, 기체 프리팹의 슬롯 모듈, 씬에서 덮어쓴 값.

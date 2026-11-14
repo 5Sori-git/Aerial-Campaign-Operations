@@ -90,11 +90,9 @@ namespace ACO
             _pilot = true;
             // 격납고에서 고른 무장으로 바꾸고 모두에게 알린다(내 화면은 바로 바꾼다).
             int want = FindModule(Loadout != null ? Loadout.GetSpecialId() : null);
-            if (want != _current)
-            {
-                Equip(want);
-                SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetEquip), want < 0 ? NO_MODULE : (byte)want);
-            }
+            if (want != _current) { Equip(want); }
+            // 바뀌지 않았어도 늘 알린다(6-194) — 빈 기체일 때 들어온 사람은 장착을 받은 적이 없어, 같은 무장으로 다시 타면 끝내 틀리게 보였다.
+            SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetEquip), want < 0 ? NO_MODULE : (byte)want);
             Forward("SFEXT_O_PilotEnter");
         }
 

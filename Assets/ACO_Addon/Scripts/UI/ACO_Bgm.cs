@@ -11,6 +11,7 @@ namespace ACO
     /// 음악 파일을 월드에 넣지 않는다. 곡은 미션 관리자의 동기화 상태로 고른다:
     ///  - 대기(STATE_IDLE): LobbyUrls.
     ///  - 페이즈 진행 중: 그 페이즈 모듈의 BgmUrls → 비었으면 보스 페이즈(IsBossPhase)는 BossUrls, 일반 페이즈는 PhaseUrls → 그것도 비면 무음.
+    ///    단계가 있는 보스(GetBgmStage 1 · 2)는 BgmUrls2 · BgmUrls3 — 비었으면 앞 단계 곡을 잇는다. 단계가 바뀌면 페이드 아웃 뒤 바꾼다(6-203).
     ///  - 페이즈 사이: 듣던 곡을 계속.  미션 끝(성공·실패): 페이드 아웃(결과 효과음만) → LobbyAfterEnd초 뒤(브리핑실로 돌아온 뒤) 대기실 곡.
     ///    미션이 끝난 뒤 월드에 들어온 사람은 바로 대기실 곡.
     /// 페이즈 곡은 페이즈 시작 시각(동기화)으로 골라 모두 같은 곡으로 시작한다. 곡이 끝나면 풀의 다음 곡, 풀에 곡이 하나면 반복.
@@ -52,6 +53,10 @@ namespace ACO
         public string[] LobbyNames;
         public string[] BossNames;
         public string[] PhaseNames;
+        [Tooltip("곡별 볼륨 배율(6-176 — 각 URL 풀과 같은 순서, 작은 음원 보정). 비거나 0 이하면 1. 플레이어 볼륨 × 배율이 1을 넘으면 1")]
+        public float[] LobbyGains;
+        public float[] BossGains;
+        public float[] PhaseGains;
 
         [Header("소리 (기본값 — 플레이어가 패널에서 바꾼 값은 저장된다)")]
         [Range(0f, 1f)] public float Volume = 0.2f;
@@ -68,8 +73,11 @@ namespace ACO
 
         private int _ctx = -1;
         private int _ctxStart;
+        private int _ctxStage;   // 단계가 있는 보스의 BGM 단계(실제로 쓰는 단계 풀 — 6-203)
         private VRCUrl[] _pool;
         private string[] _names;      // _pool과 같은 순서의 곡 이름
+        private float[] _gains;       // _pool과 같은 순서의 곡별 볼륨 배율
+        private float _fadeFrom;      // 곡을 바꾸며 페이드 아웃을 시작할 때의 볼륨(그 볼륨에서 FadeOutTime에 0)
         private int _shownState = -1;   // 패널에 보낸 곡 상태·곡
         private int _shownIndex = -1;
         private VRCUrl[] _shownPool;
@@ -109,6 +117,24 @@ namespace ACO
         /// 실제로 낼 볼륨(꺼져 있으면 0).
         private float Level() { return Dynamic ? Volume : 0f; }
 
+        /// 지금 곡의 볼륨 배율(6-176 — 비었거나 0 이하면 1).
+        private float Gain()
+        {
+            if (_gains == null || _index < 0 || _index >= _gains.Length) { return 1f; }
+            float g = _gains[_index];
+            return g > 0f ? g : 1f;
+        }
+
+        /// 지금 곡을 낼 볼륨 = 플레이어 볼륨 × 곡 배율(AudioSource 최대 1).
+        private float Target() { return Mathf.Clamp01(Level() * Gain()); }
+
+        /// 페이드 아웃 뒤 정지 · 다음 곡.
+        private void BeginSwitch()
+        {
+            if (!_switching) { _fadeFrom = _vol; }
+            _switching = true;
+        }
+
         private void Update()
         {
             if (Player == null || Output == null) { return; }
@@ -116,7 +142,7 @@ namespace ACO
             float dt = Time.deltaTime;
             if (_switching)
             {
-                _vol = Mathf.MoveTowards(_vol, 0f, dt * Mathf.Max(Volume, 0.05f) / Mathf.Max(FadeOutTime, 0.05f));
+                _vol = Mathf.MoveTowards(_vol, 0f, dt * Mathf.Max(_fadeFrom, 0.05f) / Mathf.Max(FadeOutTime, 0.05f));
                 if (_vol <= 0f)
                 {
                     _switching = false;
@@ -128,8 +154,8 @@ namespace ACO
             }
             else
             {
-                float target = _playing ? Level() : 0f;
-                float rate = Mathf.Max(Volume, 0.05f) / Mathf.Max(target > _vol ? FadeInTime : FadeOutTime, 0.05f);
+                float target = _playing ? Target() : 0f;
+                float rate = Mathf.Max(Mathf.Max(target, _vol), 0.05f) / Mathf.Max(target > _vol ? FadeInTime : FadeOutTime, 0.05f);
                 _vol = Mathf.MoveTowards(_vol, target, dt * rate);
                 if (_needLoad && !_loading && Time.time >= _nextLoad && Level() > 0f) { Load(); }
             }
@@ -167,37 +193,47 @@ namespace ACO
                 }
                 ctx = Time.time - _endAt >= LobbyAfterEnd ? CTX_LOBBY : CTX_END;
             }
-            if (ctx == _ctx && start == _ctxStart) { return; }
+            // 단계가 있는 보스(6-203): 지금 단계부터 거꾸로 곡이 있는 단계 풀을 쓴다(비었으면 앞 단계 곡을 잇는다)
+            ACO_PhaseModule m = ctx == CTX_PHASE ? Manager.GetModule(Manager.GetCurrentPhaseType()) : null;
+            int stage = 0;
+            if (m != null)
+            {
+                int want = Mathf.Clamp(m.GetBgmStage(), 0, 2);
+                if (want >= 2 && HasAny(m.BgmUrls3)) { stage = 2; }
+                else if (want >= 1 && HasAny(m.BgmUrls2)) { stage = 1; }
+            }
+            if (ctx == _ctx && start == _ctxStart && stage == _ctxStage) { return; }
             _ctx = ctx;
             _ctxStart = start;
+            _ctxStage = stage;
             VRCUrl[] pool = null;
             string[] names = null;
-            if (ctx == CTX_LOBBY) { pool = LobbyUrls; names = LobbyNames; }
-            else if (ctx == CTX_PHASE)
+            float[] gains = null;
+            if (ctx == CTX_LOBBY) { pool = LobbyUrls; names = LobbyNames; gains = LobbyGains; }
+            else if (ctx == CTX_PHASE && m != null)
             {
-                ACO_PhaseModule m = Manager.GetModule(Manager.GetCurrentPhaseType());
-                if (m != null)
-                {
-                    if (HasAny(m.BgmUrls)) { pool = m.BgmUrls; names = m.BgmNames; }
-                    else if (m.IsBossPhase()) { pool = BossUrls; names = BossNames; }
-                    else { pool = PhaseUrls; names = PhaseNames; }
-                }
+                if (stage == 2) { pool = m.BgmUrls3; names = m.BgmNames3; gains = m.BgmGains3; }
+                else if (stage == 1) { pool = m.BgmUrls2; names = m.BgmNames2; gains = m.BgmGains2; }
+                else if (HasAny(m.BgmUrls)) { pool = m.BgmUrls; names = m.BgmNames; gains = m.BgmGains; }
+                else if (m.IsBossPhase()) { pool = BossUrls; names = BossNames; gains = BossGains; }
+                else { pool = PhaseUrls; names = PhaseNames; gains = PhaseGains; }
             }
-            if (!HasAny(pool)) { pool = null; names = null; }
+            if (!HasAny(pool)) { pool = null; names = null; gains = null; }
             // 같은 풀이 이어지면(보스 → 보스 기본 등) 듣던 곡 그대로
             if (pool != null && pool == _pool && (_playing || _loading || _needLoad)) { return; }
+            if (_playing || _loading || _vol > 0f) { BeginSwitch(); }   // 듣던 곡의 볼륨에서 페이드 아웃(배율이 바뀌기 전에 잡는다)
             _pool = pool;
             _names = names;
+            _gains = gains;
             _errors = 0;
             if (pool != null)
             {
                 int n = pool.Length;
-                int pick = ctx == CTX_PHASE ? (start & 0x7fffffff) % n : Random.Range(0, n);
+                int pick = ctx == CTX_PHASE ? ((start & 0x7fffffff) + stage) % n : Random.Range(0, n);
                 _index = NextValid(pick - 1);
             }
             _needLoad = false;
-            if (_playing || _loading || _vol > 0f) { _switching = true; }
-            else { _needLoad = pool != null && Level() > 0f; }
+            if (!_switching) { _needLoad = pool != null && Level() > 0f; }
         }
 
         private void Load()
@@ -269,7 +305,7 @@ namespace ACO
         private void LevelChanged(bool wasOn)
         {
             bool on = Level() > 0f;
-            if (!on && (_playing || _loading)) { _switching = true; }
+            if (!on && (_playing || _loading)) { BeginSwitch(); }
             else if (on && !wasOn && !_playing && !_loading && HasAny(_pool)) { _needLoad = true; }
             RefreshPanels();
         }

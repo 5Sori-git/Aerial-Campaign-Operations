@@ -93,6 +93,16 @@ namespace ACO
         public string SupportTankerLabel = "TANKER DRONE";
         public string SupportGuardianLabel = "GUARDIAN DRONE";
 
+        [Header("항모 (아군 기지, 고정 위치)")]
+        [Tooltip("Bake가 작전 테이블의 HomeBase(항모)를 넣는다. 비우면 그리지 않는다")]
+        public Transform HomeBase;
+        [Tooltip("항모 마커 위 글자(뒤에 거리)")]
+        public string HomeLabel = "CVN";
+        [Tooltip("이 거리(m)보다 가까우면 그리지 않는다(갑판 위 · 착함 직전에 시야를 가리지 않게)")]
+        public float HomeMinDistance = 1500f;
+        [Tooltip("마커를 기지 기준점에서 이만큼(m) 위에 그린다(갑판 높이)")]
+        public float HomeHeight = 20f;
+
         [Header("호위 항로")]
         [Tooltip("호위 페이즈에 호위 대상의 남은 경유점과 목적지를 표시한다")]
         public bool ShowEscortRoute = true;
@@ -164,6 +174,7 @@ namespace ACO
         private const int KIND_FRIENDLY_GROUND = 5;
         private const int KIND_WAYPOINT = 6;
         private const int KIND_DESTINATION = 7;
+        private const int KIND_HOME = 8;      // 항모: 아군 색 마름모 + CVN 거리
 
         // 시작 시 생성기 풀에서 만든 유닛 목록(캐시)
         private Transform[] _unitTransform;
@@ -253,7 +264,10 @@ namespace ACO
                 Transform[] subs = f.Ace.GetSubUnits();
                 if (subs != null) { decoys += subs.Length; }
             }
-            int total = fighters + ground + hvts + parts + escorts + decoys;
+            // 잠수함 보스의 SLCM(공중 표적)과 소나 원 가운데(SONAR) — 날고 있을 때 · 보일 때만 켜져 있다
+            ACO_Submarine sub = Generator != null ? Generator.Submarine : null;
+            int subExtra = sub != null ? (sub.Slcms != null ? sub.Slcms.Length : 0) + 1 : 0;
+            int total = fighters + ground + hvts + parts + escorts + decoys + subExtra;
 
             _unitTransform = new Transform[total];
             _unitWarship = new ACO_Warship[total];
@@ -301,6 +315,17 @@ namespace ACO
                 int hvtKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_HVT, i) ? KIND_AIR : KIND_GROUND;
                 AddUnit(h.transform, h.GetComponent<SaccTarget>(), hvtKind, ReadLabel(h, "TGT"), null, ACO_MissionGenerator.CAT_HVT, i);
                 _unitWarship[_unitCount - 1] = h.GetComponent<ACO_Warship>();   // 보스 코어 단계면 마커를 코어 자리(MarkerAnchor)에
+                if (sub == null || h != (UdonSharpBehaviour)sub.Warship) { continue; }
+                // 잠수함: SLCM(락온 마커 자리 — 날 때만 켜진다)과 소나 원 가운데. 목표 색은 잠수함(같은 태그)을 따른다
+                if (sub.Slcms != null)
+                {
+                    for (int k = 0; k < sub.Slcms.Length; k++)
+                    {
+                        ACO_Slcm m = sub.Slcms[k];
+                        if (m != null && m.LockMarker != null) { AddUnit(m.LockMarker.transform, m.TargetHealth, KIND_AIR, m.MarkerLabel, null, ACO_MissionGenerator.CAT_HVT, i); }
+                    }
+                }
+                if (sub.SonarMarker != null) { AddUnit(sub.SonarMarker.transform, null, KIND_GROUND, "SONAR", null, ACO_MissionGenerator.CAT_HVT, i); }
             }
             // 함선 부위(VLS/함포/CIWS)는 각자 따로 표시된다.
             for (int i = 0; i < parts; i++)
@@ -340,6 +365,8 @@ namespace ACO
             for (int u = 0; u < _unitCount; u++)
             {
                 _unitHidden[u] = _unitCat[u] == ACO_MissionGenerator.CAT_PART && Generator.IsUnitSuppressed(_unitCat[u], _unitIdx[u]);
+                // 물속의 잠수함 선체(같은 번호의 SLCM · 소나는 따로 켜지고 꺼진다)
+                if (_unitCat[u] == ACO_MissionGenerator.CAT_HVT && Generator.IsHvtHidden(_unitIdx[u]) && _unitTransform[u] == Generator.HighValueTargets[_unitIdx[u]].transform) { _unitHidden[u] = true; }
                 // TEL: 탄도탄이 뜨면 공중 표적으로 그린다
                 if (_unitCat[u] == ACO_MissionGenerator.CAT_GROUND && Generator.IsTelUnit(_unitIdx[u]))
                 {
@@ -414,6 +441,8 @@ namespace ACO
             for (int k = 0; k < MAX_LOCKS; k++) { _lockMarker[k] = -1; _lockSize[k] = baseSize; }
 
             int used = 0;
+            // 항모를 먼저(마커 풀이 꽉 차도 빠지지 않게)
+            used = DrawHome(used, headPos, headUp, baseSize, objectiveMaxSq);
             int focusMarker = -1;
             int focusUnit = -1;
             float focusAngle = LookAngle;
@@ -775,6 +804,25 @@ namespace ACO
             }
         }
 
+        /// 항모(고정 위치): 아군 색 마름모 + "CVN 12.3km". HomeMinDistance 안 · 공역 밖이면 그리지 않는다. 그렸으면 used + 1.
+        private int DrawHome(int used, Vector3 headPos, Vector3 headUp, float baseSize, float maxSq)
+        {
+            if (HomeBase == null || Markers == null || used >= Markers.Length) { return used; }
+            Vector3 d = HomeBase.position + Vector3.up * HomeHeight - headPos;
+            float sq = d.sqrMagnitude;
+            if (sq > maxSq || sq < HomeMinDistance * HomeMinDistance) { return used; }
+            float dist = Mathf.Sqrt(sq);
+            Vector3 dir = d / dist;
+            Transform m = Markers[used];
+            if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
+            m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+            float size = baseSize * ObjectiveScale;
+            m.localScale = new Vector3(size, size, size);
+            if (_markerKind[used] != KIND_HOME) { SetMarkerKind(used, KIND_HOME); }
+            SetTopText(used, HomeLabel + " " + FormatDistance(dist));
+            return used + 1;
+        }
+
         /// 호위 대상이 아직 지나지 않은 경유점(마름모, WP n)과 목적지(큰 마름모, DEST + 거리)를 마커 풀 used부터 놓는다. 반환: 다음 빈 마커.
         private int DrawRoute(int used, Vector3 headPos, Vector3 headUp, float baseSize, float maxSq)
         {
@@ -879,11 +927,12 @@ namespace ACO
                 }
                 else if (kind == KIND_WAYPOINT) { mat = WaypointMaterial != null ? WaypointMaterial : (FriendlyMaterial != null ? FriendlyMaterial : AirMaterial); }
                 else if (kind == KIND_DESTINATION) { mat = DestinationMaterial != null ? DestinationMaterial : (FriendlyMaterial != null ? FriendlyMaterial : AirMaterial); }
+                else if (kind == KIND_HOME) { mat = FriendlyMaterial != null ? FriendlyMaterial : AirMaterial; }
                 FrameRenderers[i].sharedMaterial = mat;
             }
             if (TgtLabels != null && i < TgtLabels.Length && TgtLabels[i])
             {
-                bool friendly = kind == KIND_FRIENDLY_AIR || kind == KIND_FRIENDLY_GROUND;
+                bool friendly = kind == KIND_FRIENDLY_AIR || kind == KIND_FRIENDLY_GROUND || kind == KIND_HOME;
                 bool objective = kind == KIND_OBJECTIVE || kind == KIND_OBJECTIVE_AIR;
                 bool route = kind == KIND_WAYPOINT || kind == KIND_DESTINATION;
                 TgtLabels[i].gameObject.SetActive(friendly || objective || route);

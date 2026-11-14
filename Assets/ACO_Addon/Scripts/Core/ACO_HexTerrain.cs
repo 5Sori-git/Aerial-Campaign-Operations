@@ -177,7 +177,7 @@ namespace ACO
         public float SeaLevel = 0f;
 
         [Header("생성")]
-        [Tooltip("월드 시작 시 지형을 만든다(오너가 씨앗을 정한다). 미션마다 새로 만드는 건 생성기의 RegenerateTerrainEachMission")]
+        [Tooltip("월드 시작 시 지형을 만든다(오너가 씨앗을 정한다). 그 뒤로는 게임 진행이 브리핑 리롤 · 미션 뒤 갱신 때 새로 만든다")]
         public bool GenerateOnStart = true;
         [Tooltip("시작 씨앗(0이면 무작위)")]
         public int InitialSeed = 0;

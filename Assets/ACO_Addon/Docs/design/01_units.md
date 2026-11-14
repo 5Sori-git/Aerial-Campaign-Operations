@@ -389,6 +389,8 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
 
 ### 6-71. 적 CIWS 요격 약화
 
+- 바뀜(6-186): 반응 0.3 · 격추 0.6 · 쉼 5.5초(사거리 900m 그대로), 각도 판정 추가.
+
 - 사거리 1200 → 900m, 격추 0.5 → 1.0초, 재교전 대기 `InterceptCooldown` 0 → 1.5초(반응 0.5초 유지). 아군 CIWS는 그대로다.
 - AAM 최고 속도 600m/s면 사거리를 1.5초에 지나 CIWS 한 문이 겨우 맞출 수 있는 값이다. 느린 미사일(짧은 거리 발사)은 여전히 잘 막히고, 일제 사격은 뚫는다. 시뮬레이션(`Tools/aco_ciws_sim.py`, 요새 배치) 4발 일제 명중: 이전 0발 → 600m/s 평균 약 2발(부위별 0.4~4발).
 - `InterceptDefaultsApplied`는 한 번만 넣는 값이라, 먼저 만든 CIWS는 판 번호(`InterceptTuneVersion`, `ACO_SceneBaker.CiwsTuneVersion`)로 Bake가 한 번 더 넣는다.
@@ -488,3 +490,32 @@ NPC_Fighter (레이어 17)   BoxCollider(히트박스), Animator(Target.controll
 - 40,000ft = SAV `AtmosphereThinningStart`(그 위 65,000ft까지 공기가 옅어져 추력·양력이 준다) — 플레이어가 그 위로 피해도 둔해지므로 사격 각도는 그대로.
 - 보스(루나 저격 급가속·SHADE 집결 등)도 같은 비행 컨트롤러라 지킨다. 호위 유닛·급유기는 항로 비행이라 관계없음. 미사일은 제한 없음.
 - 설치: Setup Check `ai-ceiling-1`(NPC 프리팹 비행 컨트롤러).
+
+### 6-183. 항모 CIWS 자리 — 모델에 그려진 포대로
+- 항모(`NPC_Carrier`, 쿠즈네초프 모델 ×2.3)의 CIWS 4개가 앞쪽 (±30, 19, 110)에 있어 좁아지는 갑판 밖 허공에 떠 있었고, 뒤쪽 (±30, 19, -120)도 포대보다 바깥 · 위였다.
+- 모델의 포탑 메시(`Weapons/Large_Turret` 짝 — 양현 스폰슨) 가운데로 옮겼다: FL (-20.9, 13.9, 69.65), FR (20.9, 15.7, 72.5), AL (-21.3, 13.7, -127.85), AR (28, 13.7, -127.85) — 모델이 좌우 비대칭이라 자리도 그대로 따랐다. `ACO_FleetBuilder.CarrierCiwsSpots`(새로 만들 때) + Setup Check `carrier-ciws-1`(있는 프리팹, 씬에서 옮긴 값은 지운다).
+
+### 6-184. 항모 VLS 4개 — 모델 해치 자리
+- 쿠즈네초프 모델에는 양현 포대 옆에 VLS 해치 묶음(둥근 해치 6개짜리 판 — `Weapons/Etc_Turret01~04`)이 그려져 있는데, 항모는 CIWS 4개뿐이라 해치가 비어 있었다.
+- 다른 적 함선과 같은 VLS 부위(`CreateVLSObject` — 대공 미사일 `ACO_Missile_VLS`, 체력 150, 히트박스 · 락온 마커)를 해치판 가운데에 붙였다: FL (-22, 14.2, 55.6), FR (21.1, 14.2, 60.9), AL (-21.8, 14.2, -117.4), AR (28.2, 14.2, -117.4)(`ACO_FleetBuilder.CarrierVlsSpots` — 발사기 상자가 해치판 위로 반쯤 나온다). 함선 `Parts`에 더해 CIWS 4 · VLS 4.
+- 항모가 이제 대공 미사일을 쏜다. 부위가 하나 부서질 때마다 본체도 최대 체력의 5%(160)씩 깎이므로(6-183과 같은 규칙) VLS까지 모두 정리하면 본체 피해가 640 더 들어간다.
+- `ACO_FleetBuilder.CarrierSpec`(새로 만들 때) + Setup Check `carrier-vls-1`(`EnsureCarrierVls` — 있는 프리팹에 없는 VLS만 붙이고 자리를 맞춘다). Bake가 레이더 · RWR · 무전 · 요격 연결을 채운다.
+
+### 6-185. 항모 부위 임시 외형 숨김
+- 항모 CIWS · VLS의 임시 외형(회색 상자 · 포신 상자 MeshRenderer)을 끈다 — 쿠즈네초프 선체 모델에 포대 · VLS 해치가 그려져 있어 겹쳐 보였다.
+- 히트박스 · 락온 마커 · 포구(TurretYaw/Pitch — 조준은 그대로 돈다) · 예광탄 · 파괴 연출(파티클)은 그대로라 쏘고 맞고 터지는 건 같다. 부위가 부서져도 선체 모델의 포대는 남는다(연기 · 불꽃만).
+- `ACO_FleetBuilder.HideCarrierPartModels`(새로 만들 때 · VLS를 붙일 때도) + Setup Check `carrier-part-models-1`.
+
+### 6-186. CIWS 요격: 빠르게 잡고 오래 쉰다 + 사격 각도
+- **문제**: 1) 요격 판정에 각도가 없어 요새 · 함선 반대편 CIWS가 선체 너머 미사일도 막았다. 2) 미사일이 4km 안 CIWS를 모두 물어봐(0.1초마다 최대 4개 고름) 수백 발 · CIWS 수십 개일 때 비용이 컸다(ClientSim 측정: 적 CIWS 39 · 미사일 100발 한 바퀴 4.4~19ms).
+- **스캔 범위**: 4km → 1.7km(`ACO_Missile.IC_SCAN_RANGE_SQ` — 가장 긴 요격 사거리 1.5km(아군 호위 대공포) + 200m). 결과는 같고, 멀리 있는 CIWS를 묻지 않는다.
+- **각도**: `CanIntercept`가 사거리 다음에 `InArc`(사격과 같은 판정 — `YawArc` < 360일 때만, 처음 자세 기준 ±YawArc/2, MountRelativeAim이면 받침 기준 고각도)를 본다. 360° CIWS는 비용 · 동작이 그대로. LOS(Linecast)보다 싸다(측정: 내적 0.4µs, Linecast 0.5~0.8µs).
+- **항모 CIWS 4개**: 양현 스폰슨에 붙어 있어 바깥쪽 200°만 맡는다 — 쉬는 자세(`TurretYaw` 로컬 회전)를 좌현 -90° · 우현 +90°로, `YawArc` 200(`ACO_FleetBuilder.ApplyCarrierCiwsArc`, 새로 만들 때 + Setup Check `carrier-ciws-arc-1`). 사격 · 요격 모두 선체 반대편을 못 본다.
+- **적 CIWS 수치**(바뀜 — 6-71): 반응 0.5 → 0.3, 격추 1.0 → 0.6, 쉼(`InterceptCooldown`) 1.5 → 5.5초, 사거리 900m 그대로. 사거리를 늘리면 함대의 CIWS 범위가 겹쳐 빈틈이 사라져서, 대신 빨리 잡고 오래 쉬게 했다.
+  - 혼자서도 뚫린다: 미사일 재장전 6초 - 격추 0.9초 = 5.1초보다 오래 쉬므로, 한 CIWS가 첫 발을 잡고 쉬는 동안 다음 발이 들어간다. 일제 사격은 더 쉽게 뚫는다.
+  - `CiwsTuneVersion` 1 → 2: Setup Check `ciws-intercept-2`가 공용 포대(`NPC_Turret_CIWS` — 요새 · 랜스) · 함선 프리팹의 적 CIWS(MarkerLabel "CIWS")에 다시 넣고 씬 덮어쓰기를 지운다. LUNA UAV · 가디언 드론 · 아군 호위 대공포는 그대로(MarkerLabel로 거른다).
+
+### 6-215. 함선 VLS 미사일 기본값 = ACO_Missile_VLS_HOT (`ACO_PrefabBuilder.VlsMissileDefault`, Setup Check `vls-missile-hot-1`)
+- 사용자 요청("이제 VLS미사일은 ACO_Missile_VLS_HOT 이 기본값이야 이걸로바꿔줘"). 함선 VLS를 만드는 빌더(구축함 · 전함 · 항모 · 육상전함 · 랜스 포대 · VLS 포탑)가 예전 ACO_Missile_VLS(비례항법 N=3 — 프로젝트에서 유일한 비례항법 탄)를 기본으로 집어 왔다. 이미 구축함 · 기함 · 전함 · VLS 포탑은 손으로 VLS_HOT(직접 추적)으로 바꿔 두었고, 적 항모(NPC_Carrier)의 VLS 4기(VLS_FL · FR · AL · AR)만 예전 탄이었다 — 바꿈 확인(씬 런처 중 예전 탄 0).
+- 빌더 기본값을 ACO_Missile_VLS_HOT으로(없으면 경고 뒤 예전 탄). 기존 NPC 프리팹은 `vls-missile-hot-1`이 런처의 예전 탄 참조를 VLS_HOT으로 바꾼다. 예전 탄 프리팹은 지우지 않는다(SHADE 미사일의 대비 바탕).
+- 같이 확인: SAV 기본 미사일 · 폭탄 스크립트(DFUNC_AAM · DFUNC_AGM · DFUNC_Bomb · SAV_AAM/AGM/BombController)는 씬에 하나도 없다. 남은 곳은 원본 Pit-bool 기체 프리팹(FA-18E Main · FA-18F Main · EA-18G Main Variant — 씬에서 안 씀)뿐이고, 쓰는 기체(FA-18E Main_ACO)엔 없다.

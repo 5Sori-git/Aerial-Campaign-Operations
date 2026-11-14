@@ -2,6 +2,9 @@
 //  - Z파이팅 방지: 정점을 카메라 쪽으로 끌어당긴다. 시선 방향으로만 움직여 화면의 자리·크기는 그대로이고, 눈마다 계산해 VR에서도 어긋나지 않는다.
 //    _PullPercent = 거리의 %(멀수록 떨어지는 깊이 정밀도를 따라간다), _PullMeters = 거리와 상관없는 m(가까이서 곡면에 묻히는 것을 막는다). 둘 다 값이 클수록 많이 당긴다.
 //  - 거리 페이드: _FadeStart → _FadeEnd에서 사라진다. 글자·킬마크 머티리얼 모두 관전 망원을 위해 1500 → 1800m.
+//  - 곡면 맞춤(6-192): 판 좌표(오브젝트 공간)의 정점을 표면 모양으로 휜다 — z += A.x + A.y·x + A.z·y + B.x·x² + B.y·y² + B.z·x·y
+//    + C.x·x³ + C.y·y³ + C.z·x²y + C.w·xy²(3차 — 기수처럼 모서리가 말려 들어가는 곳).
+//    편집기가 판 아래 기체 표면을 재서 넣는다(판마다 머티리얼 — Generated/Marks). 0이면 평판 그대로. 오브젝트 공간을 쓰므로 배칭을 끈다.
 // 아래 Hidden 값은 TextMeshPro가 머티리얼에서 읽는 값이다 — 이 셰이더는 쓰지 않는다.
 Shader "ACO/MarkText"
 {
@@ -13,6 +16,9 @@ Shader "ACO/MarkText"
         _PullMeters ("Pull toward camera (m, at any distance)", Range(0, 0.5)) = 0.05
         _FadeStart ("Fade start (m)", Float) = 150
         _FadeEnd ("Fade end (m)", Float) = 300
+        _BendA ("Surface fit (const, x, y)", Vector) = (0, 0, 0, 0)
+        _BendB ("Surface fit (x2, y2, xy)", Vector) = (0, 0, 0, 0)
+        _BendC ("Surface fit (x3, y3, x2y, xy2)", Vector) = (0, 0, 0, 0)
 
         [HideInInspector] _FaceColor ("Face", Color) = (1, 1, 1, 1)
         [HideInInspector] _FaceDilate ("Dilate", Float) = 0
@@ -33,7 +39,7 @@ Shader "ACO/MarkText"
     }
     SubShader
     {
-        Tags { "Queue" = "Transparent-9" "RenderType" = "Transparent" "IgnoreProjector" = "True" }
+        Tags { "Queue" = "Transparent-9" "RenderType" = "Transparent" "IgnoreProjector" = "True" "DisableBatching" = "True" }
         Pass
         {
             ZWrite Off
@@ -51,6 +57,7 @@ Shader "ACO/MarkText"
             sampler2D _MainTex;
             fixed4 _Tint;
             float _PullPercent, _PullMeters, _FadeStart, _FadeEnd;
+            float4 _BendA, _BendB, _BendC;
 
             struct appdata
             {
@@ -75,6 +82,9 @@ Shader "ACO/MarkText"
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                float2 q = v.vertex.xy;
+                v.vertex.z += _BendA.x + _BendA.y * q.x + _BendA.z * q.y + _BendB.x * q.x * q.x + _BendB.y * q.y * q.y + _BendB.z * q.x * q.y
+                    + _BendC.x * q.x * q.x * q.x + _BendC.y * q.y * q.y * q.y + _BendC.z * q.x * q.x * q.y + _BendC.w * q.x * q.y * q.y;
                 float3 view = UnityObjectToViewPos(v.vertex.xyz);
                 float dist = length(view);
                 float pull = saturate(_PullPercent * 0.01 + _PullMeters / max(dist, 0.1));

@@ -168,6 +168,7 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeFleet();
         BakeRailgun();
         BakeLandShip();
+        BakeSubmarine();
         BakeTierHealth();
         BakeTacticalMaps();
         BakeHiScoreBoard();
@@ -190,6 +191,7 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeCatapultCrew();
         BakeSeatRecenter();
         BakeUiSound();
+        BakeVideoAudioToggle();
         BakeLocalization();
         BakeTwins();
         BakeShades();

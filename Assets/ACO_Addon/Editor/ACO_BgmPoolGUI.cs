@@ -7,13 +7,15 @@ using ACO;
 /// 곡 이름은 BGM 패널(ACO_BgmPanel)의 지금 곡에 보인다(비우면 URL).
 public static class ACO_BgmPoolGUI
 {
-    public static void Draw(SerializedObject so, string urlsName, string namesName, string label, ref bool open)
+    public static void Draw(SerializedObject so, string urlsName, string namesName, string gainsName, string label, ref bool open)
     {
         SerializedProperty urls = so.FindProperty(urlsName);
         SerializedProperty names = so.FindProperty(namesName);
         if (urls == null || names == null) { return; }
         int n = urls.arraySize;
         if (names.arraySize != n) { names.arraySize = n; }
+        SerializedProperty gains = gainsName != null ? so.FindProperty(gainsName) : null;
+        if (gains != null) { FitGains(gains, n); }
 
         EditorGUILayout.Space();
         open = EditorGUILayout.Foldout(open, $"{label} — {n}곡", true);
@@ -24,6 +26,7 @@ public static class ACO_BgmPoolGUI
             {
                 GUILayout.Space(22f);
                 EditorGUILayout.LabelField("곡 이름 (패널에 표시 — 비우면 URL)", EditorStyles.miniBoldLabel, GUILayout.Width(220f));
+                if (gains != null) { EditorGUILayout.LabelField(new GUIContent("배율", "곡별 볼륨 배율(작은 음원 보정) — 플레이어 볼륨 × 배율, 최대 1"), EditorStyles.miniBoldLabel, GUILayout.Width(44f)); }
                 EditorGUILayout.LabelField("URL", EditorStyles.miniBoldLabel);
             }
             int remove = -1;
@@ -34,6 +37,11 @@ public static class ACO_BgmPoolGUI
                     EditorGUILayout.LabelField((i + 1).ToString(), GUILayout.Width(18f));
                     SerializedProperty name = names.GetArrayElementAtIndex(i);
                     name.stringValue = EditorGUILayout.TextField(name.stringValue, GUILayout.Width(220f));
+                    if (gains != null)
+                    {
+                        SerializedProperty g = gains.GetArrayElementAtIndex(i);
+                        g.floatValue = Mathf.Max(0f, EditorGUILayout.FloatField(g.floatValue, GUILayout.Width(44f)));
+                    }
                     SerializedProperty u = urls.GetArrayElementAtIndex(i);
                     SerializedProperty s = u.FindPropertyRelative("url");
                     if (s != null) { s.stringValue = EditorGUILayout.TextField(s.stringValue); }
@@ -45,6 +53,7 @@ public static class ACO_BgmPoolGUI
             {
                 urls.DeleteArrayElementAtIndex(remove);
                 names.DeleteArrayElementAtIndex(remove);
+                if (gains != null) { gains.DeleteArrayElementAtIndex(remove); }
             }
             if (GUILayout.Button("곡 추가"))
             {
@@ -53,8 +62,18 @@ public static class ACO_BgmPoolGUI
                 SerializedProperty nu = urls.GetArrayElementAtIndex(n).FindPropertyRelative("url");
                 if (nu != null) { nu.stringValue = ""; }
                 names.GetArrayElementAtIndex(n).stringValue = "";
+                if (gains != null) { gains.arraySize = n + 1; gains.GetArrayElementAtIndex(n).floatValue = 1f; }
             }
         }
+    }
+
+    /// 배율 배열을 곡 수에 맞춘다 — 새 칸은 1.0(배열을 늘리면 Unity가 마지막 값을 복사하므로 직접 넣는다).
+    private static void FitGains(SerializedProperty gains, int n)
+    {
+        int old = gains.arraySize;
+        if (old == n) { return; }
+        gains.arraySize = n;
+        for (int i = old; i < n; i++) { gains.GetArrayElementAtIndex(i).floatValue = 1f; }
     }
 }
 
@@ -70,12 +89,12 @@ public class ACO_BgmEditor : Editor
     {
         if (UdonSharpGUI.DrawDefaultUdonSharpBehaviourHeader(target)) { return; }
         serializedObject.Update();
-        DrawPropertiesExcluding(serializedObject, "m_Script", "LobbyUrls", "LobbyNames", "BossUrls", "BossNames", "PhaseUrls", "PhaseNames");
+        DrawPropertiesExcluding(serializedObject, "m_Script", "LobbyUrls", "LobbyNames", "LobbyGains", "BossUrls", "BossNames", "BossGains", "PhaseUrls", "PhaseNames", "PhaseGains");
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("곡 풀 (페이즈 전용 곡은 각 페이즈 모듈)", EditorStyles.boldLabel);
-        ACO_BgmPoolGUI.Draw(serializedObject, "LobbyUrls", "LobbyNames", "대기실", ref _lobby);
-        ACO_BgmPoolGUI.Draw(serializedObject, "BossUrls", "BossNames", "보스 기본 (전용 곡 없는 보스 페이즈)", ref _boss);
-        ACO_BgmPoolGUI.Draw(serializedObject, "PhaseUrls", "PhaseNames", "일반 페이즈 기본 (전용 곡 없는 일반 페이즈)", ref _phase);
+        ACO_BgmPoolGUI.Draw(serializedObject, "LobbyUrls", "LobbyNames", "LobbyGains", "대기실", ref _lobby);
+        ACO_BgmPoolGUI.Draw(serializedObject, "BossUrls", "BossNames", "BossGains", "보스 기본 (전용 곡 없는 보스 페이즈)", ref _boss);
+        ACO_BgmPoolGUI.Draw(serializedObject, "PhaseUrls", "PhaseNames", "PhaseGains", "일반 페이즈 기본 (전용 곡 없는 일반 페이즈)", ref _phase);
         serializedObject.ApplyModifiedProperties();
     }
 }
@@ -90,8 +109,9 @@ public class ACO_PhaseModuleEditor : Editor
     {
         if (UdonSharpGUI.DrawDefaultUdonSharpBehaviourHeader(target)) { return; }
         serializedObject.Update();
-        DrawPropertiesExcluding(serializedObject, "m_Script", "BgmUrls", "BgmNames");
-        ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "이 페이즈 전용 BGM (비우면 보스는 보스 기본, 일반은 일반 기본 풀)", ref _showBgm);
+        // 단계별 곡(BgmUrls2 · 3)은 단계가 있는 보스(대사 표 인스펙터)만 보인다
+        DrawPropertiesExcluding(serializedObject, "m_Script", "BgmUrls", "BgmNames", "BgmGains", "BgmUrls2", "BgmNames2", "BgmGains2", "BgmUrls3", "BgmNames3", "BgmGains3");
+        ACO_BgmPoolGUI.Draw(serializedObject, "BgmUrls", "BgmNames", "BgmGains", "이 페이즈 전용 BGM (비우면 보스는 보스 기본, 일반은 일반 기본 풀)", ref _showBgm);
         serializedObject.ApplyModifiedProperties();
     }
 }

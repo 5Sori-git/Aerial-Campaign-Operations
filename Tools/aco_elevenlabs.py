@@ -117,13 +117,16 @@ def main():
     chars = 0
     for line in data['lines']:
         sp = data['voices'][line['speaker']]
-        m = sp.get('model', model)   # 화자별 모델(없으면 전체 모델) — AWACS는 평소 쓰는 목소리와 같게 eleven_v4
+        m = line.get('model', sp.get('model', model))   # 줄 → 화자 → 전체 모델 순(AWACS는 평소 쓰는 목소리와 같게 eleven_v4, 잠수함 2판은 줄마다 v4)
         settings = dict(sp.get('settings', {}))
         settings.update(line.get('settings', {}))
         radio_cfg = sp.get('radio')   # 화자에 radio가 있으면 무전 필터(aco_radio_filter)를 입혀 wav로 — 목소리 자체에 무전 느낌이 없는 화자만(선원·시스템)
         h = digest(sp['id'], m, settings, line['text'] + ('|radio' + json.dumps(radio_cfg, sort_keys=True) if radio_cfg else ''))
         base = line.get('base', 'AWACSVoiceLines')
         out = os.path.normpath(os.path.join(AUDIO, base, line['path']))
+        mix = line.get('mix')   # 환호 등을 까는 줄(aco_cheer_mix): 목소리는 Tools 원본에 쓰고, 게임 파일은 섞어서 만든다
+        if mix:
+            out = os.path.normpath(os.path.join(HERE, '..', mix['voice']))
         ckey = line['path'] if base == 'AWACSVoiceLines' else base + '/' + line['path']
         fresh = os.path.exists(out) and cache.get(ckey) == h
         if only and line['id'] not in only:
@@ -164,6 +167,8 @@ def main():
         made += 1
         chars += len(line['text'])
         print('made', line['id'], '->', line['path'], '(%d bytes)' % len(audio))
+        if mix:
+            print('   -> 섞기 필요: blender --background --factory-startup --python Tools/aco_cheer_mix.py -- %s %s Assets/ACO_Addon/Audio/AWACSVoiceLines/%s' % (mix['cheer'], mix['voice'], line['path']))
     if '--list' not in args:
         print('done: %d lines, about %d characters' % (made, chars))
 

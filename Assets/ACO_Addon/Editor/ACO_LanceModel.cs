@@ -75,7 +75,9 @@ public static partial class ACO_PrefabBuilder
     public static void DestroyAfterSetup(GameObject root)
     {
         root.SetActive(false);
-        root.hideFlags = HideFlags.HideAndDontSave;
+        // 자식까지 저장하지 않게 표시한다 — 루트만 표시하면 지우기 전(delayCall)에 씬을 저장할 때 루트만 빠지고 자식이 씬 맨 위에 떨어져 남는다
+        // (2026-11-14: 잠수함 빌드 직후 저장 → 무장 · SLCM 마커가 원점(모항)에 남아 순양함 VLS가 쐈다)
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) { t.gameObject.hideFlags = HideFlags.HideAndDontSave; }
         EditorApplication.delayCall += () => { if (root != null) { UnityEngine.Object.DestroyImmediate(root); } };
     }
 

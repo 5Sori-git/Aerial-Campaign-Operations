@@ -112,12 +112,16 @@ public static partial class ACO_PrefabBuilder
         part.TargetHealth = health;
         part.ScoreValue = 800;
         part.MarkerLabel = "CLR";
+        part.SplashScale = LanceCoolerSplashScale;   // 범위 피해 저항(6-182)
         part.LockMarkers = new[] { marker };
         part.Hitboxes = new Collider[] { box };
         part.HideOnDeath = new[] { visual };
         part.ShowOnDeath = new[] { smoke };
         return part;
     }
+
+    /// 랜스 냉각탑 범위 피해 저항(6-182): 지원 폭격(중심 1,500)이 중심에 떨어지면 약 520, 탑 위면 약 675 — 체력 700이라 두 번쯤에 깨진다.
+    public const float LanceCoolerSplashScale = 0.45f;
 
     /// 원형 기초에 내접하는 정사각형 변 — 모서리가 기초 밖으로 나가지 않는다. 둘을 45도 엇갈려 둘레를 덮는다.
     private const float RailgunPadBox = 730f;

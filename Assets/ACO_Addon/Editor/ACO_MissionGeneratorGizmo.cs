@@ -10,7 +10,6 @@ public static class ACO_MissionGeneratorGizmo
     private static readonly Color IngressColor = new Color(1f, 0.55f, 0.1f);
     private static readonly Color SafeColor = new Color(0.3f, 1f, 0.4f);
     private static readonly Color UnitLineColor = new Color(1f, 1f, 1f, 0.35f);
-    private static readonly Color CapColor = new Color(0.4f, 0.75f, 1f);
 
     [DrawGizmo(GizmoType.NonSelected | GizmoType.Selected)]
     private static void Draw(ACO_MissionGenerator gen, GizmoType gizmoType)
@@ -37,20 +36,6 @@ public static class ACO_MissionGeneratorGizmo
                 float m = gen.SafeZoneMargin;
                 DrawRect(b.min.x - m, b.min.z - m, b.max.x + m, b.max.z + m, b.center.y, false);
                 DrawRect(b.min.x, b.min.z, b.max.x, b.max.z, b.center.y, true);
-            }
-        }
-
-        // CAP 지점: 그 고도에 선회 원(전투기 HoldRadius 기준 대략 600m)과 지면까지 수직선.
-        if (gen.CapPoints != null)
-        {
-            Handles.color = CapColor;
-            foreach (Transform cap in gen.CapPoints)
-            {
-                if (cap == null) { continue; }
-                Vector3 p = cap.position;
-                Handles.DrawWireDisc(p, Vector3.up, 600f);
-                Handles.DrawDottedLine(p, new Vector3(p.x, y, p.z), 6f);
-                Handles.Label(p + Vector3.up * 50f, $"CAP  {cap.name}  ({p.y:0}m)");
             }
         }
 

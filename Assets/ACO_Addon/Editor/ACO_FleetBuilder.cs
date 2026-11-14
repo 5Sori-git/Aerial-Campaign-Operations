@@ -1,9 +1,10 @@
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using SaccFlightAndVehicles;
 using ACO;
 
-/// 함대전 함선: 아군 기함 NPC_Flagship(순양함 — Ticonderoga, 주포 1·VLS 2·CIWS 2)과 적 항모 NPC_Carrier(Kuznetsov, CIWS 4).
+/// 함대전 함선: 아군 기함 NPC_Flagship(순양함 — Ticonderoga, 주포 1·VLS 2·CIWS 2)과 적 항모 NPC_Carrier(Kuznetsov, CIWS 4 · VLS 4).
 /// 모델은 Low Poly Warship Collection — 원본이 실제의 약 0.43배라 2.3배로 키운다(순양함 172m, 항모 300m). 콜라이더는 빌더가 상자로 둔다.
 /// 호위함·적 순양함·구축함은 기존 프리팹을 그대로 쓴다(NPC_GuardShip, NPC_Warship, NPC_Destroyer).
 public static partial class ACO_PrefabBuilder
@@ -95,17 +96,135 @@ public static partial class ACO_PrefabBuilder
             ModelPrefabPath = KuznetsovPath, ReservedForFleet = true,
             Parts = new[]
             {
-                new PartSpec(PartKind.CIWS, "CIWS_FL", new Vector3(-30f, 19f, 110f)),
-                new PartSpec(PartKind.CIWS, "CIWS_FR", new Vector3(30f, 19f, 110f)),
-                new PartSpec(PartKind.CIWS, "CIWS_AL", new Vector3(-30f, 19f, -120f)),
-                new PartSpec(PartKind.CIWS, "CIWS_AR", new Vector3(30f, 19f, -120f)),
+                // 쿠즈네초프 모델에 그려진 포대(양현 스폰슨의 대형 포탑 짝) 자리 — 6-183. 예전 자리(±30, 19, 110 / -120)는 앞쪽이 좁은 갑판 밖 허공이었다
+                new PartSpec(PartKind.CIWS, "CIWS_FL", CarrierCiwsSpots[0]),
+                new PartSpec(PartKind.CIWS, "CIWS_FR", CarrierCiwsSpots[1]),
+                new PartSpec(PartKind.CIWS, "CIWS_AL", CarrierCiwsSpots[2]),
+                new PartSpec(PartKind.CIWS, "CIWS_AR", CarrierCiwsSpots[3]),
+                // 모델에 그려진 VLS 해치 묶음(포대 옆 둥근 해치 — Etc_Turret) 자리 — 6-184
+                new PartSpec(PartKind.VLS, "VLS_FL", CarrierVlsSpots[0]),
+                new PartSpec(PartKind.VLS, "VLS_FR", CarrierVlsSpots[1]),
+                new PartSpec(PartKind.VLS, "VLS_AL", CarrierVlsSpots[2]),
+                new PartSpec(PartKind.VLS, "VLS_AR", CarrierVlsSpots[3]),
             },
         };
     }
 
+    /// 항모 VLS 자리(FL · FR · AL · AR, 함선 로컬) — 모델 해치판(Etc_Turret, 윗면 14.8) 가운데. 발사기 상자(높이 1.2)가 반쯤 해치판 위로 나온다.
+    public static readonly string[] CarrierVlsNames = { "VLS_FL", "VLS_FR", "VLS_AL", "VLS_AR" };
+    public static readonly Vector3[] CarrierVlsSpots =
+    {
+        new Vector3(-22f, 14.2f, 55.6f),
+        new Vector3(21.1f, 14.2f, 60.9f),
+        new Vector3(-21.8f, 14.2f, -117.4f),
+        new Vector3(28.2f, 14.2f, -117.4f),
+    };
+
+    /// carrier-vls-1(6-184): 있는 항모 프리팹(LoadPrefabContents 루트)에 VLS 4개를 붙이거나 자리를 맞춘다 — 새로 만들 때와 같은 부위(CreateVLSObject), 함선 Parts에 더한다.
+    public static bool EnsureCarrierVls(GameObject root)
+    {
+        ACO_Warship ship = root.GetComponent<ACO_Warship>();
+        Transform body = root.transform.Find("Body");
+        if (ship == null || body == null) { return false; }
+        bool changed = false;
+        GameObject missile = null;
+        var parts = new System.Collections.Generic.List<UdonSharp.UdonSharpBehaviour>(ship.Parts ?? new UdonSharp.UdonSharpBehaviour[0]);
+        for (int i = 0; i < CarrierVlsNames.Length; i++)
+        {
+            Transform t = body.Find(CarrierVlsNames[i]);
+            if (t == null)
+            {
+                if (missile == null) { missile = LoadOrBuildVlsMissile(); }
+                GameObject part = CreateVLSObject(CarrierVlsNames[i], missile);
+                AttachPart(body.gameObject, part, CarrierVlsSpots[i]);
+                ACO_SAMSite sam = part.GetComponent<ACO_SAMSite>();
+                if (sam != null && !parts.Contains(sam)) { parts.Add(sam); }
+                changed = true;
+            }
+            else if ((t.localPosition - CarrierVlsSpots[i]).sqrMagnitude > 0.0001f)
+            {
+                t.localPosition = CarrierVlsSpots[i];
+                changed = true;
+            }
+        }
+        if (changed)
+        {
+            ship.Parts = parts.ToArray();
+            ACO_PrefabTuning.TuneShip(ship);
+            HideCarrierPartModels(root);   // 새로 붙인 VLS도 외형은 선체 모델이 맡는다(6-185)
+        }
+        return changed;
+    }
+
+    /// 항모 CIWS 자리(FL · FR · AL · AR, 함선 로컬) — 모델 포탑 메시(Large_Turret 짝)의 가운데. Setup Check carrier-ciws-1도 쓴다.
+    public static readonly string[] CarrierCiwsNames = { "CIWS_FL", "CIWS_FR", "CIWS_AL", "CIWS_AR" };
+    public static readonly Vector3[] CarrierCiwsSpots =
+    {
+        new Vector3(-20.9f, 13.9f, 69.65f),
+        new Vector3(20.9f, 15.7f, 72.5f),
+        new Vector3(-21.3f, 13.7f, -127.85f),
+        new Vector3(28f, 13.7f, -127.85f),
+    };
+
     public static GameObject BuildCarrier()
     {
         EnsurePrefabFolder();
-        return BuildShipPrefab(CarrierSpec(), LoadOrBuildVlsMissile());
+        GameObject prefab = BuildShipPrefab(CarrierSpec(), LoadOrBuildVlsMissile());
+        if (prefab != null)
+        {
+            string path = AssetDatabase.GetAssetPath(prefab);
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                bool hid = HideCarrierPartModels(root);
+                bool arc = ApplyCarrierCiwsArc(root);
+                if (hid || arc) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        return prefab;
+    }
+
+    /// 항모 CIWS 좌우 한계(6-186): 양현 스폰슨에 붙어 있어 선체 반대편은 못 쏜다 — 바깥쪽 200°.
+    public const float CarrierCiwsYawArc = 200f;
+
+    /// carrier-ciws-arc-1(6-186): 항모 CIWS 4개의 쉬는 자세를 바깥쪽(좌현 -90°, 우현 +90°)으로 돌리고 YawArc를 200°로 — 선체 너머 미사일은 요격 · 사격하지 않는다.
+    public static bool ApplyCarrierCiwsArc(GameObject root)
+    {
+        Transform body = root.transform.Find("Body");
+        if (body == null) { return false; }
+        bool changed = false;
+        foreach (string n in CarrierCiwsNames)
+        {
+            Transform part = body.Find(n);
+            ACO_AAGunSite aa = part != null ? part.GetComponent<ACO_AAGunSite>() : null;
+            if (aa == null) { continue; }
+            if (Mathf.Abs(aa.YawArc - CarrierCiwsYawArc) > 0.01f) { aa.YawArc = CarrierCiwsYawArc; EditorUtility.SetDirty(aa); changed = true; }
+            if (aa.TurretYaw == null) { continue; }
+            Quaternion rest = Quaternion.Euler(0f, part.localPosition.x < 0f ? -90f : 90f, 0f);
+            if (Quaternion.Angle(aa.TurretYaw.localRotation, rest) > 0.1f) { aa.TurretYaw.localRotation = rest; EditorUtility.SetDirty(aa.TurretYaw); changed = true; }
+        }
+        return changed;
+    }
+
+    /// carrier-part-models-1(6-185): 항모 CIWS · VLS의 임시 외형(상자 · 포신 MeshRenderer)을 끈다 — 모델 선체에 포대 · 해치가 그려져 있다.
+    /// 히트박스 · 락온 마커 · 포구 · 예광탄 · 파괴 연출(파티클)은 그대로라 쏘고 맞고 터지는 건 같다.
+    public static bool HideCarrierPartModels(GameObject root)
+    {
+        Transform body = root.transform.Find("Body");
+        if (body == null) { return false; }
+        bool changed = false;
+        foreach (string n in CarrierCiwsNames.Concat(CarrierVlsNames))
+        {
+            Transform part = body.Find(n);
+            if (part == null) { continue; }
+            foreach (MeshRenderer r in part.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (!r.enabled) { continue; }
+                r.enabled = false;
+                changed = true;
+            }
+        }
+        return changed;
     }
 }

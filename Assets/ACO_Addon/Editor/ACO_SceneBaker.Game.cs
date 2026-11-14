@@ -181,6 +181,8 @@ public partial class ACO_SceneBaker
         flow.CountdownTexts = overlayTexts.ToArray();
         // 격납고·상점: 출격 카운트다운 중 무장 변경·구매를 막는다
         ACO_SupportManager support = Object.FindObjectOfType<ACO_SupportManager>(true);
+        Transform home = HomeBase();
+        LinkTerrainExclude(home);
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             foreach (ACO_Loadout l in root.GetComponentsInChildren<ACO_Loadout>(true))
@@ -193,6 +195,7 @@ public partial class ACO_SceneBaker
             {
                 if (tm.Flow != flow) { tm.Flow = flow; MarkChanged(tm); }
                 if (tm.Support != support) { tm.Support = support; MarkChanged(tm); }   // 지원 유닛 아군 테두리
+                if (tm.HomeBase != home) { tm.HomeBase = home; MarkChanged(tm); }       // 항모 마커(작전 테이블의 HomeBase)
             }
             foreach (ACO_Shop sh in root.GetComponentsInChildren<ACO_Shop>(true)) { if (sh.Flow != flow) { sh.Flow = flow; MarkChanged(sh); } }
         }
@@ -282,6 +285,9 @@ public partial class ACO_SceneBaker
                     MarkChanged(shop);
                     Debug.Log($"[ACO] 상점 '{shop.name}': 강화 아이콘을 {ACO_PlayerProgress.UPGRADE_COUNT}항목에 맞게 다시 채웠습니다.", shop);
                 }
+                // 기동성 상세 칸의 받음각 · 하중 한계 미리보기(6-179) — 씬의 첫 플레이어 기체 강화 스크립트로 계산한다
+                ACO_VehicleUpgrades preview = Object.FindObjectOfType<ACO_VehicleUpgrades>(true);
+                if (shop.MobilityPreview != preview) { shop.MobilityPreview = preview; MarkChanged(shop); }
                 if (shop.Progress == progress) { continue; }
                 shop.Progress = progress;
                 MarkChanged(shop);
@@ -384,6 +390,7 @@ public partial class ACO_SceneBaker
             generator.Manager = Object.FindObjectOfType<ACO_MissionManager>(true);
             generator.Railgun = poolRoot.GetComponentInChildren<ACO_Railgun>(true);
             generator.LandShip = poolRoot.GetComponentInChildren<ACO_LandShip>(true);
+            generator.Submarine = poolRoot.GetComponentInChildren<ACO_Submarine>(true);
             generator.Carrier = null;
             foreach (ACO_Warship ship in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (ship.ReservedForFleet) { generator.Carrier = ship; } }
             generator.EscortUnits = poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true);

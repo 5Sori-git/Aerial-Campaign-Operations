@@ -9,7 +9,7 @@ namespace ACO
 {
     /// 기체 표시(헐넘버·콜사인·킬마크, 양쪽 면). 동기화 코드 없음 — 조종사의 PlayerData는 VRChat이 모두에게 보내 준다.
     /// 프로젝터가 아니라 기체에 붙인 판이다(ACO/MarkText: 카메라 쪽으로 당겨 Z파이팅이 없고, 멀면 사라진다).
-    /// 탑승자가 있는 동안만 보인다. 거리로 끄지 않는다 — 관전 카메라는 내 몸과 멀리 떨어져 있어서, 먼 글자는 셰이더가 지운다. 값이 바뀔 때만 다시 만든다.
+    /// 탑승자가 있는 동안만 보인다(자유 비행은 내려도 마지막 조종사가 월드에 있는 동안 — 6-194). 거리로 끄지 않는다 — 관전 카메라는 내 몸과 멀리 떨어져 있어서, 먼 글자는 셰이더가 지운다. 값이 바뀔 때만 다시 만든다.
     /// 글자는 Black Ops One(A-Z 0-9 - 공백만 담은 고정 폰트 — 콜사인·헐넘버 입력 규칙과 같다).
     /// 킬마크: 한 미션 최고 격추수를 100·10·1 단위 아이콘으로 줄여 그린다(날개 달린 별 / 전투기 3기 편대 / 전투기). 폰트에 기호가 없어 메시로 만든다.
     /// 격납고 미리보기: EntityControl이 비어 있으면 데칼 샘플 기체다 — 탑승자 대신 내 값을 보여 준다.
@@ -22,9 +22,13 @@ namespace ACO
         [Header("참조 (Bake가 채운다)")]
         [Tooltip("실제 기체는 반드시 넣는다. 비어 있으면 격납고 샘플로 보고 내 값을 보여 준다")]
         public SaccEntity EntityControl;
+        [Tooltip("같은 기체의 데칼(ACO_Decals) — 자유 비행에서 빈 기체에도 마지막 조종사의 표시를 남긴다(6-194). 생성 코드가 넣는다")]
+        public ACO_VehicleDecal Decal;
         [Tooltip("글자 묶음 — 보이지 않을 때 이것만 끈다")]
         public GameObject Root;
         public TextMeshPro[] HullTexts;
+        [Tooltip("뒷전 플랩 윗면의 헐넘버(6-190) — 플랩 본 아래에 붙어 플랩과 함께 움직인다. 글자 묶음(Root) 밖이라 따로 켜고 끈다")]
+        public TextMeshPro[] FlapTexts;
         public TextMeshPro[] NameTexts;
         [Tooltip("킬마크 메시를 넣을 곳(양쪽 면이 같은 메시를 쓴다)")]
         public MeshFilter[] KillFilters;
@@ -63,9 +67,22 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             bool preview = EntityControl == null;
             bool show = Utilities.IsValid(me);
-            if (preview) { show = show && (me.GetPosition() - transform.position).sqrMagnitude < ShowRange * ShowRange; }
-            else { show = show && EntityControl.Occupied && !EntityControl.dead; }
-            VRCPlayerApi pilot = !show ? null : (preview ? me : Networking.GetOwner(EntityControl.gameObject));
+            VRCPlayerApi pilot = null;
+            if (preview)
+            {
+                show = show && (me.GetPosition() - transform.position).sqrMagnitude < ShowRange * ShowRange;
+                if (show) { pilot = me; }
+            }
+            else if (show && !EntityControl.dead)
+            {
+                if (EntityControl.Occupied) { pilot = Networking.GetOwner(EntityControl.gameObject); }
+                else if (Decal != null)
+                {
+                    // 자유 비행: 빈 기체에도 마지막 조종사의 표시를 남긴다 — 그 사람이 월드를 나갔으면 숨긴다(소유권이 넘어가 엉뚱한 이름이 보이지 않게)
+                    int id = Decal.KeptPilotId();
+                    if (id > 0) { pilot = VRCPlayerApi.GetPlayerById(id); }
+                }
+            }
             if (!Utilities.IsValid(pilot)) { show = false; }
             SetShown(show);
             if (!show) { return; }
@@ -76,6 +93,7 @@ namespace ACO
             {
                 _hull = hull;
                 SetAll(HullTexts, hull);
+                SetAll(FlapTexts, hull);
             }
             string callsign;
             if (!PlayerData.TryGetString(pilot, ACO_TacName.KEY, out callsign)) { callsign = ""; }
@@ -98,6 +116,10 @@ namespace ACO
             if (on == _shown) { return; }
             _shown = on;
             if (Root) { Root.SetActive(on); }
+            if (FlapTexts != null)
+            {
+                for (int i = 0; i < FlapTexts.Length; i++) { if (FlapTexts[i]) { FlapTexts[i].gameObject.SetActive(on); } }
+            }
         }
 
         private void SetAll(TextMeshPro[] texts, string value)

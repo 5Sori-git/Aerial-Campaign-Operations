@@ -670,7 +670,8 @@ public static class ACO_FxBuilder
         Draw(launch, Smoke(), 0f).maxParticleSize = 8f;
         site.LaunchSmoke = launch;
 
-        ParticleSystem burst = Part(root, "SkyBurst", new Vector2(0.6f, 0.6f), Vector2.zero, new Vector2(5000f, 5000f), 0f, 2);
+        // 섬광 12km · 불덩이 2배(사용자 확인 — 19km 거리에서 점처럼 작았다)
+        ParticleSystem burst = Part(root, "SkyBurst", new Vector2(0.6f, 0.6f), Vector2.zero, new Vector2(SkyFlashSize, SkyFlashSize), 0f, 2);
         Shape(burst, ParticleSystemShapeType.Sphere, 1f, false);
         SetBursts(burst, 6f, 0f, 1f);
         ParticleSystem.MainModule bm = burst.main;
@@ -678,8 +679,8 @@ public static class ACO_FxBuilder
         Fade(burst, Color.white, new Color(1f, 0.8f, 0.6f), 1f, 0f);
         Grow(burst, 0.4f, 1f);
         Draw(burst, Flash(), -30f).maxParticleSize = 1000f;
-        ParticleSystem fire = Part(burst.transform, "Fire", new Vector2(3f, 5f), new Vector2(40f, 220f), new Vector2(900f, 1800f), 0f, 24);
-        Shape(fire, ParticleSystemShapeType.Sphere, 150f, false);
+        ParticleSystem fire = Part(burst.transform, "Fire", new Vector2(3f, 5f), new Vector2(80f, 440f), new Vector2(1800f, 3600f), 0f, 24);
+        Shape(fire, ParticleSystemShapeType.Sphere, 300f, false);
         SetBursts(fire, 6f, 0f, 18f);
         ParticleSystem.MainModule firem = fire.main;
         firem.playOnAwake = false;
@@ -688,7 +689,46 @@ public static class ACO_FxBuilder
         Grow(fire, 0.5f, 1.4f);
         Draw(fire, Fire(), -10f).maxParticleSize = 1000f;
         site.SkyBurst = burst;
+
+        // 대기권 밖 자폭 링(사용자 요청 "거대한 링"): 지면과 나란한 평면(정렬 Local, X 90°)에 충격파 고리 텍스처 한 장 — 아래에서 올려다보면 하늘에 큰 타원.
+        // 청백색 → 주황으로 식으며 퍼지고 옅어진다. 두 번째 링(자식)은 조금 늦게, 더 옅고 느리게. 사이트가 대기권 밖 자폭 때만 SkyRing.Play()(자식 포함)
+        ParticleSystem ring = SkyRingPart(root, "SkyRing", SkyRingLife, SkyRingRadius * 2f, 0.95f, 0f);
+        ParticleSystem ring2 = SkyRingPart(ring.transform, "SkyRing2", SkyRingLife * 1.3f, SkyRingRadius * 1.5f, 0.5f, 0.45f);
+        ring2.transform.localRotation = Quaternion.identity;   // 부모가 이미 눕혀져 있다
+        site.SkyRing = ring;
         EditorUtility.SetDirty(site);
+    }
+
+    public const float SkyFlashSize = 12000f;
+    public const float SkyRingRadius = 15000f;   // 다 퍼진 링 반경(m)
+    public const float SkyRingLife = 4f;
+    private static readonly Color SkyRingHot = new Color(0.8f, 0.9f, 1f);
+    private static readonly Color SkyRingCool = new Color(1f, 0.6f, 0.3f);
+
+    private static ParticleSystem SkyRingPart(Transform parent, string name, float life, float diameter, float alpha, float delay)
+    {
+        ParticleSystem ps = Part(parent, name, new Vector2(life, life), Vector2.zero, new Vector2(diameter, diameter), 0f, 2);
+        ps.transform.localPosition = Vector3.zero;
+        ps.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // 고리 판이 지면과 나란하게
+        SetBursts(ps, life + delay, delay, 1f);
+        ParticleSystem.MainModule main = ps.main;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startRotation = 0f;
+        ParticleSystem.ShapeModule shape = ps.shape;
+        shape.enabled = false;
+        NoFlipbook(ps);
+        Fade(ps, SkyRingHot, SkyRingCool, alpha, 0f);
+        // 처음엔 빠르게, 끝으로 갈수록 느리게 퍼진다
+        ParticleSystem.SizeOverLifetimeModule size = ps.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.02f, 0f, 3f), new Keyframe(1f, 1f, 0f, 0f)));
+        ParticleSystemRenderer r = Draw(ps, Shock(), -30f);
+        r.renderMode = ParticleSystemRenderMode.Billboard;
+        r.alignment = ParticleSystemRenderSpace.Local;
+        r.maxParticleSize = 1000f;
+        EditorUtility.SetDirty(ps);
+        return ps;
     }
 
     // ───────────── 레일건 포드(RGP) ─────────────
@@ -1664,6 +1704,50 @@ public static class ACO_FxBuilder
         }
     }
 
+    /// 어뢰 항적(잠수함 6-202 · 6-205): 함선 항적 거품과 같은 재질 · 색 · 사라짐. 잠수함이 어뢰 머리 자리에 직접 뿌린다(Emit — 저절로 뿜지 않는다).
+    public static void StyleTorpedoFoam(ParticleSystem ps)
+    {
+        if (ps == null) { return; }
+        ParticleSystem.MainModule main = ps.main;
+        main.startColor = new Color(0.95f, 0.98f, 1f, 0.82f);
+        main.startSpeed = 0f;
+        ParticleSystem.EmissionModule emission = ps.emission;
+        emission.rateOverTime = 0f;
+        emission.rateOverDistance = 0f;
+        NoFlipbook(ps);
+        Fade(ps, Color.white, Color.white, 1f, 0.06f);
+        Grow(ps, 0.6f, 2.2f);
+        Draw(ps, Foam(), 0f).renderMode = ParticleSystemRenderMode.HorizontalBillboard;
+        EditorUtility.SetDirty(ps);
+    }
+
+    /// 잠수함 어뢰 항적이 맞춰진 어뢰 속도(m/s) — ACO_PhaseSubmarine.TorpedoSpeed와 같게.
+    public const float TorpedoWakeSpeed = 500f;
+
+    /// 어뢰 항적(6-212): 초공동 어뢰는 함선보다 수십 배 빨라 함선 간격(약 4.5m) · 수명(22초)이면 파티클 한도(96)에 바로 걸려
+    /// 머리 쪽 거품이 끊긴다 — 간격을 넓히고 수명을 줄여 약 2km 꼬리로. 한도는 속도 / 간격 × 수명에 여유를 둔다.
+    public static void StyleTorpedoWake(ACO_WaterFx fx)
+    {
+        if (fx == null || fx.Particles == null) { return; }
+        // 한 프레임이 길어도(0.5초) 지우지 않는다 — 새 어뢰는 몇 km 떨어진 잠수함 자리에서 시작하므로 그때만 지운다
+        fx.JumpDistance = Mathf.Max(60f, TorpedoWakeSpeed * 0.5f);
+        foreach (ParticleSystem ps in fx.Particles)
+        {
+            if (ps == null) { continue; }
+            bool bow = ps.gameObject.name == "BowWave";
+            float spacing = bow ? 25f : 18f;
+            float life = bow ? 1.5f : 4.5f;
+            ParticleSystem.MainModule main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.8f, life);
+            main.maxParticles = Mathf.CeilToInt(TorpedoWakeSpeed / spacing * life * 1.3f) + 8;
+            ParticleSystem.EmissionModule emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.rateOverDistance = 1f / spacing;
+            EditorUtility.SetDirty(ps);
+        }
+        EditorUtility.SetDirty(fx);
+    }
+
     public static void ApplyToWakes()
     {
         FixTextures();
@@ -1674,6 +1758,7 @@ public static class ACO_FxBuilder
             {
                 if (fx.Mode != ACO_WaterFx.MODE_WAKE || PrefabUtility.IsPartOfPrefabInstance(fx)) { continue; }
                 StyleWake(fx);
+                if (fx.gameObject.name.StartsWith("TorpWake_")) { StyleTorpedoWake(fx); }   // 잠수함 어뢰 항적은 빠르기에 맞춘 간격 · 수명을 지킨다
                 any = true;
             }
             return any;
