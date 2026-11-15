@@ -68,7 +68,7 @@ namespace ACO
 
         [Header("돌진")]
         [Tooltip("돌진 속도(m/s)")]
-        public float DiveSpeed = 60f;
+        public float DiveSpeed = 49f;   // 6-226: 궤도 7km 기준 돌진 약 3분
         [Tooltip("돌진 최소 시간(초) — 코어를 부술 시간을 보장한다")]
         public float DiveMinTime = 110f;
         [Tooltip("돌진이 끝나는 높이(도시 지면 위 m)")]

@@ -68,6 +68,7 @@ public static partial class ACO_HUDBuilder
         { "tut.p3.d4", "<color=#F0FFF4><b>3</b></color> 특수무장    <color=#F0FFF4><b>4</b></color> 지원 호출", "<color=#F0FFF4><b>3</b></color> Special    <color=#F0FFF4><b>4</b></color> Support", "<color=#F0FFF4><b>3</b></color> 特殊兵装    <color=#F0FFF4><b>4</b></color> 支援要請" },
         { "tut.p3.d5", "발사  <color=#F0FFF4><b>Space</b></color>    플레어  <color=#F0FFF4><b>X</b></color>", "Fire  <color=#F0FFF4><b>Space</b></color>    Flares  <color=#F0FFF4><b>X</b></color>", "発射  <color=#F0FFF4><b>Space</b></color>    フレア  <color=#F0FFF4><b>X</b></color>" },
         { "tut.p3.d6", "내리기  <color=#F0FFF4><b>Enter</b></color> 두 번", "Exit  <color=#F0FFF4><b>Enter</b></color> twice", "降機  <color=#F0FFF4><b>Enter</b></color> を2回" },
+        { "tut.p3.d7", "애프터버너 켜기·끄기  <color=#F0FFF4><b>T</b></color>", "Afterburner on/off  <color=#F0FFF4><b>T</b></color>", "アフターバーナー オン/オフ  <color=#F0FFF4><b>T</b></color>" },
         { "tut.p3.vr", "VR", "VR", "VR" },
         { "tut.p3.v1", "왼손 그립 = 스로틀 (손을 앞뒤로)", "Left grip = throttle (move hand fore/aft)", "左グリップ = スロットル(手を前後に)" },
         { "tut.p3.v2", "오른손 그립 = 조종간 (손을 기울이기)", "Right grip = stick (tilt your hand)", "右グリップ = 操縦桿(手を傾ける)" },
@@ -75,6 +76,7 @@ public static partial class ACO_HUDBuilder
         { "tut.p3.v4", "왼쪽 다이얼: 플랩, 플레어, 브레이크, 기어", "Left dial: flaps, flares, brake, gear", "左ダイヤル：フラップ、フレア、ブレーキ、ギア" },
         { "tut.p3.v5", "스틱으로 고르고 트리거로 사용", "Select with the stick, use with the trigger", "スティックで選び、トリガーで使用" },
         { "tut.p3.v6", "점프 한 번 = 좌석 높이 맞추기, 두 번 = 내리기", "Jump once = adjust seat height, twice = exit", "ジャンプ1回 = 座席の高さ調整、2回 = 降機" },
+        { "tut.p3.v7", "스로틀 끝까지 앞으로 = 애프터버너", "Throttle fully forward = afterburner", "スロットルを最前まで = アフターバーナー" },
         { "tut.p3.n1", "미사일·특수무장: 기수 앞의 적을 자동으로 조준합니다. 락온 마커가 빨갛게 바뀌면 발사하세요. 쏜 칸은 몇 초 뒤 다시 장전됩니다", "Missiles and special weapons aim at enemies ahead of your nose automatically. Fire when the lock-on marker turns red. Fired slots reload after a few seconds", "ミサイル・特殊兵装：機首前方の敵を自動で狙います。ロックオンマーカーが赤くなったら発射。撃った枠は数秒後に再装填されます" },
         { "tut.p3.n2", "지원 호출: 로드아웃 패널에서 고른 지원을 부릅니다. 위치가 필요한 지원은 바라보는 곳을 지정합니다", "Support: calls the support picked on the LOADOUT panel. Support that needs a location targets where you are looking", "支援要請：ロードアウトパネルで選んだ支援を呼びます。位置が必要な支援は視線の先を指定します" },
         { "tut.p3.n3", "캐터펄트: 노란 옷 유도요원의 신호를 따라 캐터펄트에 오르고, 사출장교가 신호하면 스로틀을 끝까지(애프터버너) 올리세요. 점검이 끝나면 사출됩니다(설정에서 갑판 요원을 끄면 풀스로틀 2초)", "Catapult: follow the yellow-shirt director onto the catapult. When the shooter signals, push the throttle all the way (afterburner). You launch after the final check (with deck crew off in Settings: full throttle for 2 s)", "カタパルト：黄色い服の誘導員の合図でカタパルトに乗り、射出士官の合図でスロットルを最大(アフターバーナー)に。点検後に射出されます(設定で甲板要員をオフにすると全開2秒)" },
@@ -546,11 +548,12 @@ public static partial class ACO_HUDBuilder
     {
         TutText(p, "tut.p3.desktop", new Vector2(-390f, 355f), new Vector2(740f, 50f), 34f, font, TutDim, TextAlignmentOptions.Left);
         TutText(p, "tut.p3.vr", new Vector2(400f, 355f), new Vector2(740f, 50f), 34f, font, TutDim, TextAlignmentOptions.Left);
-        for (int i = 0; i < 6; i++)
+        // 7줄(6-250 — 데스크톱 애프터버너 T · VR 스로틀 끝까지): 간격 52 → 47로 좁혀 아래 구분선(y 2) 위에 끝난다
+        for (int i = 0; i < 7; i++)
         {
-            float y = 300f - i * 52f;
-            TutText(p, $"tut.p3.d{i + 1}", new Vector2(-390f, y), new Vector2(740f, 54f), 37f, font, TutBody, TextAlignmentOptions.Left);
-            TutText(p, $"tut.p3.v{i + 1}", new Vector2(400f, y), new Vector2(740f, 54f), 35f, font, TutBody, TextAlignmentOptions.Left);
+            float y = 300f - i * 47f;
+            TutText(p, $"tut.p3.d{i + 1}", new Vector2(-390f, y), new Vector2(740f, 50f), 37f, font, TutBody, TextAlignmentOptions.Left);
+            TutText(p, $"tut.p3.v{i + 1}", new Vector2(400f, y), new Vector2(740f, 50f), 35f, font, TutBody, TextAlignmentOptions.Left);
         }
         MakeUiBox(p, "Divider", new Vector2(0f, 2f), new Vector2(1520f, 3f), TutLine);
         float[] ys = { -55f, -132f, -212f, -292f };

@@ -27,9 +27,9 @@ public static class ACO_RadarBuilder
         ACO_HudRadar existing = markers.GetComponentInChildren<ACO_HudRadar>(true);
         if (existing != null)
         {
-            // 예전에 만든 레이더: 범위 고정(10km)·불투명도용 렌더러 목록
+            // 예전에 만든 레이더: 범위(표시 거리 — 최대를 넘거나 비었을 때만 기본 5km로, 6-239)·불투명도용 렌더러 목록
             bool changed = false;
-            if (!Mathf.Approximately(existing.Range, 10000f)) { existing.Range = 10000f; changed = true; }
+            if (existing.Range <= 0f || existing.Range > existing.MaxRange) { existing.Range = 5000f; changed = true; }
             if ((existing.Renderers == null || existing.Renderers.Length == 0) && existing.Root != null)
             {
                 existing.Renderers = existing.Root.GetComponentsInChildren<MeshRenderer>(true);

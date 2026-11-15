@@ -44,6 +44,7 @@ public static partial class ACO_PrefabBuilder
     private static readonly Vector3 SubDroneHinge = new Vector3(5.8f, 8.69f, -49f);
     private const float SubDroneLaunchUp = 4f;      // 무인기가 나타나는 높이(사출구 위, m)
     private const float SubDroneLaunchYaw = 35f;    // 바깥으로 비스듬히(도)
+    public const int SonarRingLayer = 5;            // 소나 원 = UI 레이어(6-238)
 
     // 잠수함 사출 전투 무인기(6-217)
     public const string SubDronePrefab = "NPC_SubDrone";
@@ -549,6 +550,7 @@ public static partial class ACO_PrefabBuilder
     private static GameObject BuildSonarRing(Transform parent)
     {
         var go = new GameObject("SonarRing");
+        go.layer = SonarRingLayer;   // 6-238: UI 레이어 — HUD 표시라 관전 카메라 · VRChat 카메라(사진)에 안 찍힌다
         go.transform.SetParent(parent, false);
         LineRenderer line = go.AddComponent<LineRenderer>();
         line.useWorldSpace = false;

@@ -74,9 +74,9 @@ namespace ACO
         [Tooltip("번역 장치(Bake) — 무전 자막 본문만 번역한다(6-175). 비면 영어 그대로")]
         public ACO_Localization Loc;
         [Tooltip("머리 기준 위치(m): 오른쪽(+X), 위(+Y), 앞(+Z) — 기본은 시야 아래쪽 가운데")]
-        public Vector3 HeadOffset = new Vector3(0f, -0.2f, 0.9f);
+        public Vector3 HeadOffset = new Vector3(0f, 0.2f, 0.9f);   // 6-239 기본값: 시야 위쪽 가운데
         [Tooltip("머리 회전을 따라가는 빠르기")]
-        public float FollowSharpness = 8f;
+        public float FollowSharpness = 1000f;
 
         [Header("소리")]
         [Tooltip("음성·PTT 소리를 낼 AudioSource(2D 권장 — Spatial Blend 0)")]

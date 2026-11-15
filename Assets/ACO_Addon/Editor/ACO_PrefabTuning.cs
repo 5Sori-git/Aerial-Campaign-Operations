@@ -225,6 +225,313 @@ public static class ACO_PrefabTuning
         Debug.Log("[ACO] 랜스 포대: 코어 열림 30초, 첫 충전은 공격할 때(최대 180초 대기)로 맞췄습니다. 씬을 저장하세요.");
     }
 
+    /// crew-walk-1(6-229): 갑판 점검요원 걷는 빠르기 3.2 → 2.2m/s — 걷기 클립 보폭과 맞춰 발이 미끄러지지 않게.
+    private static void TuneCrewWalk()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_CatapultCrew c in root.GetComponentsInChildren<ACO_CatapultCrew>(true))
+            {
+                if (Mathf.Approximately(c.CheckWalkSpeed, 2.2f)) { continue; }
+                c.CheckWalkSpeed = 2.2f;
+                Mark(c);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        RevertInScene<ACO_CatapultCrew>("CheckWalkSpeed");
+        Debug.Log($"[ACO] 갑판 요원 걷는 빠르기: 프리팹 {n}곳을 2.2m/s로.");
+    }
+
+    /// ordnance-debuglog-off-1(6-227): 탄 프리팹(ACO_Ordnance — 폭탄 ACO_Bomb · ACO_Bomb(LGB) 등)의 DebugHitLog를 끈다. 공개 전 — 터질 때마다 로그가 쌓였다.
+    private static void TuneOrdnanceDebugLogOff()
+    {
+        int n = 0;
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { PrefabDir }))
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null) { continue; }
+            bool on = false;
+            foreach (ACO_Ordnance o in asset.GetComponentsInChildren<ACO_Ordnance>(true)) { if (o.DebugHitLog) { on = true; break; } }
+            if (!on) { continue; }
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_Ordnance o in root.GetComponentsInChildren<ACO_Ordnance>(true)) { o.DebugHitLog = false; EditorUtility.SetDirty(o); }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                n++;
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        Debug.Log($"[ACO] 탄 디버그 로그 끄기: 프리팹 {n}개.");
+    }
+
+    /// fortress-dive-core-1(6-226): 공중 요새 3단계 — 돌진 약 2분 30초 → 약 3분(DiveSpeed 60 → 49), 코어 체력 4000 → 2000.
+    /// 돌진 시간 = 대기 1.5초 + 가속 20초(엔진이 다 부서져 27m/s에서) + 남은 길 ÷ DiveSpeed — 궤도 7km 기준 길 약 8.5km.
+    private static void TuneFortressDiveCore()
+    {
+        string path = PrefabDir + "/NPC_Fortress.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { Debug.LogWarning("[ACO] 요새 돌진 · 코어: " + path + "가 없습니다."); return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_FlyingFortress f in root.GetComponentsInChildren<ACO_FlyingFortress>(true))
+            {
+                f.DiveSpeed = FortressDiveSpeed;
+                if (f.TargetHealth != null) { f.TargetHealth.Health = FortressCoreHealth; EditorUtility.SetDirty(f.TargetHealth); }
+                EditorUtility.SetDirty(f);
+            }
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        foreach (ACO_FlyingFortress f in FindInScene<ACO_FlyingFortress>())
+        {
+            Revert(f, "DiveSpeed");
+            if (f.TargetHealth != null) { Revert(f.TargetHealth, "Health"); }
+        }
+        Debug.Log($"[ACO] 요새 돌진 · 코어: 돌진 속도 {FortressDiveSpeed}m/s(약 3분), 코어 체력 {FortressCoreHealth}.");
+    }
+
+    public const float FortressDiveSpeed = 49f;
+    public const float FortressCoreHealth = 2000f;
+
+    /// artillery-shell-collider-1(6-225): 야포 포탄(ACO_ArtilleryShell) 모델의 콜라이더를 지운다. 포탄은 매 프레임 이동 구간을 Linecast로 보는데
+    /// 바꿔 끼운 박격포탄 모델(SM_Prop_Mortar_Shell_01)의 MeshCollider가 그 구간 안에 있어 무장 시간(0.5초)이 끝나자마자 자기 몸에 맞아 공중에서 터졌다.
+    private static void TuneArtilleryShellCollider()
+    {
+        string path = PrefabDir + "/ACO_ArtilleryShell.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { Debug.LogWarning("[ACO] 야포 포탄 콜라이더 지우기: " + path + "가 없습니다."); return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            Collider[] cols = root.GetComponentsInChildren<Collider>(true);
+            foreach (Collider c in cols) { UnityEngine.Object.DestroyImmediate(c); }
+            if (cols.Length > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            Debug.Log($"[ACO] 야포 포탄 콜라이더 지우기: {cols.Length}개를 지웠습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// hud-defaults-1(6-239): HUD 설정 기본값 = 개발자가 맞춰 쓰던 값(대강). 프리팹(ACO_HUD · ACO_FlightHud)에 넣고, 씬 인스턴스에서 바꾼 같은 칸은 지우고,
+    /// 씬 오브젝트인 무전 자막(ACO_Chatter)은 직접 넣는다. 배율 항목(패널 · 결과 · 레이더 크기)은 ACO_HudSettings 코드 기본값.
+    private static void TuneHudDefaults()
+    {
+        string hudPath = PrefabDir + "/ACO_HUD.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(hudPath) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(hudPath);
+            try
+            {
+                foreach (ACO_ScoreHUD h in root.GetComponentsInChildren<ACO_ScoreHUD>(true)) { SetHudDefaults(h); }
+                foreach (ACO_RWR r in root.GetComponentsInChildren<ACO_RWR>(true)) { SetHudDefaults(r); }
+                foreach (ACO_HudRadar r in root.GetComponentsInChildren<ACO_HudRadar>(true)) { SetHudDefaults(r); }
+                PrefabUtility.SaveAsPrefabAsset(root, hudPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        else { Debug.LogWarning("[ACO] HUD 기본값: " + hudPath + "가 없습니다."); }
+        string flightPath = PrefabDir + "/ACO_FlightHud.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(flightPath) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(flightPath);
+            try
+            {
+                foreach (ACO_FlightHud f in root.GetComponentsInChildren<ACO_FlightHud>(true)) { f.Scale = 1.4f; }
+                PrefabUtility.SaveAsPrefabAsset(root, flightPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        // 씬: 프리팹 인스턴스는 같은 칸의 오버라이드를 지우고, 프리팹이 아니면 값을 직접 넣는다
+        foreach (ACO_ScoreHUD h in FindInScene<ACO_ScoreHUD>()) { if (PrefabUtility.IsPartOfPrefabInstance(h)) { Revert(h, "HeadOffset", "ResultOffset", "FollowSharpness"); } else { Undo.RecordObject(h, "HUD defaults"); SetHudDefaults(h); } }
+        foreach (ACO_RWR r in FindInScene<ACO_RWR>()) { if (PrefabUtility.IsPartOfPrefabInstance(r)) { Revert(r, "ChevronScale", "LockArcScale"); } else { Undo.RecordObject(r, "HUD defaults"); SetHudDefaults(r); } }
+        foreach (ACO_HudRadar r in FindInScene<ACO_HudRadar>()) { if (PrefabUtility.IsPartOfPrefabInstance(r)) { Revert(r, "HeadOffset", "Range", "BlipScale", "FollowSharpness"); } else { Undo.RecordObject(r, "HUD defaults"); SetHudDefaults(r); } }
+        foreach (ACO_FlightHud f in FindInScene<ACO_FlightHud>()) { if (PrefabUtility.IsPartOfPrefabInstance(f)) { Revert(f, "Scale"); } else { Undo.RecordObject(f, "HUD defaults"); f.Scale = 1.4f; } }
+        foreach (ACO_Chatter c in FindInScene<ACO_Chatter>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(c)) { Revert(c, "HeadOffset", "FollowSharpness"); continue; }
+            Undo.RecordObject(c, "HUD defaults");
+            c.HeadOffset = new Vector3(0f, 0.2f, 0.9f);
+            c.FollowSharpness = 1000f;
+            EditorUtility.SetDirty(c);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] HUD 기본값(6-239)을 넣었습니다 — 패널 좌 -0.38, 결과 아래 -0.19, 자막 위 0.2, 레이더 (-0.28, -0.16) 5km · 점 1.6, RWR 미사일 0.7 · 락온 호 1.2, 비행 HUD 1.4, 따라오는 지연 없음. 씬 저장");
+    }
+
+    private static void SetHudDefaults(ACO_ScoreHUD h)
+    {
+        h.HeadOffset = new Vector3(-0.38f, 0.16f, h.HeadOffset.z);
+        h.ResultOffset = new Vector2(0f, -0.19f);
+        h.FollowSharpness = 1000f;
+        EditorUtility.SetDirty(h);
+    }
+
+    private static void SetHudDefaults(ACO_RWR r)
+    {
+        r.ChevronScale = 0.7f;
+        r.LockArcScale = 1.2f;
+        EditorUtility.SetDirty(r);
+    }
+
+    private static void SetHudDefaults(ACO_HudRadar r)
+    {
+        r.HeadOffset = new Vector3(-0.28f, -0.16f, r.HeadOffset.z);
+        r.Range = Mathf.Min(5000f, r.MaxRange);
+        r.BlipScale = 1.6f;
+        r.FollowSharpness = 1000f;
+        EditorUtility.SetDirty(r);
+    }
+
+    /// hud-step-1cm-1(6-244): HUD 설정 Steps 중 0.02(위치 2cm · 따라오는 지연 0.02초)를 0.01로. 다른 칸은 그대로.
+    private static void TuneHudStep1cm()
+    {
+        int[] items = { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y,
+            ACO_HudSettings.ITEM_CHATTER_X, ACO_HudSettings.ITEM_CHATTER_Y, ACO_HudSettings.ITEM_RADAR_X, ACO_HudSettings.ITEM_RADAR_Y, ACO_HudSettings.ITEM_HUD_FOLLOW };
+        string path = PrefabDir + "/ACO_HudSettings.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_HudSettings h in root.GetComponentsInChildren<ACO_HudSettings>(true))
+                {
+                    if (h.Steps == null) { continue; }
+                    foreach (int i in items)
+                    {
+                        if (i < h.Steps.Length && Mathf.Approximately(h.Steps[i], 0.02f)) { h.Steps[i] = 0.01f; n++; }
+                    }
+                    EditorUtility.SetDirty(h);
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        else { Debug.LogWarning("[ACO] HUD 설정 한 칸: " + path + "가 없습니다."); }
+        // 씬: 프리팹 인스턴스는 Steps 오버라이드를 지우고, 프리팹이 아니면 직접
+        foreach (ACO_HudSettings h in FindInScene<ACO_HudSettings>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(h)) { Revert(h, "Steps"); continue; }
+            if (h.Steps == null) { continue; }
+            Undo.RecordObject(h, "HUD step");
+            foreach (int i in items) { if (i < h.Steps.Length && Mathf.Approximately(h.Steps[i], 0.02f)) { h.Steps[i] = 0.01f; n++; } }
+            EditorUtility.SetDirty(h);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] HUD 설정 한 칸 2 → 1(6-244): {n}칸을 바꿨습니다 — 위치 1cm, 따라오는 지연 0.01초. 씬 저장");
+    }
+
+    /// fighter-start-health-1(6-241): NPC 전투기 프리팹 뿌리의 SaccTarget.Health(시작 체력 — 동기화 값의 처음)를 BaseHealth(최대 체력)와 같게.
+    /// 최대 체력은 각 화면에서 BaseHealth로 바뀌고 남은 체력은 소유자가 채워 보내는데, 그걸 놓친 화면은 시작 체력 그대로라 비율이 깎여 보였다.
+    private static void TuneFighterStartHealth()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            ACO_NPCFighterAI ai = root.GetComponent<ACO_NPCFighterAI>();
+            SaccTarget t = root.GetComponent<SaccTarget>();
+            if (ai == null || t == null || ai.BaseHealth <= 0f || Mathf.Approximately(t.Health, ai.BaseHealth)) { return false; }
+            Debug.Log($"[ACO] 시작 체력: {root.name} {t.Health} → {ai.BaseHealth}");
+            t.Health = ai.BaseHealth;
+            EditorUtility.SetDirty(t);
+            n++;
+            return true;
+        });
+        int s = 0;
+        foreach (ACO_NPCFighterAI ai in FindInScene<ACO_NPCFighterAI>())
+        {
+            SaccTarget t = ai.GetComponent<SaccTarget>();
+            if (t == null || ai.BaseHealth <= 0f || Mathf.Approximately(t.Health, ai.BaseHealth)) { continue; }
+            Revert(t, "Health");
+            if (!Mathf.Approximately(t.Health, ai.BaseHealth))
+            {
+                Undo.RecordObject(t, "ACO start health");
+                t.Health = ai.BaseHealth;
+                Mark(t);
+            }
+            s++;
+        }
+        if (s > 0) { UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene()); }
+        Debug.Log($"[ACO] 시작 체력 = 최대 체력: 프리팹 {n}개, 씬 {s}기를 맞췄습니다.");
+    }
+
+    /// 미리 보기 격추(SaccTarget.PredictExplosion)가 켜진 NPC · 표적 수(프리팹 + 씬, 6-248).
+    /// 쏜 사람 화면이 소유자 확인 전에 먼저 터뜨리는 기능 — 틀리면 그 화면에서만 투명 · 무적이 되어 모두 끈다(파괴는 소유자 기준).
+    /// 빌더가 SaccTarget을 새로 붙이면 SAV 기본값(켜짐)으로 나오므로 Setup Check가 매번 센다.
+    public static int CountPredictOn()
+    {
+        int n = 0;
+        foreach (string guid in AssetDatabase.FindAssets("NPC_ t:Prefab", new[] { PrefabDir }))
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+            if (asset == null) { continue; }
+            foreach (SaccTarget t in asset.GetComponentsInChildren<SaccTarget>(true)) { if (t.PredictExplosion) { n++; } }
+        }
+        foreach (SaccTarget t in FindInScene<SaccTarget>()) { if (t.PredictExplosion) { n++; } }
+        return n;
+    }
+
+    /// 프리팹(포탑 먼저)과 씬의 SaccTarget 미리 보기 격추를 끈다. 씬 인스턴스는 오버라이드를 지우고, 그래도 켜져 있으면 직접 끈다.
+    public static void DisablePrediction()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (SaccTarget t in root.GetComponentsInChildren<SaccTarget>(true))
+            {
+                if (!t.PredictExplosion) { continue; }
+                t.PredictExplosion = false;
+                EditorUtility.SetDirty(t);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        int s = 0;
+        foreach (SaccTarget t in FindInScene<SaccTarget>())
+        {
+            if (!t.PredictExplosion) { continue; }
+            if (PrefabUtility.IsPartOfPrefabInstance(t)) { Revert(t, "PredictExplosion"); }
+            if (t.PredictExplosion)
+            {
+                Undo.RecordObject(t, "ACO predict off");
+                t.PredictExplosion = false;
+                Mark(t);
+            }
+            s++;
+        }
+        if (s > 0) { UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene()); }
+        Debug.Log($"[ACO] 미리 보기 격추 끔(6-248): 프리팹 {n}곳, 씬 {s}곳. 씬 저장");
+    }
+
+    /// sonar-ring-ui-1(6-238): 잠수함 소나 원(SonarRing)을 UI 레이어로 — HUD 표시라 관전 카메라 · VRChat 카메라에 찍히지 않게.
+    private static void TuneSonarRingLayer()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_Submarine sub in root.GetComponentsInChildren<ACO_Submarine>(true))
+            {
+                if (sub.SonarRing == null) { continue; }
+                foreach (Transform t in sub.SonarRing.GetComponentsInChildren<Transform>(true))
+                {
+                    if (t.gameObject.layer == ACO_PrefabBuilder.SonarRingLayer) { continue; }
+                    t.gameObject.layer = ACO_PrefabBuilder.SonarRingLayer;
+                    any = true;
+                    n++;
+                }
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] 소나 원 UI 레이어: {n}개를 옮겼습니다.");
+    }
+
     /// vls-missile-hot-1(6-215): NPC 프리팹 런처(ACO_MissileLauncher.AAM)가 ACO_Missile_VLS를 가리키면 ACO_Missile_VLS_HOT으로.
     private static void TuneVlsMissileHot()
     {
@@ -687,10 +994,19 @@ public static class ACO_PrefabTuning
         new Entry { Id = "canopy-thin-preview-1", Text = "격납고 미리보기 기체(PreviewRoot)에도 가늘게 만든 캐노피 앞 프레임 · 아치(볼트 포함) 메시를 끼웁니다. 고친 뒤 씬 저장", Apply = ACO_CanopyThin.ApplyPreview },
         new Entry { Id = "cockpit-display-1", Text = "FA-18E 조종석 UFC(스크래치패드) · 연료계 화면 그림을 깔끔하게 다시 그립니다(각진 사각 테두리 · 가는 선). 원본 텍스처는 그대로, 복사본 텍스처 · 머티리얼을 끼웁니다(되돌리기: 메뉴 ACO > FA-18E Cockpit Displays > Restore Original)", Apply = ACO_CockpitTexture.Apply },
         new Entry { Id = "icbm-ring-1", Text = "레이저 에이스 페이즈 탄도미사일: 대기권 밖 자폭 때 거대한 링(반경 15km, 두 겹)을 더하고 섬광 · 불덩이를 키웁니다(씬의 IcbmSite)", Apply = ApplyIcbmRing },
+        new Entry { Id = "submarine-lines-7", Text = "잠수함 대사 표 7판(6-236): 등장 대사(소나 접촉 · 항모로 돌아와 CAP)를 페이즈 시작 대사로 옮깁니다 — 공통 기본 시작 대사 대신 나오고, 표는 33줄. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
         new Entry { Id = "submarine-lines-6", Text = "잠수함 대사 표 6판(6-219): 무인기 사출 대사는 AWACS만 — 적 \"Drones away. Keep them off my back.\"을 뺍니다. 34줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
         new Entry { Id = "submarine-lines-5", Text = "잠수함 대사 표 5판(6-217): 부상 때 무인기 사출 대사(AWACS \"The sub is launching drones!…\" · 적 \"Drones away…\" · 그 뒤 \"More drones from the sub!\")를 더합니다. 35줄과 음성. 손으로 고친 대사는 덮어씁니다", Apply = ACO_PhaseModuleSetup.TuneSubmarineTexts },
         new Entry { Id = "deck-taxi-10kt-1", Text = "갑판 택싱 최고 속도를 약 5노트(2.6m/s) → 10노트(5.14m/s)로 올립니다(6-216) — 플레이어 기체 프리팹", Apply = TuneDeckTaxi },
-        new Entry { Id = "vls-missile-hot-1", Text = "NPC 프리팹의 VLS 미사일이 예전 ACO_Missile_VLS(비례항법)를 가리키면 기본값 ACO_Missile_VLS_HOT으로 바꿉니다(6-215 — 지금은 적 항모 NPC_Carrier의 VLS 4기)", Apply = TuneVlsMissileHot },
+        new Entry { Id = "crew-walk-1", Text = "갑판 점검요원 걷는 빠르기 3.2 → 2.2m/s(6-229) — 걷기 동작 보폭에 맞춰 발이 미끄러지지 않게. NPC_CatapultCrew 프리팹, 씬의 같은 값 오버라이드는 지운다", Apply = TuneCrewWalk },
+        new Entry { Id = "ordnance-debuglog-off-1",Text = "탄 프리팹(폭탄 ACO_Bomb · ACO_Bomb(LGB))의 DebugHitLog를 끕니다(6-227 — 공개 전, 터질 때마다 로그가 쌓이던 것)", Apply = TuneOrdnanceDebugLogOff },
+        new Entry { Id = "fortress-dive-core-1",Text = "공중 요새 3단계(6-226): 도시 돌진 약 2분 30초 → 약 3분(돌진 속도 60 → 49m/s), 코어 체력 4000 → 2000 — NPC_Fortress 프리팹", Apply = TuneFortressDiveCore },
+        new Entry { Id = "hud-step-1cm-1", Text = "HUD 설정의 −/+ 한 번 바뀌는 양을 2 → 1로 줄입니다(6-244) — 패널 · 결과 · 자막 · 레이더 위치 2cm → 1cm, 따라오는 지연 0.02초 → 0.01초(ACO_HudSettings 프리팹 Steps). 씬 인스턴스에서 바꾼 Steps는 지운다. 고친 뒤 씬 저장", Apply = TuneHudStep1cm },
+        new Entry { Id = "fighter-start-health-1", Text = "NPC 전투기 프리팹의 시작 체력(SaccTarget Health)을 최대 체력(BaseHealth)과 같게 맞춥니다(6-241) — 루나 2000 → 5000, 셰이드 300 → 450, 공격기 150 → 250. 체력 동기화를 놓친 화면에서 스폰하자마자 40% 등으로 보이던 것. 씬 인스턴스에서 바꾼 Health는 지운다. 고친 뒤 씬 저장", Apply = TuneFighterStartHealth },
+        new Entry { Id = "hud-defaults-1", Text = "HUD 설정 기본값을 바꿉니다(6-239) — 패널 왼쪽 · 크기 0.7, 결과 글자 아래 · 0.9, 무전 자막 위쪽, 레이더 (-0.28, -0.16) · 크기 0.7 · 5km · 점 1.6, RWR 미사일 0.7 · 락온 호 1.2, 비행 HUD 1.4, 따라오는 지연 없음. 저장된 개인 설정은 그대로. 고친 뒤 씬 저장", Apply = TuneHudDefaults },
+        new Entry { Id = "sonar-ring-ui-1", Text = "잠수함 소나 원(NPC_Submarine/SonarRing)을 UI 레이어로 옮깁니다(6-238) — 관전 화면 · VRChat 카메라에 찍히지 않게(HUD 마커와 같다)", Apply = TuneSonarRingLayer },
+        new Entry { Id = "artillery-shell-collider-1",Text = "야포 포탄(ACO_ArtilleryShell) 모델의 충돌용 메시를 지웁니다(6-225) — 발사 0.5초 뒤 자기 몸에 맞아 공중에서 터지던 것", Apply = TuneArtilleryShellCollider },
+        new Entry { Id = "vls-missile-hot-1",Text = "NPC 프리팹의 VLS 미사일이 예전 ACO_Missile_VLS(비례항법)를 가리키면 기본값 ACO_Missile_VLS_HOT으로 바꿉니다(6-215 — 지금은 적 항모 NPC_Carrier의 VLS 4기)", Apply = TuneVlsMissileHot },
         new Entry { Id = "hangar-decor-2", Text = "격납고 꾸미기 다시 만들기(6-214): 거치대 무장끼리 겹치거나 날개가 거치대에 걸리던 것을 — 표면 겹침 검사로 앞뒤로 엇갈려 놓고, 맞는 자리가 없는 무장은 뺍니다. Hanger 아래 HangarDecor를 지우고 다시 만듭니다. 고친 뒤 씬 저장", Apply = ACO_HangarDecor.Build },
         new Entry { Id = "hangar-decor-1", Text = "격납고 패널 쪽을 EEI 지원 장비로 꾸밉니다 — 무장을 올린 거치대 7대, 견인 트랙터(1대는 소품 기체 기수에 물림), 포드 거치대 4개. Hanger 아래 HangarDecor를 지우고 다시 만듭니다. 고친 뒤 씬 저장", Apply = ACO_HangarDecor.Build },
         new Entry { Id = "deck-taxi-5kt-1", Text = "갑판 택싱 최고 속도를 약 5노트(2.6m/s)로 낮춥니다(예전 10m/s = 약 19노트) — 플레이어 기체 프리팹", Apply = TuneDeckTaxi },

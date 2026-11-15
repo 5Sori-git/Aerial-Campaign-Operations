@@ -1199,6 +1199,13 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 20
   LaunchSound: {fileID: 0}
+  BurstCount: 1
+  BurstGap: 0.3
+  RailFlyby: 0
+  Flyby: {fileID: 0}
+  RailFlybySpeed: 4000
+  RailFlybyRange: 6000
+  RailFlybyHitRadius: 10
   Hatches: []
   HatchAngle: 110
   HatchHoldTime: 4
@@ -1722,7 +1729,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:

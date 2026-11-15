@@ -10573,7 +10573,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -10652,6 +10652,11 @@ MonoBehaviour:
   MaxAvoidClimbAngle: 55
   AltitudeSettleTime: 2
   SinkLeadTime: 0.8
+  MaxAltitude: 12192
+  CeilingSettleTime: 4
+  FieldRadius: 25000
+  FieldSoftMargin: 1500
+  FieldTurnBoost: 2.5
 --- !u!114 &9040117746691864341
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10708,6 +10713,8 @@ MonoBehaviour:
   Net: {fileID: 6242442683066278762}
   Ace: {fileID: 0}
   GroundAttacker: 0
+  Drone: 0
+  SpawnFx: {fileID: 0}
   MarkerLabel: FTR
   RookieVisuals:
   - {fileID: 8165389971917905688}
@@ -10832,6 +10839,7 @@ MonoBehaviour:
   HandoffToEngagedPlayer: 1
   HandoffHoldTime: 2
   HandoffCooldown: 5
+  HandoffHitGuard: 2
   SmoothTime: 0.5
   HardSnapDistance: 200
   DebugNetwork: 0

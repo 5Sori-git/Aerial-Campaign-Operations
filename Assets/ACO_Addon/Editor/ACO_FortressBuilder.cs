@@ -598,7 +598,7 @@ public static partial class ACO_PrefabBuilder
         ACO_Warship ship = root.AddUdonSharpComponent<ACO_Warship>();
         ACO_FlyingFortress fortress = root.AddUdonSharpComponent<ACO_FlyingFortress>();
 
-        core.Health = 4000f;   // 공대공 직격 200 기준 20발 — 4명이 돌진 시간(110초) 안에 끝낼 수 있게
+        core.Health = ACO_PrefabTuning.FortressCoreHealth;   // 2000(6-226 — 예전 4000). 돌진 약 3분 안에
         core.ArmorStrength = 1f;
         core.RespawnDelay = 0f;
         core.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { ship, fortress };

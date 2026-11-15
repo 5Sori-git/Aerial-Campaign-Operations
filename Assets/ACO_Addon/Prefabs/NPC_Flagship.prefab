@@ -417,7 +417,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -10486,7 +10486,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -10581,6 +10581,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -15839,6 +15840,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3182793562515773327}
   Muzzle: {fileID: 5108418699264145443}
   VisualParticle: {fileID: 5922707647748665831}
+  Laser: {fileID: 0}
   FireSound: {fileID: 3188550954408734169}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -21414,6 +21416,13 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  BurstCount: 1
+  BurstGap: 0.3
+  RailFlyby: 0
+  Flyby: {fileID: 0}
+  RailFlybySpeed: 4000
+  RailFlybyRange: 6000
+  RailFlybyHitRadius: 10
   Hatches: []
   HatchAngle: 110
   HatchHoldTime: 4
@@ -21734,7 +21743,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -22223,6 +22232,7 @@ MonoBehaviour:
   EntityControl: {fileID: 1279802231578632712}
   Muzzle: {fileID: 7681157541405843570}
   VisualParticle: {fileID: 4763238116103412429}
+  Laser: {fileID: 0}
   FireSound: {fileID: 2981782367405662467}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -22577,6 +22587,13 @@ MonoBehaviour:
   FireInterval: 3
   ReloadTime: 40
   LaunchSound: {fileID: 0}
+  BurstCount: 1
+  BurstGap: 0.3
+  RailFlyby: 0
+  Flyby: {fileID: 0}
+  RailFlybySpeed: 4000
+  RailFlybyRange: 6000
+  RailFlybyHitRadius: 10
   Hatches: []
   HatchAngle: 110
   HatchHoldTime: 4
@@ -27774,7 +27791,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -27869,6 +27886,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -28715,7 +28733,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -28810,6 +28828,7 @@ MonoBehaviour:
   EcmAimFactor: 3
   EcmInterceptFactor: 1.5
   InterceptCooldown: 0
+  SilentIntercept: 0
   InterceptTuneVersion: 0
   InterceptDefaultsApplied: 1
   SleepMargin: 3000
@@ -29082,6 +29101,7 @@ MonoBehaviour:
   EntityControl: {fileID: 3975966173608866132}
   Muzzle: {fileID: 3415371623644155748}
   VisualParticle: {fileID: 8213830896978688080}
+  Laser: {fileID: 0}
   FireSound: {fileID: 3327627036909882524}
   ShooterFlight: {fileID: 0}
   InheritShooterVelocity: 0
@@ -29246,7 +29266,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 1
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:

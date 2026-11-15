@@ -117,15 +117,22 @@ namespace ACO
         public float JbdAngle = 55f;
         [Tooltip("움직이는 빠르기(도/초)")]
         public float JbdSpeed = 25f;
+        [Tooltip("사출을 시작하고 이만큼(초) 지나면 풀림 알림이 없어도 내린다(6-242 — 보통은 그 전에 알림이 와서 내려간다)")]
+        public float JbdLaunchHold = 5f;
 
         [Header("절차")]
-        public float CheckWalkSpeed = 3.2f;
+        [Tooltip("점검요원 걷는 빠르기(m/s) — 걷기 클립(두 걸음 0.54초, 디딘 발이 약 2.2m/s로 뒤로 간다)과 맞춘다. 다르면 발이 미끄러진다(6-229)")]
+        public float CheckWalkSpeed = 2.2f;
         [Tooltip("경유점마다 쪼그려 보는 시간(초)")]
         public float KneelTime = 1.2f;
         [Tooltip("제자리로 물러나 엄지를 든 뒤 점검 완료로 치기까지(초). 엄지는 사출이 끝날 때까지 든다")]
         public float ThumbTime = 1f;
         [Tooltip("지적확인: 요원 한 명을 가리키는 시간(초). 전체 시간 = 이 값 × 요원 수")]
         public float PointEachTime = 0.6f;
+        [Tooltip("지적확인 때 상체(허리 · 가슴 · 고개)가 요원 쪽으로 도는 최대 각도(도). 다리 · 발은 조종석 쪽 그대로 서 있다(6-235)")]
+        public float PointTwistMax = 110f;
+        [Tooltip("상체가 도는 빠르기(도/초)")]
+        public float PointTwistRate = 300f;
         [Tooltip("지적확인 뒤 발함 신호부터 사출까지(초) — 동기화 여유로 1초 이상")]
         public float SignalTime = 2f;
         [Tooltip("몸을 돌리는 빠르기(도/초)")]
@@ -160,12 +167,19 @@ namespace ACO
         private float _guideTime;
         private Vector3 _directorLook;
         private Vector3 _shooterLook;
+        private Transform _shooterSpine;
+        private Transform _shooterChest;
+        private Transform _shooterHead;
+        private bool _pointing;          // 지적확인 중 — 상체만 _pointTarget으로 돈다
+        private Vector3 _pointTarget;
+        private float _pointYaw;
         private bool _directorLooking;
         private Vector3 _jbdPos;
         private Quaternion _jbdRot;
         private float _jbdNow;
         private float _jbdTick;
         private ACO_DFUNC_Catapult _jbdCat;
+        private float _jbdLaunchAt = -1f;   // 지금 기체가 사출을 시작한 시각(-1 = 아직)
 
         void Start()
         {
@@ -188,6 +202,12 @@ namespace ACO
             _ckTimer = new float[CHECKERS];
             _ckDone = new bool[CHECKERS];
             _shooterLook = Shooter != null ? Shooter.transform.position + Shooter.transform.forward : Vector3.zero;
+            if (Shooter != null && Shooter.isHuman)
+            {
+                _shooterSpine = Shooter.GetBoneTransform(HumanBodyBones.Spine);
+                _shooterChest = Shooter.GetBoneTransform(HumanBodyBones.Chest);
+                _shooterHead = Shooter.GetBoneTransform(HumanBodyBones.Head);
+            }
             HoldPendant();
             if (Jbd != null)
             {
@@ -248,7 +268,26 @@ namespace ACO
             {
                 _jbdTick = 0.25f;
                 if (_jbdCat != null && !_jbdCat.OnCatapult) { _jbdCat = null; }
-                if (_jbdCat == null) { _jbdCat = FindLocked(); }
+                // 풀림 알림을 놓쳐도 내린다(6-242): 사출 시작 뒤 JbdLaunchHold초, 사출 전에 기체가 걸림 반경 × 2보다 멀어지면(텔레포트 · 리스폰)
+                if (_jbdCat != null)
+                {
+                    if (_jbdCat.LaunchStarted)
+                    {
+                        if (_jbdLaunchAt < 0f) { _jbdLaunchAt = Time.time; }
+                        if (Time.time - _jbdLaunchAt > JbdLaunchHold) { _jbdCat = null; }
+                    }
+                    else
+                    {
+                        _jbdLaunchAt = -1f;
+                        float far = LockRadius * 2f;
+                        if ((_jbdCat.transform.position - transform.position).sqrMagnitude > far * far) { _jbdCat = null; }
+                    }
+                }
+                if (_jbdCat == null)
+                {
+                    _jbdLaunchAt = -1f;
+                    _jbdCat = FindLocked();
+                }
             }
             float target = _jbdCat != null ? JbdAngle : 0f;
             if (_jbdNow == target) { return; }
@@ -360,6 +399,7 @@ namespace ACO
             _launchOk = false;
             EnterPhase(PHASE_IDLE);
             Signal(M_SHOOTER, SIG_IDLE);
+            _pointing = false;
             if (Shooter != null) { _shooterLook = _homePos[M_SHOOTER] + _homeRot[M_SHOOTER] * Vector3.forward; }
             HoldPendant();
             for (int i = 0; i < CHECKERS; i++)
@@ -433,6 +473,7 @@ namespace ACO
             if (_phase == PHASE_READY) { Signal(M_SHOOTER, SIG_THROTTLE); }
             else if (_phase == PHASE_POINT) { Signal(M_SHOOTER, SIG_POINT); }
             else if (_phase == PHASE_SIGNAL) { Signal(M_SHOOTER, SIG_LAUNCH); }
+            _pointing = false;
             if (Shooter == null) { return; }
             if (_phase == PHASE_SIGNAL)
             {
@@ -441,10 +482,15 @@ namespace ACO
             }
             else if (_phase == PHASE_POINT)
             {
-                // 지금 확인하는 요원을 본다(몸을 돌리면 뻗은 팔도 따라간다)
+                // 6-235: 다리는 조종석 쪽 그대로 두고(_shooterLook을 바꾸지 않는다) 상체 · 고개만 지금 확인하는 요원 쪽으로 돈다 —
+                // 뻗은 팔은 가슴에 달려 있어 같이 따라간다(PostLateUpdate)
                 int k = Mathf.FloorToInt((Time.time - _phaseTime) / Mathf.Max(PointEachTime, 0.01f));
                 Animator who = _members[_pointOrder[Mathf.Clamp(k, 0, _pointOrder.Length - 1)]];
-                if (who != null) { _shooterLook = who.transform.position; }
+                if (who != null)
+                {
+                    _pointTarget = who.transform.position;
+                    _pointing = true;
+                }
             }
             else
             {
@@ -647,13 +693,47 @@ namespace ACO
             Face(body, body.position + _homeRot[M_CHECK + i] * Vector3.forward, dt);
         }
 
-        /// 다 왔으면 true.
+        /// 다 왔으면 true. 먼저 몸을 돌리고, 향한 쪽이 맞을수록 빨리 걷는다(6-229 — 옆이나 뒤로 미끄러지지 않게).
         private bool Walk(Transform body, Vector3 target, float dt)
         {
-            Vector3 next = Vector3.MoveTowards(body.position, target, CheckWalkSpeed * dt);
             Face(body, target, dt);
+            Vector3 d = target - body.position;
+            d.y = 0f;
+            float pace = 1f;
+            if (d.sqrMagnitude > 0.01f)
+            {
+                float off = Vector3.Angle(body.forward, d);
+                pace = Mathf.Clamp01((WalkTurnAngle - off) / (WalkTurnAngle - WalkFullAngle));
+            }
+            Vector3 next = Vector3.MoveTowards(body.position, target, CheckWalkSpeed * pace * dt);
             body.position = next;
             return (next - target).sqrMagnitude < 0.01f;
+        }
+
+        private const float WalkFullAngle = 25f;   // 가야 할 쪽에서 이 각도 안이면 제 빠르기
+        private const float WalkTurnAngle = 80f;   // 이 각도 넘게 틀어져 있으면 제자리에서 돌기만 한다
+
+        /// 애니메이션이 자세를 쓴 뒤 슈터 상체를 지적확인 대상 쪽으로 비튼다(허리 30 · 가슴 40 · 고개 30% — 가슴 뼈가 없는 리그(DCS)는 허리 70%). 끝나면 천천히 정면으로.
+        public override void PostLateUpdate()
+        {
+            if (!_active || Shooter == null || _shooterSpine == null) { return; }
+            float want = 0f;
+            if (_pointing)
+            {
+                Vector3 d = _pointTarget - Shooter.transform.position;
+                d.y = 0f;
+                if (d.sqrMagnitude > 0.01f) { want = Mathf.Clamp(Vector3.SignedAngle(Shooter.transform.forward, d, Vector3.up), -PointTwistMax, PointTwistMax); }
+            }
+            _pointYaw = Mathf.MoveTowards(_pointYaw, want, PointTwistRate * Time.deltaTime);
+            if (Mathf.Abs(_pointYaw) < 0.05f) { return; }
+            TwistBone(_shooterSpine, _pointYaw * (_shooterChest != null ? 0.3f : 0.7f));
+            TwistBone(_shooterChest, _pointYaw * 0.4f);
+            TwistBone(_shooterHead, _pointYaw * 0.3f);
+        }
+
+        private void TwistBone(Transform bone, float degrees)
+        {
+            if (bone != null) { bone.rotation = Quaternion.AngleAxis(degrees, Vector3.up) * bone.rotation; }
         }
 
         // 고개를 젖히지 않게 수평으로만 돈다

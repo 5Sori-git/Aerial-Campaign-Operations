@@ -55,7 +55,7 @@ namespace ACO
         [Header("표시 (HUD 설정 패널이 바꾼다)")]
         public bool ShowHud = true;
         [Tooltip("크기 배율(HUD 설정 FLIGHT HUD SIZE — 0.6~1.6). 실제 크기 = BaseScale × 이것")]
-        public float Scale = 1f;
+        public float Scale = 1.4f;   // 6-239 기본값
         [Tooltip("기본 크기(설정 ×1.0일 때의 크기 — 예전 1.0이 너무 커서 0.5)")]
         public float BaseScale = 0.5f;
         [Tooltip("밝기(0~1) — 선·글자 알파에 곱한다")]

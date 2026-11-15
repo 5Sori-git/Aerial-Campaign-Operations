@@ -102,6 +102,12 @@ public partial class ACO_SetupValidator
                 Add(g, WARN, $"NPC 프리팹 {noDeath}개에 파괴 효과가 없습니다(NPC 프리팹을 다시 만들면 빠집니다).", null, ACO_FxBuilder.ApplyToDeath);
             }
         }
+        int predictOn = ACO_PrefabTuning.CountPredictOn();
+        if (predictOn > 0)
+        {
+            Add(g, WARN, $"NPC · 표적 {predictOn}곳에 미리 보기 격추(PredictExplosion)가 켜져 있습니다. 틀리면 쏜 사람 화면에서만 투명 · 무적이 됩니다 — 파괴는 소유자 기준으로 끕니다(6-248, 프리팹을 다시 만들면 켜진다).",
+                null, ACO_PrefabTuning.DisablePrediction);
+        }
         if (ACO_SceneBaker.BulletFlybyMissing())
         {
             Add(g, WARN, "총탄이 스치는 소리(BulletFlyby)가 없습니다.", null, ACO_SceneBaker.InstallBulletFlyby);

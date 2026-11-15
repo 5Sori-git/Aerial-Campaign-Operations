@@ -1156,6 +1156,7 @@ public static class ACO_FxBuilder
             {
                 if (boss && target.transform == asset.transform) { continue; }
                 if (target.ExplodeOther == null || target.ExplodeOther.Length == 0) { continue; }
+                if (!TakesDeathFx(target)) { continue; }   // 자기 폭발을 스스로 하는 탄(잠수함 SLCM 등) — [고치기]도 건너뛴다
                 if (FindDeathFx(DeathHolder(target, false)) == null) { missing++; break; }
             }
         }
@@ -1346,6 +1347,19 @@ public static class ACO_FxBuilder
     }
 
     /// 파괴 신호를 받는 ACO 스크립트가 켜는 오브젝트. 없으면 create일 때 DeathEffects를 만들어 ShowOnDeath에 넣는다.
+    /// 파괴 효과를 받을 수 있는 부위인가 — 신호를 받는 스크립트 중 ShowOnDeath가 있거나 TEL. 없으면(예: ACO_Slcm — 격추 연출을 스스로 한다)
+    /// EditDeath가 건너뛰므로 CountMissingDeathFx도 세지 않는다(6-227 — 세면 고쳐지지 않는 경고가 남는다).
+    private static bool TakesDeathFx(SaccTarget target)
+    {
+        if (target.ExplodeOther == null) { return false; }
+        foreach (UdonSharpBehaviour script in target.ExplodeOther)
+        {
+            if (script is ACO_TelUnit) { return true; }
+            if (script != null && script.GetType().GetField("ShowOnDeath") != null) { return true; }
+        }
+        return false;
+    }
+
     private static Transform DeathHolder(SaccTarget target, bool create)
     {
         if (target.ExplodeOther == null) { return null; }

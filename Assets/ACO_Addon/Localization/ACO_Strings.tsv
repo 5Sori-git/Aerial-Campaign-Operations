@@ -403,8 +403,8 @@ bgm.off	BGM 꺼짐	BGM OFF	BGM オフ
 bgm.volume	음량  {0}%	VOLUME  {0}%	音量  {0}%
 bgm.dyn.on	상황별 BGM  켜짐	DYNAMIC BGM  ON	ダイナミックBGM  オン
 bgm.dyn.off	상황별 BGM  꺼짐	DYNAMIC BGM  OFF	ダイナミックBGM  オフ
-video.sound.near	영상 소리  근처	VIDEO SOUND  NEAR	動画の音  近く
-video.sound.global	영상 소리  글로벌	VIDEO SOUND  GLOBAL	動画の音  グローバル
+video.sound.near	영상 소리: 근처	VIDEO SOUND: NEAR	動画の音: 近く
+video.sound.global	영상 소리: 글로벌	VIDEO SOUND: GLOBAL	動画の音: グローバル
 tac.title	TAC 네임 (콜사인)	TAC NAME (CALLSIGN)	TACネーム（コールサイン）
 tac.hint	다른 조종사에게 내 기체 위에 보입니다  -  A-Z 0-9 공백 -  (최대 12자)	SHOWN ABOVE YOUR AIRCRAFT TO OTHER PILOTS  -  A-Z 0-9 SPACE -  (MAX 12)	他のパイロットに自機の上に表示されます  -  A-Z 0-9 スペース -  （最大12文字）
 tac.set	설정	SET	設定
@@ -480,6 +480,7 @@ spec.status.waitpilot	조종사를 기다리는 중	WAITING FOR PILOT	パイロ�
 spec.status.waitmissile	미사일을 기다리는 중 (추적)	WAITING FOR A MISSILE (CHASE)	ミサイル待機中（チェイス）
 spec.status.live	생중계	LIVE	ライブ
 credits.title	크레딧	CREDITS	クレジット
+updates.title	업데이트 노트	UPDATE NOTES	アップデートノート
 spec.shot.0	추적	CHASE	チェイス
 spec.shot.1	플라이바이	FLYBY	フライバイ
 spec.shot.2	망원	TELEPHOTO	望遠
@@ -598,8 +599,8 @@ radio.chatter.29	수송기가 공격받고 있다. 주변을 정리하라!	The t
 radio.chatter.30	메이데이, 메이데이... 추락한다!	Mayday, mayday... we're going down!	メーデー、メーデー……墜ちる！
 radio.chatter.31	미사일..! 플레어! 플레어!	Missile..! Flare! Flare!	ミサイル……！フレア！フレア！
 radio.chatter.32	대응책 사출 - 회피 중!	Countermeasures away - we're evading!	妨害手段射出、回避中！
-radio.chatter.33	수송대 피습 - 적을 쓸어 줘!	Convoy under attack - clear those hostiles!	輸送隊が攻撃を受けている、敵を排除してくれ！
-radio.chatter.34	수송대 차량을 잃었다!	We lost a convoy vehicle!	輸送隊の車両がやられた！
+radio.chatter.33	호송대 피습 - 적을 쓸어 줘!	Convoy under attack - clear those hostiles!	輸送隊が攻撃を受けている、敵を排除してくれ！
+radio.chatter.34	호송대 한 대를 잃었다!	We lost a convoy vehicle!	輸送隊に損害！一台やられた！
 radio.chatter.35	연막 터뜨린다! 엄호해 줘! 가, 가!	Popping smoke! Cover us! move! move!	スモーク展開！援護してくれ！行け、行け！
 radio.chatter.36	연막 전개 - 놈들 록온이 풀렸다!	Smoke screen deployed - they've lost their lock!	煙幕展開、奴らのロックが外れた！
 radio.chatter.37	미사일 요격당했다! 적 CIWS가 떨어뜨렸다.	Missile intercepted! Their CIWS shot it down.	ミサイルが迎撃された！敵のCIWSに落とされた。
@@ -762,9 +763,9 @@ radio.phaseintercept.02	폭격기 전멸! 도시는 무사하다.	All bombers do
 radio.phaseintercept.03	도시가 폭격당했다... 임무 실패. 전 부대, 철수하라.	The city has been bombed... Mission failed. All units, withdraw.	街が爆撃された……任務失敗。全部隊、撤退せよ。
 radio.phasedestroy.05	전 편대, 강화 구조물을 우선 공격하라. 주목표를 무력화하라!	All flights, prioritize the hardened structures. Neutralize the primary target!	全編隊、強化構造物を優先せよ。主目標を無力化しろ！
 radio.phasedestroy.06	주목표 전부 파괴. 위협 제거. 모두 훌륭했다.	All primary targets destroyed. Threat eliminated. Excellent work out there, everyone.	主目標をすべて破壊。脅威排除。皆、見事だった。
-radio.phaseconvoy.01	수송대가 적 지역을 통과하고 있다. 움직임을 주시하며 길을 열어라!	The convoy is moving through hostile territory. Keep an eye on their movement and clear the road!	輸送隊が敵地を通過中だ。動きを見守り、道を切り拓け！
-radio.phaseconvoy.02	수송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete,  well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
-radio.phaseconvoy.03	수송대를 잃었다. 임무 실패. 기지로 귀환하라.	The convoy is gone. Mission failed. Return to base.	輸送隊が全滅した。任務失敗。帰投せよ。
+radio.phaseconvoy.01	호송대가 적 지역을 통과하고 있다. 움직임을 주시하며 길을 열어라!	The convoy is moving through hostile territory. Keep an eye on their movement and clear the road!	輸送隊が敵地を通過中だ。動きを見守り、道を切り拓け！
+radio.phaseconvoy.02	호송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete,  well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
+radio.phaseconvoy.03	호송대를 잃었다. 임무 실패. 기지로 귀환하라.	The convoy is gone. Mission failed. Return to base.	輸送隊が全滅した。任務失敗。帰投せよ。
 radio.phasefleet.01	적 함대 사정권 진입. 전 포대, 사격 개시!	Enemy fleet in range. All batteries, commence firing!	敵艦隊、射程に入った。全砲門、撃ち方始め！
 radio.phasefleet.02	항모 함대 사정권! 전 함, 사격 개시!	Carrier fleets are in range! All ships, open fire!	空母艦隊、射程内！全艦、撃て！
 radio.phasefleet.03	전 함재기 발진! 기함을 찾아 격침하라!	Launch all aircraft! Find that flagship and sink it!	全艦載機発艦！旗艦を見つけて沈めろ！

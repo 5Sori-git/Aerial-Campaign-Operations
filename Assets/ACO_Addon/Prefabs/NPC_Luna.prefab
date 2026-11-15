@@ -21030,7 +21030,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -27889,7 +27889,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -33190,7 +33190,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -33669,14 +33669,14 @@ MonoBehaviour:
     PrefabModifications: []
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 781346677598854423}
-  Health: 2000
+  Health: 5000
   RespawnDelay: 0
   ExplodeOther:
   - {fileID: 6257263531178944754}
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -33816,6 +33816,8 @@ MonoBehaviour:
   Net: {fileID: 7374443232692737996}
   Ace: {fileID: 3188966485003702618}
   GroundAttacker: 0
+  Drone: 0
+  SpawnFx: {fileID: 0}
   MarkerLabel: FTR
   RookieVisuals: []
   VeteranVisuals: []
@@ -33938,6 +33940,7 @@ MonoBehaviour:
   HandoffToEngagedPlayer: 1
   HandoffHoldTime: 2
   HandoffCooldown: 5
+  HandoffHitGuard: 2
   SmoothTime: 0.5
   HardSnapDistance: 200
   DebugNetwork: 0
@@ -40628,7 +40631,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:

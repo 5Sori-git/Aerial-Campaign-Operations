@@ -29,7 +29,7 @@ namespace ACO
         [Header("표시 (HUD 설정 패널이 바꾼다)")]
         public bool ShowRadar = true;
         [Tooltip("머리 기준 위치(m): 오른쪽(+X), 위(+Y), 앞(+Z)")]
-        public Vector3 HeadOffset = new Vector3(-0.32f, -0.2f, 0.9f);
+        public Vector3 HeadOffset = new Vector3(-0.28f, -0.16f, 0.9f);   // 6-239 기본값
         [Tooltip("스코프 지름(m)")]
         public float Size = 0.2f;
         [Tooltip("불투명도(0~1) — 배경·고리·점 모두에 곱한다")]
@@ -37,7 +37,7 @@ namespace ACO
 
         [Header("동작")]
         [Tooltip("표시 거리(m) — 스코프 가장자리 거리. HUD 설정 패널이 2~10km로 바꾼다(MaxRange 이하)")]
-        public float Range = 10000f;
+        public float Range = 5000f;   // 6-239 기본 5km
         [Tooltip("표시 거리 최대(m)")]
         public float MaxRange = 10000f;
         [Tooltip("불투명도를 적용할 렌더러(배경·고리·점). 비우면 Root 아래 전부")]
@@ -48,13 +48,13 @@ namespace ACO
         [Tooltip("점 메시를 다시 채우는 간격(초). 회전은 매 프레임")]
         public float UpdateInterval = 0.1f;
         [Tooltip("머리 회전을 따라가는 빠르기(1/s, 클수록 바로 따라온다). HUD 설정 패널의 FOLLOW DELAY가 바꾼다")]
-        public float FollowSharpness = 12f;
+        public float FollowSharpness = 1000f;
         [Tooltip("점 크기(스코프 지름 대비)")]
         public float BlipSize = 0.045f;
         [Tooltip("미사일 막대 길이(스코프 지름 대비 — 폭은 이것의 30%)")]
         public float MissileSize = 0.035f;
         [Tooltip("점 크기 배율 — HUD 설정 패널이 바꾼다")]
-        public float BlipScale = 1f;
+        public float BlipScale = 1.6f;
 
         [Header("색")]
         public Color EnemyColor = new Color(1f, 0.82f, 0.2f, 1f);

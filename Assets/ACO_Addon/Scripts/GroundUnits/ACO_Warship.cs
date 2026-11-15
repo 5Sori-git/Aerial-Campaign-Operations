@@ -419,7 +419,11 @@ namespace ACO
         private void ReviveHull()
         {
             // 체력 복구는 한 클라이언트만 해야 한다(RespawnTarget이 내부에서 소유권을 가져가고 동기화한다).
-            if (Networking.IsOwner(gameObject) && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+            if (TargetHealth)
+            {
+                if (Networking.IsOwner(gameObject)) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+                else { SendCustomEventDelayedFrames(nameof(_LocalRefillHealth), 3); }   // 소유자가 아닌 화면은 같은 값으로 직접 채운다(6-247)
+            }
             _dead = false;
             SetDeathVisuals(false);
         }
@@ -429,6 +433,18 @@ namespace ACO
         public void _RespawnTargetHealth()
         {
             if (TargetHealth) { TargetHealth.RespawnTarget(); }
+        }
+
+        /// 소유자가 아닌 화면(6-247): 유닛을 켜기 전에 지나간 소유자의 스폰 채우기(RespawnTarget)를 놓쳤을 수 있다 — 그러면 지난 미션 체력 · 격파 상태가 남아
+        /// 쏜 사람 화면의 격추 미리 보기가 틀리거나(투명 · 무적) 피해가 안 들어간다. 소유자와 같은 값(최대 체력)으로 직접 채운다.
+        /// 숙련도 최대 체력(2프레임 뒤) 다음인 3프레임 뒤에, SaccTarget.Start가 끝난 것만(Start 전에 부르면 SaccTarget이 멈춘다).
+        public void _LocalRefillHealth()
+        {
+            if (!TargetHealth || !TargetHealth.gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (TargetHealth.GetProgramVariable("TargetAnimator") == null) { return; }
+            if (TargetHealth.FullHealth <= 0f) { return; }
+            TargetHealth.Health = TargetHealth.FullHealth;
+            TargetHealth.SendCustomEvent("_onDeserialization");   // 격파 상태 · 체력 바를 새 값으로(이 화면에서만)
         }
     }
 }

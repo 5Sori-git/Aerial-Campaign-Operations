@@ -52,6 +52,10 @@ namespace ACO
         public const int ITEM_COUNT = 36;
 
         private const string KEY_PREFIX = "aco_hud_";
+        // 배율 항목의 기본값(6-239) — 프리팹 크기(×1.0) 대비. 저장값도 같은 기준이라 기본값을 바꿔도 저장된 설정은 그대로 보인다
+        private const float DEFAULT_PANEL_SCALE = 0.7f;
+        private const float DEFAULT_RESULT_SCALE = 0.9f;
+        private const float DEFAULT_RADAR_SIZE = 0.7f;
 
         // 저장 ID(ITEM_* 순서). 키 = "aco_hud_" + ID — 항목을 더하거나 순서를 바꿔도 기존 설정이 틀어지지 않는다.
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 재사용하지 않는다. 인스펙터에 두지 않는다(실수로 바뀌지 않게).
@@ -83,11 +87,11 @@ namespace ACO
             "SUBTITLE LEFT / RIGHT", "SUBTITLE UP / DOWN", "SUBTITLE SIZE", "RWR MISSILE MARK SIZE", "RWR LOCK ARC SIZE",
             "RADAR", "RADAR SIZE", "RADAR LEFT / RIGHT", "RADAR UP / DOWN", "RADAR OPACITY", "HUD FOLLOW DELAY", "RADAR RANGE", "RADAR BLIP SIZE", "FLIGHT HUD", "FLIGHT HUD SIZE", "FLIGHT HUD BRIGHTNESS", "DISTANCE UNIT", "DECK CREW", "CLOUD QUALITY", "HUD COLOR", "TEXT SHADOW", "LANGUAGE" };
         [Tooltip("−/+ 한 번에 바뀌는 양(위치 m, 크기 배율, 각도 도). 크로스헤어·RWR·레이더는 켜기/끄기, 따라오는 지연은 초. 패널 거리·크로스헤어 거리는 현재 거리의 DistanceStepRatio와 이 값 중 큰 쪽")]
-        public float[] Steps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f, 0.02f, 0.02f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.02f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
+        public float[] Steps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
         public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f };
         public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f };
         // 예전 프리팹(항목이 적은 배열)을 위한 코드 기본값 — 인스펙터 배열이 짧으면 이 값을 쓴다.
-        private float[] _fbSteps = new float[] { 0.02f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.5f, 0.02f, 0.02f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.02f, 0.02f, 0.1f, 0.02f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
+        private float[] _fbSteps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
         private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f };
         private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f };
 
@@ -132,10 +136,10 @@ namespace ACO
                 _defaults[ITEM_RESULT_Y] = ScoreHUD.ResultOffset.y;
                 if (ScoreHUD.ResultGroup) { _baseResultScale = ScoreHUD.ResultGroup.localScale; }
             }
-            _defaults[ITEM_PANEL_SCALE] = 1f;
-            _defaults[ITEM_RESULT_SCALE] = 1f;
+            _defaults[ITEM_PANEL_SCALE] = DEFAULT_PANEL_SCALE;
+            _defaults[ITEM_RESULT_SCALE] = DEFAULT_RESULT_SCALE;
             _defaults[ITEM_CHATTER_X] = Chatter != null ? Chatter.HeadOffset.x : 0f;
-            _defaults[ITEM_CHATTER_Y] = Chatter != null ? Chatter.HeadOffset.y : -0.2f;
+            _defaults[ITEM_CHATTER_Y] = Chatter != null ? Chatter.HeadOffset.y : 0.2f;
             _defaults[ITEM_CHATTER_SCALE] = 1f;
             if (Chatter != null && Chatter.Panel != null) { _baseChatterScale = Chatter.Panel.localScale; }
             _defaults[ITEM_CROSSHAIR_DISTANCE] = Markers != null ? Markers.CrosshairDistance : 30f;
@@ -148,17 +152,17 @@ namespace ACO
             }
             _defaults[ITEM_RWR] = Rwr == null || Rwr.ShowRwr ? 1f : 0f;
             _defaults[ITEM_RWR_SIZE] = Rwr != null ? Rwr.SizeScale : 1f;
-            _defaults[ITEM_RWR_MISSILE_SIZE] = Rwr != null ? Rwr.ChevronScale : 1f;
-            _defaults[ITEM_RWR_LOCK_SIZE] = Rwr != null ? Rwr.LockArcScale : 1f;
+            _defaults[ITEM_RWR_MISSILE_SIZE] = Rwr != null ? Rwr.ChevronScale : 0.7f;
+            _defaults[ITEM_RWR_LOCK_SIZE] = Rwr != null ? Rwr.LockArcScale : 1.2f;
             _defaults[ITEM_RADAR] = HudRadar == null || HudRadar.ShowRadar ? 1f : 0f;
-            _defaults[ITEM_RADAR_SIZE] = 1f;
-            _defaults[ITEM_RADAR_X] = HudRadar != null ? HudRadar.HeadOffset.x : -0.32f;
-            _defaults[ITEM_RADAR_Y] = HudRadar != null ? HudRadar.HeadOffset.y : -0.2f;
+            _defaults[ITEM_RADAR_SIZE] = DEFAULT_RADAR_SIZE;
+            _defaults[ITEM_RADAR_X] = HudRadar != null ? HudRadar.HeadOffset.x : -0.28f;
+            _defaults[ITEM_RADAR_Y] = HudRadar != null ? HudRadar.HeadOffset.y : -0.16f;
             _defaults[ITEM_RADAR_ALPHA] = HudRadar != null ? HudRadar.Opacity : 1f;
-            _defaults[ITEM_RADAR_RANGE] = HudRadar != null ? Mathf.Min(HudRadar.Range, HudRadar.MaxRange) : 10000f;
-            _defaults[ITEM_RADAR_BLIP] = HudRadar != null ? HudRadar.BlipScale : 1f;
+            _defaults[ITEM_RADAR_RANGE] = HudRadar != null ? Mathf.Min(HudRadar.Range, HudRadar.MaxRange) : 5000f;
+            _defaults[ITEM_RADAR_BLIP] = HudRadar != null ? HudRadar.BlipScale : 1.6f;
             _defaults[ITEM_FLIGHT_HUD] = FlightHud == null || FlightHud.ShowHud ? 1f : 0f;
-            _defaults[ITEM_FLIGHT_HUD_SIZE] = FlightHud != null ? FlightHud.Scale : 1f;
+            _defaults[ITEM_FLIGHT_HUD_SIZE] = FlightHud != null ? FlightHud.Scale : 1.4f;
             _defaults[ITEM_FLIGHT_HUD_BRIGHT] = FlightHud != null ? FlightHud.Brightness : 1f;
             _defaults[ITEM_DISTANCE_UNIT] = Units != null && Units.NauticalMiles ? 1f : 0f;
             _defaults[ITEM_DECK_CREW] = 1f;
@@ -176,7 +180,7 @@ namespace ACO
                 _shadowAlpha[i] = a > 0.01f ? a : 0.5f;
             }
             // 따라오는 지연(초) = 1 / 빠르기. 기준은 점수 패널
-            _defaults[ITEM_HUD_FOLLOW] = ScoreHUD != null && ScoreHUD.FollowSharpness > 0.01f ? Mathf.Round(100f / ScoreHUD.FollowSharpness) / 100f : 0.1f;
+            _defaults[ITEM_HUD_FOLLOW] = ScoreHUD != null && ScoreHUD.FollowSharpness > 0.01f ? Mathf.Round(100f / ScoreHUD.FollowSharpness) / 100f : 0f;
             if (HudRadar != null) { _baseRadarSize = HudRadar.Size; }
             _values = new float[ITEM_COUNT];
             for (int i = 0; i < ITEM_COUNT; i++) { _values[i] = _defaults[i]; }

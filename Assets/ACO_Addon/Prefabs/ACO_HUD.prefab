@@ -12399,10 +12399,10 @@ MonoBehaviour:
   Spin: {fileID: 514062327755172990}
   BlipFilter: {fileID: 6009109497364678222}
   ShowRadar: 1
-  HeadOffset: {x: -0.32, y: -0.2, z: 0.9}
+  HeadOffset: {x: -0.28, y: -0.16, z: 0.9}
   Size: 0.2
   Opacity: 1
-  Range: 10000
+  Range: 5000
   MaxRange: 10000
   Renderers:
   - {fileID: 3652133254608821718}
@@ -12410,10 +12410,10 @@ MonoBehaviour:
   - {fileID: 4962571824143611157}
   HeadingFromVehicle: 0
   UpdateInterval: 0.1
-  FollowSharpness: 12
+  FollowSharpness: 1000
   BlipSize: 0.045
   MissileSize: 0.035
-  BlipScale: 1
+  BlipScale: 1.6
   EnemyColor: {r: 1, g: 0.82, b: 0.2, a: 1}
   ObjectiveColor: {r: 1, g: 0.25, b: 0.2, a: 1}
   FriendlyColor: {r: 0.35, g: 0.65, b: 1, a: 1}
@@ -22895,8 +22895,8 @@ MonoBehaviour:
   LockSource: {fileID: 6135199878469031483}
   ShowRwr: 1
   SizeScale: 1
-  ChevronScale: 1
-  LockArcScale: 1
+  ChevronScale: 0.7
+  LockArcScale: 1.2
   MaxShown: 4
   MaxRange: 10000
   CloseRange: 300
@@ -27462,9 +27462,9 @@ MonoBehaviour:
   ResultText: {fileID: 2446166650345127122}
   NoticeText: {fileID: 7690366404152176393}
   ResultGroup: {fileID: 5477721726005501309}
-  HeadOffset: {x: -0.28, y: 0.16, z: 0.9}
-  ResultOffset: {x: 0, y: 0.07}
-  FollowSharpness: 10
+  HeadOffset: {x: -0.38, y: 0.16, z: 0.9}
+  ResultOffset: {x: 0, y: -0.19}
+  FollowSharpness: 1000
   UpdateInterval: 0.25
   ShowWhenIdle: 0
   TextAlpha: 0.85
@@ -27552,6 +27552,10 @@ MonoBehaviour:
   SupportBomberLabel: SUPPORT BOMBER
   SupportTankerLabel: TANKER DRONE
   SupportGuardianLabel: GUARDIAN DRONE
+  HomeBase: {fileID: 0}
+  HomeLabel: CVN
+  HomeMinDistance: 1500
+  HomeHeight: 20
   ShowEscortRoute: 1
   WaypointMaterial: {fileID: 2100000, guid: e2c121bcc308cf346a6fda111d1ea974, type: 2}
   DestinationMaterial: {fileID: 2100000, guid: 5bf1c381c38cebf4c83029e5f7f3fc4e, type: 2}

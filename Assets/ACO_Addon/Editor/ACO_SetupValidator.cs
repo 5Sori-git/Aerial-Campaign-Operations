@@ -460,6 +460,8 @@ public partial class ACO_SetupValidator : EditorWindow
         Single<ACO_ScreenFader>(g, "화면 암전", WARN, ACO_SceneBaker.CreateScreenFader);
         Single<ACO_UrlStore>(g, "URL 저장소(데칼 이미지 URL 영구 저장 — Player Object)", WARN, ACO_SceneBaker.CreateUrlStore);
         Single<ACO_Chatter>(g, "무전 채터", INFO, ACO_SceneBaker.CreateChatter);
+        ACO_Chatter subtitleChatter = FindOne<ACO_Chatter>();
+        if (subtitleChatter != null && !ACO_SceneBaker.SubtitleWidthOk(subtitleChatter)) { Add(g, WARN, "무전 자막 폭이 넓어 긴 대사가 한 줄로 길게 나옵니다 — [고치기]는 줄바꿈 폭으로 맞춘다(6-236).", subtitleChatter, () => ACO_SceneBaker.FitSubtitleWidth(subtitleChatter)); }
     }
 
     private void CheckFlow()
@@ -641,7 +643,15 @@ public partial class ACO_SetupValidator : EditorWindow
             Add(g, WARN, "작전 테이블에 북쪽 표시가 없습니다.", map, () => ACO_RadarBuilder.EnsureTacticalNorthMark(map));
         }
 
-        if (FindOne<ACO_CreditBoard>() == null) { Add(g, INFO, "크레딧 보드가 없습니다(선택) — 사용한 에셋 출처 표기(CC-BY 에셋을 쓰면 필수).", null, () => PlacePrefab("ACO_CreditBoard", ACO_HUDBuilder.CreateCreditBoardPrefab)); }
+        // 크레딧 · 업데이트 노트는 같은 스크립트라 언어별 파일 유무로 가른다(6-251)
+        bool hasCredits = false;
+        bool hasUpdates = false;
+        foreach (ACO_CreditBoard cb in Object.FindObjectsOfType<ACO_CreditBoard>(true))
+        {
+            if (cb.LanguageSources != null && cb.LanguageSources.Length > 0) { hasUpdates = true; } else { hasCredits = true; }
+        }
+        if (!hasCredits) { Add(g, WARN, "크레딧 보드가 없습니다 — 사용한 에셋 출처 표기. [고치기]는 선원실 가운데 사물함 앞에 기대 세운다(6-228).", null, ACO_SceneBaker.CreateCreditBoard); }
+        if (!hasUpdates) { Add(g, WARN, "업데이트 노트 보드가 없습니다. [고치기]는 선원실 크레딧 보드 옆 사물함 앞에 기대 세운다(6-251) — 그 뒤 Bake.", null, ACO_SceneBaker.CreateUpdateBoard); }
 
         // 튜토리얼(6-160): 브리핑실 책장 위 표식 + 팝업, 함내 사진
         if (!ACO_HUDBuilder.PanelFontsReady())

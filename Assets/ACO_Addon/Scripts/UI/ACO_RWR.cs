@@ -41,9 +41,9 @@ namespace ACO
         [Tooltip("링 반경 배율(미사일이 놓이는 안쪽·바깥 반경과 락온 호 반경). 안쪽 반경은 크로스헤어 바깥(반지름 + 0.4°)보다 작아지지 않는다")]
         public float SizeScale = 1f;
         [Tooltip("미사일 표시(쉐브론) 크기 배율")]
-        public float ChevronScale = 1f;
+        public float ChevronScale = 0.7f;   // 6-239 기본값
         [Tooltip("락온 호 크기 배율(반경 — 바깥 반경보다 안쪽으로는 안 들어간다)")]
-        public float LockArcScale = 1f;
+        public float LockArcScale = 1.2f;
 
         [Header("링")]
         [Tooltip("한 번에 그리는 미사일 수(가까운 순)")]

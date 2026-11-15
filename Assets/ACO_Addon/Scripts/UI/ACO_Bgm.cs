@@ -15,7 +15,8 @@ namespace ACO
     ///  - 페이즈 사이: 듣던 곡을 계속.  미션 끝(성공·실패): 페이드 아웃(결과 효과음만) → LobbyAfterEnd초 뒤(브리핑실로 돌아온 뒤) 대기실 곡.
     ///    미션이 끝난 뒤 월드에 들어온 사람은 바로 대기실 곡.
     /// 페이즈 곡은 페이즈 시작 시각(동기화)으로 골라 모두 같은 곡으로 시작한다. 곡이 끝나면 풀의 다음 곡, 풀에 곡이 하나면 반복.
-    /// URL 불러오기는 LoadInterval초에 한 번(VRChat 제한 5초). 불러오기 제한 오류면 다시, 다른 오류면 다음 곡(풀을 다 돌면 그 상황은 무음).
+    /// URL 불러오기는 LoadInterval초에 한 번(VRChat 제한 5초). 불러오기 제한 오류면 다시, 다른 오류면 다음 곡.
+    /// 풀을 한 바퀴 다 실패하면(6-240): 페이즈 전용 곡이면 공용 풀(보스 BossUrls · 일반 PhaseUrls), 그것도 실패하면 RetryDelays초 기다렸다 기본 풀부터 다시 — 기다리는 동안 패널은 LOADING.
     /// 곡을 바꿀 땐 페이드 아웃 → 정지 → 불러오기 → 재생 시작에 페이드 인. 이 스크립트는 영상 이벤트를 받도록 플레이어와 같은 오브젝트에 둔다.
     /// 볼륨·켜기는 BGM 패널(ACO_BgmPanel)에서 바꾸고 플레이어 영구 저장(PlayerData)에 남는다 — 끄면 URL을 불러오지도 않는다.
     /// 곡 이름(*Names — URL과 같은 순서, 인스펙터에서 URL 옆에 넣는다)은 패널에 지금 곡으로 보인다(비우면 URL).
@@ -70,6 +71,8 @@ namespace ACO
         public float LoadInterval = 5.5f;
         [Tooltip("미션 끝(성공·실패) 뒤 이만큼(초) 무음, 그 뒤 대기실 곡 — 게임 진행의 귀환(ReturnDelay 8초 + 암전)이 끝날 즈음")]
         public float LobbyAfterEnd = 10f;
+        [Tooltip("풀을 한 바퀴 다 실패하면(유튜브 일시 실패 등) 이만큼(초) 기다렸다 처음부터 다시 — 차례로 늘고 끝 값을 계속 쓴다(6-240). 상황이 바뀌거나 재생되면 처음부터")]
+        public float[] RetryDelays = new float[] { 15f, 30f, 60f };
 
         private int _ctx = -1;
         private int _ctxStart;
@@ -92,6 +95,14 @@ namespace ACO
         private bool _restored;
         private int _endState = -1;   // 지금 보고 있는 미션 끝 상태(성공·실패) — 바뀌면 끝난 시각을 다시 잰다
         private float _endAt;
+        // 실패 대비(6-240): 이 상황의 기본 풀(전용 곡)과 공용 풀(보스 BossUrls · 일반 PhaseUrls). 기본 풀을 다 실패하면 공용 풀, 그것도 실패하면 기다렸다 기본 풀부터 다시
+        private VRCUrl[] _basePool;
+        private string[] _baseNames;
+        private float[] _baseGains;
+        private VRCUrl[] _fbPool;
+        private string[] _fbNames;
+        private float[] _fbGains;
+        private int _retries;
 
         private const string KEY_VOLUME = "aco_bgm_volume";
         private const string KEY_ON = "aco_bgm_on";
@@ -219,21 +230,63 @@ namespace ACO
                 else { pool = PhaseUrls; names = PhaseNames; gains = PhaseGains; }
             }
             if (!HasAny(pool)) { pool = null; names = null; gains = null; }
+            // 공용 풀(6-240): 페이즈에서 기본 풀이 공용 풀이 아닐 때만(전용 곡을 다 실패하면 넘어간다)
+            VRCUrl[] fb = null;
+            string[] fbNames = null;
+            float[] fbGains = null;
+            if (ctx == CTX_PHASE && m != null && pool != null)
+            {
+                if (m.IsBossPhase()) { fb = BossUrls; fbNames = BossNames; fbGains = BossGains; }
+                else { fb = PhaseUrls; fbNames = PhaseNames; fbGains = PhaseGains; }
+                if (fb == pool || !HasAny(fb)) { fb = null; fbNames = null; fbGains = null; }
+            }
+            _basePool = pool;
+            _baseNames = names;
+            _baseGains = gains;
+            _fbPool = fb;
+            _fbNames = fbNames;
+            _fbGains = fbGains;
+            _retries = 0;
+            _nextLoad = Mathf.Min(_nextLoad, Time.time + LoadInterval);   // 다시 시도를 기다리던 중이면 그 대기를 버린다(불러오기 간격은 지킨다)
             // 같은 풀이 이어지면(보스 → 보스 기본 등) 듣던 곡 그대로
             if (pool != null && pool == _pool && (_playing || _loading || _needLoad)) { return; }
             if (_playing || _loading || _vol > 0f) { BeginSwitch(); }   // 듣던 곡의 볼륨에서 페이드 아웃(배율이 바뀌기 전에 잡는다)
+            UsePool(pool, names, gains, ctx == CTX_PHASE ? ((start & 0x7fffffff) + stage) : -1);
+            _needLoad = false;
+            if (!_switching) { _needLoad = pool != null && Level() > 0f; }
+        }
+
+        /// 곡 풀을 바꾸고 첫 곡을 고른다. seed ≥ 0이면 모두 같은 곡(페이즈 시작 시각), 아니면 무작위.
+        private void UsePool(VRCUrl[] pool, string[] names, float[] gains, int seed)
+        {
             _pool = pool;
             _names = names;
             _gains = gains;
             _errors = 0;
-            if (pool != null)
+            if (pool == null) { return; }
+            int n = pool.Length;
+            int pick = seed >= 0 ? seed % n : Random.Range(0, n);
+            _index = NextValid(pick - 1);
+        }
+
+        /// 지금 풀을 한 바퀴 다 실패했다(6-240): 기본 풀이면 공용 풀로, 공용 풀(또는 공용 풀이 없으면)이면 기다렸다 기본 풀부터 다시.
+        private void PoolFailed()
+        {
+            int seed = _ctx == CTX_PHASE ? ((_ctxStart & 0x7fffffff) + _ctxStage) : -1;
+            if (_pool == _basePool && _fbPool != null)
             {
-                int n = pool.Length;
-                int pick = ctx == CTX_PHASE ? ((start & 0x7fffffff) + stage) % n : Random.Range(0, n);
-                _index = NextValid(pick - 1);
+                Debug.LogWarning("[ACO_Bgm] all tracks failed — shared pool");
+                UsePool(_fbPool, _fbNames, _fbGains, seed);
+                _needLoad = true;
+                return;
             }
-            _needLoad = false;
-            if (!_switching) { _needLoad = pool != null && Level() > 0f; }
+            float delay = 15f;
+            if (RetryDelays != null && RetryDelays.Length > 0) { delay = RetryDelays[Mathf.Min(_retries, RetryDelays.Length - 1)]; }
+            _retries++;
+            Debug.LogWarning("[ACO_Bgm] all tracks failed — retry in " + delay + "s");
+            UsePool(_basePool, _baseNames, _baseGains, seed);
+            _nextLoad = Mathf.Max(_nextLoad, Time.time + delay);
+            _needLoad = _pool != null;
         }
 
         private void Load()
@@ -251,6 +304,7 @@ namespace ACO
             _loading = false;
             _playing = true;
             _errors = 0;
+            _retries = 0;
         }
 
         public override void OnVideoEnd()
@@ -265,6 +319,7 @@ namespace ACO
         {
             _loading = false;
             _playing = false;
+            if (_index >= 0 && _pool != null && _index < _pool.Length && _pool[_index] != null) { Debug.LogWarning("[ACO_Bgm] error " + videoError.ToString() + " " + _pool[_index].Get()); }
             if (_switching || !HasAny(_pool)) { return; }
             if (videoError == VideoError.RateLimited)
             {
@@ -273,7 +328,7 @@ namespace ACO
                 return;
             }
             _errors++;
-            if (_errors >= CountValid(_pool)) { return; }   // 풀을 다 돌았다 — 이 상황은 무음
+            if (_errors >= CountValid(_pool)) { PoolFailed(); return; }   // 풀을 다 돌았다 — 공용 풀 또는 기다렸다 다시(6-240)
             _index = NextValid(_index);
             _needLoad = true;
         }

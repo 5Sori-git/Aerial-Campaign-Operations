@@ -189,8 +189,15 @@ namespace ACO
             ShowHold(false, 0f);
         }
 
+        /// 캐터펄트에 걸린 채 폭발 — 모두의 화면에서 걸림을 푼다(SFEXT_O_Explode는 조종사 화면만 — 다른 사람 화면에 JBD가 올라간 채 남았다, 6-242).
+        public void SFEXT_G_Explode()
+        {
+            if (OnCatapult) { CatapultLockOff(); }
+        }
+
         public void SFEXT_G_RespawnButton()
         {
+            if (OnCatapult) { CatapultLockOff(); }   // 걸린 채 리스폰(6-242)
             if (Dial_Funcon) { Dial_Funcon.SetActive(false); }
             if (Dial_Funcon_Array != null) { for (int i = 0; i < Dial_Funcon_Array.Length; i++) { if (Dial_Funcon_Array[i]) { Dial_Funcon_Array[i].SetActive(false); } } }
         }

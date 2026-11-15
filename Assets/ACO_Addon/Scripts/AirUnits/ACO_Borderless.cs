@@ -138,12 +138,8 @@ namespace ACO
             _wasAlive = alive;
             SetMarker(alive);
             if (LockGate) { LockGate.Active = alive && Phase != null && Phase.IsEcmOn(); }
-            // 체력 하한이 걸린 동안(1단계·전환) 미리 보기 격추를 끈다
-            if (TargetHealth)
-            {
-                bool predict = !alive || (Phase != null && Phase.IsVulnerable());
-                if (TargetHealth.PredictExplosion != predict) { TargetHealth.PredictExplosion = predict; }
-            }
+            // 미리 보기 격추는 모든 NPC에서 끈다(6-248 — 파괴는 소유자 기준). 예전엔 체력 하한이 걸린 동안만 껐다
+            if (TargetHealth && TargetHealth.PredictExplosion) { TargetHealth.PredictExplosion = false; }
             if (!alive) { return; }
 
             if (Networking.IsOwner(AI.gameObject))

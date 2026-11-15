@@ -400,5 +400,17 @@ namespace ACO
             if (Turret != null) { Turret.NetRespawn(); }
             if (Artillery != null) { Artillery.NetRespawn(); }
         }
+
+        /// 소유자가 아닌 화면(6-249): SaccTarget은 살아 있는데(체력 > 0) 이 스크립트만 격파 상태면 표시를 되돌린다. 미리 보기 격추를 껐으므로(6-248) 늘 어긋남이다
+        /// (예: 꺼져 있던 동안의 지난 미션 격파가 켜진 뒤 늦게 적용). 스폰 채우기와 1.5 · 4초 다시 보내기(ACO_MissionGenerator) 때 부른다.
+        public void _SyncRevive()
+        {
+            if (!TargetHealth || TargetHealth.Health <= 0f || !gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (!_dead) { return; }
+            _dead = false;
+            _falling = false;
+            ApplyPose(true);
+            Debug.Log("[ACO_SYNC] 표시 복구(격파 상태였음): " + gameObject.name + " 체력 " + TargetHealth.Health.ToString("F0") + "/" + TargetHealth.FullHealth.ToString("F0"));
+        }
     }
 }

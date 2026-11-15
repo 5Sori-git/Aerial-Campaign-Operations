@@ -1895,6 +1895,7 @@ namespace ACO
             if (ship != null)
             {
                 if (!ship.ExternalPose) { QueueTierHealth(ship.TargetHealth, ship.BaseHealth, tier); }   // 공중 요새 코어는 4명 기준으로 맞춘 값 그대로
+                else { QueueFullHealth(ship.TargetHealth, ship.BaseHealth, true); }   // 그 값도 모든 화면에 넣는다(6-249)
                 if (ship.Parts == null) { return; }
                 for (int k = 0; k < ship.Parts.Length; k++) { if (ship.Parts[k] != null) { ApplySiteTier(ship.Parts[k], tier); } }
                 return;
@@ -1935,21 +1936,52 @@ namespace ACO
         private int _tierHealthHead;
         private int _tierHealthCount;
 
+        private bool[] _tierHealthFixed = new bool[TIER_HEALTH_QUEUE];
+
         private void QueueTierHealth(SaccTarget target, float baseHealth, int tier)
         {
-            if (target == null || baseHealth <= 0f || _tierHealthCount >= TIER_HEALTH_QUEUE) { return; }
+            QueueFullHealth(target, baseHealth * TierValue(GroundHealthMultiplier, tier), false);
+        }
+
+        /// 최대 체력을 2프레임 뒤 모든 화면에 넣는다. fixed = 숙련도 배율 없는 고정값(6-249 — 호위 · 고정 표적 · TEL · 보스 부위 · 공중 요새 코어):
+        /// 이들은 예전엔 SaccTarget.Start가 그 순간 체력을 최대 체력으로 잡아, 늦게 켜진 화면은 깎인 값을 최대 체력으로 들고 있었다(그 사람이 마스터가 되면 모두에게 그 값으로 스폰).
+        private void QueueFullHealth(SaccTarget target, float value, bool fixedValue)
+        {
+            if (target == null || value <= 0f || _tierHealthCount >= TIER_HEALTH_QUEUE) { return; }
             int k = (_tierHealthHead + _tierHealthCount) % TIER_HEALTH_QUEUE;
             _tierHealthTargets[k] = target;
-            _tierHealthValues[k] = baseHealth * TierValue(GroundHealthMultiplier, tier);
+            _tierHealthValues[k] = value;
+            _tierHealthFixed[k] = fixedValue;
             _tierHealthCount++;
             SendCustomEventDelayedFrames(nameof(_ApplyTierHealth), 2);   // 하나당 한 번 — 같은 프레임에 켠 유닛끼리 순서가 유지된다
+        }
+
+        /// 숙련도가 없는 유닛과 그 부위의 고정 최대 체력(6-249). 숙련도 체력을 받는 대공포 · SAM · 함선 본체는 ApplyUnitTier가 한다.
+        private void QueueFixedHealth(UdonSharpBehaviour unit)
+        {
+            ACO_FortressPart[] parts = unit.GetComponentsInChildren<ACO_FortressPart>(true);
+            for (int i = 0; i < parts.Length; i++) { if (parts[i] != null) { QueueFullHealth(parts[i].TargetHealth, parts[i].BaseHealth, true); } }
+            ACO_StaticTarget st = unit.GetComponent<ACO_StaticTarget>();
+            if (st != null) { QueueFullHealth(st.TargetHealth, st.BaseHealth, true); }
+            ACO_TelUnit tel = unit.GetComponent<ACO_TelUnit>();
+            if (tel != null) { QueueFullHealth(tel.TargetHealth, tel.BaseHealth, true); }
         }
 
         public void _ApplyTierHealth()
         {
             if (_tierHealthCount <= 0) { return; }
             SaccTarget t = _tierHealthTargets[_tierHealthHead];
-            if (t != null) { t.FullHealth = _tierHealthValues[_tierHealthHead]; }
+            float v = _tierHealthValues[_tierHealthHead];
+            if (t != null)
+            {
+                // 확인용(6-249): 고정값인데 이 화면의 최대 체력이 달랐다 = Start가 깎인 체력을 잡았던 것
+                if (_tierHealthFixed[_tierHealthHead] && t.FullHealth > 0f && Mathf.Abs(t.FullHealth - v) > v * 0.01f)
+                {
+                    Debug.Log("[ACO_SYNC] 최대 체력 바로잡음: " + t.gameObject.name + " " + t.FullHealth.ToString("F0") + " → " + v.ToString("F0"));
+                }
+                t.FullHealth = v;
+            }
+            _tierHealthTargets[_tierHealthHead] = null;
             _tierHealthHead = (_tierHealthHead + 1) % TIER_HEALTH_QUEUE;
             _tierHealthCount--;
         }
@@ -4624,11 +4656,26 @@ namespace ACO
                 if (_escortUsed[i])
                 {
                     unit.gameObject.SetActive(true);
+                    // 고정 최대 체력(6-249): 호위 본체와 방어 기총(숙련도 없음) — MissionStart의 부활 채우기(2프레임 뒤)보다 먼저 예약
+                    QueueFullHealth(unit.TargetHealth, unit.BaseHealth, true);
+                    if (unit.DefenseGuns != null)
+                    {
+                        for (int g = 0; g < unit.DefenseGuns.Length; g++)
+                        {
+                            UdonSharpBehaviour dg = unit.DefenseGuns[g];
+                            if (dg == null) { continue; }
+                            ACO_AAGunSite eg = dg.GetComponent<ACO_AAGunSite>();
+                            if (eg != null) { QueueFullHealth(eg.TargetHealth, eg.BaseHealth, true); }
+                            ACO_SAMSite es = dg.GetComponent<ACO_SAMSite>();
+                            if (es != null) { QueueFullHealth(es.TargetHealth, es.BaseHealth, true); }
+                        }
+                    }
                     float own = i < _escortOffset.Length ? (float)_escortOffset[i] : 0f;
                     unit.SetSpeedOverride(i < _escortFleet.Length && _escortFleet[i] ? FleetSpeed : 0f);
                     unit.MissionStart(_escortRoute, i * ACO_EscortUnit.MAX_ROUTE_POINTS, _escortRouteCount[i], _escortTimeMs[i], _escortTimeMs[i] - _joinTimeMs > 0,
                         own, ColumnLeadOffset(_escortTag[i]) - own, i < _escortArrival.Length ? _escortArrival[i] : 0,
                         i < _escortLateral.Length ? (float)_escortLateral[i] : 0f);
+                    QueueHealthResend(unit);   // 호위 대상(VIP)도 스폰 체력을 다시 보낸다(6-245)
                 }
                 else
                 {
@@ -4691,6 +4738,7 @@ namespace ACO
                         }
                     }
                     ApplyUnitTier(unit, i < tiers.Length ? tiers[i] : ACO_NPCFighterAI.SKILL_VETERAN);
+                    QueueFixedHealth(unit);
                     bool fleet = (units == GroundUnits && i < _groundFleet.Length && _groundFleet[i]) || (units == HighValueTargets && i < _hvtFleet.Length && _hvtFleet[i]);
                     if (fleet)
                     {
@@ -4703,6 +4751,7 @@ namespace ACO
                         }
                     }
                     unit.SendCustomEvent("MissionSpawn");
+                    QueueHealthResend(unit);
                 }
                 else
                 {
@@ -4710,6 +4759,76 @@ namespace ACO
                     unit.gameObject.SetActive(false);
                 }
             }
+        }
+
+        // 스폰 체력 다시 보내기(6-245 — 지상 · 고가치 표적 · 호위): 소유자는 스폰 2프레임 뒤 남은 체력을 한 번 채워 보내는데, 그때 아직 유닛을 켜지 않은 화면(켜기는 화면마다 나눠서 한다)은
+        // 그 갱신을 못 받아 지난 값(프리팹 · 지난 미션) 그대로 — 체력이 100%로 안 보였다. 1.5초 · 4초 뒤 그때의 소유자가 다시 보낸다(모든 화면에서 예약).
+        // 같은 지연끼리는 예약 순서대로 돌므로 고리 두 개(1.5초 · 4초)로 나눈다.
+        private const int HEALTH_RESEND_QUEUE = 512;
+        private SaccTarget[] _resendA = new SaccTarget[HEALTH_RESEND_QUEUE];
+        private SaccTarget[] _resendB = new SaccTarget[HEALTH_RESEND_QUEUE];
+        private int _resendAHead;
+        private int _resendACount;
+        private int _resendBHead;
+        private int _resendBCount;
+
+        private void QueueHealthResend(UdonSharpBehaviour unit)
+        {
+            SaccTarget[] targets = unit.GetComponentsInChildren<SaccTarget>(true);
+            for (int i = 0; i < targets.Length; i++)
+            {
+                SaccTarget t = targets[i];
+                if (t == null) { continue; }
+                if (_resendACount < HEALTH_RESEND_QUEUE)
+                {
+                    _resendA[(_resendAHead + _resendACount) % HEALTH_RESEND_QUEUE] = t;
+                    _resendACount++;
+                    SendCustomEventDelayedSeconds(nameof(_HealthResendA), 1.5f);
+                }
+                if (_resendBCount < HEALTH_RESEND_QUEUE)
+                {
+                    _resendB[(_resendBHead + _resendBCount) % HEALTH_RESEND_QUEUE] = t;
+                    _resendBCount++;
+                    SendCustomEventDelayedSeconds(nameof(_HealthResendB), 4f);
+                }
+            }
+        }
+
+        public void _HealthResendA()
+        {
+            if (_resendACount <= 0) { return; }
+            SaccTarget t = _resendA[_resendAHead];
+            _resendA[_resendAHead] = null;
+            _resendAHead = (_resendAHead + 1) % HEALTH_RESEND_QUEUE;
+            _resendACount--;
+            ResendHealth(t);
+        }
+
+        public void _HealthResendB()
+        {
+            if (_resendBCount <= 0) { return; }
+            SaccTarget t = _resendB[_resendBHead];
+            _resendB[_resendBHead] = null;
+            _resendBHead = (_resendBHead + 1) % HEALTH_RESEND_QUEUE;
+            _resendBCount--;
+            ResendHealth(t);
+        }
+
+        /// 그때의 소유자가, 켜져 있을 때 남은 체력을 그대로 다시 보낸다(맞아서 깎였으면 깎인 값).
+        /// 이미 파괴됐으면 0도 보낸다 — 켜기 전에 파괴 갱신을 놓친 화면에서 살아 있는 채로 남지 않게(6-247).
+        private void ResendHealth(SaccTarget t)
+        {
+            if (t == null || !t.gameObject.activeInHierarchy) { return; }
+            if (!Networking.IsOwner(t.gameObject))
+            {
+                // 소유자가 아닌 화면(6-249): 체력은 살아 있는데 유닛 스크립트만 격파 상태면 표시를 되돌린다(받는 쪽이 판단, 없는 스크립트는 무시)
+                if (t.Health > 0f && t.ExplodeOther != null)
+                {
+                    for (int i = 0; i < t.ExplodeOther.Length; i++) { if (t.ExplodeOther[i] != null) { t.ExplodeOther[i].SendCustomEvent("_SyncRevive"); } }
+                }
+                return;
+            }
+            t.SendNetworkUpdate();
         }
 
         private float TierValue(float[] table, int tier)

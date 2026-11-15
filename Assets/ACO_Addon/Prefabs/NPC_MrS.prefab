@@ -5333,7 +5333,7 @@ MonoBehaviour:
   DisableBulletHitEvent: 0
   ArmorStrength: 1
   NoDamageBelow: 0
-  PredictExplosion: 1
+  PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
   TargetKilledMessages:
@@ -5473,6 +5473,8 @@ MonoBehaviour:
   Net: {fileID: 1918802706927652076}
   Ace: {fileID: 6530342349876897772}
   GroundAttacker: 0
+  Drone: 0
+  SpawnFx: {fileID: 0}
   MarkerLabel: FTR
   RookieVisuals: []
   VeteranVisuals: []
@@ -5594,6 +5596,7 @@ MonoBehaviour:
   HandoffToEngagedPlayer: 1
   HandoffHoldTime: 2
   HandoffCooldown: 5
+  HandoffHitGuard: 2
   SmoothTime: 0.5
   HardSnapDistance: 200
   DebugNetwork: 0

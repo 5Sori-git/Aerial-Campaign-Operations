@@ -306,7 +306,8 @@ namespace ACO
         void Update()
         {
             if (Net) { Net.OwnerCheckTick(Time.deltaTime); }
-            if (!_alive || !Flight) { return; }
+            if (!_alive) { return; }
+            if (!Flight) { return; }
             float dt = Time.deltaTime;
 
             if (_isOwner)
@@ -460,7 +461,29 @@ namespace ACO
         public void _ApplyTierHealth()
         {
             if (!TargetHealth || _tierFullHealth <= 0f) { return; }
+            if (_startHealth < 0f && TargetHealth.FullHealth > 0f) { _startHealth = TargetHealth.FullHealth; }   // SaccTarget.Start가 잡은 시작 체력(프리팹 값) — 덮기 전에 한 번
             TargetHealth.FullHealth = _tierFullHealth;
+        }
+
+        // SaccTarget.Start가 잡은 시작 체력(프리팹 Health). 남은 체력이 이 값 그대로면 부활 채우기를 못 받은 것(6-241)
+        private float _startHealth = -1f;
+
+        /// 스폰 1.5초 · 4초 뒤(모든 클라이언트에서 예약, 소유자만 한다 — 6-241): 남은 체력을 다시 보낸다 — 스폰 순간 꺼져 있던 클라이언트도 받게.
+        /// 남은 체력이 아직 시작 체력(프리팹 값) 그대로면(스폰 순간 소유권이 바뀌어 아무도 채우지 않았다) 최대 체력으로 다시 채운다.
+        public void _HealthResend()
+        {
+            if (!TargetHealth || !gameObject.activeInHierarchy) { return; }
+            if (!Networking.IsOwner(TargetHealth.gameObject)) { _SyncRevive(); return; }   // 소유자가 아닌 화면: 표시만 맞춘다(6-249)
+            // 이미 격추됐으면 0을 다시 보낸다 — 켜기 전에 격추 갱신을 놓친 화면에서 살아 있는 채로 남지 않게(6-247)
+            if (TargetHealth.Health <= 0f) { TargetHealth.SendNetworkUpdate(); return; }
+            if (!_alive) { return; }
+            if (_tierFullHealth > 0f && _startHealth > 0f && !Mathf.Approximately(_startHealth, _tierFullHealth) && Mathf.Approximately(TargetHealth.Health, _startHealth))
+            {
+                _ApplyTierHealth();
+                TargetHealth.RespawnTarget();
+                return;
+            }
+            TargetHealth.SendNetworkUpdate();
         }
 
         /// 숙련도 단계의 외형만 켠다(단계별 모델 교체). 부활할 때 HideOnDeath가 모델을 다시 켜므로 그 뒤에도 다시 부른다.
@@ -519,7 +542,17 @@ namespace ACO
             _isOwner = Net != null ? Net.RefreshOwnerSilent() : Networking.IsOwner(gameObject);
 
             // 체력 복구는 한 클라이언트만 해야 한다(RespawnTarget이 내부에서 소유권을 가져가고 동기화한다).
-            if (_isOwner && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+            if (TargetHealth)
+            {
+                if (_isOwner) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+                else { SendCustomEventDelayedFrames(nameof(_LocalRefillHealth), 3); }   // 소유자가 아닌 화면은 같은 값으로 직접 채운다(6-247)
+            }
+            // 늦게 켜진 클라이언트 · 스폰 순간 소유권 변경 대비(6-241) — 그때의 소유자가 다시 보낸다
+            if (TargetHealth)
+            {
+                SendCustomEventDelayedSeconds(nameof(_HealthResend), 1.5f);
+                SendCustomEventDelayedSeconds(nameof(_HealthResend), 4f);
+            }
 
             transform.position = position;
             transform.rotation = rotation;
@@ -1273,6 +1306,35 @@ namespace ACO
             if (!TargetHealth) { return; }
             _ApplyTierHealth();   // 숙련도 최대 체력으로 채운다(RespawnTarget = FullHealth)
             TargetHealth.RespawnTarget();
+        }
+
+        /// 소유자가 아닌 화면(6-247): 기체를 켜기 전에 지나간 소유자의 스폰 채우기(RespawnTarget)를 놓쳤을 수 있다 — 그러면 지난 미션 체력 · 격파 상태가 남아
+        /// 쏜 사람 화면의 격추 미리 보기가 틀리거나(투명 · 무적) 피해가 안 들어간다. 소유자와 같은 값(숙련도 최대 체력)으로 직접 채운다.
+        /// 3프레임 뒤에, SaccTarget.Start가 끝난 것만(Start 전에 부르면 SaccTarget이 멈춘다).
+        public void _LocalRefillHealth()
+        {
+            if (!TargetHealth || !TargetHealth.gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (TargetHealth.GetProgramVariable("TargetAnimator") == null) { return; }
+            _ApplyTierHealth();
+            if (TargetHealth.FullHealth <= 0f) { return; }
+            float before = TargetHealth.Health;
+            TargetHealth.Health = TargetHealth.FullHealth;
+            TargetHealth.SendCustomEvent("_onDeserialization");   // 격파 상태 · 체력 바를 새 값으로(이 화면에서만)
+            if (before < TargetHealth.FullHealth * 0.99f) { Debug.Log("[ACO_SYNC] 스폰 직접 채우기: " + gameObject.name + " " + before.ToString("F0") + " → " + TargetHealth.FullHealth.ToString("F0") + "(소유자 채우기를 놓침)"); }
+            _SyncRevive();
+        }
+
+        /// 소유자가 아닌 화면(6-249): SaccTarget은 살아 있는데(체력 > 0) 이 기체만 격추 상태면 되살린다. 미리 보기 격추를 껐으므로(6-248) 늘 어긋남이다
+        /// (예: 꺼져 있던 동안의 지난 미션 격추가 켜진 뒤 늦게 적용). 스폰 채우기와 1.5 · 4초 다시 보내기 때 부른다. 위치는 동기화가 맞춘다.
+        public void _SyncRevive()
+        {
+            if (_alive || !TargetHealth || TargetHealth.Health <= 0f || !gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            SetDeathVisuals(false);
+            if (Ace != null && Ace.Wreck != null) { Ace.Wreck.Clear(); }
+            IgnorePlayerCollisions();
+            SendCustomEventDelayedSeconds(nameof(IgnorePlayerCollisions), 0.5f);
+            _alive = true;
+            Debug.Log("[ACO_SYNC] 표시 복구(격추 상태였음): " + gameObject.name + " 체력 " + TargetHealth.Health.ToString("F0") + "/" + TargetHealth.FullHealth.ToString("F0"));
         }
     }
 }

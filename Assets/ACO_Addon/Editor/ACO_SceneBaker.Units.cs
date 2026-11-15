@@ -489,6 +489,23 @@ public partial class ACO_SceneBaker
         {
             if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
         }
+        // 숙련도가 없는 유닛 · 부위의 고정 최대 체력(6-249) — 생성기가 스폰 때마다 모든 화면에 넣는다
+        foreach (ACO_EscortUnit u in Object.FindObjectsOfType<ACO_EscortUnit>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_StaticTarget u in Object.FindObjectsOfType<ACO_StaticTarget>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_TelUnit u in Object.FindObjectsOfType<ACO_TelUnit>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
+        foreach (ACO_FortressPart u in Object.FindObjectsOfType<ACO_FortressPart>(true))
+        {
+            if (u.TargetHealth != null && u.BaseHealth != u.TargetHealth.Health) { u.BaseHealth = u.TargetHealth.Health; MarkChanged(u); changed++; }
+        }
         if (changed > 0) { Debug.Log($"[ACO] 지상 유닛 {changed}곳의 기준 체력(BaseHealth, 베테랑)을 채웠습니다."); }
     }
 

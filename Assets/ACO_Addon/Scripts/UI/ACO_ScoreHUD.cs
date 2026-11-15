@@ -29,11 +29,11 @@ namespace ACO
 
         [Header("위치")]
         [Tooltip("머리 기준 위치(m): 오른쪽(+X), 위(+Y), 앞(+Z)")]
-        public Vector3 HeadOffset = new Vector3(-0.28f, 0.16f, 0.9f);
+        public Vector3 HeadOffset = new Vector3(-0.38f, 0.16f, 0.9f);   // 6-239 기본값
         [Tooltip("결과·안내 묶음의 머리 기준 위치(m): 오른쪽(+X), 위(+Y). 앞(거리)은 HeadOffset.z와 같다(HUD 설정 패널이 바꾼다)")]
-        public Vector2 ResultOffset = new Vector2(0f, 0.07f);
+        public Vector2 ResultOffset = new Vector2(0f, -0.19f);
         [Tooltip("머리 회전을 따라가는 빠르기. 클수록 딱 붙고, 작을수록 부드럽게 늦게 따라온다")]
-        public float FollowSharpness = 10f;
+        public float FollowSharpness = 1000f;   // 6-239: 지연 없음(HUD 설정 FOLLOW DELAY OFF)
         [Tooltip("텍스트 갱신 주기(초)")]
         public float UpdateInterval = 0.25f;
         [Tooltip("미션 시작 전(대기)에도 패널을 보여 준다")]

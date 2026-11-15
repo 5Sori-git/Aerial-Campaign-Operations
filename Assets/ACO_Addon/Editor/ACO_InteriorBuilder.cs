@@ -78,8 +78,14 @@ public static class ACO_InteriorBuilder
     private static readonly string[] SolidParts =
     {
         "Int_Chair_", "Int_Desk", "Int_Lectern", "Int_Bookcase", "Int_CicDesk", "Int_Rack", "Int_RadioDesk",
-        "Int_SpectatorDesk", "Int_Locker", "Int_TrophyCase", "Int_Bunk", "Int_TvDesk",
+        "Int_SpectatorDesk", "Int_Locker", "Int_TrophyCase", "Int_Bunk",
     };
+    // TV 책상(6-237): 통 상자 하나면 아래 선반의 셋톱박스 앞 영상 소리 버튼을 누르는 레이저를 막는다 — 위판 · 아래 선반 · 양옆 다리로 나누고
+    // 셋톱박스 앞(선반 위 ~ 위판 아래)은 비워 둔다
+    private const string TvDesk = "Int_TvDesk";
+    private const float TvDeskShelfTop = 0.185f;   // 아래 선반 윗면(셋톱박스가 놓인 면)
+    private const float TvDeskTopThickness = 0.035f;
+    private const float TvDeskLegWidth = 0.06f;
 
     // 라이트맵은 큰 면만 받는다. 벽 띠, 늑골처럼 좁고 조각이 많은 것을 넣으면 UV가 겹쳐 얼룩이 생긴다
     private static readonly string[] LightmapMaterials = { "wall" };
@@ -525,6 +531,54 @@ public static class ACO_InteriorBuilder
         finally { PrefabUtility.UnloadPrefabContents(contents); }
     }
 
+    /// 6-237: 함내 FBX를 다시 만든 뒤 라이트맵을 받지 않는 재질 묶음(materials)만 레이아웃대로 다시 만든다 — 벽 라이트맵 메시는 그대로라 빛을 다시 굽지 않아도 된다.
+    /// 가구 콜라이더 · 기능부도 함께 다시 만든다(UpdateSystems).
+    public static void UpdateTvAndDesk()
+    {
+        RebuildMaterialGroups(new[] { "steel", "rubber", "led" });
+        UpdateSystems();
+    }
+
+    public static void RebuildMaterialGroups(string[] materials)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) == null || !File.Exists(MeshAsset)) { Build(); return; }
+        Dictionary<string, List<Piece>> modules = ReadModules(AssetDatabase.LoadAssetAtPath<GameObject>(ModelFbx));
+        List<KeyValuePair<string, List<Placement>>> rooms = ReadLayout(modules);
+        var wanted = new HashSet<string>(materials);
+        GameObject contents = PrefabUtility.LoadPrefabContents(PrefabPath);
+        try
+        {
+            foreach (KeyValuePair<string, List<Placement>> room in rooms)
+            {
+                Transform roomObject = contents.transform.Find(room.Key);
+                if (roomObject == null) { continue; }
+                for (int i = roomObject.childCount - 1; i >= 0; i--)
+                {
+                    Transform child = roomObject.GetChild(i);
+                    if (!wanted.Contains(child.name)) { continue; }   // "steel" 같은 이름만 — "_Lightmap" · "Surface_" · "Fixture_" 묶음은 건드리지 않는다
+                    MeshFilter filter = child.GetComponent<MeshFilter>();
+                    if (filter != null && filter.sharedMesh != null && AssetDatabase.GetAssetPath(filter.sharedMesh) == MeshAsset) { UnityEngine.Object.DestroyImmediate(filter.sharedMesh, true); }
+                    UnityEngine.Object.DestroyImmediate(child.gameObject);
+                }
+                // 그 재질 조각만 남긴 모듈 표로 같은 묶기를 한다
+                var only = new Dictionary<string, List<Piece>>();
+                foreach (var kv in modules)
+                {
+                    var keep = new List<Piece>();
+                    foreach (Piece pc in kv.Value) { if (wanted.Contains(pc.Material) && !IsLightmapped(pc.Material) && !IsSurface(kv.Key, pc.Material) && kv.Key != Fixture) { keep.Add(pc); } }
+                    only[kv.Key] = keep;
+                }
+                bool created = true;
+                BuildRenderers(roomObject, room.Key, room.Value, only, ref created);
+            }
+            AssetDatabase.SaveAssets();
+            PrefabUtility.SaveAsPrefabAsset(contents, PrefabPath);
+            ACO_PrefabVersions.Stamp(PrefabName);
+            Debug.Log("[ACO] 함내 격실의 재질 묶음(" + string.Join(", ", materials) + ")을 다시 만들었습니다(빛은 다시 굽지 않아도 됩니다).");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(contents); }
+    }
+
     private static bool IsPhotoObject(string name)
     {
         return name.Length == 7 && name.StartsWith("photo", StringComparison.Ordinal) && char.IsDigit(name[5]) && char.IsDigit(name[6]);
@@ -950,6 +1004,18 @@ public static class ACO_InteriorBuilder
                 Bounds b = BoundsOf(pieces);
                 if (place.Module == SpectatorDesk) { b.SetMinMax(b.min, new Vector3(b.max.x, b.max.y, SpectatorDeskDepth)); }
                 AddBox(parent, ref index, place, b.center, b.size, 0f);
+            }
+            else if (place.Module == TvDesk)
+            {
+                Bounds b = BoundsOf(pieces);
+                float top = b.max.y;
+                AddBox(parent, ref index, place, new Vector3(b.center.x, top - TvDeskTopThickness * 0.5f, b.center.z), new Vector3(b.size.x, TvDeskTopThickness, b.size.z), 0f);
+                AddBox(parent, ref index, place, new Vector3(b.center.x, (b.min.y + TvDeskShelfTop) * 0.5f, b.center.z), new Vector3(b.size.x, TvDeskShelfTop - b.min.y, b.size.z), 0f);
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    float x = b.center.x + side * (b.extents.x - TvDeskLegWidth * 0.5f);
+                    AddBox(parent, ref index, place, new Vector3(x, b.center.y, b.center.z), new Vector3(TvDeskLegWidth, b.size.y, b.size.z), 0f);
+                }
             }
             else if (place.Module == "Int_PlotTable")
             {

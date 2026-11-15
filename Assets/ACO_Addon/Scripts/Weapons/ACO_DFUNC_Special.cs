@@ -87,6 +87,8 @@ namespace ACO
 
         public void SFEXT_O_PilotEnter()
         {
+            // 선택은 다이얼(DFUNC_Selected)만 정한다 — 지난 탑승에서 남은 값으로 새 모듈을 선택하면 기총과 함께 쐈다(6-243)
+            _selected = false;
             _pilot = true;
             // 격납고에서 고른 무장으로 바꾸고 모두에게 알린다(내 화면은 바로 바꾼다).
             int want = FindModule(Loadout != null ? Loadout.GetSpecialId() : null);
@@ -98,6 +100,9 @@ namespace ACO
 
         public void SFEXT_O_PilotExit()
         {
+            // SAV는 내릴 때 DFUNC_Deselected를 보내지 않는다 — 여기서 푼다(6-243)
+            if (_selected) { Forward("DFUNC_Deselected"); }
+            _selected = false;
             Forward("SFEXT_O_PilotExit");
             _pilot = false;
         }

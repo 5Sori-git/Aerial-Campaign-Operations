@@ -257,6 +257,8 @@ public static class ACO_VoiceLines
         else if (m is ACO_PhaseSubmarine sub)
         {
             c |= Common(m, "Submarine/Submarine_", true);
+            // 시작 대사(6-236 — 소나 접촉 · CAP)는 표가 아니라 StartText — 음성은 N05
+            if (!string.IsNullOrEmpty(m.StartText) && m.StartClip == null) { c |= Fill(ref m.StartClip, "Submarine/Submarine_N05"); }
             // 대사 표 6판(6-219) 34줄 — 4판(6-211) 32줄 뒤에 무인기 사출 N09 · N11(AWACS만 — N10 적 대사는 뺐다). 4판 — 2판 음성 L03~L26 사이에 새 줄 N01~N04(3판 — SLCM 소진 · 완전 부상의 항모 함장 · 승무원), 앞 4줄은 N05~N08(시작 소나 접촉 · 첫 발사). 예전 L01 · L02는 쓰지 않는다
             if (sub.LineText != null && sub.LineText.Length == SubmarineV4Clips.Length)
             {
@@ -275,7 +277,7 @@ public static class ACO_VoiceLines
 
     private static readonly string[] SubmarineV4Clips =
     {
-        "N05", "N06", "N07", "N08", "L03", "L04", "L05", "L06", "L07", "L08", "N01", "N02", "L09", "L10", "L11", "L12", "L13",
+        "N06", "N07", "N08", "L03", "L04", "L05", "L06", "L07", "L08", "N01", "N02", "L09", "L10", "L11", "L12", "L13",
         "L14", "L15", "N03", "N04", "L16", "L17", "L18", "L19", "L20", "L21", "L22", "L23", "L24", "L25", "L26",
         "N09", "N11",
     };

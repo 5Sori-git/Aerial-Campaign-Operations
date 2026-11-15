@@ -56,6 +56,14 @@ public partial class ACO_SceneBaker
             if (!same) { s.Vehicles = arr; changed = true; }
             if (s.Flow != flow) { s.Flow = flow; changed = true; }
             if (s.Rain != rain) { s.Rain = rain; changed = true; }
+            // 6-238: 씬 오버라이드로 비어 버린 관전 비(카메라 자식 SpectatorRain)를 다시 잇는다 — 비면 관전 화면에 비가 안 온다
+            if (s.RainRenderer == null && s.Cam != null)
+            {
+                Transform sr = s.Cam.transform.Find("SpectatorRain");
+                Renderer rr = sr != null ? sr.GetComponent<Renderer>() : null;
+                if (rr != null) { s.RainRenderer = rr; changed = true; Debug.Log($"[ACO] 관전 패널 '{s.name}': 비어 있던 관전 비(SpectatorRain)를 다시 연결했습니다.", s); }
+                else { Debug.LogWarning($"[ACO] 관전 패널 '{s.name}': 관전 비(SpectatorRain)가 없습니다 — 관전 화면에 비가 안 옵니다. 프리팹 생성 창에서 관전 패널을 다시 만드세요.", s); }
+            }
             if (gen != null && (s.SeaLevel != gen.SeaLevel || s.GroundLayers != gen.GroundLayers)) { s.SeaLevel = gen.SeaLevel; s.GroundLayers = gen.GroundLayers; changed = true; }
             if (s.SkyFogDome != null && clouds != null && clouds.SkyFog != null && s.SkyFogDome.sharedMaterial != clouds.SkyFog.sharedMaterial)
             {
@@ -140,6 +148,74 @@ public partial class ACO_SceneBaker
     }
 
     /// Setup Check [고치기]: 셋톱박스 앞면에 토글을 놓고, YamaPlayer 소리를 NEAR 3D로(VRC 공간 음향은 오디오 소스 거리 곡선을 쓰게 — 2D/3D 전환이 그대로 먹게).
+    // 크레딧 보드 자리(6-228): 선원실 서쪽 벽 사물함 5개 중 가운데(레이아웃 y −1.17) 앞면(x 14.90)에 뒤로 기대 세운다. 함내 레이아웃 (x, y, 높이) → 함내 프리팹 로컬 (x, 높이, y).
+    private const float CreditLockerFrontX = 14.90f;
+    private const float CreditLockerY = -1.17f;
+    private const float CreditTilt = 8f;
+
+    /// Setup Check [고치기]: 크레딧 보드(없으면 프리팹을 만든다)를 선원실 가운데 사물함 앞 바닥에 놓고 뒤로 8도 기대 세운다. 함내(ACO_Interior)가 없으면 아무것도 하지 않는다.
+    public static void CreateCreditBoard()
+    {
+        string path = "Assets/ACO_Addon/Prefabs/ACO_CreditBoard.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreateCreditBoardPrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        Transform interior = null;
+        foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (Transform t in r.GetComponentsInChildren<Transform>(true)) { if (t.name == ACO_InteriorBuilder.PrefabName) { interior = t; break; } }
+            if (interior != null) { break; }
+        }
+        if (prefab == null || interior == null) { Debug.LogWarning("[ACO] 크레딧 보드: 프리팹이나 함내(ACO_Interior)가 없습니다."); return; }
+        Transform parent = interior.parent;
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        Undo.RegisterCreatedObjectUndo(go, "ACO credit board");
+        float h = ACO_HUDBuilder.CreditH * ACO_HUDBuilder.CreditUnit;
+        // 앞(캔버스 앞면 = 루트 +Z)이 방 쪽(+x), 윗변을 사물함 쪽으로 기울인다
+        Quaternion rot = interior.rotation * Quaternion.LookRotation(Vector3.right, Vector3.up) * Quaternion.Euler(CreditTilt, 0f, 0f);
+        float baseX = CreditLockerFrontX + Mathf.Sin(CreditTilt * Mathf.Deg2Rad) * h + 0.02f;
+        Vector3 bottom = interior.TransformPoint(new Vector3(baseX, 0.02f, CreditLockerY));
+        go.transform.SetPositionAndRotation(bottom + rot * Vector3.up * (h * 0.5f), rot);
+        BakeUiSound();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] 크레딧 보드를 선원실 가운데 사물함 앞에 기대 세웠습니다. 씬을 저장하세요.", go);
+    }
+
+    // 업데이트 노트 보드 자리(6-251): 크레딧 보드 바로 옆 사물함(레이아웃 y −0.51, 간격 0.66) 앞면에 같은 각도로 기대 세운다.
+    private const float UpdateLockerY = -0.51f;
+
+    /// Setup Check [고치기]: 업데이트 노트 보드(없으면 프리팹을 만든다)를 선원실 크레딧 보드 옆 사물함 앞에 놓는다. 함내(ACO_Interior)가 없으면 아무것도 하지 않는다.
+    public static void CreateUpdateBoard()
+    {
+        string path = $"Assets/ACO_Addon/Prefabs/{ACO_HUDBuilder.UpdateBoardPrefabName}.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreateUpdateBoardPrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        Transform interior = null;
+        foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (Transform t in r.GetComponentsInChildren<Transform>(true)) { if (t.name == ACO_InteriorBuilder.PrefabName) { interior = t; break; } }
+            if (interior != null) { break; }
+        }
+        if (prefab == null || interior == null) { Debug.LogWarning("[ACO] 업데이트 노트 보드: 프리팹이나 함내(ACO_Interior)가 없습니다."); return; }
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, interior.parent);
+        Undo.RegisterCreatedObjectUndo(go, "ACO update board");
+        float h = ACO_HUDBuilder.CreditH * ACO_HUDBuilder.CreditUnit;
+        Quaternion rot = interior.rotation * Quaternion.LookRotation(Vector3.right, Vector3.up) * Quaternion.Euler(CreditTilt, 0f, 0f);
+        float baseX = CreditLockerFrontX + Mathf.Sin(CreditTilt * Mathf.Deg2Rad) * h + 0.02f;
+        Vector3 bottom = interior.TransformPoint(new Vector3(baseX, 0.02f, UpdateLockerY));
+        go.transform.SetPositionAndRotation(bottom + rot * Vector3.up * (h * 0.5f), rot);
+        // 크레딧 보드가 있으면 그 자리 · 각도 · 크기를 따라 사물함 한 칸(0.66m) 옆에 — 씬에서 크레딧 보드를 옮겨 둔 경우(사물함에 세워 붙임)
+        foreach (ACO_CreditBoard cb in Object.FindObjectsOfType<ACO_CreditBoard>(true))
+        {
+            if (cb.gameObject == go || (cb.LanguageSources != null && cb.LanguageSources.Length > 0)) { continue; }
+            go.transform.SetPositionAndRotation(cb.transform.position + interior.rotation * new Vector3(0f, 0f, -0.66f), cb.transform.rotation);
+            go.transform.localScale = cb.transform.localScale;
+            break;
+        }
+        BakeUiSound();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] 업데이트 노트 보드를 선원실 크레딧 보드 옆 사물함 앞에 기대 세웠습니다. Bake 후 씬을 저장하세요.", go);
+    }
+
     public static void CreateVideoAudioToggle()
     {
         string path = $"Assets/ACO_Addon/Prefabs/{ACO_HUDBuilder.VideoAudioTogglePrefab}.prefab";
@@ -177,6 +253,28 @@ public partial class ACO_SceneBaker
     }
 
     /// BGM 패널 캔버스가 모니터 화면 크기 · 자리인가(1cm · 1mm 안).
+    /// 무전 자막 글자 상자 폭이 줄바꿈 폭(ACO_HUDBuilder.SubtitleWrapWidth)인가 — 6-236.
+    public static bool SubtitleWidthOk(ACO_Chatter chatter)
+    {
+        if (chatter == null || chatter.SubtitleText == null) { return true; }
+        return Mathf.Abs(chatter.SubtitleText.rectTransform.sizeDelta.x - ACO_HUDBuilder.SubtitleWrapWidth) < 0.01f;
+    }
+
+    /// Setup Check [고치기]: 씬 무전 자막의 글자 상자 폭을 줄바꿈 폭으로(높이 · 위치는 그대로, 아래 정렬이라 줄이 늘면 위로 쌓인다).
+    public static void FitSubtitleWidth(ACO_Chatter chatter)
+    {
+        if (chatter == null || chatter.SubtitleText == null) { return; }
+        RectTransform rt = chatter.SubtitleText.rectTransform;
+        Undo.RecordObject(rt, "ACO subtitle width");
+        rt.sizeDelta = new Vector2(ACO_HUDBuilder.SubtitleWrapWidth, rt.sizeDelta.y);
+        Undo.RecordObject(chatter.SubtitleText, "ACO subtitle width");
+        chatter.SubtitleText.enableWordWrapping = true;
+        EditorUtility.SetDirty(rt);
+        EditorUtility.SetDirty(chatter.SubtitleText);
+        EditorSceneManager.MarkSceneDirty(chatter.gameObject.scene);
+        Debug.Log("[ACO] 무전 자막 폭을 " + ACO_HUDBuilder.SubtitleWrapWidth + "단위로 맞췄습니다(긴 대사가 줄바꿈된다). 씬을 저장하세요.", chatter);
+    }
+
     public static bool BgmPanelFitsMonitor(ACO_BgmPanel panel)
     {
         RectTransform canvas = panel.GetComponentInChildren<Canvas>(true) != null ? panel.GetComponentInChildren<Canvas>(true).GetComponent<RectTransform>() : null;
@@ -213,6 +311,7 @@ public partial class ACO_SceneBaker
             foreach (ACO_DebugButton c in root.GetComponentsInChildren<ACO_DebugButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_SpectatorButton c in root.GetComponentsInChildren<ACO_SpectatorButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_LogScrollButton c in root.GetComponentsInChildren<ACO_LogScrollButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_CreditScrollButton c in root.GetComponentsInChildren<ACO_CreditScrollButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_TacName c in root.GetComponentsInChildren<ACO_TacName>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_BgmPanel c in root.GetComponentsInChildren<ACO_BgmPanel>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_VideoAudioToggle c in root.GetComponentsInChildren<ACO_VideoAudioToggle>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }

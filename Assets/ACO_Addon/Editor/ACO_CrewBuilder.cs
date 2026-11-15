@@ -29,7 +29,7 @@ public static partial class ACO_PrefabBuilder
     private const string CrewMaterialDir = "Assets/ACO_Addon/Generated/CrewMaterials";
     private const string CrewFbxPath = "Assets/EEIproducts/Other/DeckCrewSet/Deck Crew/FBX/DCS.fbx";
     private const float CrewHeadHeight = 1.6f;   // 발목에서 머리 뼈까지(m) — 키 약 1.8m
-    private const int CrewClipVersion = 5;
+    private const int CrewClipVersion = 23;   // 22: 유도요원 런지 앉기(6-234), 23: 지적확인 자세(6-235)   // 10: 앉기 · 슈터 신호 · 전환 시간(6-230), 11: 슈터 런지(6-231), 12: 점검요원 버티기 · 쪼그려 앉기(6-232), 13: 런지 더 깊게(6-233), 14: 무릎을 발보다 앞으로 — 런지 · 버티기 · 쪼그려 앉기를 실제로 낮게(6-233)   // 6: 걷기 디딤 순서 바로잡음, 7: 걸음 템포, 8: 팔 흔들기 · 가슴 비틀기 · 덜 숙임(6-229)
 
     private const int HandOpen = 0;
     private const int HandFist = 1;
@@ -50,6 +50,9 @@ public static partial class ACO_PrefabBuilder
         public float Lean;        // 도, + = 앞으로
         public float HeadPitch;   // 도, + = 아래로
         public float HeadYaw;     // 도, + = 오른쪽으로
+        public float Twist;       // 도, 가슴을 위에서 보아 시계 방향(+ = 오른쪽 어깨가 뒤로) — 걸을 때 팔과 함께 흔든다
+        public float HipPitch;    // 도, 골반을 앞으로 기울인다(+). 상체도 같이 기운다 — Lean은 그 위에 더 숙이는 몫.
+                                  // 아바타가 다리를 뒤로 약 25도까지만 뻗게 해서, 런지처럼 뒷다리를 길게 뻗으려면 골반을 기울여야 한다(6-233)
         public bool RightThumbSky; // 오른손 엄지 쪽이 하늘을 보게 손목을 돌리고 꺾는다
         public int LeftHand = HandOpen;
         public int RightHand = HandOpen;
@@ -84,11 +87,19 @@ public static partial class ACO_PrefabBuilder
     private static CrewPose WalkPose(bool leftForward, bool contact)
     {
         float s = leftForward ? 1f : -1f;
+        // 6-229: 덜 숙이고(38 → 26도) 팔을 다리와 엇갈려 흔들며(앞으로 뻗은 다리 반대쪽 팔이 앞), 가슴도 조금 같이 비튼다 — 예전엔 두 팔을 앞으로 내민 채 굳어 있었다.
+        // 디딜 때(contact) 가장 크게, 지나갈 때는 거의 가운데.
+        float swing = contact ? 0.7f : 0.08f;
+        // 앞으로 간 팔은 팔꿈치를 더 굽혀 손이 앞으로, 뒤로 간 팔은 덜 굽힌다
+        Vector3 foreFront = new Vector3(0f, -0.3f, 0.95f), foreBack = new Vector3(0f, -0.8f, 0.4f), foreMid = new Vector3(0f, -0.5f, 0.8f);
+        Vector3 leftFore = contact ? (s > 0f ? foreBack : foreFront) : foreMid;
+        Vector3 rightFore = contact ? (s > 0f ? foreFront : foreBack) : foreMid;
         var p = new CrewPose
         {
-            Lean = 38f, HeadPitch = -10f, LeftHand = HandFist, RightHand = HandFist,
-            LeftArm = new Vector3(-0.25f, -0.9f, 0.45f - 0.2f * s), LeftFore = new Vector3(-0.1f, -0.65f, 0.75f),
-            RightArm = new Vector3(0.25f, -0.9f, 0.45f + 0.2f * s), RightFore = new Vector3(0.1f, -0.65f, 0.75f),
+            Lean = 26f, HeadPitch = -14f, LeftHand = HandFist, RightHand = HandFist,
+            Twist = contact ? -8f * s : 0f,
+            LeftArm = new Vector3(-0.2f, -0.95f, 0.05f - swing * s), LeftFore = leftFore + new Vector3(-0.05f, 0f, 0f),
+            RightArm = new Vector3(0.2f, -0.95f, 0.05f + swing * s), RightFore = rightFore + new Vector3(0.05f, 0f, 0f),
         };
         if (contact)
         {
@@ -129,20 +140,49 @@ public static partial class ACO_PrefabBuilder
         };
     }
 
+    // 6-234: 유도요원도 런지하듯 앉아 후폭풍에 버틴다(사용자 요청 — 예전 판 6-232는 쪼그려 앉기).
+    // 다리는 슈터 런지(LungePose)와 같다 — 오른다리 앞에 깊게, 왼다리 뒤로 길게(엉덩이 약 0.69m).
+    // 오른팔뚝은 앞 무릎에 얹고, 왼손은 옆 갑판을 짚으며, 몸을 숙여 기체를 본다.
+    private static CrewPose SitLungePose()
+    {
+        return new CrewPose
+        {
+            RightThigh = new Vector3(0.3f, -0.1f, 1f), RightShin = new Vector3(0.08f, -0.75f, -0.65f),
+            LeftThigh = new Vector3(-0.14f, -0.52f, -0.85f), LeftShin = new Vector3(-0.05f, 0.08f, -1f),
+            Lean = 34f, HeadPitch = -26f, Twist = -8f,
+            RightArm = new Vector3(0.2f, -0.75f, 0.6f), RightFore = new Vector3(-0.05f, -0.35f, 0.95f), RightHand = HandFist,
+            LeftArm = new Vector3(-0.35f, -0.95f, 0.2f), LeftFore = new Vector3(-0.15f, -1f, 0.1f), LeftHand = HandOpen,
+        };
+    }
+
     private static CrewKey[] CrewSit()
     {
-        CrewPose a = KneelPose();
-        return new[] { new CrewKey(0f, a), new CrewKey(1f, a) };
+        // 6-230: 굳은 한 자세 → 숨쉬듯 들썩이며 좌우를 천천히 둘러본다. 6-232: 무릎 꿇기 → 쪼그려 버티기 → 6-234: 런지하듯 앉기
+        CrewPose a = SitLungePose();
+        CrewPose Breath(float lean, float pitch, float yaw, float twist)
+        {
+            CrewPose p = SitLungePose();
+            p.Lean += lean; p.HeadPitch += pitch; p.HeadYaw = yaw; p.Twist = twist;
+            return p;
+        }
+        return new[]
+        {
+            new CrewKey(0f, a), new CrewKey(1.4f, Breath(3f, 4f, -18f, -4f)), new CrewKey(2.6f, Breath(0.5f, -2f, -6f, -1f)),
+            new CrewKey(3.9f, Breath(3f, 3f, 16f, 4f)), new CrewKey(5.2f, a),
+        };
     }
 
     private static CrewKey[] CrewWalk()
     {
-        const float t = 0.17f;
+        // 디딘 발이 몸 뒤로 지나가는 빠르기(플레이에서 발 뼈로 잼)가 ACO_CatapultCrew.CheckWalkSpeed(2.2m/s)와 같게 — 6-229.
+        // 0.17초(두 걸음 0.68초)일 때 약 1.75m/s였다 → 0.135초(두 걸음 0.54초)
+        const float t = 0.135f;
         CrewPose first = WalkPose(true, true);
         return new[]
         {
-            new CrewKey(0f, first), new CrewKey(t, WalkPose(false, false)),
-            new CrewKey(t * 2f, WalkPose(false, true)), new CrewKey(t * 3f, WalkPose(true, false)),
+            // 왼발을 앞에 디딘 뒤에는 그 왼발로 서고 오른발이 앞으로 지나간다(6-229 — 예전엔 거꾸로라 디딘 발이 미끄러졌다)
+            new CrewKey(0f, first), new CrewKey(t, WalkPose(true, false)),
+            new CrewKey(t * 2f, WalkPose(false, true)), new CrewKey(t * 3f, WalkPose(false, false)),
             new CrewKey(t * 4f, first),
         };
     }
@@ -232,16 +272,31 @@ public static partial class ACO_PrefabBuilder
         return new[] { new CrewKey(0f, p), new CrewKey(1f, p) };
     }
 
+    // 6-232: 실제 점검요원(사용자 참고 사진) — 후폭풍에 버티며 낮게: 오른다리는 깊게 굽히고 왼다리는 옆뒤로 길게 뻗고,
+    // 왼손으로 갑판을 짚고, 오른팔은 곧게 위로 뻗어 엄지를 든다. 몸은 앞으로 숙이고 고개를 들어 기체를 본다.
+    private static CrewPose BracePose(float reach, float lean)
+    {
+        return new CrewPose
+        {
+            // 오른무릎을 갑판에 대고(참고 사진 왼쪽 요원) 왼다리를 옆으로 곧게 뻗어 발이 갑판에 닿게
+            // 슈터 런지(LungePose — 엉덩이 약 0.7m로 실제 낮게 내려감)를 좌우로 뒤집은 다리: 왼다리를 앞에 깊게, 오른다리는 뒤로 길게(참고 사진 2의 녹색 요원)
+            LeftThigh = new Vector3(-0.3f, -0.1f, 1f), LeftShin = new Vector3(-0.08f, -0.75f, -0.65f),
+            RightThigh = new Vector3(0.14f, -0.52f, -0.85f), RightShin = new Vector3(0.05f, 0.08f, -1f),
+            Lean = lean, HeadPitch = -34f, Twist = 10f,
+            LeftArm = new Vector3(-0.25f, -0.95f, 0.35f), LeftFore = new Vector3(-0.1f, -1f, 0.2f), LeftHand = HandOpen,
+            RightArm = new Vector3(0.3f, 0.9f, reach), RightFore = new Vector3(0.28f, 0.92f, reach),
+            RightHand = HandThumb, RightThumbSky = true,
+        };
+    }
+
     private static CrewKey[] CrewThumb()
     {
-        // 무릎을 꿇고 팔은 수평에서 50도쯤만 든 채, 손목을 꺾어 엄지가 하늘을 보게 한다
-        CrewPose up = KneelPose();
-        up.HeadPitch = -6f;
-        up.RightArm = new Vector3(0.25f, 0.77f, 0.6f);
-        up.RightFore = new Vector3(0.25f, 0.77f, 0.6f);
-        up.RightHand = HandThumb;
-        up.RightThumbSky = true;
-        return new[] { new CrewKey(0f, KneelPose()), new CrewKey(0.35f, up), new CrewKey(1f, up) };
+        // 꿇은 자세에서 낮게 버티는 자세로 내려가며 팔을 뻗어 올리고, 버티는 동안 몸이 조금씩 들썩인다(멈춰 있지 않게)
+        return new[]
+        {
+            new CrewKey(0f, KneelPose()), new CrewKey(0.45f, BracePose(0.3f, 55f)),
+            new CrewKey(1.2f, BracePose(0.36f, 59f)), new CrewKey(2f, BracePose(0.3f, 55f)),
+        };
     }
 
     // 패널 앞에 서서 양손을 패널에 올린다. 오른손 · 왼손 · 양손 순으로 옮기며 바깥을 살핀다
@@ -280,12 +335,15 @@ public static partial class ACO_PrefabBuilder
     private static CrewKey[] CrewThrottle()
     {
         // 손을 머리 위로 올려 돌린다 — 엔진을 올리라는 신호
+        // 6-230: 팔만 돌던 것 → 몸도 원을 따라 조금 비틀고 숙이며, 왼팔은 기체 쪽으로 반쯤 든다
         CrewPose Make(float x, float z)
         {
             return new CrewPose
             {
                 RightArm = new Vector3(0.3f, 1f, 0.15f), RightFore = new Vector3(0.1f + x, 1f, 0.1f + z),
-                RightHand = HandPoint, HeadPitch = -4f,
+                RightHand = HandPoint, HeadPitch = -6f,
+                Lean = 4f + z * 8f, Twist = -x * 14f,
+                LeftArm = new Vector3(-0.35f, -0.45f, 0.8f), LeftFore = new Vector3(-0.15f, -0.2f, 1f), LeftHand = HandOpen,
             };
         }
         CrewPose a = Make(0.3f, 0f);
@@ -299,37 +357,79 @@ public static partial class ACO_PrefabBuilder
     private static CrewKey[] CrewPoint()
     {
         // 손가락으로 요원을 가리킨다(거의 수평). 한 명씩 몸을 돌리는 동안 손을 작게 끊어 친다 — 몸은 ACO_CatapultCrew가 돌린다
-        CrewPose Make(float y)
+        // 6-235: 다리를 어깨너비로 벌리고 무릎을 살짝 굽혀 선 채, 팔을 굽혔다 뻗으며 끊어 가리키고 고개 · 몸이 같이 끄덕인다.
+        // 요원 쪽으로 도는 것은 상체만(ACO_CatapultCrew.PostLateUpdate — 다리는 조종석 쪽 그대로)
+        CrewPose Make(float reach, float lean)
         {
             return new CrewPose
             {
-                RightArm = new Vector3(0.05f, y, 1f), RightFore = new Vector3(0f, y, 1f), RightHand = HandPoint,
-                LeftArm = new Vector3(-0.35f, -1f, -0.1f), LeftFore = new Vector3(0.45f, -0.6f, 0.5f), LeftHand = HandFist,
+                LeftThigh = new Vector3(-0.26f, -1f, 0.08f), LeftShin = new Vector3(-0.06f, -1f, -0.12f),
+                RightThigh = new Vector3(0.26f, -1f, 0.08f), RightShin = new Vector3(0.06f, -1f, -0.12f),
+                RightArm = new Vector3(0.1f, -0.05f - 0.25f * (1f - reach), 1f), RightFore = new Vector3(0f, -0.05f + 0.5f * (1f - reach), 1f - 0.4f * (1f - reach)),
+                RightHand = HandPoint,
+                LeftArm = new Vector3(-0.3f, -1f, 0.05f), LeftFore = new Vector3(0.25f, -0.55f, 0.75f), LeftHand = HandFist,
+                Lean = lean, HeadPitch = lean * 0.8f,
             };
         }
-        CrewPose a = Make(-0.02f);
-        return new[] { new CrewKey(0f, a), new CrewKey(0.2f, Make(-0.14f)), new CrewKey(0.6f, a) };
+        CrewPose a = Make(0.55f, 4f);
+        return new[] { new CrewKey(0f, a), new CrewKey(0.16f, Make(1f, 10f)), new CrewKey(0.36f, Make(0.95f, 7f)), new CrewKey(0.6f, a) };
+    }
+
+    // 6-231: 실제 슈터 발함 신호(사용자 참고 사진) — 앞(오른)다리를 깊게 굽히고 뒷(왼)다리를 길게 뻗은 런지로 몸을 낮게 숙여,
+    // 갑판을 짚었다가 오른팔을 사출 방향으로 곧게 뻗어 가리킨다. 왼손은 앞 무릎 위.
+    private static CrewPose LungePose(float lean, bool touch)
+    {
+        var p = new CrewPose
+        {
+            // 6-233: 더 깊게 — 거의 주저앉듯. 앞 허벅지는 수평보다 조금 아래까지, 무릎이 발보다 앞으로, 뒷다리는 낮게 길게 뻗는다
+            // 낮은 런지(참고 사진): 뒷무릎을 갑판 가까이 내리고 뒷정강이는 뒤로 눕힌다 — 아바타가 허벅지를 뒤로 약 25도까지만
+            // 뻗게 해서, 뒷다리를 곧게 뻗으면 엉덩이가 0.75m에서 더 안 내려간다. 무릎을 내리면 약 0.5m.
+            // 정강이 방향은 무릎 → 발이라, 무릎이 발보다 앞이면 z가 음수다
+            // 앞다리는 쪼그려 앉기(SquatPose — 엉덩이 0.53m로 실제 내려가는 것을 잼)와 같은 굽힘: 허벅지를 조금 벌려 수평으로, 무릎은 발보다 앞
+            // 뒷무릎이 갑판에 닿고(뒷정강이는 수평보다 조금 위로 — 발끝이 아니라 무릎이 가장 낮게), 앞발은 갑판을 디딘다(엉덩이 약 0.65m)
+            // 뒷허벅지는 아바타 한계(실제 약 36도)까지 뒤로 — 목표를 더 뒤로 주면 한계에서 멈춘다. 앞다리는 쪼그려 앉기처럼 깊게
+            RightThigh = new Vector3(0.3f, -0.1f, 1f), RightShin = new Vector3(0.08f, -0.75f, -0.65f),
+            LeftThigh = new Vector3(-0.14f, -0.52f, -0.85f), LeftShin = new Vector3(-0.05f, 0.08f, -1f),
+            Lean = lean, HeadPitch = -22f, Twist = -12f,
+            LeftArm = new Vector3(0.05f, -0.75f, 0.65f), LeftFore = new Vector3(0.4f, -0.55f, 0.75f), LeftHand = HandFist,
+            RightHand = HandPoint,
+        };
+        if (touch)
+        {
+            // 오른손으로 앞 갑판을 짚는다
+            p.RightArm = new Vector3(0.25f, -0.85f, 0.55f);
+            p.RightFore = new Vector3(0.1f, -0.95f, 0.35f);
+            p.RightHand = HandOpen;
+            p.HeadPitch = -8f;
+        }
+        else
+        {
+            // 사출 방향으로 곧게(거의 수평, 조금 위)
+            p.RightArm = new Vector3(0.12f, 0.06f, 1f);
+            p.RightFore = new Vector3(0.05f, 0.08f, 1f);
+        }
+        return p;
     }
 
     private static CrewKey[] CrewLaunch()
     {
-        // 무릎을 꿇고, 고개를 돌려 전방을 확인한 뒤, 팔을 사출 방향으로 곧게 뻗는다
-        CrewPose Look(float yaw)
+        // 서서 고개와 가슴을 돌려 앞뒤(좌우)를 크게 살핀 뒤, 런지로 낮게 내려가 갑판을 짚고, 팔을 뻗으며 앞으로 쏠렸다가(넘침) 버틴다.
+        // 사출은 신호 시작 2초 뒤(ACO_CatapultCrew.SignalTime) — 팔을 뻗은 직후다.
+        CrewPose Look(float yaw, float twist)
         {
-            CrewPose p = KneelPose();
-            p.HeadYaw = yaw;
-            p.HeadPitch = -8f;
-            return p;
+            return new CrewPose { Lean = 10f, HeadPitch = -6f, HeadYaw = yaw, Twist = twist,
+                LeftThigh = new Vector3(-0.1f, -1f, 0.15f), LeftShin = new Vector3(-0.03f, -1f, -0.15f),
+                RightThigh = new Vector3(0.1f, -1f, 0.15f), RightShin = new Vector3(0.03f, -1f, -0.15f) };
         }
-        CrewPose thrust = Look(0f);
-        thrust.Lean = 14f;
-        thrust.RightArm = new Vector3(0.08f, 0.1f, 1f);
-        thrust.RightFore = new Vector3(0.03f, 0.1f, 1f);
-        thrust.RightHand = HandPoint;
+        CrewPose touch = LungePose(50f, true);
+        CrewPose thrust = LungePose(36f, false);
+        CrewPose hold = LungePose(28f, false);
+        hold.HeadPitch = -26f;
         return new[]
         {
-            new CrewKey(0f, new CrewPose()), new CrewKey(0.45f, Look(0f)), new CrewKey(0.8f, Look(-22f)),
-            new CrewKey(1.15f, Look(22f)), new CrewKey(1.4f, Look(0f)), new CrewKey(1.75f, thrust), new CrewKey(2.6f, thrust),
+            new CrewKey(0f, new CrewPose()), new CrewKey(0.35f, Look(-42f, -14f)), new CrewKey(0.75f, Look(42f, 14f)),
+            new CrewKey(1.05f, Look(0f, 0f)), new CrewKey(1.45f, touch), new CrewKey(1.8f, thrust),
+            new CrewKey(2.15f, hold), new CrewKey(3.0f, hold),
         };
     }
 
@@ -358,6 +458,19 @@ public static partial class ACO_PrefabBuilder
             case ACO_CatapultCrew.SIG_OPERATE: return CrewOperate();
             case ACO_CatapultCrew.SIG_PRESS: return CrewPress();
             default: return CrewIdle();
+        }
+    }
+
+    /// 상태로 들어가는 전환 시간(초). 꿇기 · 앉기는 몸이 내려가야 하므로 길게, 걷기는 짧게.
+    private static float CrewTransition(string state)
+    {
+        switch (state)
+        {
+            case "Kneel": case "Sit": case "Thumb": return 0.45f;
+            case "Idle": return 0.4f;
+            case "Walk": return 0.15f;
+            case "Launch": return 0.3f;
+            default: return 0.25f;
         }
     }
 
@@ -440,9 +553,12 @@ public static partial class ACO_PrefabBuilder
         public CrewFrame Capture(CrewPose p)
         {
             Reset();
+            if (p.HipPitch != 0f) { Pitch(HumanBodyBones.Hips, p.HipPitch); }
             Pitch(HumanBodyBones.Spine, p.Lean * 0.5f);
             Pitch(HumanBodyBones.Chest, p.Lean * 0.5f);
-            Pitch(HumanBodyBones.Head, p.HeadPitch - p.Lean * 0.6f);
+            Pitch(HumanBodyBones.Head, p.HeadPitch - (p.Lean + p.HipPitch) * 0.6f);   // 골반 기울기도 고개가 되받는다
+            Transform chest = Bone(HumanBodyBones.Chest);
+            if (chest != null && p.Twist != 0f) { chest.rotation = Quaternion.AngleAxis(p.Twist, World(Vector3.up)) * chest.rotation; }
             Transform head = Bone(HumanBodyBones.Head);
             if (head != null) { head.rotation = Quaternion.AngleAxis(p.HeadYaw, Vector3.up) * head.rotation; }
             Aim(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, p.LeftArm);
@@ -639,6 +755,13 @@ public static partial class ACO_PrefabBuilder
             t.hasFixedDuration = true;
             t.duration = 0.2f;
             t.canTransitionToSelf = false;
+        }
+        // 6-230: 전환 시간 — 무릎을 꿇거나 일어서는 동작은 0.2초면 툭 떨어진다. 이미 있는 전환도 맞춘다(클립은 건드리지 않는다)
+        foreach (AnimatorStateTransition t in machine.anyStateTransitions)
+        {
+            if (t.destinationState == null) { continue; }
+            float want = CrewTransition(t.destinationState.name);
+            if (!Mathf.Approximately(t.duration, want)) { t.duration = want; }
         }
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();

@@ -755,6 +755,9 @@ namespace ACO
             if (_syncTargetIdx != _targetIdx) { BindTarget(_syncTargetIdx); }
         }
 
+        // 체력 0으로 격파 이벤트를 받았다(부활에서 풀림) — 표시 복구(_SyncRevive) 판단용. 본체 격침(Silence)은 따로다
+        private bool _exploded;
+
         public override void OnOwnershipTransferred(VRCPlayerApi player)
         {
             _isOwner = Networking.IsOwner(gameObject);
@@ -766,6 +769,7 @@ namespace ACO
             _disabled = true;
             if (Gun) { Gun.ForceStop(); }
             SetDeathVisuals(true);
+            _exploded = true;   // 체력으로 격파됨(6-249 표시 복구 판단)
         }
 
         /// SaccTarget 애니메이터가 처리하지 못하는 부분(자식 모델, 루트가 아닌/MeshCollider가 아닌 콜라이더)을 직접 켜고 끈다.
@@ -857,13 +861,18 @@ namespace ACO
             _isOwner = Networking.IsOwner(gameObject);
 
             // 체력 복구는 한 클라이언트만 해야 한다(RespawnTarget이 내부에서 소유권을 가져가고 동기화한다).
-            if (_isOwner && TargetHealth) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+            if (TargetHealth)
+            {
+                if (_isOwner) { SendCustomEventDelayedFrames(nameof(_RespawnTargetHealth), 2); }
+                else { SendCustomEventDelayedFrames(nameof(_LocalRefillHealth), 3); }   // 소유자가 아닌 화면은 같은 값으로 직접 채운다(6-247)
+            }
 
             SetDeathVisuals(false);
             SnapToRest();
             WakeUp();
             _disabled = false;
             SetTarget(-1);
+            _exploded = false;
         }
 
         /// SaccTarget 체력 복구(RespawnTarget). 풀에서 막 켠 유닛은 SaccTarget의 Start가 아직 안 돌아 localPlayer·FullHealth가 비어 있다 —
@@ -871,6 +880,34 @@ namespace ACO
         public void _RespawnTargetHealth()
         {
             if (TargetHealth) { TargetHealth.RespawnTarget(); }
+        }
+
+        /// 소유자가 아닌 화면(6-247): 유닛을 켜기 전에 지나간 소유자의 스폰 채우기(RespawnTarget)를 놓쳤을 수 있다 — 그러면 지난 미션 체력 · 격파 상태가 남아
+        /// 쏜 사람 화면의 격추 미리 보기가 틀리거나(투명 · 무적) 피해가 안 들어간다. 소유자와 같은 값(최대 체력)으로 직접 채운다.
+        /// 숙련도 최대 체력(2프레임 뒤) 다음인 3프레임 뒤에, SaccTarget.Start가 끝난 것만(Start 전에 부르면 SaccTarget이 멈춘다).
+        public void _LocalRefillHealth()
+        {
+            if (!TargetHealth || !TargetHealth.gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (TargetHealth.GetProgramVariable("TargetAnimator") == null) { return; }
+            if (TargetHealth.FullHealth <= 0f) { return; }
+            float before = TargetHealth.Health;
+            TargetHealth.Health = TargetHealth.FullHealth;
+            TargetHealth.SendCustomEvent("_onDeserialization");   // 격파 상태 · 체력 바를 새 값으로(이 화면에서만)
+            if (before < TargetHealth.FullHealth * 0.99f) { Debug.Log("[ACO_SYNC] 스폰 직접 채우기: " + gameObject.name + " " + before.ToString("F0") + " → " + TargetHealth.FullHealth.ToString("F0") + "(소유자 채우기를 놓침)"); }
+            _SyncRevive();
+        }
+
+        /// 소유자가 아닌 화면(6-249): SaccTarget은 살아 있는데(체력 > 0) 이 스크립트만 격파 상태면 표시를 되돌린다. 미리 보기 격추를 껐으므로(6-248) 늘 어긋남이다
+        /// (예: 꺼져 있던 동안의 지난 미션 격파가 켜진 뒤 늦게 적용). 스폰 채우기와 1.5 · 4초 다시 보내기(ACO_MissionGenerator) 때 부른다.
+        public void _SyncRevive()
+        {
+            if (!TargetHealth || TargetHealth.Health <= 0f || !gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (!_exploded) { return; }
+            _exploded = false;
+            SetDeathVisuals(false);
+            WakeUp();
+            _disabled = false;
+            Debug.Log("[ACO_SYNC] 표시 복구(격파 상태였음): " + gameObject.name + " 체력 " + TargetHealth.Health.ToString("F0") + "/" + TargetHealth.FullHealth.ToString("F0"));
         }
     }
 }

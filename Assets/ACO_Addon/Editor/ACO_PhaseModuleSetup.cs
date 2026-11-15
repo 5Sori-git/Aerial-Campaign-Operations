@@ -223,7 +223,7 @@ public static class ACO_PhaseModuleSetup
     // 적 함장은 충각 단계부터 "항모 하나로 전쟁을 끝내 천만 명을 구한다"는 광기, 항모는 승조원 모두가 조종사를 믿고 버티는 목소리.
     private static readonly int[] SubmarineLineEvent =
     {
-        ACO_PhaseSubmarine.SIT_START, ACO_PhaseSubmarine.SIT_START,
+        ACO_PhaseSubmarine.SIT_START,
         ACO_PhaseSubmarine.SIT_FIRST_SALVO, ACO_PhaseSubmarine.SIT_FIRST_SALVO,
         ACO_PhaseSubmarine.SIT_SALVO,
         ACO_PhaseSubmarine.SIT_SPRINT,
@@ -246,7 +246,7 @@ public static class ACO_PhaseModuleSetup
     };
     private static readonly int[] SubmarineLineSpeaker =
     {
-        ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY,
+        ACO_PhaseBoss.SPEAKER_ENEMY,
         ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS,
         ACO_PhaseBoss.SPEAKER_AWACS,
         ACO_PhaseBoss.SPEAKER_AWACS,
@@ -267,9 +267,11 @@ public static class ACO_PhaseModuleSetup
         ACO_PhaseBoss.SPEAKER_AWACS,
         ACO_PhaseBoss.SPEAKER_AWACS,
     };
+    // 페이즈 시작 대사(StartText — 6-236). 음성은 Submarine_N05(ACO_VoiceLines가 StartClip에 넣는다).
+    public const string SubmarineStartLine = "Sonar has a large submerged contact closing on the fleet! All aircraft, return to the carrier and fly CAP!";
+
     private static readonly string[] SubmarineLineText =
     {
-        "Sonar has a large submerged contact closing on the fleet! All aircraft, return to the carrier and fly CAP!",
         "Periscope depth. There she is... the carrier. Flood all tubes.",
         "All tubes, fire! Bury that carrier!",
         "Vampire, vampire! Cruise missiles launched from the sub, bearing {left}! Splash them before they reach the carrier!",
@@ -311,7 +313,9 @@ public static class ACO_PhaseModuleSetup
         m.PhaseName = "SUBMARINE - LEVIATHAN";
         m.Description = "DEFEND THE CARRIER FROM THE SUBMARINE";
         m.FailText = "CARRIER LOST";
-        m.StartText = "";   // 시작 대사는 대사 표(SIT_START)가 맡는다
+        // 6-236: 등장 대사(소나 접촉 · 항모로 돌아와 CAP)를 페이즈 시작 대사로 — 예전엔 비워 두어 공통 기본 시작 대사가 먼저 나오고 표의 같은 뜻 대사가 이어졌다
+        m.StartText = SubmarineStartLine;
+        m.StartSpeaker = 0;   // AWACS
         m.SuccessText = "Leviathan confirmed destroyed. The carrier is safe. Outstanding work, all aircraft!";
         m.FailChatterText = "The carrier is lost... All aircraft, divert to the nearest airfield.";
         m.EnemyName = "LEVIATHAN";

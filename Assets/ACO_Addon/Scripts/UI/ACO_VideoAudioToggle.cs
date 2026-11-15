@@ -73,7 +73,7 @@ namespace ACO
 
         private void Refresh()
         {
-            if (Label != null) { Label.text = _global ? T("video.sound.global", "VIDEO SOUND  GLOBAL") : T("video.sound.near", "VIDEO SOUND  NEAR"); }
+            if (Label != null) { Label.text = _global ? T("video.sound.global", "VIDEO SOUND: GLOBAL") : T("video.sound.near", "VIDEO SOUND: NEAR"); }
             if (Background != null) { Background.color = _global ? GlobalColor : NearColor; }
         }
 

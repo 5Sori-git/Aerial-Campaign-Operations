@@ -95,7 +95,7 @@ public static partial class ACO_HUDBuilder
         hud.MainText = mainText;
         hud.ResultText = resultText;
         hud.ResultGroup = resultGroup.transform;
-        hud.ResultOffset = new Vector2(0f, 0.07f);
+        hud.ResultOffset = new Vector2(0f, -0.19f);   // 6-239 기본값(ACO_ScoreHUD와 같다)
         hud.NoticeText = MakeNoticeText(resultGroup.transform, NoticeOffset, font, textMat);
 
         // ── 마커 풀: 마커 한 변 = 1(실행 중 스크립트가 각도 크기에 맞춰 스케일한다)
@@ -1929,7 +1929,7 @@ public static partial class ACO_HUDBuilder
         GameObject root = new GameObject(VideoAudioTogglePrefab);
         ACO_VideoAudioToggle tog = root.AddUdonSharpComponent<ACO_VideoAudioToggle>();
         RectTransform canvas = MakeUiPanel(root.transform, VideoToggleW, VideoToggleH);
-        Image button = MakeUiButton(canvas, "Toggle", Vector2.zero, new Vector2(VideoToggleW - 4f, VideoToggleH - 4f), font, "VIDEO SOUND  NEAR", 30f);
+        Image button = MakeUiButton(canvas, "Toggle", Vector2.zero, new Vector2(VideoToggleW - 4f, VideoToggleH - 4f), font, "VIDEO SOUND: NEAR", 30f);
         WireEvent(button.GetComponent<Button>(), tog, "Toggle");
         tog.Background = button;
         tog.Label = button.GetComponentInChildren<TextMeshProUGUI>(true);
@@ -3321,38 +3321,154 @@ public static partial class ACO_HUDBuilder
     /// 크로스헤어, RWR) — 카드마다 제목 + 줄(이름 / − / 값 / +), 가운데 열 아래에 RESET. HUD(점수 패널·표적 마커·RWR·자막)는 씬 오브젝트라 Bake가 연결한다.
     public const string CreditsPath = "Assets/ACO_Addon/Credits/ACO_Credits.txt";
 
-    /// 크레딧 보드 프리팹: 판 2.4m x 1.9m(월드 공간 Canvas), 제목 + 본문(텍스트 파일 Credits/ACO_Credits.txt — 실행할 때 ACO_CreditBoard가 읽는다).
-    /// 본문은 글자 수에 맞춰 자동으로 줄어든다(20~34). 기본 TMP 폰트라 영문으로 적는다. 로비 벽 등에 둔다.
+    /// 크레딧 보드 프리팹: 판 0.62m x 0.95m(사물함 폭 — 월드 공간 Canvas), 제목 + 스크롤 본문(텍스트 파일 Credits/ACO_Credits.txt — 실행할 때 ACO_CreditBoard가 읽는다).
+    /// 6-228: 본문 글자 크기는 고정(34), 넘치면 끌기 · 스크롤바 · ▲▼ 버튼으로 본다. 선원실 가운데 사물함 앞에 기대 세운다(ACO_SceneBaker.CreateCreditBoard).
+    public const float CreditW = 1240f;
+    public const float CreditH = 1900f;
+    public const float CreditUnit = 0.0005f;
     public static void CreateCreditBoardPrefab()
     {
+        BuildTextBoard("ACO_CreditBoard", "credits.title", AssetDatabase.LoadAssetAtPath<TextAsset>(CreditsPath), null, FontPath);
+    }
+
+    /// 업데이트 노트 보드(6-251): 크레딧 보드와 같은 판 · 스크롤. 본문은 언어별 파일(Credits/ACO_Updates_ko · en · ja.txt — 설정 LANGUAGE를 따른다, 로컬).
+    /// 한글 · 일본어가 있어 패널 글꼴(Pretendard + JP 폴백)을 쓴다. 내용은 텍스트 파일만 고치면 된다(실행할 때 읽는다).
+    public const string UpdateBoardPrefabName = "ACO_UpdateBoard";
+    public static readonly string[] UpdatesPaths = { "Assets/ACO_Addon/Credits/ACO_Updates_ko.txt", "Assets/ACO_Addon/Credits/ACO_Updates_en.txt", "Assets/ACO_Addon/Credits/ACO_Updates_ja.txt" };
+    public static void CreateUpdateBoardPrefab()
+    {
+        var langs = new TextAsset[UpdatesPaths.Length];
+        for (int i = 0; i < langs.Length; i++) { langs[i] = AssetDatabase.LoadAssetAtPath<TextAsset>(UpdatesPaths[i]); }
+        if (!PanelFontsReady()) { EnsureTutorialFonts(); }
+        BuildTextBoard(UpdateBoardPrefabName, "updates.title", langs[1], langs, PanelFontPath);
+    }
+
+    /// 크레딧 · 업데이트 노트 공용 판(6-228 · 6-251). langs가 있으면 언어별 본문(ACO_CreditBoard.LanguageSources), 없으면 source 하나.
+    private static void BuildTextBoard(string prefabName, string titleKey, TextAsset source, TextAsset[] langs, string fontPath)
+    {
         EnsureFolder("Assets/ACO_Addon", "Prefabs");
-        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-        if (font == null)
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(fontPath);
+        if (font == null) { font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath); }
+        if (font == null)   // 패널 글꼴도 기본 글꼴도 없다
         {
             Debug.LogError($"[ACO] TMP 폰트를 찾지 못했습니다: {FontPath} — Window → TextMeshPro → Import TMP Essential Resources를 먼저 실행하세요.");
             return;
         }
-        TextAsset source = AssetDatabase.LoadAssetAtPath<TextAsset>(CreditsPath);
 
-        GameObject root = new GameObject("ACO_CreditBoard");
+        // 판 3(6-228): 사물함 폭(0.62m) x 0.95m — 캔버스 1240 x 1900 단위 x 0.0005. 불투명 판 + 얇은 틀, 제목은 고정, 본문은 스크롤.
+        GameObject root = new GameObject(prefabName);
         ACO_CreditBoard board = root.AddUdonSharpComponent<ACO_CreditBoard>();
-        RectTransform canvas = MakeUiPanel(root.transform, 2400f, 1900f);
-        LocLabel(MakeUiText(canvas, "Title", new Vector2(0f, 860f), new Vector2(2300f, 120f), 84f, font, ""), "credits.title");
-        TextMeshProUGUI body = MakeUiText(canvas, "Body", new Vector2(0f, -70f), new Vector2(2240f, 1660f), 34f, font, source != null ? source.text : "(Credits/ACO_Credits.txt)");
+        RectTransform canvas = MakeUiPanel(root.transform, CreditW, CreditH);
+        canvas.localScale = Vector3.one * CreditUnit;
+        canvas.Find("Background").GetComponent<Image>().color = new Color(0.02f, 0.05f, 0.04f, 1f);
+        Color frame = new Color(0.32f, 0.36f, 0.34f, 1f);
+        float t = 14f;
+        MakeUiBox(canvas, "Frame_T", new Vector2(0f, CreditH * 0.5f - t * 0.5f), new Vector2(CreditW, t), frame);
+        MakeUiBox(canvas, "Frame_B", new Vector2(0f, -CreditH * 0.5f + t * 0.5f), new Vector2(CreditW, t), frame);
+        MakeUiBox(canvas, "Frame_L", new Vector2(-CreditW * 0.5f + t * 0.5f, 0f), new Vector2(t, CreditH), frame);
+        MakeUiBox(canvas, "Frame_R", new Vector2(CreditW * 0.5f - t * 0.5f, 0f), new Vector2(t, CreditH), frame);
+        LocLabel(MakeUiText(canvas, "Title", new Vector2(0f, 865f), new Vector2(1180f, 100f), 64f, font, ""), titleKey);
+
+        // 스크롤 창: 위 810 ~ 아래 -750, 오른쪽 50은 스크롤바
+        GameObject viewGo = new GameObject("ScrollView", typeof(RectTransform));
+        RectTransform view = viewGo.GetComponent<RectTransform>();
+        view.SetParent(canvas, false);
+        view.anchoredPosition = new Vector2(0f, 30f);
+        view.sizeDelta = new Vector2(1180f, 1560f);
+        ScrollRect scroll = viewGo.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.inertia = true;
+        scroll.decelerationRate = 0.135f;
+        scroll.scrollSensitivity = 60f;
+
+        GameObject portGo = new GameObject("Viewport", typeof(RectTransform));
+        RectTransform port = portGo.GetComponent<RectTransform>();
+        port.SetParent(view, false);
+        port.anchorMin = Vector2.zero;
+        port.anchorMax = Vector2.one;
+        port.offsetMin = Vector2.zero;
+        port.offsetMax = new Vector2(-50f, 0f);
+        portGo.AddComponent<RectMask2D>();
+        Image catcher = portGo.AddComponent<Image>();   // 빈 곳을 잡아도 끌린다
+        catcher.color = new Color(0f, 0f, 0f, 0f);
+
+        TextMeshProUGUI body = MakeUiText(port, "Body", Vector2.zero, new Vector2(1100f, 1500f), 34f, font, source != null ? source.text : "(" + prefabName + ")");
+        RectTransform br = body.rectTransform;
+        br.anchorMin = new Vector2(0f, 1f);
+        br.anchorMax = new Vector2(1f, 1f);
+        br.pivot = new Vector2(0.5f, 1f);
+        br.offsetMin = new Vector2(16f, -1500f);
+        br.offsetMax = new Vector2(-16f, -8f);
         body.alignment = TextAlignmentOptions.TopLeft;
         body.enableWordWrapping = true;
-        body.enableAutoSizing = true;
-        body.fontSizeMin = 20f;
-        body.fontSizeMax = 34f;
+        body.enableAutoSizing = false;
+        body.fontSize = 34f;
         body.color = new Color(0.85f, 0.95f, 0.88f, 1f);
-        board.Source = source;
-        board.Body = body;
+        ContentSizeFitter fit = body.gameObject.AddComponent<ContentSizeFitter>();
+        fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
-        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/ACO_CreditBoard.prefab");
-        ACO_PrefabVersions.Stamp("ACO_CreditBoard");
+        // 스크롤바(오른쪽 30)
+        Image track = MakeUiBox(view, "Scrollbar", new Vector2(575f, 0f), new Vector2(30f, 1560f), new Color(0.35f, 1f, 0.45f, 0.12f));
+        track.raycastTarget = true;
+        GameObject areaGo = new GameObject("Sliding Area", typeof(RectTransform));
+        RectTransform area = areaGo.GetComponent<RectTransform>();
+        area.SetParent(track.rectTransform, false);
+        area.anchorMin = Vector2.zero;
+        area.anchorMax = Vector2.one;
+        area.offsetMin = new Vector2(0f, 6f);
+        area.offsetMax = new Vector2(0f, -6f);
+        Image handle = MakeUiBox(area, "Handle", Vector2.zero, Vector2.zero, new Color(0.35f, 1f, 0.45f, 0.55f));
+        handle.raycastTarget = true;
+        handle.rectTransform.anchorMin = Vector2.zero;
+        handle.rectTransform.anchorMax = Vector2.one;
+        handle.rectTransform.offsetMin = Vector2.zero;
+        handle.rectTransform.offsetMax = Vector2.zero;
+        Scrollbar bar = track.gameObject.AddComponent<Scrollbar>();
+        bar.handleRect = handle.rectTransform;
+        bar.targetGraphic = handle;
+        bar.direction = Scrollbar.Direction.BottomToTop;
+        var barNav = bar.navigation;
+        barNav.mode = Navigation.Mode.None;
+        bar.navigation = barNav;
+
+        scroll.content = br;
+        scroll.viewport = port;
+        scroll.verticalScrollbar = bar;
+        scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+
+        // ▲ ▼ 버튼(반 화면씩)
+        string[] icons = { "chevron_up", "chevron_down" };
+        int[] steps = { -1, 1 };
+        float[] xs = { -170f, 170f };
+        var buttons = new Button[2];
+        for (int i = 0; i < 2; i++)
+        {
+            Image img = MakeUiButton(canvas, i == 0 ? "Btn_Up" : "Btn_Down", new Vector2(xs[i], -845f), new Vector2(300f, 90f), font, "", 60f);
+            MakeIcon(img.rectTransform, "Icon", LoadIcon(icons[i]), Vector2.zero, 70f);
+            ACO_CreditScrollButton btn = img.gameObject.AddUdonSharpComponent<ACO_CreditScrollButton>();
+            btn.Board = board;
+            btn.Step = steps[i];
+            buttons[i] = img.GetComponent<Button>();
+            WireClick(buttons[i], btn);
+        }
+
+        board.Source = source;
+        board.LanguageSources = langs;
+        board.Body = body;
+        board.Scroll = scroll;
+        board.Viewport = port;
+        board.ScrollControls = new GameObject[] { track.gameObject, buttons[0].gameObject, buttons[1].gameObject };
+        board.UpButton = buttons[0];
+        board.DownButton = buttons[1];
+
+        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/{prefabName}.prefab");
+        ACO_PrefabVersions.Stamp(prefabName);
         ACO_PrefabBuilder.DestroyAfterSetup(root);
         AssetDatabase.SaveAssets();
-        Debug.Log($"[ACO] 크레딧 보드 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 내용은 {CreditsPath}를 고치면 된다(실행할 때 읽는다).");
+        Debug.Log($"[ACO] {prefabName} 프리팹 생성 완료: {AssetDatabase.GetAssetPath(prefab)} — 내용은 텍스트 파일을 고치면 된다(실행할 때 읽는다).");
     }
 
     public static void CreateHudSettingsPrefab()
@@ -3631,6 +3747,8 @@ public static partial class ACO_HUDBuilder
 
     /// 무전 채터(ACO_Chatter)를 씬에 만든다: 머리를 따라오는 자막 한 줄(가운데 정렬, 줄바꿈 허용) + 2D 음성 AudioSource.
     /// 글자는 HUD와 같은 '항상 맨 위' 머티리얼(Generated/ACO_HUDTextOverlay — HUD 프리팹을 만들 때 생긴다)을 쓴다.
+    public const float SubtitleWrapWidth = 22f;
+
     public static GameObject CreateChatter()
     {
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
@@ -3645,12 +3763,13 @@ public static partial class ACO_HUDBuilder
         var root = new GameObject("ACO_Chatter");
         ACO_Chatter radio = root.AddUdonSharpComponent<ACO_Chatter>();
 
-        // 한 단위 = 0.03m(점수 패널과 같다). 폭 50단위 ≈ 1.5m, 넘치면 줄바꿈.
+        // 한 단위 = 0.03m(점수 패널과 같다). 폭 SubtitleWrapWidth(22단위 ≈ 0.66m — 영어 약 80자 · 한글/일본어 약 40자)를 넘치면 줄바꿈.
+        // 6-236: 예전 50단위(≈1.5m)는 영어 180자가 한 줄이라 긴 대사가 한 줄로 길게 늘어졌다.
         var panel = new GameObject("SubtitlePanel");
         panel.transform.SetParent(root.transform, false);
         panel.transform.localScale = Vector3.one * 0.03f;
         TextMeshPro text = MakeText(panel.transform, "Subtitle", Vector3.zero, 6f, Color.white,
-            TextAlignmentOptions.Bottom, new Vector2(50f, 8f), new Vector2(0.5f, 0f), font, textMat, "[AWACS] Chatter check.");
+            TextAlignmentOptions.Bottom, new Vector2(SubtitleWrapWidth, 8f), new Vector2(0.5f, 0f), font, textMat, "[AWACS] Chatter check.");
         text.enableWordWrapping = true;
 
         var voiceGo = new GameObject("Voice");

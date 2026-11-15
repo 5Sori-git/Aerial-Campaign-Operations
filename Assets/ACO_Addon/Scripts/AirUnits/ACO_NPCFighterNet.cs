@@ -50,6 +50,8 @@ namespace ACO
         public float HandoffHoldTime = 2f;
         [Tooltip("소유권이 바뀐 뒤 이 시간(초) 동안은 다시 넘기지 않는다(오너가 오가며 튀지 않게)")]
         public float HandoffCooldown = 5f;
+        [Tooltip("최근 이 시간(초) 안에 피해를 받았으면 넘기지 않는다(넘기는 사이 도착한 피해가 사라지지 않게)")]
+        public float HandoffHitGuard = 2f;
 
         [Header("원격 표시")]
         [Tooltip("새 상태를 받았을 때 화면 위치/방향의 차이를 흡수하는 시간 척도(초, 대략 2배면 거의 다 흡수). 작을수록 정확하고 클수록 부드럽다")]
@@ -147,6 +149,8 @@ namespace ACO
         private int _handoffTargetIdx = -1;
         private float _handoffSince;
         private float _lastOwnerChangeTime = -1000f;
+        private float _lastHitTime = -1000f;
+        private float _lastHp = -1f;
 
         void Start()
         {
@@ -189,6 +193,14 @@ namespace ACO
             if (_handoffTimer > 0f) { return; }
             _handoffTimer = HANDOFF_CHECK_INTERVAL;
 
+            // 체력이 줄었으면 맞은 시각을 적는다(0.5초 간격 확인 — 소유자 화면의 체력이 기준)
+            if (AI.TargetHealth)
+            {
+                float hp = AI.TargetHealth.Health;
+                if (hp < _lastHp) { _lastHitTime = Time.time; }
+                _lastHp = hp;
+            }
+
             int idx = AI.IsEngaged() ? AI.GetNetTargetIdx() : -1;
             if (idx != _handoffTargetIdx)
             {
@@ -199,6 +211,8 @@ namespace ACO
             if (idx < 0) { return; }
             if (Time.time - _handoffSince < HandoffHoldTime) { return; }
             if (Time.time - _lastOwnerChangeTime < HandoffCooldown) { return; }
+            // 맞고 있는 중엔 넘기지 않는다 — 넘기는 사이 도착한 피해는 옛 소유자가 버려서 쏜 사람 화면의 격추 미리 보기와 어긋난다(6-246)
+            if (Time.time - _lastHitTime < HandoffHitGuard) { return; }
 
             VRCPlayerApi pilot = AI.GetTargetPilot();
             if (!Utilities.IsValid(pilot) || pilot.isLocal) { return; }
