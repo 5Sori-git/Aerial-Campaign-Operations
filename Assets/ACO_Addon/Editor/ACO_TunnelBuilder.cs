@@ -16,22 +16,25 @@ public static class ACO_TunnelBuilder
     public const string Fbx = "Assets/ACO_Addon/Models/Tunnel/ACO_Tunnel.fbx";
     public const string PrefabPath = "Assets/ACO_Addon/Prefabs/ACO_Tunnel.prefab";
     private const string MatDir = "Assets/ACO_Addon/Generated/Tunnel";
-    /// 덮는 칸 수(1 · 2 · 3)별 프리팹 이름 — 1칸은 처음 만든 이름 그대로(씬 참조 유지).
-    public static readonly string[] Names = { "ACO_Tunnel", "ACO_Tunnel2", "ACO_Tunnel3" };
+    /// 프리팹 이름: 직선 1 · 2 · 3칸, 곡선(한쪽 활 — 3판) 2 · 3칸. 1칸은 처음 만든 이름 그대로(씬 참조 유지).
+    public static readonly string[] Names = { "ACO_Tunnel", "ACO_Tunnel2", "ACO_Tunnel3", "ACO_Tunnel2C", "ACO_Tunnel3C" };
 
     /// 1칸 터널 프리팹.
     public static GameObject Load() { return Load(1); }
-    /// cells칸(1 · 2 · 3) 터널 프리팹. 없으면 null.
-    public static GameObject Load(int cells)
+    /// cells칸(1 · 2 · 3) 직선 터널 프리팹. 없으면 null.
+    public static GameObject Load(int cells) { return Load(cells, false); }
+    /// cells칸 터널 프리팹(curved = 곡선형 — 2 · 3칸만). 없으면 null.
+    public static GameObject Load(int cells, bool curved)
     {
-        if (cells < 1 || cells > Names.Length) { return null; }
-        return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/ACO_Addon/Prefabs/{Names[cells - 1]}.prefab");
+        if (cells < 1 || cells > 3 || (curved && cells < 2)) { return null; }
+        string name = curved ? Names[cells + 1] : Names[cells - 1];
+        return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/ACO_Addon/Prefabs/{name}.prefab");
     }
 
     /// 1칸 프리팹을 (다시) 만든다.
     public static GameObject Build() { return Build(Names[0]); }
 
-    /// 세 프리팹을 모두 (다시) 만든다. 칸 수 순서(1, 2, 3).
+    /// 프리팹을 모두 (다시) 만든다. Names 순서.
     public static GameObject[] BuildAll()
     {
         var list = new GameObject[Names.Length];

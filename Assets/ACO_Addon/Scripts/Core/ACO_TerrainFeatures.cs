@@ -50,6 +50,16 @@ namespace ACO
         public GameObject TunnelPrefab2;
         [Tooltip("터널 3칸짜리(약 2.0km)")]
         public GameObject TunnelPrefab3;
+        [Tooltip("곡선형 2칸(한쪽 활, 가운데 휨 50m — 입구 가운데서 반대편 출구가 안 보인다). 비면 직선만")]
+        public GameObject TunnelPrefab2C;
+        [Tooltip("곡선형 3칸(가운데 휨 130m — 입구 가운데서 터널 한가운데 물체가 안 보인다). 비면 직선만")]
+        public GameObject TunnelPrefab3C;
+        [Tooltip("2 · 3칸 터널이 곡선형일 확률(지형 씨앗). 휘는 방향(좌우)도 씨앗으로")]
+        [Range(0f, 1f)] public float TunnelCurveChance = 0.5f;
+        [Tooltip("터널 능선 · 진입로 칸의 이웃이 이보다(m) 높으면 그 자리를 쓰지 않는다 — 높은 이웃의 경사 치마가 터널 안으로 흘러든다(30m면 치마가 칸 가장자리에서 약 110m만 들어온다)")]
+        public float TunnelMaxOverhang = 30f;
+        [Tooltip("곡선형은 이웃이 이보다(m) 높으면 직선형으로 — 휜 터널(최대 130m 옆으로)은 칸 경계에 가까워 높은 이웃의 치마가 벽 아래로 들어온다")]
+        public float TunnelCurveMaxOverhang = 10f;
 
         [Header("수")]
         public int CityCount = 2;
@@ -551,11 +561,14 @@ namespace ACO
             AddBlockAt(x, z, 80f);
         }
 
-        /// 터널 프리팹(덮는 칸 수 1 · 2 · 3).
-        private GameObject TunnelPrefabFor(int cells)
+        /// 터널 프리팹(덮는 칸 수 1 · 2 · 3). 2 · 3칸은 이 지형 씨앗으로 곡선형을 고를 수 있다(곡선형이 없으면 직선).
+        private GameObject TunnelPrefabFor(int cells) { return TunnelPrefabFor(cells, true); }
+
+        private GameObject TunnelPrefabFor(int cells, bool allowCurve)
         {
-            if (cells == 3) { return TunnelPrefab3; }
-            if (cells == 2) { return TunnelPrefab2; }
+            bool curved = allowCurve && Hash(0, 471, _jobSeed) < TunnelCurveChance;
+            if (cells == 3) { return curved && TunnelPrefab3C != null ? TunnelPrefab3C : TunnelPrefab3; }
+            if (cells == 2) { return curved && TunnelPrefab2C != null ? TunnelPrefab2C : TunnelPrefab2; }
             return cells == 1 ? TunnelPrefab : null;
         }
 
@@ -590,9 +603,11 @@ namespace ACO
             return true;
         }
 
+        /// 같은 높이 · 빈 육지이고, 이웃이 TunnelMaxOverhang보다 높지 않다 — 더 높은 이웃의 경사 치마(15°, 최대 800m)가 칸 위로 흘러내려
+        /// 터널 안 · 입구 앞까지 들어오지 않게(6-266 4판 — 테스트 촬영에서 옆 칸 비탈이 터널 바닥 위로 솟아 있었다).
         private bool SameFree(int c, int i)
         {
-            return c >= 0 && !_taken[c] && _ch[c] >= _sea && Mathf.Abs(_ch[c] - _ch[i]) <= 0.5f;
+            return c >= 0 && !_taken[c] && _ch[c] >= _sea && Mathf.Abs(_ch[c] - _ch[i]) <= 0.5f && _over[c] <= TunnelMaxOverhang;
         }
 
         /// 터널: 놓을 수 있는 가장 긴 능선(TunnelFit)을 능선 칸들의 가운데에 터널 축 = 일렬 방향으로 놓는다.
@@ -608,6 +623,7 @@ namespace ACO
             // 능선 칸 막기 · 가운데 구하기
             float sx = 0f;
             float sz = 0f;
+            float maxOver = _over[_nb[cell * 6 + (dir + 3) % 6]];
             int c = cell;
             for (int k = 0; k < cells; k++)
             {
@@ -615,8 +631,10 @@ namespace ACO
                 _taken[c] = true;
                 sx += _cx[c];
                 sz += _cz[c];
+                maxOver = Mathf.Max(maxOver, _over[c]);
                 AddBlockAt(_origin.x + _cx[c], _origin.z + _cz[c], _hexR * 0.95f);
             }
+            maxOver = Mathf.Max(maxOver, _over[_nb[c * 6 + dir]]);
             _taken[_nb[c * 6 + dir]] = true;                   // 앞 진입로
             _taken[_nb[cell * 6 + (dir + 3) % 6]] = true;      // 뒤 진입로
             float x = _origin.x + sx / cells;
@@ -625,7 +643,9 @@ namespace ACO
             _siteZ[site] = z;
             string city = NearestCityName(x, z);
             _siteName[site] = (city.Length > 0 ? city : _siteName[site]) + TunnelLabel;
-            AddPlacement(TunnelPrefabFor(cells), new Vector3(x, _ch[cell], z), DirYaw(dir));
+            // 곡선형이 휘는 쪽(좌우)을 씨앗으로 — 모델은 앞뒤 대칭이라 180도 돌리면 반대로 휜다
+            float flip = Hash(0, 473, _jobSeed) < 0.5f ? 180f : 0f;
+            AddPlacement(TunnelPrefabFor(cells, maxOver <= TunnelCurveMaxOverhang), new Vector3(x, _ch[cell], z), DirYaw(dir) + flip);
         }
 
         private string NearestCityName(float x, float z)

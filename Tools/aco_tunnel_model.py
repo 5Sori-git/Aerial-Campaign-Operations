@@ -61,14 +61,40 @@ def half_width(z):
     return max(best - MARGIN, 40.0)
 
 
+CURVE = 0.0   # 곡선형(6-266 3판): 터널 가운데가 +X 쪽으로 휘는 폭(m). 0이면 직선. 한쪽 활(포물선 ≈ 원호), 양 끝은 x = 0
+
+
+def center_x(z):
+    """터널 중심선의 x. 양 끝 밖(포털 앞 절단용 연장)은 끝의 접선 방향으로 곧게."""
+    if CURVE == 0.0:
+        return 0.0
+    zz = max(-HALF_LEN, min(HALF_LEN, z))
+    x = CURVE * (1.0 - (zz / HALF_LEN) ** 2)
+    if abs(z) > HALF_LEN:
+        x += center_slope(zz) * (z - zz)
+    return x
+
+
+def center_slope(z):
+    """dx/dz(양 끝 밖은 끝 값)."""
+    zz = max(-HALF_LEN, min(HALF_LEN, z))
+    return -2.0 * CURVE * zz / (HALF_LEN ** 2)
+
+
 def height(x, z, u, row, col):
-    """u = 폭 방향 -1~1(가장자리 ±1)."""
+    """u = 폭 방향 -1~1(가장자리 ±1). 능선 등줄기는 터널 중심선(center_x)을 따라 휜다."""
     if row == 0 or row == ROWS or col == 0 or col == COLS:
         return BASE_Y
-    s = 1.0 - abs(u)
+    xc = center_x(z)
+    w = half_width(z)
+    if x >= xc:
+        s = 1.0 - (x - xc) / max(w - xc, 1.0)
+    else:
+        s = 1.0 - (xc - x) / max(w + xc, 1.0)
+    s = max(0.0, min(1.0, s))
     along = smooth(0.0, 1.0, (HALF_LEN - abs(z)) / 260.0)
     body = PEAK * (smooth(0.0, 0.85, s) ** 1.2) * along
-    wx = 1.0 - smooth(PORTAL_HALF, PORTAL_HALF + PORTAL_BLEND, abs(x))
+    wx = 1.0 - smooth(PORTAL_HALF, PORTAL_HALF + PORTAL_BLEND, abs(x - xc))
     fz = max(0.0, min(1.0, (HALF_LEN - abs(z)) / PORTAL_RAMP))
     h = max(body, PORTAL_H * fz * wx)
     if 1 < row < ROWS - 1 and 1 < col < COLS - 1:
@@ -126,6 +152,43 @@ def prism(profile, z0, z1):
     return bm
 
 
+def sweep_into(bm, profile, z0, z1, n):
+    """단면(profile — (가로, 높이), 닫힌 다각형)을 중심선을 따라 z0 → z1로 n칸 끌어 닫힌 입체를 bm에 더한다. 가로 = 진행 방향에 수직인 수평축."""
+    rings = []
+    for i in range(n + 1):
+        z = z0 + (z1 - z0) * i / n
+        cx = center_x(z)
+        sl = center_slope(z) if abs(z) <= HALF_LEN else center_slope(math.copysign(HALF_LEN, z))
+        inv = 1.0 / math.sqrt(1.0 + sl * sl)
+        tx, tz = sl * inv, inv            # 진행 방향(x, z)
+        lx, lz = tz, -tx                  # 가로(+X 쪽)
+        rings.append([bm.verts.new((cx + lx * px, py, z + lz * px)) for px, py in profile])
+    m = len(profile)
+    bm.faces.new(rings[0])
+    bm.faces.new(list(reversed(rings[-1])))
+    for i in range(n):
+        a, b = rings[i], rings[i + 1]
+        for k in range(m):
+            k2 = (k + 1) % m
+            bm.faces.new((a[k], a[k2], b[k2], b[k]))
+
+
+def sweep(profile, z0, z1, n):
+    bm = bmesh.new()
+    sweep_into(bm, profile, z0, z1, n)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm
+
+
+def steps(z0, z1, step=20.0):
+    """곡선형이면 step(m)마다 한 칸, 직선이면 한 칸."""
+    return max(1, int(math.ceil(abs(z1 - z0) / step))) if CURVE != 0.0 else 1
+
+
+def rect(x0, x1, y0, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
 def box(bm, x0, x1, y0, y1, z0, z1):
     v = [bm.verts.new((x, y, z)) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
     # v index = xi*4 + yi*2 + zi
@@ -157,6 +220,7 @@ def difference(target, cutter):
 def in_bore(c):
     """면 가운데가 터널 안쪽 면인가(Unity 좌표)."""
     x, y, z = c
+    x = (x - center_x(z)) / math.sqrt(1.0 + center_slope(z) ** 2)   # 중심선에서의 가로 거리
     if abs(z) > APOTHEM + 1.0 or y > BORE_H + 0.5 or abs(x) > BORE_W * 0.5 + 0.5:
         return False
     if y <= WALL_H:
@@ -200,10 +264,11 @@ def tris(ob):
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
 
-def set_cells(n):
-    """칸 수에 따라 길이 관련 값을 바꾼다(원점 = 덮는 칸들의 가운데 — 2칸이면 두 칸 사이 변의 가운데)."""
-    global CELLS, HALF_LEN, APOTHEM, FRAME_Z1, FRAME_Z0, ROWS
+def set_cells(n, curve=0.0):
+    """칸 수 · 휨 폭에 따라 길이 관련 값을 바꾼다(원점 = 덮는 칸들의 가운데 — 2칸이면 두 칸 사이 변의 가운데)."""
+    global CELLS, HALF_LEN, APOTHEM, FRAME_Z1, FRAME_Z0, ROWS, CURVE
     CELLS = n
+    CURVE = curve
     HALF_LEN = CELL_APOTHEM * CELLS - MARGIN
     APOTHEM = HALF_LEN
     FRAME_Z1 = HALF_LEN - 12.0
@@ -211,15 +276,16 @@ def set_cells(n):
     ROWS = 24 * CELLS
 
 
-# (프리팹 이름, 덮는 칸 수) — 1칸은 처음 만든 이름 그대로(씬 참조 유지)
-VARIANTS = (("ACO_Tunnel", 1), ("ACO_Tunnel2", 2), ("ACO_Tunnel3", 3))
+# (프리팹 이름, 덮는 칸 수, 휨 폭 m) — 1칸은 처음 만든 이름 그대로(씬 참조 유지).
+# 곡선형(3판, 한쪽 활): 2칸 50m = 입구 가운데서 반대편 출구가 안 보임(능선 허리가 좁아 더 못 휜다), 3칸 130m = 입구 가운데서 터널 한가운데 물체가 안 보임.
+VARIANTS = (("ACO_Tunnel", 1, 0.0), ("ACO_Tunnel2", 2, 0.0), ("ACO_Tunnel3", 3, 0.0), ("ACO_Tunnel2C", 2, 50.0), ("ACO_Tunnel3C", 3, 130.0))
 
 
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     os.makedirs(MODEL_DIR, exist_ok=True)
-    for name, cells in VARIANTS:
-        set_cells(cells)
+    for name, cells, curve in VARIANTS:
+        set_cells(cells, curve)
         build(name)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.export_scene.fbx(filepath=os.path.join(MODEL_DIR, FBX_NAME), object_types={'MESH'}, apply_scale_options='FBX_SCALE_ALL', axis_forward='-Z', axis_up='Y',
@@ -228,10 +294,11 @@ def main():
 
 
 def build(NAME):
-    print("VARIANT", NAME, "cells", CELLS, "length", round(HALF_LEN * 2))
-    # 산 - 터널
+    print("VARIANT", NAME, "cells", CELLS, "curve", CURVE, "length", round(HALF_LEN * 2))
+    # 산 - 터널(중심선을 따라 끈 아치)
     mountain = to_object(mountain_mesh(), "mountain")
-    bore = to_object(prism(arch_profile(BORE_W * 0.5, WALL_H, BASE_Y - 3.0), -APOTHEM - 60.0, APOTHEM + 60.0), "bore")
+    z0, z1 = -APOTHEM - 60.0, APOTHEM + 60.0
+    bore = to_object(sweep(arch_profile(BORE_W * 0.5, WALL_H, BASE_Y - 3.0), z0, z1, steps(z0, z1)), "bore")
     difference(mountain, bore)
     rock, inner = split(mountain, NAME + "__rock", NAME + "__concrete_in")
 
@@ -239,8 +306,8 @@ def build(NAME):
     frames = []
     for sign in (-1.0, 1.0):
         z0, z1 = (FRAME_Z0, FRAME_Z1) if sign > 0 else (-FRAME_Z1, -FRAME_Z0)
-        fr = to_object(prism(arch_profile(BORE_W * 0.5 + FRAME_T, WALL_H, BASE_Y), z0, z1), "frame")
-        cut = to_object(prism(arch_profile(BORE_W * 0.5, WALL_H, BASE_Y - 3.0), z0 - 5.0, z1 + 5.0), "framecut")
+        fr = to_object(sweep(arch_profile(BORE_W * 0.5 + FRAME_T, WALL_H, BASE_Y), z0, z1, 1), "frame")
+        cut = to_object(sweep(arch_profile(BORE_W * 0.5, WALL_H, BASE_Y - 3.0), z0 - 5.0, z1 + 5.0, 1), "framecut")
         difference(fr, cut)
         frames.append(fr)
 
@@ -252,20 +319,19 @@ def build(NAME):
     concrete = to_object(concrete_bm, NAME + "__concrete")
 
     # 바닥 도로(칸 윗면 위 얇은 판 — 충돌 없음)
-    road_bm = bmesh.new()
-    box(road_bm, -BORE_W * 0.5 + 0.1, BORE_W * 0.5 - 0.1, 0.02, 0.25, -FRAME_Z1, FRAME_Z1)   # 벽까지(풀이 보이지 않게)
-    road = to_object(road_bm, NAME + "__asphalt")
+    road = to_object(sweep(rect(-BORE_W * 0.5 + 0.1, BORE_W * 0.5 - 0.1, 0.02, 0.25), -FRAME_Z1, FRAME_Z1, steps(-FRAME_Z1, FRAME_Z1)), NAME + "__asphalt")   # 벽까지
 
-    # 유도등: 양쪽 벽 아래 띠 + 천장 가운데 점선
+    # 유도등: 양쪽 벽 아래 띠 + 천장 가운데 점선(중심선을 따라)
     glow_bm = bmesh.new()
     zl = FRAME_Z0 - 2.0
     for sx in (-1.0, 1.0):
         x = sx * (BORE_W * 0.5 - 0.25)
-        box(glow_bm, x - 0.2, x + 0.2, 1.0, 1.7, -zl, zl)
+        sweep_into(glow_bm, rect(x - 0.2, x + 0.2, 1.0, 1.7), -zl, zl, steps(-zl, zl))
     z = -zl
     while z + 6.0 <= zl:
-        box(glow_bm, -0.6, 0.6, BORE_H - 0.6, BORE_H - 0.25, z, z + 6.0)
+        sweep_into(glow_bm, rect(-0.6, 0.6, BORE_H - 0.6, BORE_H - 0.25), z, z + 6.0, 1)
         z += 24.0
+    bmesh.ops.recalc_face_normals(glow_bm, faces=glow_bm.faces)
     glow = to_object(glow_bm, NAME + "__glow")
 
     for ob in (rock, concrete, road, glow):

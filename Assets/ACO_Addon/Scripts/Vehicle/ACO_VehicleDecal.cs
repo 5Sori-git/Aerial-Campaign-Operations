@@ -7,7 +7,8 @@ namespace ACO
     /// 실기체 데칼(플레이어 기체마다, 수동 동기화 — 오너 = 조종사): 조종석에 앉으면(ACO_VehicleUpgrades가 LocalPilotEnter) 내 데칼 이미지 URL(스튜디오, 이번 접속)과
     /// 저장된 자리 2개(기종 DecalKey — 샘플 기준 상대값 = 이 기체 기준점 기준 상대값)를 동기화 값으로 보낸다. 내리면 끈다.
     /// 모든 클라이언트: 받은 자리에 프로젝터 2개(이 기체 기준점 자식)를 놓고, 스튜디오가 받아 둔 이미지(대기열·캐시)를 머티리얼에 넣어 켠다.
-    /// 다른 사람 데칼은 스튜디오의 HIDE OTHERS가 켜져 있으면 숨긴다. 이미지를 못 받으면 끈다.
+    /// 다른 사람 데칼은 스튜디오의 HIDE OTHERS가 켜져 있으면 숨긴다. 이미지를 못 받으면 꺼 두고 계속 기다린다 —
+    /// 스튜디오가 다른 사람 이미지를 시간을 두고 다시 받아(6-267) 받아지면 그때 켠다. 캐시에서 밀려난 이미지도 다시 부탁한다.
     /// 라운델(6-191): 내 라운델 이미지 URL(스튜디오 ROUNDEL)도 같이 보낸다 — 자리는 고정(기체에 붙은 판 Roundels — 동체 양옆, 왼쪽 날개 위, 오른쪽 날개 아래).
     /// 이미지가 없으면 안 보인다. 판들은 처음 켤 때 머티리얼 하나를 복제해 같이 쓴다(기체마다 따로 — 프리팹 머티리얼을 건드리지 않는다).
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
@@ -39,7 +40,7 @@ namespace ACO
         private const int FLAG_PILOT = 64;
         private const int ROUNDEL = 2;   // 이미지 칸 번호(0·1 데칼, 2 라운델)
         private string[] _appliedUrl = new string[] { "", "", "" };
-        private bool[] _waiting = new bool[3];
+        private bool[] _waiting = new bool[3];   // 보여야 하는데 이미지가 아직(실패해도 계속 — 스튜디오가 다른 사람 이미지를 다시 받는다, 6-267)
         private bool[] _texReady = new bool[3];
         private Material _roundelMat;
         private float _pollTimer;
@@ -135,11 +136,15 @@ namespace ACO
                 _texReady[i] = false;
                 _waiting[i] = false;
             }
-            if (!wanted || u.Length == 0 || _texReady[i] || Studio == null) { return; }
-            if (Studio.GetTexture(url) != null) { _texReady[i] = true; }
-            else if (!_waiting[i] && !Studio.IsFailed(url))
+            if (!wanted || u.Length == 0 || _texReady[i] || Studio == null)
             {
-                Studio.Request(url);
+                if (!wanted) { _waiting[i] = false; }
+                return;
+            }
+            if (Studio.GetTexture(url) != null) { _texReady[i] = true; _waiting[i] = false; }
+            else
+            {
+                Studio.Request(url);   // 이미 있거나(받는 중 · 실패 포함) 대기 중이면 그대로
                 _waiting[i] = true;
             }
         }
@@ -182,11 +187,10 @@ namespace ACO
                     _texReady[i] = true;
                     changed = true;
                 }
-                else if (Studio.IsFailed(url))
+                else
                 {
-                    _waiting[i] = false;
-                    _texReady[i] = false;
-                    changed = true;
+                    // 실패로 남아도 기다린다(스튜디오가 시간을 두고 다시 받는다). 캐시에서 밀려났으면 다시 부탁한다
+                    Studio.Request(url);
                 }
             }
             if (changed) { Apply(); }

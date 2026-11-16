@@ -994,6 +994,7 @@ public static class ACO_PrefabTuning
         new Entry { Id = "escort-waves-1", Text = "호위 페이즈 증원(6-265): 콘보이 웨이포인트 매복 · 상륙전 2차 공습(해변 3km) 무전 음성을 씬 모듈에 넣고 무전 연결(페이즈 모듈 Bake). 고친 뒤 씬 저장", Apply = TuneEscortWaves },
         new Entry { Id = "tunnel-landmark-1", Text = "터널 랜드마크(6-266): Models/Tunnel/ACO_Tunnel.fbx로 Prefabs/ACO_Tunnel 프리팹을 만들고 씬 지형 장식(TunnelPrefab)에 넣습니다 — 같은 높이 3칸 일렬의 가운데 칸에 확률 0.6으로 터널 산(폭 50m x 높이 40m 관통 터널). 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
+        new Entry { Id = "tunnel-landmark-3", Text = "터널 랜드마크 3판(6-266): 곡선형 2 · 3칸(한쪽 활 — 휨 50 · 130m, 능선도 같이 휨)을 더해 프리팹 다섯 개를 만들고 씬 지형 장식에 넣습니다 — 2 · 3칸은 반반 곡선형. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "escort-waves-2", Text = "호위 페이즈 증원 대사(6-265): 콘보이 매복 · 상륙전 2차 공습 대사를 무엇이 오는지 말하지 않는 증원 대사로(\"Enemy reinforcements inbound! …\") — 매복이 실제로 놓이지 않아도 틀리지 않게. 씬 모듈 글자를 새 기본값으로(음성은 같은 파일을 새로 만들었다)", Apply = TuneEscortLines },
         new Entry { Id = "canopy-thin-4", Text = "FA-18E 캐노피 앞 프레임 다시 만들기: 프레임 안쪽에 붙은 손잡이 · 거울이 떠 있던 것을 붙은 자리 프레임 안쪽 면과 같이 옮겨 붙임(6-264)", Apply = ACO_CanopyThin.Apply },
         new Entry { Id = "canopy-thin-preview-1", Text = "격납고 미리보기 기체(PreviewRoot)에도 가늘게 만든 캐노피 앞 프레임 · 아치(볼트 포함) 메시를 끼웁니다. 고친 뒤 씬 저장", Apply = ACO_CanopyThin.ApplyPreview },
@@ -1483,6 +1484,8 @@ public static class ACO_PrefabTuning
             f.TunnelPrefab = prefabs[0];
             f.TunnelPrefab2 = prefabs[1];
             f.TunnelPrefab3 = prefabs[2];
+            f.TunnelPrefab2C = prefabs[3];
+            f.TunnelPrefab3C = prefabs[4];
             f.TunnelChance = 0.9f;
             if (PrefabUtility.IsPartOfPrefabInstance(f)) { PrefabUtility.RecordPrefabInstancePropertyModifications(f); }
             EditorUtility.SetDirty(f);

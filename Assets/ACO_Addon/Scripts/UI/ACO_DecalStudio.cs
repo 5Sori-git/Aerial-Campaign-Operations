@@ -95,6 +95,10 @@ namespace ACO
         public float DownloadGap = 5.5f;
         [Tooltip("이 시간(초) 안에 응답이 없으면 실패로 치고 대기열을 넘긴다")]
         public float DownloadTimeout = 30f;
+        [Tooltip("다른 사람 데칼 · 라운델 이미지가 실패하면 이 시간(초) 뒤 다시 받는다(6-267 — 번째마다 2배: 30 → 60 → 120초). 내 이미지는 LOAD로")]
+        public float OtherRetryDelay = 30f;
+        [Tooltip("다른 사람 이미지 자동 재시도 횟수(한 번 = 받기 2번 — 처음 + 바로 한 번 더)")]
+        public int OtherRetryRounds = 3;
 
         private VRCUrl[] _urls = new VRCUrl[] { VRCUrl.Empty, VRCUrl.Empty };
         private int _selected;
@@ -113,6 +117,8 @@ namespace ACO
         private Texture2D[] _cacheTex = new Texture2D[CACHE];
         private int[] _cacheState = new int[CACHE];   // 0 없음, 1 대기, 2 받는 중, 3 성공, 4 실패
         private int[] _cacheRetries = new int[CACHE];
+        private int[] _cacheRounds = new int[CACHE];      // 다른 사람 이미지 자동 재시도 번째(6-267)
+        private float[] _cacheFailAt = new float[CACHE];  // 실패로 남은 시각
         private VRCUrl[] _cacheVrcUrl = new VRCUrl[CACHE];
         private float _nextDownload;
         private int _downloading = -1;
@@ -531,6 +537,7 @@ namespace ACO
             _cacheTex[slot] = null;
             _cacheState[slot] = 1;
             _cacheRetries[slot] = 0;
+            _cacheRounds[slot] = 0;
         }
 
         /// 받아 둔 이미지(없거나 아직이면 null).
@@ -606,6 +613,7 @@ namespace ACO
                 if (Time.time - _downloadStart < DownloadTimeout) { return; }
                 FailDownload(_downloading, _downloadingUrl, T("decal.timeout", "TIMED OUT"));
             }
+            RetryOthers();
             if (Time.time < _nextDownload || _downloader == null) { return; }
             int i = NextPending();
             if (i < 0) { return; }
@@ -636,19 +644,49 @@ namespace ACO
             _downloadingUrl = "";
         }
 
-        /// 실패: 한 번은 자동으로 다시 받고, 그래도 안 되면 실패로 남긴다(LOAD를 누르면 다시 받는다).
+        /// 다른 사람 이미지(내 스튜디오 URL이 아닌 것)가 실패로 남았으면 OtherRetryDelay × 2^번째 뒤 다시 대기열에 넣는다(6-267 — 렉 · 시간 초과 같은 일시 실패로
+        /// 그 접속 내내 안 보이던 것). OtherRetryRounds번까지 — 허용되지 않은 호스트처럼 계속 실패하는 주소를 끝없이 받지 않게.
+        private void RetryOthers()
+        {
+            for (int i = 0; i < CACHE; i++)
+            {
+                if (_cacheState[i] != 4 || _cacheRounds[i] >= OtherRetryRounds || IsCurrent(_cacheUrl[i])) { continue; }
+                float wait = OtherRetryDelay * (1 << Mathf.Clamp(_cacheRounds[i], 0, 6));
+                if (Time.time - _cacheFailAt[i] < wait) { continue; }
+                _cacheRounds[i]++;
+                _cacheRetries[i] = 0;
+                _cacheState[i] = 1;
+                Debug.Log("[ACO] 데칼 이미지: 다른 사람 이미지 다시 받기 " + _cacheRounds[i] + "/" + OtherRetryRounds + " — " + HostOf(_cacheUrl[i]));
+            }
+        }
+
+        /// URL의 호스트(로그용 — 전체 주소는 남기지 않는다).
+        private string HostOf(string url)
+        {
+            if (string.IsNullOrEmpty(url)) { return "(empty)"; }
+            int start = url.IndexOf("://");
+            start = start >= 0 ? start + 3 : 0;
+            int end = url.IndexOf('/', start);
+            return end > start ? url.Substring(start, end - start) : url.Substring(start);
+        }
+
+        /// 실패: 한 번은 자동으로 다시 받고, 그래도 안 되면 실패로 남긴다(LOAD를 누르면 다시 받는다 — 다른 사람 이미지는 RetryOthers가 시간을 두고 다시).
         private void FailDownload(int i, string url, string reason)
         {
             EndDownload(url);
             if (i < 0 || _cacheUrl[i] != url) { return; }
+            bool mine = IsCurrent(url);
+            Debug.Log("[ACO] 데칼 이미지 실패: " + (mine ? "내 이미지" : "다른 사람 이미지") + ", 호스트 " + HostOf(url) + ", 오류 " + reason
+                + ", 받기 " + (_cacheRetries[i] + 1) + "번째" + (mine ? "" : ", 자동 재시도 " + _cacheRounds[i] + "/" + OtherRetryRounds));
             if (_cacheRetries[i] < 1)
             {
                 _cacheRetries[i]++;
                 _cacheState[i] = 1;
-                if (IsCurrent(url)) { Msg("decal.msg.retrying", "RETRYING IMAGE...", "", false); }
+                if (mine) { Msg("decal.msg.retrying", "RETRYING IMAGE...", "", false); }
                 return;
             }
             _cacheState[i] = 4;
+            _cacheFailAt[i] = Time.time;
             if (IsCurrent(url)) { Msg("decal.msg.failed", "IMAGE FAILED: {0} - PRESS LOAD TO TRY AGAIN (ALLOWED HOSTS: IMGUR, GITHUB... OR ENABLE UNTRUSTED URLS)", reason, true); }
         }
 
