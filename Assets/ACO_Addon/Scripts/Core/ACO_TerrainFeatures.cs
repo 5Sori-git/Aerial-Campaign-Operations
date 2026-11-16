@@ -23,6 +23,7 @@ namespace ACO
         public const int SITE_RADAR = 5;
         public const int SITE_TOWER = 6;
         public const int SITE_RUINS = 7;
+        public const int SITE_TUNNEL = 8;   // 터널 랜드마크(6-266)
 
         [Header("지형")]
         [Tooltip("이 지형이 다 세워지면 장식을 놓는다(지형의 Features에도 이 오브젝트를 넣는다 — Bake가 서로 연결)")]
@@ -42,6 +43,13 @@ namespace ACO
         public GameObject RadarPrefab;
         public GameObject CommTowerPrefab;
         public GameObject RuinsPrefab;
+        [Tooltip("터널 랜드마크(6-266) 1칸짜리(터널 약 0.65km — 원점 = 덮는 칸들의 가운데 윗면, 터널 축 = +Z). 같은 높이 일렬 [진입로 + 능선 칸 + 진입로]에 일렬 방향으로 놓고, "
+            + "놓을 수 있는 가장 긴 것(3 → 2 → 1칸)을 고른다. Setup Check가 Prefabs/ACO_Tunnel · ACO_Tunnel2 · ACO_Tunnel3을 넣는다")]
+        public GameObject TunnelPrefab;
+        [Tooltip("터널 2칸짜리(약 1.35km, 원점 = 두 칸 사이 변의 가운데)")]
+        public GameObject TunnelPrefab2;
+        [Tooltip("터널 3칸짜리(약 2.0km)")]
+        public GameObject TunnelPrefab3;
 
         [Header("수")]
         public int CityCount = 2;
@@ -53,6 +61,8 @@ namespace ACO
         [Tooltip("봉우리 위 레이더/통신탑 수")]
         public int HighlandCount = 3;
         public int RuinsCount = 1;
+        [Tooltip("지형마다 터널이 생길 확률(지형 씨앗으로 정한다 — 모든 화면이 같다). 최대 1개, 놓을 자리가 없으면 없다")]
+        [Range(0f, 1f)] public float TunnelChance = 0.9f;
 
         [Header("자리 조건")]
         [Tooltip("도시/마을/비행장 사이 최소 거리(m)")]
@@ -101,6 +111,8 @@ namespace ACO
         public string RadarLabel = " RADAR STATION";
         public string TowerLabel = " RELAY TOWER";
         public string PortLabel = " HARBOR";
+        [Tooltip("터널 이름 꼬리말(가장 가까운 도시 이름 뒤 — 도시가 없으면 새 이름 뒤)")]
+        public string TunnelLabel = " TUNNEL";
         [Tooltip("폐허 이름 앞말(이름 앞에 붙는다)")]
         public string RuinsLabel = "RUINS OF ";
 
@@ -123,7 +135,8 @@ namespace ACO
         private const int PICK_LIGHTHOUSE = 3;
         private const int PICK_HIGHLAND = 4;
         private const int PICK_RUINS = 5;
-        private const int PICK_COUNT = 6;
+        private const int PICK_TUNNEL = 6;
+        private const int PICK_COUNT = 7;
 
         private int _stage;
         private bool _running;
@@ -308,6 +321,11 @@ namespace ACO
             if (kind == PICK_VILLAGE) { return VillageCount; }
             if (kind == PICK_LIGHTHOUSE) { return LighthouseCount; }
             if (kind == PICK_HIGHLAND) { return HighlandCount; }
+            if (kind == PICK_TUNNEL)
+            {
+                bool any = TunnelPrefab != null || TunnelPrefab2 != null || TunnelPrefab3 != null;
+                return any && Hash(0, 467, _jobSeed) < TunnelChance ? 1 : 0;
+            }
             return RuinsCount;
         }
 
@@ -338,6 +356,7 @@ namespace ACO
                 if (!radar && CommTowerPrefab == null) { radar = true; }
                 AddSimple(best, radar ? SITE_RADAR : SITE_TOWER, radar ? RadarPrefab : CommTowerPrefab, 120f, false);
             }
+            else if (kind == PICK_TUNNEL) { AddTunnel(best); }
             else { AddSimple(best, SITE_RUINS, RuinsPrefab, _hexR * 0.4f, false); }
             return true;
         }
@@ -376,6 +395,13 @@ namespace ACO
             {
                 if ((RadarPrefab == null && CommTowerPrefab == null) || !_peak[i] || up < HighlandMinHeight) { return 0f; }
                 return up * 0.02f + jitter * 10f;
+            }
+            if (kind == PICK_TUNNEL)
+            {
+                // 긴 터널이 늘 이긴다(칸 수 × 100), 같은 길이끼리는 씨앗 해시로
+                int fit = TunnelFit(i);
+                if (fit < 0) { return 0f; }
+                return (fit / 8) * 100f + jitter * 20f;
             }
             if (RuinsPrefab == null || up < RuinsMinHeight || _flat[i] < 2 || _over[i] > VillageMaxOverhang) { return 0f; }
             return 5f + jitter * 20f;
@@ -425,6 +451,7 @@ namespace ACO
             if (siteKind == SITE_VILLAGE) { return PICK_VILLAGE; }
             if (siteKind == SITE_LIGHTHOUSE) { return PICK_LIGHTHOUSE; }
             if (siteKind == SITE_RADAR || siteKind == SITE_TOWER) { return PICK_HIGHLAND; }
+            if (siteKind == SITE_TUNNEL) { return PICK_TUNNEL; }
             return PICK_RUINS;
         }
 
@@ -522,6 +549,98 @@ namespace ACO
             _taken[cell] = true;
             AddPlacement(LighthousePrefab, new Vector3(x, _ch[cell], z), DirYaw(dir));
             AddBlockAt(x, z, 80f);
+        }
+
+        /// 터널 프리팹(덮는 칸 수 1 · 2 · 3).
+        private GameObject TunnelPrefabFor(int cells)
+        {
+            if (cells == 3) { return TunnelPrefab3; }
+            if (cells == 2) { return TunnelPrefab2; }
+            return cells == 1 ? TunnelPrefab : null;
+        }
+
+        /// 칸 i를 능선 첫 칸으로 놓을 수 있는 가장 긴 터널(3 → 2 → 1칸): 칸 수 * 8 + 방향(0~5). 없으면 -1.
+        /// 조건: 방향 dir 일렬로 [진입로, 능선 cells칸, 진입로]가 모두 같은 높이(0.5m 안) 육지이고 아무 자리도 차지하지 않았다.
+        /// 진입로 칸이 터널 입구 앞 평지(약 690m)가 된다.
+        private int TunnelFit(int i)
+        {
+            if (_ch[i] < _sea || _taken[i]) { return -1; }
+            int start = Mathf.FloorToInt(Hash(i, 463, _jobSeed) * 5.999f);
+            for (int cells = 3; cells >= 1; cells--)
+            {
+                if (TunnelPrefabFor(cells) == null) { continue; }
+                for (int k = 0; k < 6; k++)
+                {
+                    int dir = (start + k) % 6;
+                    if (TunnelLine(i, dir, cells)) { return cells * 8 + dir; }
+                }
+            }
+            return -1;
+        }
+
+        private bool TunnelLine(int i, int dir, int cells)
+        {
+            if (!SameFree(_nb[i * 6 + (dir + 3) % 6], i)) { return false; }   // 뒤 진입로
+            int c = i;
+            for (int step = 1; step <= cells; step++)   // 능선 나머지 칸 + 앞 진입로
+            {
+                c = _nb[c * 6 + dir];
+                if (!SameFree(c, i)) { return false; }
+            }
+            return true;
+        }
+
+        private bool SameFree(int c, int i)
+        {
+            return c >= 0 && !_taken[c] && _ch[c] >= _sea && Mathf.Abs(_ch[c] - _ch[i]) <= 0.5f;
+        }
+
+        /// 터널: 놓을 수 있는 가장 긴 능선(TunnelFit)을 능선 칸들의 가운데에 터널 축 = 일렬 방향으로 놓는다.
+        /// 능선 칸을 막고(지상 유닛 · 항로가 지나지 않는다) 양 끝 진입로 칸도 차지한다(나무를 끈다 — 저공 진입로).
+        /// 이름 = 가장 가까운 도시 이름 + TunnelLabel(도시가 없으면 새 이름).
+        private void AddTunnel(int cell)
+        {
+            int fit = TunnelFit(cell);
+            if (fit < 0) { return; }
+            int cells = fit / 8;
+            int dir = fit % 8;
+            int site = AddSite(SITE_TUNNEL, cell, _hexR * (0.9f * cells + 0.1f));
+            // 능선 칸 막기 · 가운데 구하기
+            float sx = 0f;
+            float sz = 0f;
+            int c = cell;
+            for (int k = 0; k < cells; k++)
+            {
+                if (k > 0) { c = _nb[c * 6 + dir]; }
+                _taken[c] = true;
+                sx += _cx[c];
+                sz += _cz[c];
+                AddBlockAt(_origin.x + _cx[c], _origin.z + _cz[c], _hexR * 0.95f);
+            }
+            _taken[_nb[c * 6 + dir]] = true;                   // 앞 진입로
+            _taken[_nb[cell * 6 + (dir + 3) % 6]] = true;      // 뒤 진입로
+            float x = _origin.x + sx / cells;
+            float z = _origin.z + sz / cells;
+            _siteX[site] = x;
+            _siteZ[site] = z;
+            string city = NearestCityName(x, z);
+            _siteName[site] = (city.Length > 0 ? city : _siteName[site]) + TunnelLabel;
+            AddPlacement(TunnelPrefabFor(cells), new Vector3(x, _ch[cell], z), DirYaw(dir));
+        }
+
+        private string NearestCityName(float x, float z)
+        {
+            string best = "";
+            float bestD = float.MaxValue;
+            for (int s = 0; s < _siteCount; s++)
+            {
+                if (_siteKind[s] != SITE_CITY) { continue; }
+                float dx = _siteX[s] - x;
+                float dz = _siteZ[s] - z;
+                float d = dx * dx + dz * dz;
+                if (d < bestD) { bestD = d; best = _siteName[s]; }
+            }
+            return best;
         }
 
         /// 칸 가운데에 하나(마을/레이더/통신탑/유적). wholeCell이면 칸 전체를 막는다.
@@ -713,7 +832,7 @@ namespace ACO
             for (int s = 0; s < _siteCount; s++)
             {
                 int k = _siteKind[s];
-                if (k == SITE_PORT || k == SITE_LIGHTHOUSE || k == SITE_RUINS) { continue; }
+                if (k == SITE_PORT || k == SITE_LIGHTHOUSE || k == SITE_RUINS || k == SITE_TUNNEL) { continue; }
                 if (maxDist > 0f)
                 {
                     float dx = _siteX[s] - focus.x;

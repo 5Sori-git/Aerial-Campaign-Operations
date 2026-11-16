@@ -20,6 +20,9 @@ namespace ACO
     /// - 갑판 택싱 제한: 갑판(진행도 SafeZones) 위에서 DeckTaxiSpeed 아래로 움직이기 시작하면 수평 속도를 그 값에서 묶는다.
     ///   스로틀은 건드리지 않는다(놓은 자리가 그대로 남아 캐터펄트로 이어진다). 캐터펄트에 걸리면 풀리고,
     ///   그보다 빠르게 내린 기체(착함 실패 뒤 다시 올라갈 때)에는 걸리지 않는다. 비행장 활주로에는 걸리지 않는다.
+    /// - 출격 정리(6-254): 조종사 없이 순간이동되면(SFEXT_O_VehicleTeleported — LAUNCH가 보낸다) 엔진 출력 · 스로틀 · 속도(탈 때 SAV가 기체 속도로 넣는
+    ///   CurrentVel 포함)를 0으로, 애프터버너를 끄고, 기어가 올라가 있으면 즉시 내린다. SAV는 내릴 때 엔진만 끄고 출력은 천천히(반감기 약 4초) 줄여
+    ///   LAUNCH 직후 남은 출력으로 기체가 앞으로 밀려 나갔다(물에 빠진 기체 · 가속 중 내린 기체).
     /// 캐노피·후크를 다이얼에서 빼서 확장 목록에 두면 다이얼 칸이 빈다(트리거로 조작은 못 하고 자동으로만 움직인다).
     /// 셋업: 메뉴 ACO → Player Vehicle → Add Auto Canopy + Gear/Hook Link to Selected Vehicles.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -57,6 +60,8 @@ namespace ACO
         public float DeckTaxiSpeed = 5.14f;
         [Tooltip("갑판 영역(SafeZones)을 읽는 진행도 — Bake가 채운다")]
         public ACO_PlayerProgress Progress;
+        [Tooltip("탑승자 전용 충돌(발함 지휘소 구덩이 바닥 — 6-259). 탈 때 · 내릴 때 알린다. Bake가 채운다")]
+        public ACO_PilotOnlyColliders PilotOnly;
 
         [Header("리스폰 복구 (셋업 메뉴가 굽는다)")]
         [Tooltip("기체 루트의 애니메이터")]
@@ -102,6 +107,7 @@ namespace ACO
         public void SFEXT_O_PilotEnter()
         {
             _piloting = true;
+            if (PilotOnly) { PilotOnly.SetLocalPiloting(true); }
             _moving = _onCatapult || Speed() > CloseSpeed;
             _stillSince = -1f;
             // 탑승 때는 후크를 내리지 않는다(막 옮겨진 기체는 접지 판정 전이라 지상인데도 내려갈 수 있다) — 기어가 올라가 있을 때만 올린다
@@ -111,6 +117,7 @@ namespace ACO
         public void SFEXT_O_PilotExit()
         {
             _piloting = false;
+            if (PilotOnly) { PilotOnly.SetLocalPiloting(false); }
             ClearGroundSafety();
         }
 
@@ -118,6 +125,29 @@ namespace ACO
         public void SFEXT_G_CatapultLockOff() { _onCatapult = false; }
         public void SFEXT_G_Explode() { _onCatapult = false; ClearGroundSafety(); }
         public void SFEXT_G_RespawnButton() { _onCatapult = false; ClearGroundSafety(); }
+
+        /// 출격 정리(6-254, 오너 화면 — LAUNCH가 기체를 갑판으로 옮긴 직후, 태우기 전): 내리기 전의 엔진 출력 · 스로틀 · 속도를 지우고
+        /// 애프터버너를 끄고 기어를 내린다. SAV 리스폰을 거치지 않는 순간이동이라 SAV가 하지 않는다. 탄 채로 옮겨지면 건드리지 않는다.
+        public void SFEXT_O_VehicleTeleported()
+        {
+            if (!SAVControl || (bool)SAVControl.GetProgramVariable("Piloting")) { return; }
+            // 엔진: 출력(동기화 값 — 다른 화면의 소리 · 불꽃도 따라온다)과 스로틀. 탈 때 SAV가 엔진을 켜면 0에서 시작한다
+            SAVControl.SetProgramVariable("EngineOutput", 0f);
+            SAVControl.SetProgramVariable("ThrottleInput", 0f);
+            SAVControl.SetProgramVariable("PlayerThrottle", 0f);
+            // 탈 때 SAV가 기체 속도를 CurrentVel로 덮어쓴다(SFEXT_O_PilotEnter) — 옛 속도가 남지 않게
+            SAVControl.SetProgramVariable("CurrentVel", Vector3.zero);
+            SAVControl.SetProgramVariable("LastFrameVel", Vector3.zero);
+            if (_body == null) { _body = EntityControl ? EntityControl.VehicleRigidbody : null; }
+            if (_body != null)
+            {
+                _body.velocity = Vector3.zero;
+                _body.angularVelocity = Vector3.zero;
+            }
+            if ((bool)SAVControl.GetProgramVariable("AfterburnerOn")) { SAVControl.SendCustomNetworkEvent(NetworkEventTarget.All, "SetAfterburnerOff"); }
+            // 기어: 올라가 있으면 모두의 화면에서 애니메이션 없이 내린다(SAV 리스폰과 같은 처리 — DFUNC_Gear의 리스폰 이벤트만 부른다)
+            if (Gear && Gear.GearUp) { Gear.SendCustomNetworkEvent(NetworkEventTarget.All, "SFEXT_G_RespawnButton"); }
+        }
 
         // 기어 함수가 모든 클라이언트에서 보낸다 — 조종사 화면에서만 후크를 맞춘다
         public void SFEXT_G_GearDown() { if (_piloting) { SyncHook(); } }

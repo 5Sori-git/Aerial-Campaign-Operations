@@ -49,7 +49,8 @@ MonoBehaviour:
   DisplayName: HVAA
   Description: 'HIGH-VELOCITY AAM
 
-    VERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE.'
+    HITS TOP SPEED RIGHT OFF THE RAIL - THE QUICKEST
+    TO REACH CLOSE TARGETS. TURNS WIDE.'
   Price: 13000
   Icon: {fileID: 21300000, guid: 4e8ef1ff9f2cb7b4d953489a66d6ec7e, type: 3}
   SortOrder: 90
@@ -125,25 +126,25 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 16
   AllowFiringWhenGrounded: 0
-  LockRange: 6500
-  LockAngle: 12
+  LockRange: 2000
+  LockAngle: 45
   LockFromCcip: 1
-  LockTime: 1.4
+  LockTime: 1.5
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 2
-  MaxAmmo: 16
+  MaxAmmo: 24
   SlotReloadTime: 10
   LaunchPoints: []
-  Damage: 130
-  MaxSpeed: 800
-  Acceleration: 700
+  Damage: 200
+  MaxSpeed: 1900
+  Acceleration: 1500
   TurnRate: 70
-  GuidanceMode: 2
+  GuidanceMode: 0
   NavigationConstant: 3
   ProximityRadius: 10
-  SplashRadius: 25
+  SplashRadius: 10
   MinSplashFraction: 0.25
   MissileSplash: 0
   FullPartSplash: 0
@@ -179,7 +180,7 @@ MonoBehaviour:
   FireInterval: 0.12
   Missile: {fileID: 0}
   NumPreInstantiated: 2
-  MissileType: 0
+  MissileType: 1
   AllowUnguidedFire: 0
   InheritVelocity: 1
   WorldParent: {fileID: 0}

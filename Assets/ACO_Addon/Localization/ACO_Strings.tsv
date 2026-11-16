@@ -62,6 +62,8 @@ prog.up.countermeasure	플레어	COUNTERMEASURES	フレア
 prog.updesc.countermeasure	플레어를 더 싣습니다.	EXTRA FLARE CARTRIDGES IN THE DISPENSER.	フレアの搭載数が増えます。
 prog.up.gun_damage	기관포 피해	GUN DAMAGE	機関砲ダメージ
 prog.updesc.gun_damage	기관포 탄의 위력이 커집니다.	HEAVIER CANNON ROUNDS.	機関砲弾の威力が上がります。
+prog.up.gun_ammo	기관포 탄약량	GUN AMMO CAPACITY	機関砲弾薬量
+prog.updesc.gun_ammo	기관포를 더 오래 쏠 수 있습니다(최대 5배).	MORE CANNON ROUNDS - FIRE LONGER (UP TO 5X).	機関砲をより長く撃てます(最大5倍)。
 prog.up.msl_damage	피해	DAMAGE	ダメージ
 prog.updesc.msl_damage	일반 미사일의 탄두가 강해집니다.	BIGGER WARHEADS ON STANDARD MISSILES.	通常ミサイルの弾頭が強化されます。
 prog.up.msl_ammo	탑재량	CAPACITY	搭載数
@@ -211,20 +213,20 @@ load.buy	구매 {0} CR	BUY {0} CR	購入 {0} CR
 load.owned	보유	OWNED	所持
 wpn.4AAM	다중 목표 공대공 미사일\n최대 네 대를 한 번에 락온하고 한 발씩 쏩니다. 일반 미사일보다 락온 거리가 깁니다.	MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. LONGER LOCK RANGE THAN STANDARD MISSILES.	多目標空対空ミサイル\n最大4機を同時にロックし、1発ずつ発射します。通常ミサイルよりロック距離が長めです。
 wpn.UGB	무유도 폭탄\n자유 낙하 폭탄입니다. CCIP 조준점으로 겨누세요. 폭탄 중 폭발이 가장 넓습니다.	UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER. THE WIDEST BLAST OF ANY BOMB.	無誘導爆弾\n自由落下爆弾です。CCIP照準で狙います。爆弾の中で最も爆発範囲が広いです。
-wpn.RKT	로켓 발사기\n지상 표적용 무유도 로켓 연사. 탄창이 크고 재장전이 빠릅니다.	ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD.	ロケットランチャー\n地上目標向けの無誘導ロケット連射。弾数が多く装填も速めです。
-wpn.LGB	레이저 유도 폭탄\n지상 표적을 락온하고 투하하면 폭탄이 스스로 날아갑니다. 무유도 폭탄보다 폭발은 좁지만 더 강합니다.	LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. TIGHTER BLAST THAN UNGUIDED BOMBS, BUT HITS HARDER.	レーザー誘導爆弾\n地上目標をロックして投下すると自ら誘導します。無誘導爆弾より爆発範囲は狭いですが、威力は高めです。
-wpn.LGR	레이저 유도 로켓\n락온한 로켓이 비행 중 표적으로 방향을 고칩니다. 위력은 일반 로켓과 같고 재장전이 느립니다.	LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. SAME PUNCH AS PLAIN ROCKETS, BUT SLOWER TO RELOAD.	レーザー誘導ロケット\nロックしたロケットが飛行中に目標へ修正します。威力は通常ロケットと同じで、装填は遅めです。
+wpn.RKT	로켓 발사기\n지상 표적용 무유도 로켓 연사. 한 번에 8발씩 몰아 쏩니다.	ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. FIRES IN 8-ROUND BURSTS.	ロケットランチャー\n地上目標向けの無誘導ロケット連射。8発ずつまとめて撃ちます。
+wpn.LGB	레이저 유도 폭탄\n지상 표적을 락온하고 투하하면 폭탄이 스스로 날아갑니다. 폭발은 좁지만 한 발이 가장 강합니다.	LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. NARROW BLAST, BUT THE HARDEST-HITTING SINGLE BOMB.	レーザー誘導爆弾\n地上目標をロックして投下すると自ら誘導します。爆発範囲は狭いですが、一発の威力は最大です。
+wpn.LGR	레이저 유도 로켓\n락온한 로켓이 비행 중 표적으로 방향을 고칩니다. 확실히 맞는 대신 탄수가 적고 재장전이 느립니다.	LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. RELIABLE HITS, BUT FEWER ROCKETS AND A SLOWER RELOAD.	レーザー誘導ロケット\nロックしたロケットが飛行中に目標へ修正します。確実に当たる代わりに弾数が少なく、装填も遅めです。
 wpn.4AGM	다중 목표 공대지 미사일\n지상 표적 네 개를 락온하고 한 발씩 쏩니다.	MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH.	多目標空対地ミサイル\n地上目標を最大4つロックし、1発ずつ発射します。
 wpn.LAGM	장거리 공대지 미사일\n대공 사거리 밖에서 지상 표적을 치는 무거운 미사일. 락온 범위가 좁고 느립니다.	LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK.	長距離空対地ミサイル\n対空射程の外から地上目標を叩く重ミサイル。ロック範囲が狭く遅めです。
 wpn.LASM	장거리 대함 미사일\n해면을 스치듯 날아 고속으로 함선을 칩니다. 탄두가 무겁고 함선 CIWS가 막지 못합니다.	LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT.	長距離対艦ミサイル\n海面すれすれを高速で飛び艦船を撃ちます。弾頭が重く、艦のCIWSでは防げません。
 wpn.SCM	원거리 확산 미사일\n표적 위에서 열려 넓은 범위에 자탄을 뿌립니다. 탄수가 적고 재장전이 깁니다.	STAND-OFF CLUSTER MISSILE\nOPENS ABOVE THE TARGET AND SCATTERS BOMBLETS OVER A WIDE AREA. FEW ROUNDS, LONG RELOAD.	スタンドオフ・クラスターミサイル\n目標の上空で開き、広範囲に子弾をばらまきます。弾数が少なく装填が長めです。
 wpn.FLAK	근접 신관 로켓\n누르고 있는 동안 무유도 로켓을 쏘고, 적기 근처에서 터집니다.	PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT.	近接信管ロケット\n押している間、敵機の近くで炸裂する無誘導ロケットを発射します。
-wpn.LAAM	장거리 공대공 미사일\n시야 밖의 적기도 락온합니다. 락온 범위가 좁고 느립니다.	LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK.	長距離空対空ミサイル\n視界外の敵機もロックできます。ロック範囲が狭く遅めです。
+wpn.LAAM	장거리 공대공 미사일\n시야 밖의 적기도 락온합니다. 느리게 출발하지만 멀리 갈수록 가장 빨라집니다. 락온이 느립니다.	LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. SLOW OFF THE RAIL, BUT THE FASTEST OF ALL AT LONG RANGE. SLOW LOCK.	長距離空対空ミサイル\n視界外の敵機もロックできます。出だしは遅いものの、遠くほど最も速くなります。ロックは遅めです。
 wpn.SASM	공중 제압 미사일\n근접 신관이 매우 넓어 빗나가 스쳐 지나가도 터지며 피해를 줍니다. 락온 거리가 짧습니다.	AERIAL SUPPRESSION AAM\nA VERY WIDE PROXIMITY FUSE - EVEN A MISSILE THAT SLIPS PAST STILL BURSTS AND DAMAGES. SHORT LOCK RANGE.	空中制圧ミサイル\n近接信管が非常に広く、すり抜けても炸裂してダメージを与えます。ロック距離は短めです。
 wpn.QAAM	고기동 공대공 미사일\n넓고 빠른 락온과 뛰어난 선회력으로 근접전에 강합니다. 사거리가 짧습니다.	QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE.	高機動空対空ミサイル\n広く速いロックと高い旋回性能で格闘戦に強いミサイル。射程は短めです。
 wpn.ECM	전자전 포드\n잠시 주변을 교란합니다. 적의 락온과 미사일을 끊고 대공포 조준을 흐트러뜨립니다.	ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS.	電子戦ポッド\n一時的に周囲を妨害します。敵のロックとミサイルを外し、対空砲の照準を乱します。
-wpn.HVAA	고속 공대공 미사일\n매우 빨라 피하기 어렵지만 크게 선회합니다.	HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE.	高速空対空ミサイル\n非常に速く振り切りにくいが、旋回は大回りです。
-wpn.CCAA	대응책 무시 공대공 미사일\n플레어를 무시합니다. 락온이 좁고 느리며 크게 선회합니다.	COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. NARROW, SLOW LOCK AND TURNS WIDE.	対抗手段無効空対空ミサイル\nフレアを無視します。ロックは狭く遅めで、旋回は大回りです。
+wpn.HVAA	고속 공대공 미사일\n발사 직후 곧바로 최고 속도에 올라 가까운 적에 가장 빨리 닿습니다. 크게 선회합니다.	HIGH-VELOCITY AAM\nHITS TOP SPEED RIGHT OFF THE RAIL - THE QUICKEST TO REACH CLOSE TARGETS. TURNS WIDE.	高速空対空ミサイル\n発射直後に最高速度に達し、近くの敵に最も早く届きます。旋回は大回りです。
+wpn.CCAA	대응책 무시 공대공 미사일\n플레어와 미끼에 속지 않아 에이스 상대로 강합니다. 락온 범위가 좁고 재장전이 깁니다.	COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES AND DECOYS - THE ACE HUNTER. NARROW LOCK, LONG RELOAD.	対抗手段無効空対空ミサイル\nフレアやおとりに惑わされず、エース相手に強いミサイルです。ロック範囲が狭く、装填は長めです。
 wpn.HPAA	고위력 공대공 미사일\n대형 탄두로 다른 공대공 미사일보다 피해가 훨씬 큽니다. 폭발 범위도 넓습니다. 재장전이 깁니다.	HIGH-POWER AAM\nHEAVY WARHEAD THAT HITS FAR HARDER THAN OTHER AAMS, WITH A WIDER BLAST AS A BONUS. LONG RELOAD.	高威力空対空ミサイル\n大型弾頭で他の空対空ミサイルより大幅に強力です。爆発範囲も広めです。装填は長めです。
 wpn.ADAM	지역 제압 공중 탄약\n투하된 뒤 가장 가까운 적기를 쫓습니다. 폭발이 크고 탄수가 적습니다.	AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS.	広域制圧空中弾\n投下後、最も近い敵機を追います。爆発が大きく弾数は少なめです。
 wpn.MMP	마이크로 미사일 포드\n공중·지상 표적을 최대 여덟 개 락온하고 마이크로 미사일 16발을 나눠 쏩니다. 탄두가 가볍고 사거리가 짧습니다.	MICRO-MISSILE POD\nLOCKS UP TO EIGHT AIR OR GROUND TARGETS AND SPLITS 16 MICRO-MISSILES BETWEEN THEM. LIGHT WARHEADS, SHORT REACH.	マイクロミサイルポッド\n空中・地上目標を最大8つロックし、16発のマイクロミサイルを分けて撃ちます。弾頭は軽く射程は短めです。
@@ -624,6 +626,7 @@ radio.twins.08	동전은 아직 공중에 있다.	Coin's still in the air.	コ�
 radio.phaseamphibious.01	LCAC 출발. 건십이 앞서 진입한다. 해안을 정리하고 호버크래프트를 지켜라.	LCACs are away. Gunships are moving in ahead of them. Clear the beach and keep those hovercraft alive.	LCAC発進。ガンシップが先行している。海岸を掃討し、ホバークラフトを守れ。
 radio.phaseamphibious.02	상륙정이 해안에 닿았다. 병력이 상륙한다.	The landing craft are on the beach. Troops are going ashore.	上陸艇が海岸に到達。部隊が上陸する。
 radio.phaseamphibious.03	상륙정 전멸. 상륙 작전 실패.	All landing craft are down. The assault has failed.	上陸艇全滅。上陸作戦は失敗した。
+radio.phaseamphibious.04	적 증원 접근 중! 상륙정을 엄호하라!	Enemy reinforcements inbound! Cover the landing craft!	敵増援、接近中！上陸艇を援護せよ！
 radio.phasedestroy.03	레이더에 고위협 신호 탐지. 적 에이스 비행대다. 정신 바짝 차려라!	High-threat signature detected on radar. It's an enemy ace squadron. Stay sharp out there!	レーダーに高脅威反応。敵エース部隊だ。気を引き締めろ！
 radio.phasedestroy.04	적 에이스 부대 전기 격추 확인! 적의 사기를 꺾었다. 훌륭했다!	Confirming splash on the entire enemy ace unit! you broke the enemy's spirit. Outstanding work!	敵エース部隊の全機撃墜を確認！敵の士気を砕いた。見事だ！
 radio.phaseluna.01	도시에 불이 켜졌어. 이제 하늘이 떨어지기만 하면 돼.	The city is lit. All that is left is for the sky to fall.	街に灯がともった。あとは空が落ちるだけ。
@@ -766,6 +769,8 @@ radio.phasedestroy.06	주목표 전부 파괴. 위협 제거. 모두 훌륭했�
 radio.phaseconvoy.01	호송대가 적 지역을 통과하고 있다. 움직임을 주시하며 길을 열어라!	The convoy is moving through hostile territory. Keep an eye on their movement and clear the road!	輸送隊が敵地を通過中だ。動きを見守り、道を切り拓け！
 radio.phaseconvoy.02	호송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete,  well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
 radio.phaseconvoy.03	호송대를 잃었다. 임무 실패. 기지로 귀환하라.	The convoy is gone. Mission failed. Return to base.	輸送隊が全滅した。任務失敗。帰投せよ。
+radio.phaseconvoy.04	적 증원 접근 중! 호송대를 엄호하라!	Enemy reinforcements inbound! Cover the convoy!	敵増援、接近中！輸送隊を援護せよ！
+radio.phaseconvoy.05	적 증원 접근 중! 호송대를 끝까지 지켜라!	Enemy reinforcements inbound! Get the convoy home!	敵増援、接近中！輸送隊を最後まで守り抜け！
 radio.phasefleet.01	적 함대 사정권 진입. 전 포대, 사격 개시!	Enemy fleet in range. All batteries, commence firing!	敵艦隊、射程に入った。全砲門、撃ち方始め！
 radio.phasefleet.02	항모 함대 사정권! 전 함, 사격 개시!	Carrier fleets are in range! All ships, open fire!	空母艦隊、射程内！全艦、撃て！
 radio.phasefleet.03	전 함재기 발진! 기함을 찾아 격침하라!	Launch all aircraft! Find that flagship and sink it!	全艦載機発艦！旗艦を見つけて沈めろ！

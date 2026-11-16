@@ -38,6 +38,11 @@ public partial class ACO_SetupValidator
         int noCrew = triggers.FindAll(t => !crews.Exists(c => c.Trigger == t)).Count;
         if (noCrew > 0) { problems.Add($"요원 없는 캐터펄트 {noCrew}곳"); }
         if (crews.Exists(c => c.Jbd == null)) { problems.Add("JBD 미연결"); }
+        if (crews.Exists(c => c.Jbd != null && c.Jbd.GetComponentsInChildren<Collider>(true).Length > 0)) { problems.Add("JBD 충돌 남음(6-253)"); }
+        if (crews.Exists(c => c.Jbd != null && ACO_SceneBaker.FindJbdFloor(c.Jbd) == null)) { problems.Add("JBD 자리 바닥 없음(6-253)"); }
+        if (ACO_SceneBaker.LaunchBubbleLidRemains()) { problems.Add("발함 지휘소 뚜껑 충돌 남음(6-259)"); }
+        if (ACO_SceneBaker.FindLaunchBubble() != null && ACO_SceneBaker.FindLaunchBubbleFloor() == null) { problems.Add("발함 지휘소 구덩이 바닥 없음(6-259)"); }
+        if (!ACO_SceneBaker.LaunchBubbleFloorPilotOnly()) { problems.Add("발함 지휘소 바닥이 탑승자 전용이 아님(6-259)"); }
         if (FindOne<ACO_LaunchOperator>() == null) { problems.Add("지휘소 요원 없음"); }
         if (!ACO_PrefabBuilder.CrewClipsCurrent()) { problems.Add("애니메이션이 옛 판"); }
         if (problems.Count == 0) { Add(g, OK, $"갑판 요원 {crews.Count}조가 설치되어 있습니다."); return; }

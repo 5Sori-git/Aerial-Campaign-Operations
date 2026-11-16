@@ -53,6 +53,26 @@ namespace ACO
         public float AttackerDistanceMin = 6000f;
         public float AttackerDistanceMax = 9000f;
 
+        [Header("2차 공습 (6-265) — 선두 LCAC가 해변까지 StrikeRemaining 안에 들어오면 한 번")]
+        [Tooltip("해변까지 남은 거리(m) — 항로 10km 중 7km 지점")]
+        public float StrikeRemaining = 3000f;
+        [Tooltip("공격기 수 = Base + PerPhase × (페이즈 번호 − 1). 해변 쪽 AttackerDistance에서 들어온다. 풀에 공격기가 없으면 헬기만")]
+        public int StrikeAttackersBase = 2;
+        public int StrikeAttackersPerPhase = 1;
+        [Tooltip("적 헬리콥터 조 수(조당 생성기 HelicopterGroupSize기) — LCAC 앞 바다 위 항로 옆으로 나온다")]
+        public int StrikeHelicopterGroups = 1;
+        [Tooltip("헬기가 자리 잡는 곳: 선두 LCAC 앞 이 거리(m)의 항로 옆")]
+        public float StrikeHelicopterAhead = 1200f;
+
+        [Header("무전 — 2차 공습 (Bake가 Chatter를 넣는다)")]
+        public ACO_Chatter Chatter;
+        // 공격기 · 헬기가 실제로 놓였는지(풀)는 화면마다 알 수 없어 무엇이 오는지 말하지 않는 증원 대사로(6-265)
+        public const string DefaultStrikeLine = "Enemy reinforcements inbound! Cover the landing craft!";
+        [TextArea] public string StrikeLine = DefaultStrikeLine;
+        public AudioClip StrikeClip;
+        [Tooltip("음성이 이 시간(초)보다 오래 밀리면 버린다")]
+        public float VoiceQueueDelay = 8f;
+
         // 이동 시간만큼 제한 시간을 늘리는 건 기반 클래스 GrantTravelTime(모듈 추가 메뉴가 켠다)
 
         // 사전 확인 결과(오너)
@@ -61,6 +81,14 @@ namespace ACO
         private Vector3 _planLanding;
         // 진행 판정(오너 지역 상태 — 오너가 바뀌면 처음부터 다시 본다)
         private bool[] _seenAlive;
+        // 2차 공습(오너 지역 상태 — 페이즈 시작 시각 도장으로 이번 페이즈 값인지 본다)
+        private int _strikeStamp;
+        private bool _strikeSent;
+        private int _phaseIndex;
+        // 2차 공습 대사(모든 클라이언트)
+        private int _lineStamp;
+        private bool _lineSaid;
+        private float _lineTimer;
 
         // ───────────── 오너 ─────────────
 
@@ -97,6 +125,9 @@ namespace ACO
             _survived = 1f;
             _seenAlive = new bool[Generator.GetUnitCount(ACO_MissionGenerator.CAT_ESCORT)];
             _planSeed = 0;
+            _phaseIndex = Mathf.Max(phaseIndex, 0);
+            _strikeStamp = CurrentStamp();
+            _strikeSent = false;
         }
 
         private int Scale(int baseCount, float perPhase, int phaseIndex)
@@ -144,7 +175,84 @@ namespace ACO
                 Manager.ScheduleModuleRelease();
                 return RESULT_CLEAR;
             }
+            TickStrike(tag);
             return RESULT_RUNNING;
+        }
+
+        /// 2차 공습(오너): 선두 LCAC가 해변까지 StrikeRemaining 안에 들어오면 한 번 — 공격기 편대 + LCAC 앞 바다 위 적 헬기.
+        private void TickStrike(int tag)
+        {
+            ACO_EscortUnit lead = LeadVip(tag);
+            if (lead == null) { return; }
+            bool inside = lead.GetRemainingDistance() <= StrikeRemaining;
+            int stamp = CurrentStamp();
+            if (_strikeStamp != stamp)
+            {
+                // 페이즈 중간에 오너가 됐다: 이미 안쪽이면 앞 오너가 냈다고 본다
+                _strikeStamp = stamp;
+                _strikeSent = inside;
+                _phaseIndex = Mathf.Max(Manager.GetPhaseIndex(), 0);
+                return;
+            }
+            if (_strikeSent || !inside) { return; }
+            _strikeSent = true;
+            int last = lead.GetWaypointCount() - 1;
+            Vector3 landing = lead.GetWaypoint(last);
+            int attackers = StrikeAttackersBase + StrikeAttackersPerPhase * _phaseIndex;
+            if (attackers > 0 && Generator.CountFreeAttackers() > 0)
+            {
+                Generator.RequestDeployObjective(ACO_MissionGenerator.OBJ_ATTACK, 0, attackers, -1, landing, AttackerDistanceMin, AttackerDistanceMax);
+            }
+            if (StrikeHelicopterGroups > 0)
+            {
+                float s = lead.GetDistanceTravelled() + StrikeHelicopterAhead;
+                Vector3 at = lead.PointAtDistance(s);
+                Vector3 dir = lead.PointAtDistance(s + 100f) - lead.PointAtDistance(s - 100f);
+                Generator.RequestAmbushAt(at, dir, StrikeHelicopterGroups, ACO_EscortUnit.MOVE_HOVER, ACO_MobileUnit.KIND_HELICOPTER);
+            }
+            Manager.MarkModuleProgress();   // 새 위협이 나왔다 — 교착 웨이브 기준 시각을 지금으로
+        }
+
+        /// 살아 있는 LCAC 중 가장 앞선 것(항로가 들어온 것만).
+        private ACO_EscortUnit LeadVip(int tag)
+        {
+            if (Generator == null || tag == 0) { return null; }
+            int n = Generator.GetUnitCount(ACO_MissionGenerator.CAT_ESCORT);
+            ACO_EscortUnit best = null;
+            float bestS = -1f;
+            for (int i = 0; i < n; i++)
+            {
+                ACO_EscortUnit unit = VipAt(i, tag);
+                if (unit == null || unit.IsDestroyed() || unit.GetWaypointCount() < 2) { continue; }
+                float s = unit.GetDistanceTravelled();
+                if (s > bestS) { bestS = s; best = unit; }
+            }
+            return best;
+        }
+
+        // ───────────── 2차 공습 대사 (모든 클라이언트) ─────────────
+
+        void Update()
+        {
+            _lineTimer -= Time.deltaTime;
+            if (_lineTimer > 0f) { return; }
+            _lineTimer = 0.5f;
+            if (Manager == null || Generator == null || Chatter == null) { return; }
+            if (!Manager.IsPhaseActive() || Manager.GetModule(Manager.GetCurrentPhaseType()) != this) { return; }
+            ACO_EscortUnit lead = LeadVip(Manager.GetModuleTag());
+            if (lead == null) { return; }
+            bool inside = lead.GetRemainingDistance() <= StrikeRemaining;
+            int stamp = CurrentStamp();
+            if (_lineStamp != stamp)
+            {
+                // 이 페이즈를 처음 본다: 지금 상태를 기준으로(늦게 들어온 클라이언트가 지난 대사를 듣지 않게)
+                _lineStamp = stamp;
+                _lineSaid = inside;
+                return;
+            }
+            if (_lineSaid || !inside) { return; }
+            _lineSaid = true;
+            if (!string.IsNullOrEmpty(StrikeLine) || StrikeClip != null) { Chatter.SayControl(StrikeLine, StrikeClip, VoiceQueueDelay); }
         }
 
         private float _survived = 1f;

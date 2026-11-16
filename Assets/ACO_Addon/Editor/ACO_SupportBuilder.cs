@@ -20,6 +20,11 @@ public static partial class ACO_PrefabBuilder
     public const string SupportManagerName = "ACO_SupportManager";
     public const string TankerDronePrefab = "ACO_TankerDrone";
     public const string GuardianDronePrefab = "ACO_GuardianDrone";
+    // 가디언 드론 요격(6-258 — 튜닝 guardian-intercept-2가 프리팹에도 넣는다)
+    public const float GuardianInterceptRange = 1500f;
+    public const float GuardianReactionTime = 0.1f;
+    public const float GuardianKillTime = 0.45f;
+    public const float GuardianCooldown = 0f;
     public const string SupportBomberPrefab = "ACO_SupportBomber";
     private const int SupportDialIndex = 3;
     private const KeyCode SupportKey = KeyCode.Alpha4;
@@ -446,11 +451,12 @@ public static partial class ACO_PrefabBuilder
         aa.MarkerLabel = "GD";
         aa.ScoreValue = 0;
         aa.InterceptProtectLayers = 1 << 25;   // 아군 항공기를 노린 미사일
-        aa.InterceptRange = 1200f;
+        // 6-258: 미사일은 거의 다 막고(초당 2발 남짓, 쉬는 시간 없음) 레일건 탄(4000m/s — 사거리 1500m를 0.375초에 지난다)은 격추 0.45초보다 빨라 못 막는다
+        aa.InterceptRange = GuardianInterceptRange;
         aa.DefenseRadius = 60f;
-        aa.InterceptReactionTime = 0.4f;
-        aa.InterceptKillTime = 0.8f;
-        aa.InterceptCooldown = 2f;
+        aa.InterceptReactionTime = GuardianReactionTime;
+        aa.InterceptKillTime = GuardianKillTime;
+        aa.InterceptCooldown = GuardianCooldown;
         aa.OtherDefenseFactor = 1f;
         aa.SilentIntercept = true;
         aa.InterceptTuneVersion = ACO_SceneBaker.CiwsTuneVersion;

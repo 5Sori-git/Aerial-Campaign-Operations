@@ -126,25 +126,25 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 16
   AllowFiringWhenGrounded: 0
-  LockRange: 6000
-  LockAngle: 15
+  LockRange: 2000
+  LockAngle: 45
   LockFromCcip: 1
-  LockTime: 1
+  LockTime: 3
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
   SlotCount: 8
   MaxAmmo: 72
-  SlotReloadTime: 3
+  SlotReloadTime: 4
   LaunchPoints: []
-  Damage: 45
-  MaxSpeed: 450
+  Damage: 100
+  MaxSpeed: 900
   Acceleration: 600
   TurnRate: 120
-  GuidanceMode: 2
+  GuidanceMode: 0
   NavigationConstant: 3
-  ProximityRadius: 9
-  SplashRadius: 12
+  ProximityRadius: 0
+  SplashRadius: 15
   MinSplashFraction: 0.3
   MissileSplash: 0
   FullPartSplash: 0
@@ -152,7 +152,7 @@ MonoBehaviour:
   Rwr: {fileID: 0}
   Spectator: {fileID: 0}
   InterceptSites: []
-  CrossLockIndicator: 0
+  CrossLockIndicator: 1
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 0
   AutoTargetNearest: 0

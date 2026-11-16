@@ -51,7 +51,8 @@ namespace ACO
         [Tooltip("투하 뒤 폭격기가 보이는 시간(초) — 상승하며 이탈")]
         public float BomberExitTime = 14f;
         public float BomberClimb = 6f;
-        public float StrikeDamage = 1500f;
+        [Tooltip("벙커버스터 중심 피해. 함선은 본체 · 부위 범위 피해 배율(ACO_Warship.CoreSplashScale · PartSplashScale — 6-255)을 받으므로 그만큼 크게 둔다(1500 → 4500: 함선 본체 0.4배 = 1800)")]
+        public float StrikeDamage = 4500f;
         public float StrikeRadius = 500f;
         [Range(0f, 1f)] public float StrikeMinFraction = 0.3f;
         public LayerMask DamageLayers = 1 << 17;

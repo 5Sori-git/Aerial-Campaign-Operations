@@ -56,6 +56,9 @@ namespace ACO
         [Tooltip("부위(본체 말고 같은 계층의 SaccTarget)가 범위 피해를 받는 배율. 탄이 직접 닿은 부위와 FullPartSplash 무기(LASM)는 그대로 받는다. "
             + "해상 유닛(함선·육상전함) 0.2, 공중 요새·랜스 포대 1")]
         [Range(0f, 1f)] public float PartSplashScale = 1f;
+        [Tooltip("본체(코어, TargetHealth)가 범위 피해를 받는 배율(6-255). 탄이 본체에 직접 닿거나 락온 명중이면 그대로 받고, 옆에 떨어진 폭탄 · 빗나간 미사일 폭발은 이만큼만 받는다 — "
+            + "빗나가면 탄을 약 2배 써야 하게(함선 0.4, 잠수함 0.5). 1 = 예전과 같다. CoreSplashImmune이면 범위 피해를 아예 받지 않으므로 쓰지 않는다")]
+        [Range(0f, 1f)] public float CoreSplashScale = 1f;
         [Tooltip("켜면 본체(코어, TargetHealth)는 범위 피해를 받지 않는다 — 직접 맞혀야만(코어를 락온해 명중, 폭탄이 코어에 닿음) 깎인다. 예외 무기(FullPartSplash)도 막는다. 보스(공중 요새·랜스 포대·육상전함) 코어")]
         public bool CoreSplashImmune = false;
 
@@ -261,11 +264,12 @@ namespace ACO
             TargetHealth.SendNetworkUpdate();
         }
 
-        /// 범위 피해 배율: 본체는 1, 부위는 PartSplashScale × 그 부위의 저항(ACO_FortressPart.SplashScale — 6-182, 랜스 냉각탑).
-        /// 무기(ACO_Missile·ACO_Ordnance·지원 폭격)가 범위 피해를 넣을 때 묻는다. 직접 맞은 부위는 무기가 따로 거른다(묻지 않는다).
+        /// 범위 피해 배율: 본체는 CoreSplashScale(6-255), 부위는 PartSplashScale × 그 부위의 저항(ACO_FortressPart.SplashScale — 6-182, 랜스 냉각탑).
+        /// 무기(ACO_Missile·ACO_Ordnance·지원 폭격)가 범위 피해를 넣을 때 묻는다. 직접 맞은 부위 · 본체는 무기가 따로 거른다(묻지 않는다).
         public float GetSplashScale(SaccTarget target)
         {
-            if (target == null || target == TargetHealth) { return 1f; }
+            if (target == null) { return 1f; }
+            if (target == TargetHealth) { return Mathf.Clamp01(CoreSplashScale); }
             float scale = PartSplashScale;
             ACO_FortressPart part = target.GetComponent<ACO_FortressPart>();
             if (part != null) { scale *= Mathf.Clamp01(part.SplashScale); }

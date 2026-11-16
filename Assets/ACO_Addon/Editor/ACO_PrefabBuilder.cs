@@ -635,7 +635,7 @@ public static partial class ACO_PrefabBuilder
     {
         EnsurePrefabFolder();
         return BuildStaticTargetPrefab("NPC_Bunker", "Bunker", new Vector3(18f, 5f, 18f),
-            health: 400f, armor: 4f, noDamageBelow: 20f, score: 800, chimney: false);
+            health: 400f, armor: 4f, noDamageBelow: 0f, score: 800, chimney: false);   // 6-256: 기총도 먹힌다(예전 문턱 20 — 기총 면역)
     }
 
     /// 전함(고가치 표적): 본체 120m + VLS 2 + 함포 1 + CIWS 2. VLS용 콜드런치 미사일이 없으면 같이 만든다.
@@ -2109,13 +2109,13 @@ public static partial class ACO_PrefabBuilder
         public bool ReservedForFleet;
     }
 
-    // 장갑 4: SAV 미사일 직격 = 최대 체력의 25%. 기총(파티클 10/4 = 2.5)은 NoDamageBelow 3에 걸려 선체엔 안 들어간다.
+    // 장갑 4: SAV 미사일 직격 = 최대 체력의 25%. 기총(파티클 10/4 = 2.5)도 선체에 들어간다(6-256 — 예전엔 NoDamageBelow 3에 걸려 면역).
     private static ShipSpec BattleshipSpec()
     {
         return new ShipSpec
         {
             PrefabName = "NPC_Warship", TargetName = "Cruiser", Label = "CG", HighValue = true, Score = 1500,
-            Health = 1000f, Armor = 4f, NoDamageBelow = 3f, PartHullDamage = 0.12f,
+            Health = 1000f, Armor = 4f, NoDamageBelow = 0f, PartHullDamage = 0.12f,
             CruiseSpeed = 12f, CruiseRadius = 2500f, EscortSpacing = 500f,
             HullSize = new Vector3(16f, 9f, 120f),
             BridgeSize = new Vector3(10f, 10f, 24f), BridgeCenter = new Vector3(0f, 11f, -5f),
@@ -2137,7 +2137,7 @@ public static partial class ACO_PrefabBuilder
         return new ShipSpec
         {
             PrefabName = "NPC_Destroyer", TargetName = "Destroyer", Label = "DD", HighValue = false, Score = 500,
-            Health = 500f, Armor = 2.5f, NoDamageBelow = 3f, PartHullDamage = 0.2f,
+            Health = 500f, Armor = 2.5f, NoDamageBelow = 0f, PartHullDamage = 0.2f,
             CruiseSpeed = 14f, CruiseRadius = 1500f, EscortSpacing = 350f,
             HullSize = new Vector3(11f, 7f, 80f),
             BridgeSize = new Vector3(8f, 7f, 14f), BridgeCenter = new Vector3(0f, 8f, -2f),

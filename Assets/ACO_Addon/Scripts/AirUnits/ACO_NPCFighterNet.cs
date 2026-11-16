@@ -53,9 +53,19 @@ namespace ACO
         [Tooltip("최근 이 시간(초) 안에 피해를 받았으면 넘기지 않는다(넘기는 사이 도착한 피해가 사라지지 않게)")]
         public float HandoffHitGuard = 2f;
 
+        [Header("기동 전환 즉시 전송 (6-252)")]
+        [Tooltip("오너: 비행 배율(급선회 TurnBoost · 급가감속 AccelBoost · 급가속 SpeedBoost · 저속 허용 AllowLowSpeed)이 바뀌면 바로 한 번, ManeuverFollowUpDelay 뒤 한 번 더 보낸다 — 에이스 기동의 시작 · 끝. "
+            + "보스 스크립트는 배율을 기동 단계가 바뀔 때만 바꿔야 한다(매 프레임 바꾸면 전송이 몰린다)")]
+        public bool SendOnManeuverChange = true;
+        [Tooltip("기동 전환 뒤 한 번 더 보내기까지(초). 전환 순간엔 잰 선회율이 아직 예전 값이라, 선회가 자리 잡은 뒤의 값을 한 번 더 보낸다")]
+        public float ManeuverFollowUpDelay = 0.15f;
+
         [Header("원격 표시")]
-        [Tooltip("새 상태를 받았을 때 화면 위치/방향의 차이를 흡수하는 시간 척도(초, 대략 2배면 거의 다 흡수). 작을수록 정확하고 클수록 부드럽다")]
-        public float SmoothTime = 0.5f;
+        [Tooltip("새 상태를 받았을 때 화면 위치/방향의 차이를 흡수하는 시간 척도(초, 대략 2배면 거의 다 흡수). 작을수록 정확하고 클수록 부드럽다(6-252 — 0.8: 위치 오차는 1.5배쯤 늘지만 기총 리드 표시가 덜 튄다)")]
+        public float SmoothTime = 0.8f;
+        [Tooltip("새 상태를 받을 때 화면에 보이던 속도 · 회전 속도를 이어서 보정한다(6-252). 끄면 위치만 잇고 보정 속도는 0에서 다시 시작한다(예전 — 받는 순간 보이는 속도가 꺾여 "
+            + "SAV 기총 리드 표시가 튄다. 리드 표시는 적이 화면에서 움직인 양으로 속도를 잰다)")]
+        public bool KeepVelocityOnCorrect = true;
         [Tooltip("이보다 크게 벗어나면 보정 대신 즉시 이동한다")]
         public float HardSnapDistance = 200f;
         [Tooltip("켜면 전송/수신/보정을 VRChat 로그에 [ACO_NET]으로 남긴다. 테스트용 — 배포 전에 끈다")]
@@ -78,6 +88,11 @@ namespace ACO
         // 순서가 뒤바뀐 패킷으로 볼 최대 과거(ms). 실제로 뒤바뀌는 건 수 초 이내다.
         private const int STALE_WINDOW_MS = 30000;
         private const float HANDOFF_CHECK_INTERVAL = 0.5f;
+        // 기동 전환 전송의 최소 간격(초). NetState 한도(초당 10회) 안에 둔다.
+        private const float MANEUVER_MIN_INTERVAL = 0.12f;
+        // 이어 보정(KeepVelocityOnCorrect): 이어 받는 속도 차이 상한(예측 속력 × 이 배수)과 회전 속도 차이 상한(rad/s). 엉뚱하게 미끄러지지 않게.
+        private const float KEEP_VEL_LIMIT = 0.5f;
+        private const float KEEP_ROT_LIMIT = 1.5f;
 
         // 상태는 동기화 변수가 아니라 네트워크 이벤트(NetState)로 보낸다 — SAV도 위치를 이벤트로 보낸다(SAV_SyncScript.SendSyncData).
         // 동기화 변수로 보냈을 때는 Manual인데도 VRChat이 0.25초마다 다시 직렬화했고 새 상태가 평균 1.5초 늦게 도착했으며
@@ -151,6 +166,15 @@ namespace ACO
         private float _lastOwnerChangeTime = -1000f;
         private float _lastHitTime = -1000f;
         private float _lastHp = -1f;
+
+        // 기동 전환 즉시 전송: 지난 프레임의 비행 배율, 보낼 것이 남았는가, 한 번 더 보내기까지 남은 시간(음수 = 없음)
+        private float _lastTurnBoost = 1f;
+        private float _lastAccelBoost = 1f;
+        private float _lastSpeedBoost = 1f;
+        private bool _lastLowSpeed;
+        private bool _hasManeuverState;
+        private bool _maneuverSendPending;
+        private float _maneuverFollowTimer = -1f;
 
         void Start()
         {
@@ -261,6 +285,30 @@ namespace ACO
             if (Networking.IsClogged) { _congestion = Mathf.Min(_congestion + dt * 2f, Mathf.Max(MaxCongestionScale, 1f)); }
             else { _congestion = Mathf.Max(_congestion - dt * 0.5f, 1f); }
 
+            // 기동 전환(6-252): 비행 배율이 바뀌면 최소 간격(MinSendInterval)을 기다리지 않고 보낸다 — 지금 한 번, 선회가 자리 잡은 뒤 한 번 더.
+            if (SendOnManeuverChange && ManeuverChanged())
+            {
+                _maneuverSendPending = true;
+                _maneuverFollowTimer = Mathf.Max(ManeuverFollowUpDelay, 0f);
+            }
+            if (_maneuverFollowTimer >= 0f)
+            {
+                _maneuverFollowTimer -= dt;
+                if (_maneuverFollowTimer < 0f) { _maneuverSendPending = true; }
+            }
+            if (_maneuverSendPending && _sinceSend >= MANEUVER_MIN_INTERVAL * _congestion)
+            {
+                _maneuverSendPending = false;
+                if (DebugNetwork)
+                {
+                    LogNet("send why=maneuver since=" + _sinceSend.ToString("F2")
+                        + " turnBoost=" + Flight.TurnBoost.ToString("F1") + " accelBoost=" + Flight.AccelBoost.ToString("F1")
+                        + " speedBoost=" + Flight.SpeedBoost.ToString("F1") + " low=" + Flight.AllowLowSpeed);
+                }
+                SendState();
+                return;
+            }
+
             float farError = _viewerFar ? Mathf.Max(FarErrorScale, 1f) : 1f;
             if (_sinceSend < MinSendInterval * _congestion * (_viewerFar ? Mathf.Max(FarMinIntervalScale, 1f) : 1f)) { return; }
 
@@ -288,6 +336,21 @@ namespace ACO
                     + " mode=" + (AI != null ? AI.GetNetMode() : (byte)0));
             }
             SendState();
+        }
+
+        /// 비행 배율이 지난 프레임과 달라졌는가(처음 한 번은 기준만 잡는다). 보스 스크립트가 기동 단계를 바꿀 때만 바꾸는 값이다.
+        private bool ManeuverChanged()
+        {
+            if (!Flight) { return false; }
+            bool changed = _hasManeuverState
+                && (Flight.TurnBoost != _lastTurnBoost || Flight.AccelBoost != _lastAccelBoost
+                    || Flight.SpeedBoost != _lastSpeedBoost || Flight.AllowLowSpeed != _lastLowSpeed);
+            _lastTurnBoost = Flight.TurnBoost;
+            _lastAccelBoost = Flight.AccelBoost;
+            _lastSpeedBoost = Flight.SpeedBoost;
+            _lastLowSpeed = Flight.AllowLowSpeed;
+            _hasManeuverState = true;
+            return changed;
         }
 
         private string SendReason(float posError, float posThreshold, float dirError, float dirThreshold)
@@ -425,6 +488,10 @@ namespace ACO
 
             Vector3 shownPos = transform.position;
             Vector3 shownFwd = transform.forward;
+            // 받기 직전 화면에 보이던 속도 · 회전 속도(예측 + 보정 오프셋의 속도) — 이어 보정(KeepVelocityOnCorrect)에 쓴다.
+            bool hadShown = _hasPrediction;
+            Vector3 shownVel = _predFwd * _predSpeed + _offsetVel;
+            Vector3 shownAngVel = _predAngVel + _offsetRotVel;
 
             _predPos = _syncPos;
             _predFwd = _syncFwd.sqrMagnitude > 0.000001f ? _syncFwd.normalized : shownFwd;
@@ -457,13 +524,22 @@ namespace ACO
             }
             else
             {
-                // 위치만 잇고 보정 속도는 0에서 다시 시작한다. 받기 직전의 화면 속도까지 이으면 틀린 움직임이 다음 보정으로
-                // 넘어가 오차가 쌓인다(예전 스프링 시도가 실측에서 더 나빴던 이유).
+                // 위치를 잇고, 보정 속도는 화면에 보이던 속도를 이어 받는다(6-252). 보정 속도를 0에서 다시 시작하면 받는 순간 보이는 속도가
+                // 한 프레임에 꺾이고, SAV 기총 리드 표시(화면에서 움직인 양으로 속도를 잰다)가 그만큼 × 탄 비행시간 튄다.
+                // 이어 받으면 위치 오차는 조금 늘지만(예전 실측에서 "오차가 쌓인다"던 그것) 꺾임이 사라진다. 끄면 예전 방식.
                 _offsetPos = shownPos - _predPos;
-                _offsetVel = Vector3.zero;
                 _offsetRotVec = RotationVector(_predFwd, shownFwd);
-                _offsetRotVel = Vector3.zero;
                 _offsetRot = RotationFromVector(_offsetRotVec);
+                if (KeepVelocityOnCorrect && hadShown)
+                {
+                    _offsetVel = Vector3.ClampMagnitude(shownVel - _predFwd * _predSpeed, _predSpeed * KEEP_VEL_LIMIT);
+                    _offsetRotVel = Vector3.ClampMagnitude(shownAngVel - _predAngVel, KEEP_ROT_LIMIT);
+                }
+                else
+                {
+                    _offsetVel = Vector3.zero;
+                    _offsetRotVel = Vector3.zero;
+                }
                 _smoothTime = SmoothTime * Mathf.Clamp(error / 100f, 1f, MAX_SMOOTH_SCALE);
             }
 
@@ -631,6 +707,9 @@ namespace ACO
             _hasPrevMotion = false;
             _hasGhost = false;
             _hasWrittenPos = false;
+            _hasManeuverState = false;
+            _maneuverSendPending = false;
+            _maneuverFollowTimer = -1f;
         }
 
         // ───────────── 소유권 ─────────────

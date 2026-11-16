@@ -189,6 +189,24 @@ def i_ammo(c):
     seg(c, (82, 38), (82, 62)); seg(c, (70, 50), (94, 50))
 
 
+def gun_round(c, cx, top, bottom, hw):
+    # 기관포탄 한 발(채움): 둥근 탄두 + 탄피 + 아래 테(림). 미사일(뾰족 · 날개)과 실루엣이 다르게 짧고 굵다.
+    case_top = top + (bottom - top) * 0.42
+    ph = hw * 0.78
+    fill_poly(c, [(cx - ph, case_top), (cx - ph, case_top - 5), (cx - ph * 0.75, top + 9), (cx - ph * 0.35, top + 2.5),
+                  (cx, top), (cx + ph * 0.35, top + 2.5), (cx + ph * 0.75, top + 9), (cx + ph, case_top - 5), (cx + ph, case_top)])
+    fill_poly(c, [(cx - hw, case_top + 3), (cx + hw, case_top + 3), (cx + hw, bottom - 5), (cx - hw, bottom - 5)])
+    fill_poly(c, [(cx - hw - 1.5, bottom - 3.5), (cx + hw + 1.5, bottom - 3.5), (cx + hw + 1.5, bottom), (cx - hw - 1.5, bottom)])
+
+
+def i_gun_ammo(c):
+    # 기관포 탄약(6-257): 탄띠로 묶인 포탄 세 발 + "더하기"(미사일 탄수 ammo 아이콘과 구분)
+    for x in (16, 37, 58):
+        gun_round(c, x, 14, 84, 7.5)
+    seg(c, (6, 62), (68, 62), 3.5); seg(c, (6, 74), (68, 74), 3.5)
+    seg(c, (84, 38), (84, 62)); seg(c, (72, 50), (96, 50))
+
+
 def i_turn(c):
     seg(c, (28, 90), (28, 46))
     arc(c, 50, 46, 22, 180, 360)
@@ -851,7 +869,7 @@ ICONS = [
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),
     ("power", i_power), ("screen", i_screen), ("target", i_target), ("camera", i_camera), ("score", i_score),
     ("decal", i_decal), ("download", i_download), ("swap", i_swap), ("size", i_size), ("rotate", i_rotate), ("flip", i_flip),
-    ("mirror", i_mirror), ("clear", i_clear), ("hide", i_hide), ("gun_reset", i_gun_reset),
+    ("mirror", i_mirror), ("clear", i_clear), ("hide", i_hide), ("gun_reset", i_gun_reset), ("gun_ammo", i_gun_ammo),
     ("phase_1", i_phase_1), ("phase_2", i_phase_2), ("phase_3", i_phase_3), ("phase_4", i_phase_4), ("phase_5", i_phase_5),
 ]
 

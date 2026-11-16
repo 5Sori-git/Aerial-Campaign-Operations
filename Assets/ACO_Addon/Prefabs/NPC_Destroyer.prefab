@@ -21878,13 +21878,13 @@ MonoBehaviour:
     PrefabModifications: []
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 1642746974102511295}
-  Health: 1500
+  Health: 700
   RespawnDelay: 0
   ExplodeOther:
   - {fileID: 5099684118843983844}
   DisableBulletHitEvent: 0
   ArmorStrength: 2.5
-  NoDamageBelow: 3
+  NoDamageBelow: 0
   PredictExplosion: 0
   SendKillEvents: 0
   KillFeed: {fileID: 0}
@@ -21939,7 +21939,7 @@ MonoBehaviour:
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 2698660503898156249}
   TargetHealth: {fileID: 4288937001720538127}
-  BaseHealth: 0
+  BaseHealth: 700
   Parts:
   - {fileID: 4147830272635359414}
   - {fileID: 9141997833491756298}
@@ -21953,7 +21953,8 @@ MonoBehaviour:
   PoseOwner: {fileID: 0}
   PartHullDamage: 0.2
   PartCheckInterval: 0.25
-  PartSplashScale: 0.2
+  PartSplashScale: 0.1
+  CoreSplashScale: 0.4
   CoreSplashImmune: 0
   CruiseSpeed: 14
   CruiseRadius: 1500

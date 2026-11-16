@@ -72,23 +72,23 @@ MonoBehaviour:
   AllowFiringWhenGrounded: 0
   LockRange: 4000
   LockAngle: 45
-  LockFromCcip: 1
+  LockFromCcip: 0
   LockTime: 1.5
   MaxLockTargets: 1
   CenterSwitchMargin: 1.5
   OneMissilePerTarget: 1
-  SlotCount: 1
-  MaxAmmo: 6
+  SlotCount: 2
+  MaxAmmo: 8
   SlotReloadTime: 18
   LaunchPoints: []
-  Damage: 400
-  MaxSpeed: 300
+  Damage: 150
+  MaxSpeed: 250
   Acceleration: 80
   TurnRate: 60
   GuidanceMode: 0
   NavigationConstant: 3
-  ProximityRadius: 35
-  SplashRadius: 120
+  ProximityRadius: 300
+  SplashRadius: 400
   MinSplashFraction: 0.5
   MissileSplash: 1
   FullPartSplash: 0
@@ -100,7 +100,7 @@ MonoBehaviour:
   IgnoreCountermeasures: 0
   ProximityAnyEnemy: 1
   AutoTargetNearest: 1
-  DropTime: 0.8
+  DropTime: 1
   EjectSpeed: 0
   EjectDirection: {x: 0, y: -0.958, z: 0.287}
   DropTurnRate: 0
@@ -125,7 +125,7 @@ MonoBehaviour:
   Missile: {fileID: 3697451406933362917, guid: 603186772b65bf94cbf05fd05a274111, type: 3}
   NumPreInstantiated: 2
   MissileType: 1
-  AllowUnguidedFire: 0
+  AllowUnguidedFire: 1
   InheritVelocity: 1
   WorldParent: {fileID: 0}
   LaunchSound: {fileID: 0}

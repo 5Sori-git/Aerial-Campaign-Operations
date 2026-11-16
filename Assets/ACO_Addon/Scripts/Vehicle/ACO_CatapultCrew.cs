@@ -259,7 +259,7 @@ namespace ACO
             Think();
         }
 
-        // JBD는 시설이라 요원 표시를 꺼도, 멀어도 움직인다(콜라이더도 함께 — 모두의 화면에서 같아야 한다)
+        // JBD는 시설이라 요원 표시를 꺼도, 멀어도 움직인다(모두의 화면에서 같아야 한다). 충돌은 없다 — 갑판에 파인 자리는 고정 바닥이 덮는다(6-253)
         private void UpdateJbd(float dt)
         {
             if (Jbd == null) { return; }

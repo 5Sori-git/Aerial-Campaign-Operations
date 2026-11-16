@@ -267,6 +267,17 @@ public static class ACO_VoiceLines
             }
             else if (sub.LineText != null && sub.LineText.Length == 26) { c |= FillArray(ref sub.LineClip, 26, "Submarine/Submarine_L{0:00}", 0, 26); }
         }
+        else if (m is ACO_PhaseConvoy convoy)
+        {
+            // 웨이포인트 매복 대사(6-265)
+            c |= Fill(ref convoy.AmbushClip, "Convoy/Convoy_Ambush");
+            c |= Fill(ref convoy.FinalAmbushClip, "Convoy/Convoy_Final");
+        }
+        else if (m is ACO_PhaseAmphibious amphibious)
+        {
+            // 2차 공습 대사(6-265)
+            c |= Fill(ref amphibious.StrikeClip, "Amphibious/Amphibious_Strike");
+        }
         if (c)
         {
             EditorUtility.SetDirty(m);

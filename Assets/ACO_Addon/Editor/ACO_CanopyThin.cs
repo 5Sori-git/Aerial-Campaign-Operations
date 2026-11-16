@@ -913,6 +913,98 @@ public static class ACO_CanopyThin
         return moved;
     }
 
+    // 캐노피 프레임 면에 직접 붙은 작은 부품(손잡이 2 · 옆 거울 2) 붙이기(사용자 지적 "캐노피 프레임 손잡이가 공중에 떠 있다"):
+    // 프레임 안쪽 면은 깊이 줄이기(Flatten)로 바깥쪽으로 많이 옮겨지는데, 부품은 자기 가장 바깥 정점(프레임 속에 박힌 끝 — 바깥면 근처라 변위가 작다)의
+    // 변위로 옮겨져 안쪽 면과 벌어졌다. 부품 둘레(GlueReach) 프레임 안쪽 면(단면 중심에서 가장 가까운 점 + GlueBand)의 변위 평균으로 통째로 옮긴다.
+    private const float GlueBand = 0.005f, GlueReach = 0.02f, GlueTouch = 0.003f;
+
+    private static Vector3 ClosestOnTri(Vector3 p, Vector3 a, Vector3 b, Vector3 c, out Vector3 bary)
+    {
+        Vector3 ab = b - a, ac = c - a, ap = p - a;
+        float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+        if (d1 <= 0f && d2 <= 0f) { bary = new Vector3(1f, 0f, 0f); return a; }
+        Vector3 bp = p - b;
+        float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+        if (d3 >= 0f && d4 <= d3) { bary = new Vector3(0f, 1f, 0f); return b; }
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0f && d1 >= 0f && d3 <= 0f) { float v = d1 / (d1 - d3); bary = new Vector3(1f - v, v, 0f); return a + ab * v; }
+        Vector3 cp = p - c;
+        float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+        if (d6 >= 0f && d5 <= d6) { bary = new Vector3(0f, 0f, 1f); return c; }
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0f && d2 >= 0f && d6 <= 0f) { float w = d2 / (d2 - d6); bary = new Vector3(1f - w, 0f, w); return a + ac * w; }
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0f && (d4 - d3) >= 0f && (d5 - d6) >= 0f) { float w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); bary = new Vector3(0f, 1f - w, w); return b + (c - b) * w; }
+        float denom = 1f / (va + vb + vc);
+        float vv = vb * denom, ww = vc * denom;
+        bary = new Vector3(1f - vv - ww, vv, ww);
+        return a + ab * vv + ac * ww;
+    }
+
+    /// 작은 덩어리(submesh 0, 정점 300 이하)를 붙은 프레임 면의 변위로 통째로 옮긴다(q를 고친다). 옮긴 덩어리 수.
+    private static int GlueParts(Mesh orig, Vector3[] pf, Vector3[] q)
+    {
+        System.Collections.Generic.HashSet<int> used;
+        System.Collections.Generic.Dictionary<int, int> size;
+        int[] grp = Groups(orig, pf, out used, out size);
+        int[] t0 = orig.GetTriangles(0);
+        var frame = new System.Collections.Generic.List<int>();
+        for (int t = 0; t < t0.Length; t += 3)
+        {
+            if (size[grp[t0[t]]] > 300) { frame.Add(t0[t]); frame.Add(t0[t + 1]); frame.Add(t0[t + 2]); }
+        }
+        if (frame.Count == 0) { return 0; }
+        var parts = new System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<int>>();
+        foreach (int i in used)
+        {
+            if (size[grp[i]] > 300) { continue; }
+            if (!parts.ContainsKey(grp[i])) { parts[grp[i]] = new System.Collections.Generic.List<int>(); }
+            parts[grp[i]].Add(i);
+        }
+        int glued = 0;
+        var candR = new System.Collections.Generic.List<float>();
+        var candD = new System.Collections.Generic.List<Vector3>();
+        foreach (var part in parts.Values)
+        {
+            // 부품 정점마다 GlueReach 안의 프레임 면 점(가장 가까운 점) — 그중 안쪽 면(단면 중심에서 가장 가까운 것, + GlueBand)의 변위 평균.
+            // 부품 끝은 프레임 속에 박혀 있어 가장 가까운 면이 바깥면일 수 있다 — 안쪽 면으로 고른다(부품은 조종석 쪽에 붙어 있다).
+            candR.Clear();
+            candD.Clear();
+            float touch = float.MaxValue;
+            foreach (int i in part)
+            {
+                Vector3 p = pf[i];
+                for (int t = 0; t < frame.Count; t += 3)
+                {
+                    int a = frame[t], b = frame[t + 1], c = frame[t + 2];
+                    Vector3 bary;
+                    Vector3 cpt = ClosestOnTri(p, pf[a], pf[b], pf[c], out bary);
+                    float d2 = (cpt - p).sqrMagnitude;
+                    if (d2 < touch) { touch = d2; }
+                    if (d2 > GlueReach * GlueReach) { continue; }
+                    candR.Add(Radius(cpt));
+                    candD.Add((q[a] - pf[a]) * bary.x + (q[b] - pf[b]) * bary.y + (q[c] - pf[c]) * bary.z);
+                }
+            }
+            // 프레임 면에 직접 닿은 부품만(손잡이 · 옆 거울 — 1~2mm). 가운데 거울은 면에서 약 7mm 떨어져 매달린 모양이라 붙이면 오히려 벌어진다 — 예전 방식(Flatten) 그대로.
+            if (candR.Count == 0 || touch > GlueTouch * GlueTouch) { continue; }
+            float minR = float.MaxValue;
+            foreach (float r in candR) { if (r < minR) { minR = r; } }
+            Vector3 sum = Vector3.zero;
+            int cnt = 0;
+            for (int k = 0; k < candR.Count; k++)
+            {
+                if (candR[k] > minR + GlueBand) { continue; }
+                sum += candD[k];
+                cnt++;
+            }
+            Vector3 move = sum / cnt;
+            foreach (int i in part) { q[i] = pf[i] + move; }
+            glued++;
+        }
+        return glued;
+    }
+
     /// 원본 복사본에 변위를 넣어 저장한다(있으면 덮어쓴다). 노멀 · 탄젠트 · UV · 가중치는 그대로.
     private static Mesh Build(Mesh orig, SkinnedMeshRenderer smr, Transform frame)
     {
@@ -925,6 +1017,7 @@ public static class ACO_CanopyThin
         Vector3[] pf;
         Vector3[] q = Final(orig, toFrame, out pf);
         int matched = orig.name == Targets[1] ? MatchArch(orig, pf, q) : 0;
+        int glued = orig.name == Targets[0] ? GlueParts(orig, pf, q) : 0;
         int glass = TuckGlass(orig, pf, q);
         int moved = 0;
         float maxShift = 0f;
@@ -950,7 +1043,7 @@ public static class ACO_CanopyThin
             Object.DestroyImmediate(m);
             EditorUtility.SetDirty(old);
         }
-        Debug.Log($"[ACO] 캐노피 프레임: {orig.name} 정점 {moved}개를 옮겼습니다(최대 {maxShift * 100f:0.0}cm" + (matched > 0 ? $", 아치 안쪽 맞추기 {matched}개" : "") + (glass > 0 ? $", 유리 끝 넣기 {glass}개" : "") + (bolts > 0 ? $", 볼트 {bolts}개" : "") + ").");
+        Debug.Log($"[ACO] 캐노피 프레임: {orig.name} 정점 {moved}개를 옮겼습니다(최대 {maxShift * 100f:0.0}cm" + (matched > 0 ? $", 아치 안쪽 맞추기 {matched}개" : "") + (glued > 0 ? $", 부품 붙이기 {glued}개" : "") + (glass > 0 ? $", 유리 끝 넣기 {glass}개" : "") + (bolts > 0 ? $", 볼트 {bolts}개" : "") + ").");
         return old;
     }
 

@@ -52,6 +52,7 @@ namespace ACO
         public const int UP_FUEL = 3;          // 연료 효율(소모량 ÷ 배수 — 오래 난다)
         public const int UP_COUNTERMEASURE = 4; // 대응탄 수(플레어 최대 수 — 단계마다 CountermeasurePerLevel발. 예전 안정성 자리, 새 저장 키 "countermeasure")
         public const int UP_GUN = 5;           // 기총 피해(SAV 기총 탄에 덤 피해 — ACO_GunDamageBonus)
+        public const int UP_GUN_AMMO = 6;      // 기총 탄약(SAV 기총 사격 가능 시간 × 배수 — 6-257)
 
         // 무장 계열(ACO_UpgradeFamily와 같은 값). 이 밖의 값(None 등)은 강화 없음.
         public const int FAMILY_MISSILE = 0;   // 일반 미사일
@@ -70,14 +71,14 @@ namespace ACO
         public const int STAT_RELOAD = 7;      // 재장전 속도(슬롯 장전 시간 ÷ 배수, 모든 계열)
 
         // 분류(상점 탭) — 항목 번호는 이 순서로 이어진다
-        public const int CAT_AIRFRAME = 0;     // 0~5(기총 포함 — 예전 OTHER 탭에서 돌아왔다, 6-142)
-        public const int CAT_MISSILE = 1;      // 6~12
-        public const int CAT_SP_AAM = 2;       // 13~19
-        public const int CAT_SP_AGM = 3;       // 20~25
-        public const int CAT_SP_BOMB = 4;      // 26~29
+        public const int CAT_AIRFRAME = 0;     // 0~6(기총 피해 · 탄약 포함 — 예전 OTHER 탭에서 돌아왔다, 6-142 · 6-257)
+        public const int CAT_MISSILE = 1;      // 7~13
+        public const int CAT_SP_AAM = 2;       // 14~20
+        public const int CAT_SP_AGM = 3;       // 21~26
+        public const int CAT_SP_BOMB = 4;      // 27~30
         public const int CAT_SUPPORT = 5;      // 지원 호출권 탭(강화 항목 없음 — 상점이 호출권 줄을 그린다. 예전 OTHER 탭 자리)
         public const int CATEGORY_COUNT = 6;
-        public const int UPGRADE_COUNT = 30;
+        public const int UPGRADE_COUNT = 31;
         public const int MAX_CATEGORY_LENGTH = 7;   // 상점 줄 수(가장 긴 탭)
 
         // 저장 키(PlayerData). 강화·해금은 항목 번호가 아니라 고정 ID로 저장한다 — 항목을 더하거나 순서·탭을 바꿔도 기존 기록이 틀어지지 않는다.
@@ -115,7 +116,7 @@ namespace ACO
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 다른 항목에 재사용하지 않는다. 새 항목은 아무 자리에나 넣고 새 ID를 준다.
         // 항목을 빼면 ID도 빼면 된다(저장된 값은 쓰이지 않고 남을 뿐). 효과 수치·가격·표시 이름은 언제든 바꿔도 된다.
         private string[] _upgradeKeys = new string[] {
-            "hull", "mobility", "engine", "fuel", "countermeasure", "gun_damage",   // 4: 예전 "stability"(기동성에 합쳤다 — 그 키는 다시 쓰지 않는다)
+            "hull", "mobility", "engine", "fuel", "countermeasure", "gun_damage", "gun_ammo",   // 4: 예전 "stability"(기동성에 합쳤다 — 그 키는 다시 쓰지 않는다). gun_ammo 6-257
             "msl_damage", "msl_ammo", "msl_turn", "msl_lock_speed", "msl_lock_range", "msl_seeker", "msl_reload",
             "aam_damage", "aam_ammo", "aam_turn", "aam_lock_speed", "aam_lock_range", "aam_seeker", "aam_reload",
             "agm_damage", "agm_ammo", "agm_blast", "agm_lock_speed", "agm_lock_range", "agm_reload",
@@ -154,9 +155,9 @@ namespace ACO
         [Tooltip("함내 구역. Bake가 넣는다. 격실 안도 안전지대다")]
         public ACO_InteriorZone Interior;
 
-        [Header("강화 (항목 번호 순: 기체 6(기총 포함) / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
+        [Header("강화 (항목 번호 순: 기체 7(기총 피해 · 탄약 포함) / 일반 미사일 7 / 특수 대공 7 / 특수 대지 6 / 특수 폭탄 4)")]
         public string[] UpgradeNames = new string[] {
-            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "COUNTERMEASURES", "GUN DAMAGE",
+            "HULL ARMOR", "MOBILITY", "ENGINE", "FUEL EFFICIENCY", "COUNTERMEASURES", "GUN DAMAGE", "GUN AMMO",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "TURN RATE", "LOCK SPEED", "LOCK RANGE", "SEEKER CONE", "RELOAD SPEED",
             "DAMAGE", "CAPACITY", "BLAST RADIUS", "LOCK SPEED", "LOCK RANGE", "RELOAD SPEED",
@@ -164,8 +165,8 @@ namespace ACO
         [Tooltip("단계마다 늘어나는 배수(0.1 = 단계당 +10%, 10단계 ×2). 락온 속도·재장전 속도는 시간이 그만큼 짧아진다(1 + 배수로 나눔). "
             + "SEEKER CONE = 미사일 시커 범위(추적 각도) — 락온 각도가 아니다")]
         public float[] UpgradeSteps = new float[] {
-            // 체력 ×4, 기동 ×1.3, 추력 ×2, 연료 효율 ×2.5, 대응탄 수(배수 아님 — CountermeasurePerLevel발씩), 기총 ×2.5
-            0.30f, 0.03f, 0.10f, 0.15f, 0f, 0.15f,
+            // 체력 ×4, 기동 ×1.3, 추력 ×2, 연료 효율 ×2.5, 대응탄 수(배수 아님 — CountermeasurePerLevel발씩), 기총 ×2.5, 기총 탄약 ×5
+            0.30f, 0.03f, 0.10f, 0.15f, 0f, 0.15f, 0.40f,
             // 피해 ×2.5, 탄수 ×2, 선회 ×1.5, 락온 속도 ×1.5, 락온 거리 ×2.5, 시커 범위 ×1.5, 재장전 ×2
             0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
             0.15f, 0.10f, 0.05f, 0.05f, 0.15f, 0.05f, 0.10f,
@@ -175,7 +176,7 @@ namespace ACO
             0.15f, 0.10f, 0.15f, 0.10f };
         [Tooltip("1단계 가격. n단계 가격 = 이 값 × LevelCostScale[n-1]. 성능에 민감한 항목(기동·선회·락온 속도·시커 범위)은 1단계부터 비싸다")]
         public int[] UpgradeBaseCosts = new int[] {
-            1500, 2500, 2000, 1000, 1500, 1500,
+            1500, 2500, 2000, 1000, 1500, 1500, 1200,
             1500, 1500, 2500, 2000, 1200, 2500, 2000,
             2000, 2000, 3000, 2500, 1500, 3000, 2500,
             2000, 2000, 2000, 2500, 1500, 2500,
@@ -393,9 +394,9 @@ namespace ACO
 
         // 상점 탭(CAT_* 순서): 이름, 첫 항목 번호, 항목 수
         private string[] _categoryNames = new string[] { "AIRFRAME", "MISSILE", "SP. AAM", "SP. AGM", "SP. BOMB", "SUPPORT" };
-        private int[] _categoryStarts = new int[] { 0, 6, 13, 20, 26, UPGRADE_COUNT };
-        // 기체 탭 0~5: 체력·기동성·추력·연료 효율·대응탄 수(4 — 예전 안정성 자리)·기총(5 — OTHER 탭에서 돌아왔다). SUPPORT 탭은 강화 항목이 없다(호출권)
-        private int[] _categoryLengths = new int[] { 6, 7, 7, 6, 4, 0 };
+        private int[] _categoryStarts = new int[] { 0, 7, 14, 21, 27, UPGRADE_COUNT };
+        // 기체 탭 0~6: 체력·기동성·추력·연료 효율·대응탄 수(4 — 예전 안정성 자리)·기총 피해(5 — OTHER 탭에서 돌아왔다)·기총 탄약(6 — 6-257). SUPPORT 탭은 강화 항목이 없다(호출권)
+        private int[] _categoryLengths = new int[] { 7, 7, 7, 6, 4, 0 };
 
         /// 분류(CAT_*)의 첫 항목 번호와 항목 수(상점 탭).
         public int GetCategoryStart(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryStarts[cat] : 0; }

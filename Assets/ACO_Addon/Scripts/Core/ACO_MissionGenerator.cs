@@ -126,6 +126,9 @@ namespace ACO
         public float AmbushDistanceMax = 900f;
         [Tooltip("매복조 출발점: 매복 지점에서 항로 반대쪽으로 이만큼(m) 더 떨어진 곳")]
         public float AmbushApproachDistance = 1500f;
+        [Tooltip("한 지점 매복(RequestAmbushAt — 콘보이 웨이포인트 매복, 6-265)의 출발점 거리(m). 콘보이(20m/s)가 앞 웨이포인트를 지날 때 출발해 "
+            + "다음 웨이포인트(약 2~3km, 100초 남짓)보다 먼저 닿게 짧게 — 전차(10m/s) 700m ≈ 70초. 곡사포는 ArtilleryApproachDistance 그대로")]
+        public float PointAmbushApproachDistance = 700f;
 
         [Header("헬리콥터 / 곡사포 (ACO_MobileUnit의 Kind — 지상 풀에 같이 둔다)")]
         [Tooltip("순찰 소대를 헬리콥터 편대로 놓을 확률(풀에 헬리콥터가 있을 때). 헬리콥터는 바다·절벽 위로도 순찰한다")]
@@ -1583,6 +1586,24 @@ namespace ACO
         private int PlaceAmbushes(int offset, int count, int groups, int now, int moveMode)
         {
             if (groups <= 0 || GroundUnits == null) { return 0; }
+            Vector3[] at = new Vector3[groups];
+            Vector3[] dirs = new Vector3[groups];
+            for (int g = 0; g < groups; g++)
+            {
+                float f = (g + 1) / (float)(groups + 1) * (count - 1);
+                int k = Mathf.Min(Mathf.FloorToInt(f), count - 2);
+                Vector3 a = _escortRoute[offset + k];
+                Vector3 b = _escortRoute[offset + k + 1];
+                at[g] = Vector3.Lerp(a, b, f - k);
+                dirs[g] = b - a;
+            }
+            return PlaceAmbushGroups(at, dirs, groups, -1, now, moveMode, AmbushApproachDistance);
+        }
+
+        /// 매복조 groups개: g번째 조는 항로 위 점 at[g](그 자리 항로 방향 dirs[g]) 옆에. forceKind >= 0이면 그 종류(ACO_MobileUnit.KIND_*)만 — 풀에 없으면 놓지 않는다.
+        /// 한 번에 모은 후보에서 차례로 꺼낸다(파괴된 유닛을 다시 쓸 때 같은 유닛을 두 조에 넣지 않게).
+        private int PlaceAmbushGroups(Vector3[] at, Vector3[] dirs, int groups, int forceKind, int now, int moveMode, float approachDistance)
+        {
             int saved = _markTag;
             _markTag = 0;
             int[] tanks = new int[_groundUsed.Length];
@@ -1600,27 +1621,33 @@ namespace ACO
             {
                 // 종류 고르기
                 int kind = ACO_MobileUnit.KIND_TANK;
-                float roll = Random.value;
-                if (roll < ArtilleryAmbushShare) { kind = ACO_MobileUnit.KIND_ARTILLERY; }
-                else if (roll < ArtilleryAmbushShare + HelicopterAmbushShare) { kind = ACO_MobileUnit.KIND_HELICOPTER; }
-                if (kind == ACO_MobileUnit.KIND_ARTILLERY && nextGun >= gunCount) { kind = ACO_MobileUnit.KIND_TANK; }
-                if (kind == ACO_MobileUnit.KIND_HELICOPTER && nextHeli >= heliCount) { kind = ACO_MobileUnit.KIND_TANK; }
-                if (kind == ACO_MobileUnit.KIND_TANK && nextTank >= tankCount) { kind = nextHeli < heliCount ? ACO_MobileUnit.KIND_HELICOPTER : ACO_MobileUnit.KIND_ARTILLERY; }
+                if (forceKind >= 0)
+                {
+                    kind = forceKind;
+                    bool none = kind == ACO_MobileUnit.KIND_HELICOPTER ? nextHeli >= heliCount
+                        : (kind == ACO_MobileUnit.KIND_ARTILLERY ? nextGun >= gunCount : nextTank >= tankCount);
+                    if (none) { continue; }
+                }
+                else
+                {
+                    float roll = Random.value;
+                    if (roll < ArtilleryAmbushShare) { kind = ACO_MobileUnit.KIND_ARTILLERY; }
+                    else if (roll < ArtilleryAmbushShare + HelicopterAmbushShare) { kind = ACO_MobileUnit.KIND_HELICOPTER; }
+                    if (kind == ACO_MobileUnit.KIND_ARTILLERY && nextGun >= gunCount) { kind = ACO_MobileUnit.KIND_TANK; }
+                    if (kind == ACO_MobileUnit.KIND_HELICOPTER && nextHeli >= heliCount) { kind = ACO_MobileUnit.KIND_TANK; }
+                    if (kind == ACO_MobileUnit.KIND_TANK && nextTank >= tankCount) { kind = nextHeli < heliCount ? ACO_MobileUnit.KIND_HELICOPTER : ACO_MobileUnit.KIND_ARTILLERY; }
+                }
                 bool heli = kind == ACO_MobileUnit.KIND_HELICOPTER;
                 bool gun = kind == ACO_MobileUnit.KIND_ARTILLERY;
 
-                float f = (g + 1) / (float)(groups + 1) * (count - 1);
-                int k = Mathf.Min(Mathf.FloorToInt(f), count - 2);
-                Vector3 a = _escortRoute[offset + k];
-                Vector3 b = _escortRoute[offset + k + 1];
-                Vector3 onRoute = Vector3.Lerp(a, b, f - k);
-                Vector3 dir = b - a;
+                Vector3 onRoute = at[g];
+                Vector3 dir = dirs[g];
                 dir.y = 0f;
                 if (dir.sqrMagnitude < 1f) { dir = Vector3.forward; }
                 Vector3 side = new Vector3(-dir.z, 0f, dir.x).normalized;
                 float distMin = gun ? ArtilleryStandoffMin : AmbushDistanceMin;
                 float distMax = gun ? ArtilleryStandoffMax : AmbushDistanceMax;
-                float approach = gun ? ArtilleryApproachDistance : AmbushApproachDistance;
+                float approach = gun ? ArtilleryApproachDistance : approachDistance;
                 bool found = false;
                 for (int attempt = 0; attempt < (gun ? 16 : 8) && !found; attempt++)
                 {
@@ -2037,6 +2064,41 @@ namespace ACO
         public void NetDeployEscort(int tag, Vector3 focus, float routeLength, int sites, int moveMode, int units, int ambushGroups, int routeSeed)
         {
             DeployEscort(tag, focus, routeLength, sites, moveMode, units, ambushGroups, routeSeed);
+        }
+
+        /// 한 지점 매복(6-265 — 콘보이 웨이포인트 매복, 상륙전 2차 공습의 적 헬기): 항로 위 점 point(그 자리 항로 방향 dir) 옆에 매복조 groups개.
+        /// 조 하나하나는 PlaceAmbushes와 같은 규칙(옆 거리 · 접근 거리 · 종류 확률). forceKind >= 0이면 그 종류만(ACO_MobileUnit.KIND_*). 목표 아님(태그 없음).
+        public void RequestAmbushAt(Vector3 point, Vector3 dir, int groups, int moveMode, int forceKind)
+        {
+            if (Networking.IsOwner(gameObject)) { AmbushAt(point, dir, groups, moveMode, forceKind); }
+            else
+            {
+                SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.Owner, nameof(NetAmbushAt),
+                    point, dir, groups, moveMode, forceKind);
+            }
+        }
+
+        [NetworkCallable]
+        public void NetAmbushAt(Vector3 point, Vector3 dir, int groups, int moveMode, int forceKind)
+        {
+            AmbushAt(point, dir, groups, moveMode, forceKind);
+        }
+
+        public void AmbushAt(Vector3 point, Vector3 dir, int groups, int moveMode, int forceKind)
+        {
+            if (!Networking.IsOwner(gameObject) || GroundUnits == null || groups <= 0) { return; }
+            EnsureArrays();
+            int now = Networking.GetServerTimeInMilliseconds();
+            Vector3[] at = new Vector3[groups];
+            Vector3[] dirs = new Vector3[groups];
+            for (int g = 0; g < groups; g++) { at[g] = point; dirs[g] = dir; }
+            int placed = PlaceAmbushGroups(at, dirs, groups, forceKind, now, moveMode, PointAmbushApproachDistance);
+            if (placed <= 0)
+            {
+                Debug.Log("[ACO] 매복(한 지점): 놓을 유닛·자리가 없어 건너뜀");
+                return;
+            }
+            Publish("매복(한 지점)", 0, groups, placed, 0, 0);
         }
 
         /// 이동 방식이 moveMode인 호위 대상 units대를 같은 항로로 출발시킨다(여러 대면 EscortConvoySpacing 간격 행렬, 선두가 앞).

@@ -16356,10 +16356,10 @@ MonoBehaviour:
   _udonSharpBackingUdonBehaviour: {fileID: 2076189541427888800}
   AI: {fileID: 1894684686947322797}
   Flight: {fileID: 5465896025212372023}
-  PositionErrorThreshold: 4
+  PositionErrorThreshold: 2.5
   ThresholdPerKm: 10
-  DirectionErrorThreshold: 5
-  MinSendInterval: 0.3
+  DirectionErrorThreshold: 3
+  MinSendInterval: 0.15
   HeartbeatInterval: 4
   MaxCongestionScale: 4
   FarDistance: 10000
@@ -16370,7 +16370,10 @@ MonoBehaviour:
   HandoffHoldTime: 2
   HandoffCooldown: 5
   HandoffHitGuard: 2
-  SmoothTime: 0.5
+  SendOnManeuverChange: 1
+  ManeuverFollowUpDelay: 0.15
+  SmoothTime: 0.8
+  KeepVelocityOnCorrect: 1
   HardSnapDistance: 200
   DebugNetwork: 0
 --- !u!114 &2076189541427888800

@@ -991,6 +991,11 @@ public static class ACO_PrefabTuning
         new Entry { Id = "canopy-thin-1", Text = "FA-18E 조종석 앞을 가로지르는 캐노피 앞 프레임 · 앞유리 아치를 가늘게(폭 ×0.65 — 15cm → 약 10cm). 원본 FBX는 그대로, 복사본 메시를 끼웁니다(되돌리기: 메뉴 ACO > FA-18E Canopy Frame > Restore Original)", Apply = ACO_CanopyThin.Apply },
         new Entry { Id = "canopy-thin-3", Text = "FA-18E 앞 아치 볼트: 양쪽 대칭(한쪽 자리를 거울로), 짙은 회색 전용 재질(검은 쪽 아치에서도 보인다), 음영은 아치 면과 볼트 면의 중간(옆면이 검게 죽지 않고 입체감). 미리보기 기체에도", Apply = ACO_CanopyThin.Apply },
         new Entry { Id = "canopy-thin-2", Text = "FA-18E 캐노피 앞 프레임 · 아치 다시 만들기: 아치 볼트 옆면이 검게 보이던 것을 아치 면과 같은 밝기로(반투명 HUD 글자 뒤로 육각 테두리가 진하게 비쳤다), 얇게 하며 드러난 앞유리 끝을 프레임 속으로 다시 넣는다(아치를 따라 유리가 떨어져 보였다). 미리보기 기체에도", Apply = ACO_CanopyThin.Apply },
+        new Entry { Id = "escort-waves-1", Text = "호위 페이즈 증원(6-265): 콘보이 웨이포인트 매복 · 상륙전 2차 공습(해변 3km) 무전 음성을 씬 모듈에 넣고 무전 연결(페이즈 모듈 Bake). 고친 뒤 씬 저장", Apply = TuneEscortWaves },
+        new Entry { Id = "tunnel-landmark-1", Text = "터널 랜드마크(6-266): Models/Tunnel/ACO_Tunnel.fbx로 Prefabs/ACO_Tunnel 프리팹을 만들고 씬 지형 장식(TunnelPrefab)에 넣습니다 — 같은 높이 3칸 일렬의 가운데 칸에 확률 0.6으로 터널 산(폭 50m x 높이 40m 관통 터널). 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
+        new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
+        new Entry { Id = "escort-waves-2", Text = "호위 페이즈 증원 대사(6-265): 콘보이 매복 · 상륙전 2차 공습 대사를 무엇이 오는지 말하지 않는 증원 대사로(\"Enemy reinforcements inbound! …\") — 매복이 실제로 놓이지 않아도 틀리지 않게. 씬 모듈 글자를 새 기본값으로(음성은 같은 파일을 새로 만들었다)", Apply = TuneEscortLines },
+        new Entry { Id = "canopy-thin-4", Text = "FA-18E 캐노피 앞 프레임 다시 만들기: 프레임 안쪽에 붙은 손잡이 · 거울이 떠 있던 것을 붙은 자리 프레임 안쪽 면과 같이 옮겨 붙임(6-264)", Apply = ACO_CanopyThin.Apply },
         new Entry { Id = "canopy-thin-preview-1", Text = "격납고 미리보기 기체(PreviewRoot)에도 가늘게 만든 캐노피 앞 프레임 · 아치(볼트 포함) 메시를 끼웁니다. 고친 뒤 씬 저장", Apply = ACO_CanopyThin.ApplyPreview },
         new Entry { Id = "cockpit-display-1", Text = "FA-18E 조종석 UFC(스크래치패드) · 연료계 화면 그림을 깔끔하게 다시 그립니다(각진 사각 테두리 · 가는 선). 원본 텍스처는 그대로, 복사본 텍스처 · 머티리얼을 끼웁니다(되돌리기: 메뉴 ACO > FA-18E Cockpit Displays > Restore Original)", Apply = ACO_CockpitTexture.Apply },
         new Entry { Id = "icbm-ring-1", Text = "레이저 에이스 페이즈 탄도미사일: 대기권 밖 자폭 때 거대한 링(반경 15km, 두 겹)을 더하고 섬광 · 불덩이를 키웁니다(씬의 IcbmSite)", Apply = ApplyIcbmRing },
@@ -1011,6 +1016,16 @@ public static class ACO_PrefabTuning
         new Entry { Id = "hangar-decor-1", Text = "격납고 패널 쪽을 EEI 지원 장비로 꾸밉니다 — 무장을 올린 거치대 7대, 견인 트랙터(1대는 소품 기체 기수에 물림), 포드 거치대 4개. Hanger 아래 HangarDecor를 지우고 다시 만듭니다. 고친 뒤 씬 저장", Apply = ACO_HangarDecor.Build },
         new Entry { Id = "deck-taxi-5kt-1", Text = "갑판 택싱 최고 속도를 약 5노트(2.6m/s)로 낮춥니다(예전 10m/s = 약 19노트) — 플레이어 기체 프리팹", Apply = TuneDeckTaxi },
         new Entry { Id = "deco-model-1", Text = "도시, 마을, 항구, 비행장, 등대, 레이더, 통신탑, 유적을 새 모델로 다시 만듭니다. 프리팹을 손으로 고쳤다면 그 내용은 사라집니다", Apply = ACO_DecoBuilder.InstallModels },
+        new Entry { Id = "lgb-lgr-balance-2", Text = "LGB · LGR 밸런스(6-261): LGB 피해 350 → 500 · 범위 150 → 50m · 탄수 18 → 12(한 발이 가장 센 정밀 폭탄), LGR 탄수 54 → 60 · 재장전 8 → 6초(유도형 짝은 무유도형의 약 5/6 총량 — 풀업 LGB 500/초 · LGR 667/초, 둘 다 30,000). 플레이어 기체 프리팹(lgb-lgr-balance-1은 LGR 40발 · 8초였다)", Apply = TuneLgbLgr },
+        new Entry { Id = "aam-balance-1", Text = "공대공 밸런스(6-262): LAAM 가속 320 → 200 · 최고 속도 1200 → 2400 · 선회 90 → 110(느리게 출발해 멀리서 가장 빠름), HVAA 가속 700 → 1500(곧바로 최고 속도), CCAA 락온 2.5 → 1.5초 · 선회 70 → 90(대에이스). 플레이어 기체 프리팹 + 특수무장 정의 프리팹(설명 포함)", Apply = TuneAamBalance },
+        new Entry { Id = "flak-damage-1", Text = "FLAK 피해 30 → 50(6-263 — 신관이 범위 가장자리에서 터져 실제 약 25/발, 전투기 8발 · 총 약 1,350). 플레이어 기체 프리팹", Apply = TuneFlakDamage },
+        new Entry { Id = "weapon-defs-sync-1", Text = "특수무장 정의 프리팹 = 기체 값(6-263): 정의(새 기체에 설치할 때 복제되는 원본)의 수치 · 켜기 값을 F/A-18 프리팹 모듈과 같게 — 그동안 기체만 바꿔 정의에 옛 값이 남아 있었다(HVAA 최고 속도 800 등)", Apply = SyncWeaponDefsFromAircraft },
+        new Entry { Id = "rkt-balance-3", Text = "로켓(RKT) 밸런스(6-260): 탄수 64 → 72, 슬롯 재장전 3 → 4초 — 풀업 지속 화력 약 1330 → 1000/초(범위가 좁은 만큼 UGB 750보다 높게), 총 피해 36,000(UGB와 같게). 한 번에 8발 연사는 그대로. 플레이어 기체 프리팹(rkt-balance-1 · 2는 탄수 48이었다)", Apply = TuneRocketBalance },
+        new Entry { Id = "guardian-intercept-2", Text = "가디언 드론 요격 강화(6-258): 반응 0.1초 · 격추 0.45초 · 쉬는 시간 없음 · 사거리 1500m — 미사일 일제 발사를 거의 막고, 레일건 탄(4000m/s)은 너무 빨라 못 막습니다", Apply = TuneGuardianIntercept },
+        new Entry { Id = "gun-damage-all-1", Text = "기총 면역 없애기(6-256): 순양함 · 항모 · 벙커 · 구축함의 피해 문턱(NoDamageBelow)을 0으로 — 기총이 모두 먹힙니다(장갑은 그대로라 한 발 2.5, 구축함 4). 아군 호위 대상과 보스 외피는 그대로. 씬이 덮어쓴 값은 지웁니다", Apply = TuneGunDamageAll },
+        new Entry { Id = "destroyer-health-2", Text = "구축함(NPC_Destroyer) 본체 체력 → 700(6-255): 순양함보다 약하게 — 풀업 무유도 폭탄 직격 한 발이면 격침, 최고 숙련도만 두 발. 숙련도 기준(BaseHealth)도 같이, 씬이 덮어쓴 값은 지웁니다", Apply = TuneDestroyerHealth },
+        new Entry { Id = "ship-splash-resist-1", Text = "함선 · 보스 범위 피해 저항(6-255): 직격이 아닌 범위 피해는 본체가 일부만 받습니다(순양함 · 구축함 · 항모 0.4, 잠수함 0.5). 부위 범위 피해 배율 — 함선 · 잠수함 · 육상전함 · 공중 요새 0.1, 랜스 포대 0.5. 벙커버스터 피해 1500 → 4500(배율을 받는 대신). 씬이 덮어쓴 값은 지웁니다", Apply = TuneShipSplash },
+        new Entry { Id = "fighter-net-sync-1", Text = "NPC 전투기 동기화(6-252): 모든 전투기의 보정 시간 0.5 → 0.8초(받는 순간 속도를 이어 보정 — 기총 리드 표시가 덜 튑니다), 에이스(HEADS · TAILS · SHADE · BORDERLESS · LUNA · MR. S)만 더 자주 보냅니다(최소 간격 0.3 → 0.15초, 위치 4 → 2.5m, 방향 5 → 3도). 씬이 덮어쓴 값은 지웁니다", Apply = TuneFighterNetSync },
     };
 
     public static bool IsApplied(string id)
@@ -1169,6 +1184,486 @@ public static class ACO_PrefabTuning
             if (src != null && Array.IndexOf(AceExtendPrefabs, src.name) >= 0) { Revert(ai, "MaxExtendDuration"); }
         }
         UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+    }
+
+    /// fighter-net-sync-1(6-252): NPC 전투기 동기화. 모든 전투기 — 보정 시간 0.8초, 속도 이어 보정 · 기동 전환 즉시 전송 켬.
+    /// 에이스(자식에 ACO_AceBase가 있는 프리팹)만 — 전송 기준 강화(최소 간격 0.15초, 위치 2.5m, 방향 3도). 씬 인스턴스가 덮어쓴 값은 지워 프리팹 값을 따르게.
+    public const float NetSmoothTime = 0.8f;
+    public const float AceNetMinSendInterval = 0.15f;
+    public const float AceNetPositionError = 2.5f;
+    public const float AceNetDirectionError = 3f;
+
+    public static void TuneFighterNetSync()
+    {
+        int fighters = 0, aces = 0, changedPrefabs = 0;
+        EditPrefabs(root =>
+        {
+            bool changed = false;
+            foreach (ACO_NPCFighterNet net in root.GetComponentsInChildren<ACO_NPCFighterNet>(true))
+            {
+                // 에이스: 자식에 에이스 스크립트가 있다(AI.Ace 칸은 Bake가 씬에서 이어 프리팹엔 비어 있을 수 있다)
+                bool ace = net.GetComponentInChildren<ACO_AceBase>(true) != null;
+                fighters++;
+                if (ace) { aces++; }
+                bool c = false;
+                if (!Mathf.Approximately(net.SmoothTime, NetSmoothTime)) { net.SmoothTime = NetSmoothTime; c = true; }
+                if (!net.KeepVelocityOnCorrect) { net.KeepVelocityOnCorrect = true; c = true; }
+                if (!net.SendOnManeuverChange) { net.SendOnManeuverChange = true; c = true; }
+                if (ace)
+                {
+                    if (!Mathf.Approximately(net.MinSendInterval, AceNetMinSendInterval)) { net.MinSendInterval = AceNetMinSendInterval; c = true; }
+                    if (!Mathf.Approximately(net.PositionErrorThreshold, AceNetPositionError)) { net.PositionErrorThreshold = AceNetPositionError; c = true; }
+                    if (!Mathf.Approximately(net.DirectionErrorThreshold, AceNetDirectionError)) { net.DirectionErrorThreshold = AceNetDirectionError; c = true; }
+                }
+                if (c) { EditorUtility.SetDirty(net); changed = true; }
+            }
+            if (changed) { changedPrefabs++; }
+            return changed;
+        });
+        int s = 0;
+        foreach (ACO_NPCFighterNet net in FindInScene<ACO_NPCFighterNet>())
+        {
+            if (!PrefabUtility.IsPartOfPrefabInstance(net)) { continue; }
+            Revert(net, "SmoothTime", "KeepVelocityOnCorrect", "SendOnManeuverChange", "ManeuverFollowUpDelay",
+                "MinSendInterval", "PositionErrorThreshold", "DirectionErrorThreshold");
+            s++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 전투기 동기화(6-252): 프리팹 전투기 {fighters}기(에이스 {aces}기) 확인, 프리팹 {changedPrefabs}개 바꿈. 씬 인스턴스 {s}기의 덮어쓴 값을 지웠습니다. 씬을 저장하세요.");
+    }
+
+    /// ship-splash-resist-1(6-255): 함선 · 보스 범위 피해 저항. 직격이 아니면 탄을 약 2배 쓰게 — 본체(CoreSplashScale)와 부위(PartSplashScale) 배율.
+    /// 풀업 무유도 폭탄(750 · 반경 500m)이 빗나가도 직격과 같고, 한 발이 부위를 모두 쓸던 것. 씬 인스턴스가 덮어쓴 값은 지워 프리팹 값을 따르게.
+    /// 벙커버스터(씬 ACO_SupportManager)는 배율을 받는 대신 피해 1500 → 4500.
+    private static readonly string[] SplashPrefabs = { "NPC_Warship", "NPC_Destroyer", "NPC_Carrier", "NPC_Submarine", "NPC_Railgun", "NPC_Fortress", "NPC_LandShip" };
+    private static readonly float[] SplashPart = { 0.1f, 0.1f, 0.1f, 0.1f, 0.5f, 0.1f, 0.1f };
+    private static readonly float[] SplashCore = { 0.4f, 0.4f, 0.4f, 0.5f, 1f, 1f, 1f };   // 랜스 · 요새 · 육상전함 코어는 범위 피해 면역(CoreSplashImmune)
+    public const float StrikeDamageWithSplashScale = 4500f;
+
+    public static void TuneShipSplash()
+    {
+        int changed = 0;
+        EditPrefabs(root =>
+        {
+            int k = Array.IndexOf(SplashPrefabs, root.name);
+            if (k < 0) { return false; }
+            bool c = false;
+            foreach (ACO_Warship w in root.GetComponentsInChildren<ACO_Warship>(true))
+            {
+                if (!Mathf.Approximately(w.PartSplashScale, SplashPart[k])) { w.PartSplashScale = SplashPart[k]; c = true; }
+                if (!Mathf.Approximately(w.CoreSplashScale, SplashCore[k])) { w.CoreSplashScale = SplashCore[k]; c = true; }
+                if (c) { EditorUtility.SetDirty(w); }
+            }
+            if (c) { changed++; }
+            return c;
+        });
+        int s = 0;
+        foreach (ACO_Warship w in FindInScene<ACO_Warship>())
+        {
+            if (!PrefabUtility.IsPartOfPrefabInstance(w)) { continue; }
+            Revert(w, "PartSplashScale", "CoreSplashScale");
+            s++;
+        }
+        int m = 0;
+        foreach (ACO_SupportManager sup in FindInScene<ACO_SupportManager>())
+        {
+            if (Mathf.Approximately(sup.StrikeDamage, StrikeDamageWithSplashScale)) { continue; }
+            Undo.RecordObject(sup, "ACO strike damage");
+            sup.StrikeDamage = StrikeDamageWithSplashScale;
+            EditorUtility.SetDirty(sup);
+            m++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 함선 범위 피해 저항(6-255): 프리팹 {changed}개 바꿈, 씬 함선 {s}척의 덮어쓴 값을 지움, 벙커버스터 피해 {m}곳 → {StrikeDamageWithSplashScale}. 씬을 저장하세요.");
+    }
+
+    /// destroyer-health-2(6-255): 구축함 본체 체력 1500 → 700 — 순양함(1000)보다 약하게, 풀업 무유도 폭탄 직격 한 발(750)이면 격침, 최고 숙련도(×1.3 = 910)만 두 발(destroyer-health-1은 550이었다).
+    /// 숙련도 기준(ACO_Warship.BaseHealth — 보통 Bake가 SaccTarget 체력에서 복사)도 같이. 씬 인스턴스가 덮어쓴 값은 지운다.
+    public const float DestroyerHealth = 700f;
+
+    public static void TuneDestroyerHealth()
+    {
+        EditPrefabs(root =>
+        {
+            if (root.name != "NPC_Destroyer") { return false; }
+            bool c = false;
+            foreach (ACO_Warship w in root.GetComponentsInChildren<ACO_Warship>(true))
+            {
+                if (w.TargetHealth != null && !Mathf.Approximately(w.TargetHealth.Health, DestroyerHealth)) { w.TargetHealth.Health = DestroyerHealth; EditorUtility.SetDirty(w.TargetHealth); c = true; }
+                if (!Mathf.Approximately(w.BaseHealth, DestroyerHealth)) { w.BaseHealth = DestroyerHealth; EditorUtility.SetDirty(w); c = true; }
+            }
+            return c;
+        });
+        int s = 0;
+        foreach (ACO_Warship w in FindInScene<ACO_Warship>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(w);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src == null || src.name != "NPC_Destroyer") { continue; }
+            Revert(w, "BaseHealth");
+            if (w.TargetHealth != null) { Revert(w.TargetHealth, "Health"); }
+            s++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 구축함 체력(6-255): NPC_Destroyer 본체 · 숙련도 기준 {DestroyerHealth}, 씬 구축함 {s}척의 덮어쓴 값을 지웠습니다. 씬을 저장하세요.");
+    }
+
+    /// gun-damage-all-1(6-256): 기총 면역이던 적(순양함 · 항모 본체 문턱 3, 벙커 문턱 20 — 기총 한 발 10 ÷ 장갑 4 = 2.5)과 구축함의 피해 문턱(NoDamageBelow)을 0으로.
+    /// 장갑은 그대로라 한 발 2.5(구축함 4). 아군 호위 대상 · 보스 외피(DisableBulletHitEvent)는 그대로. 씬 인스턴스가 덮어쓴 값은 지운다.
+    private static readonly string[] GunDamagePrefabs = { "NPC_Warship", "NPC_Carrier", "NPC_Destroyer", "NPC_Bunker" };
+
+    public static void TuneGunDamageAll()
+    {
+        int changed = 0;
+        EditPrefabs(root =>
+        {
+            if (Array.IndexOf(GunDamagePrefabs, root.name) < 0) { return false; }
+            bool c = false;
+            foreach (SaccTarget t in root.GetComponentsInChildren<SaccTarget>(true))
+            {
+                if (t.NoDamageBelow <= 0f) { continue; }
+                t.NoDamageBelow = 0f;
+                EditorUtility.SetDirty(t);
+                c = true;
+            }
+            if (c) { changed++; }
+            return c;
+        });
+        int s = 0;
+        foreach (SaccTarget t in FindInScene<SaccTarget>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(t);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src == null || Array.IndexOf(GunDamagePrefabs, src.name) < 0) { continue; }
+            Revert(t, "NoDamageBelow");
+            if (t.NoDamageBelow > 0f)
+            {
+                Undo.RecordObject(t, "ACO gun damage");
+                t.NoDamageBelow = 0f;
+                Mark(t);
+            }
+            s++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 기총 피해 문턱(6-256): 프리팹 {changed}개, 씬 {s}곳의 문턱을 0으로 — 순양함 · 항모 · 벙커도 기총이 먹힙니다. 씬을 저장하세요.");
+    }
+
+    /// rkt-balance-2(6-260): 플레이어 기체 프리팹의 로켓(Module_RKT) 탄수 64 → 48, 슬롯 재장전 3 → 4초 — 풀업 지속 화력 약 1330 → 1000/초(UGB 750보다 높게).
+    public static void TuneRocketBalance()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            int n = 0;
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.name != "Module_RKT") { continue; }
+                m.MaxAmmo = ACO_PlayerMissileSetup.RocketAmmo;
+                m.SlotReloadTime = ACO_PlayerMissileSetup.RocketSlotReload;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            Debug.Log($"[ACO] 로켓 밸런스(6-260): {path}의 로켓 모듈 {n}개 — 탄수 {ACO_PlayerMissileSetup.RocketAmmo}, 재장전 {ACO_PlayerMissileSetup.RocketSlotReload}초.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        foreach (ACO_DFUNC_Missile m in FindInScene<ACO_DFUNC_Missile>())
+        {
+            if (m.name == "Module_RKT" && PrefabUtility.IsPartOfPrefabInstance(m)) { Revert(m, "MaxAmmo", "SlotReloadTime"); }
+        }
+    }
+
+    /// lgb-lgr-balance-2(6-261): 플레이어 기체 프리팹의 LGB 피해 350 → 500 · 범위 150 → 50m · 탄수 18 → 12(한 발이 가장 센 정밀 폭탄),
+    /// LGR 탄수 54 → 60 · 재장전 8 → 6초(유도형 짝은 무유도형의 약 5/6 총량, 짝 안에선 로켓이 화력 높고 총량 같게).
+    public static void TuneLgbLgr()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            int n = 0;
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.name == "Module_LGB")
+                {
+                    m.Damage = ACO_SpecialWeaponCatalog.LgbDamage;
+                    m.SplashRadius = ACO_SpecialWeaponCatalog.LgbSplash;
+                    m.MaxAmmo = ACO_SpecialWeaponCatalog.LgbAmmo;
+                    n++;
+                }
+                else if (m.name == "Module_LGR")
+                {
+                    m.MaxAmmo = ACO_SpecialWeaponCatalog.LgrAmmo;
+                    m.SlotReloadTime = ACO_SpecialWeaponCatalog.LgrReload;
+                    n++;
+                }
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            Debug.Log($"[ACO] LGB · LGR 밸런스(6-261): {path}의 모듈 {n}개를 바꿨습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        foreach (ACO_DFUNC_Missile m in FindInScene<ACO_DFUNC_Missile>())
+        {
+            if (!PrefabUtility.IsPartOfPrefabInstance(m)) { continue; }
+            if (m.name == "Module_LGB") { Revert(m, "Damage", "SplashRadius", "MaxAmmo"); }
+            else if (m.name == "Module_LGR") { Revert(m, "MaxAmmo", "SlotReloadTime"); }
+        }
+    }
+
+    /// aam-balance-1(6-262): LAAM(느린 가속 · 가장 높은 최고 속도 · 선회 110), HVAA(가속 1500), CCAA(락온 1.5초 · 선회 90).
+    /// 플레이어 기체 프리팹의 모듈과 특수무장 정의 프리팹(새 기체에 설치할 때 복제되는 원본 — 설명도)을 같이 고친다. 씬 기체의 덮어쓴 값은 지운다.
+    public static void TuneAamBalance()
+    {
+        int n = 0;
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (ApplyAamBalance(m, m.name.StartsWith("Module_") ? m.name.Substring(7) : "")) { n++; }
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+
+        int d = 0;
+        foreach (string id in new[] { "LAAM", "HVAA", "CCAA" })
+        {
+            string defPath = "Assets/ACO_Addon/SpecialWeapons/ACO_Special_" + id + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(defPath) == null) { Debug.LogWarning($"[ACO] 공대공 밸런스(6-262): {defPath}가 없습니다."); continue; }
+            GameObject defRoot = PrefabUtility.LoadPrefabContents(defPath);
+            try
+            {
+                ACO_SpecialWeaponDef def = defRoot.GetComponent<ACO_SpecialWeaponDef>();
+                if (def == null || def.Module == null) { continue; }
+                ApplyAamBalance(def.Module, id);
+                def.Description = ACO_SpecialWeaponCatalog.DescriptionFor(id, def.Description);
+                PrefabUtility.SaveAsPrefabAsset(defRoot, defPath);
+                d++;
+            }
+            finally { PrefabUtility.UnloadPrefabContents(defRoot); }
+        }
+
+        int s = 0;
+        foreach (ACO_DFUNC_Missile m in FindInScene<ACO_DFUNC_Missile>())
+        {
+            if (!PrefabUtility.IsPartOfPrefabInstance(m)) { continue; }
+            if (m.name == "Module_LAAM" || m.name == "Module_HVAA" || m.name == "Module_CCAA")
+            {
+                Revert(m, "MaxSpeed", "Acceleration", "TurnRate", "LockTime");
+                s++;
+            }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 공대공 밸런스(6-262): 기체 프리팹 모듈 {n}개 · 정의 {d}개를 바꾸고 씬 모듈 {s}개의 덮어쓴 값을 지웠습니다. Bake 후 씬을 저장하세요.");
+    }
+
+    /// escort-waves-1(6-265): 콘보이 · 상륙전 모듈의 새 무전 음성 칸을 채우고(빈 칸만) 페이즈 모듈 연결(무전 Chatter 포함)을 다시 한다.
+    public static void TuneEscortWaves()
+    {
+        int n = 0;
+        foreach (ACO_PhaseModule m in FindInScene<ACO_PhaseModule>())
+        {
+            if (!(m is ACO_PhaseConvoy) && !(m is ACO_PhaseAmphibious)) { continue; }
+            if (ACO_VoiceLines.ApplyPhase(m)) { n++; }
+        }
+        ACO_SceneBaker.BakePhaseModulesNow();
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 호위 페이즈 증원(6-265): 모듈 {n}개에 음성을 넣고 무전을 연결했습니다. 씬을 저장하세요.");
+    }
+
+    /// tunnel-landmark-1 · 2(6-266): 터널 프리팹(1 · 2 · 3칸)을 만들고 씬 지형 장식에 넣는다. 2판부터 확률 0.9(놓을 수 있으면 가장 긴 것).
+    public static void TuneTunnelLandmark()
+    {
+        GameObject[] prefabs = ACO_TunnelBuilder.BuildAll();
+        int n = 0;
+        foreach (ACO_TerrainFeatures f in FindInScene<ACO_TerrainFeatures>())
+        {
+            f.TunnelPrefab = prefabs[0];
+            f.TunnelPrefab2 = prefabs[1];
+            f.TunnelPrefab3 = prefabs[2];
+            f.TunnelChance = 0.9f;
+            if (PrefabUtility.IsPartOfPrefabInstance(f)) { PrefabUtility.RecordPrefabInstancePropertyModifications(f); }
+            EditorUtility.SetDirty(f);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 터널 랜드마크(6-266): 지형 장식 {n}곳에 프리팹 1 · 2 · 3칸을 넣고 확률을 0.9로. 씬을 저장하세요.");
+    }
+
+    /// escort-waves-2(6-265): 씬 콘보이 · 상륙전 모듈의 매복 · 2차 공습 글자를 스크립트 기본값(증원 대사)으로.
+    public static void TuneEscortLines()
+    {
+        int n = 0;
+        foreach (ACO_PhaseConvoy c in FindInScene<ACO_PhaseConvoy>())
+        {
+            c.AmbushLine = ACO_PhaseConvoy.DefaultAmbushLine;
+            c.FinalAmbushLine = ACO_PhaseConvoy.DefaultFinalAmbushLine;
+            EditorUtility.SetDirty(c);
+            n++;
+        }
+        foreach (ACO_PhaseAmphibious a in FindInScene<ACO_PhaseAmphibious>())
+        {
+            a.StrikeLine = ACO_PhaseAmphibious.DefaultStrikeLine;
+            EditorUtility.SetDirty(a);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 호위 페이즈 증원 대사(6-265): 모듈 {n}개의 글자를 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// flak-damage-1(6-263): 플레이어 기체 프리팹의 FLAK 피해 30 → 50.
+    public static void TuneFlakDamage()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        int n = 0;
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.name != "Module_FLAK") { continue; }
+                m.Damage = ACO_SpecialWeaponCatalog.FlakDamage;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        int s = 0;
+        foreach (ACO_DFUNC_Missile m in FindInScene<ACO_DFUNC_Missile>())
+        {
+            if (m.name == "Module_FLAK" && PrefabUtility.IsPartOfPrefabInstance(m)) { Revert(m, "Damage"); s++; }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] FLAK 피해(6-263): 기체 프리팹 모듈 {n}개를 바꾸고 씬 모듈 {s}개의 덮어쓴 값을 지웠습니다.");
+    }
+
+    /// weapon-defs-sync-1(6-263): 특수무장 정의 프리팹의 모듈 수치를 F/A-18 프리팹의 같은 ID 모듈(Module_ + ID)과 같게 한다.
+    /// 숫자 · 켜기 · 선택 값(float/int/bool/enum)만 — 참조(발사 지점 · 소리 · 탄 프리팹 · 글자)와 레이어 마스크는 건드리지 않는다.
+    /// 기체 쪽 값이 기준(튜닝 항목들이 기체 프리팹을 바꿔 왔다). 같은 일을 다시 하려면 새 ID(weapon-defs-sync-2)로 이 함수를 부른다.
+    public static void SyncWeaponDefsFromAircraft()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        var air = new Dictionary<string, ACO_DFUNC_Missile>();
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (m.name.StartsWith("Module_")) { air[m.name.Substring(7)] = m; }
+            }
+            int defs = 0, fields = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/ACO_Addon/SpecialWeapons" }))
+            {
+                string defPath = AssetDatabase.GUIDToAssetPath(guid);
+                GameObject defRoot = PrefabUtility.LoadPrefabContents(defPath);
+                try
+                {
+                    ACO_SpecialWeaponDef def = defRoot.GetComponent<ACO_SpecialWeaponDef>();
+                    if (def == null || def.Module == null) { continue; }
+                    if (!air.TryGetValue(def.Id, out ACO_DFUNC_Missile src))
+                    {
+                        Debug.LogWarning($"[ACO] 정의 동기화: 기체에 {def.Id} 모듈이 없어 '{defPath}'를 건너뜁니다.");
+                        continue;
+                    }
+                    int changed = CopyScalars(src, def.Module);
+                    if (changed == 0) { continue; }
+                    PrefabUtility.SaveAsPrefabAsset(defRoot, defPath);
+                    defs++;
+                    fields += changed;
+                }
+                finally { PrefabUtility.UnloadPrefabContents(defRoot); }
+            }
+            Debug.Log($"[ACO] 정의 동기화(6-263): 특수무장 정의 {defs}개의 값 {fields}개를 기체({path}) 값으로 맞췄습니다.");
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    private static int CopyScalars(Object src, Object dst)
+    {
+        var from = new SerializedObject(src);
+        var to = new SerializedObject(dst);
+        int n = 0;
+        SerializedProperty it = from.GetIterator();
+        it.NextVisible(true);
+        do
+        {
+            SerializedPropertyType t = it.propertyType;
+            if (t != SerializedPropertyType.Float && t != SerializedPropertyType.Integer
+                && t != SerializedPropertyType.Boolean && t != SerializedPropertyType.Enum) { continue; }
+            SerializedProperty p = to.FindProperty(it.propertyPath);
+            if (p == null || p.propertyType != t) { continue; }
+            switch (t)
+            {
+                case SerializedPropertyType.Float:
+                    if (p.floatValue != it.floatValue) { p.floatValue = it.floatValue; n++; }
+                    break;
+                case SerializedPropertyType.Boolean:
+                    if (p.boolValue != it.boolValue) { p.boolValue = it.boolValue; n++; }
+                    break;
+                default:
+                    if (p.intValue != it.intValue) { p.intValue = it.intValue; n++; }
+                    break;
+            }
+        } while (it.NextVisible(false));
+        if (n > 0) { to.ApplyModifiedPropertiesWithoutUndo(); }
+        return n;
+    }
+
+    private static bool ApplyAamBalance(ACO_DFUNC_Missile m, string id)
+    {
+        switch (id)
+        {
+            case "LAAM":
+                m.MaxSpeed = ACO_SpecialWeaponCatalog.LaamSpeed;
+                m.Acceleration = ACO_SpecialWeaponCatalog.LaamAccel;
+                m.TurnRate = ACO_SpecialWeaponCatalog.LaamTurn;
+                return true;
+            case "HVAA":
+                m.Acceleration = ACO_SpecialWeaponCatalog.HvaaAccel;
+                return true;
+            case "CCAA":
+                m.LockTime = ACO_SpecialWeaponCatalog.CcaaLockTime;
+                m.TurnRate = ACO_SpecialWeaponCatalog.CcaaTurn;
+                return true;
+        }
+        return false;
+    }
+
+    /// guardian-intercept-2(6-258): 가디언 드론 요격 강화 — 반응 0.4 → 0.1초, 격추 0.8 → 0.45초, 쉼 2 → 0초, 사거리 1200 → 1500m.
+    /// 미사일(600m/s)은 사거리 안 2.5초 동안 5발까지 막고, 레일건 탄(4000m/s)은 사거리를 0.375초에 지나 격추(0.45초)보다 빨라 못 막는다.
+    public static void TuneGuardianIntercept()
+    {
+        // 가디언 프리팹은 NPC_ 이름이 아니라 EditPrefabs가 훑지 않는다 — 직접 연다
+        string path = PrefabDir + "/" + ACO_PrefabBuilder.GuardianDronePrefab + ".prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            int n = 0;
+            foreach (ACO_AAGunSite aa in root.GetComponentsInChildren<ACO_AAGunSite>(true))
+            {
+                aa.InterceptRange = ACO_PrefabBuilder.GuardianInterceptRange;
+                aa.InterceptReactionTime = ACO_PrefabBuilder.GuardianReactionTime;
+                aa.InterceptKillTime = ACO_PrefabBuilder.GuardianKillTime;
+                aa.InterceptCooldown = ACO_PrefabBuilder.GuardianCooldown;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            else { Debug.LogWarning($"[ACO] 가디언 드론 요격(6-258): {path}에서 요격 대공포를 찾지 못했습니다."); }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        int s = 0;
+        foreach (ACO_AAGunSite aa in FindInScene<ACO_AAGunSite>())
+        {
+            GameObject inst = PrefabUtility.GetNearestPrefabInstanceRoot(aa);
+            GameObject src = inst != null ? PrefabUtility.GetCorrespondingObjectFromSource(inst) : null;
+            if (src == null || src.name != ACO_PrefabBuilder.GuardianDronePrefab) { continue; }
+            Revert(aa, "InterceptRange", "InterceptReactionTime", "InterceptKillTime", "InterceptCooldown");
+            s++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 가디언 드론 요격(6-258): 프리팹 값을 바꾸고 씬 드론 {s}대의 덮어쓴 값을 지웠습니다. 씬을 저장하세요.");
     }
 
     /// carrier-ciws-1(6-183): 항모 CIWS 4개를 쿠즈네초프 모델에 그려진 포대 자리로 옮긴다(앞쪽 둘이 갑판 밖 허공에 떠 있었다). 씬에서 옮긴 값은 지운다.

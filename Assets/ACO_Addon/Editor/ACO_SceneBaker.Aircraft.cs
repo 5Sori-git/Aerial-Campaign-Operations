@@ -313,6 +313,28 @@ public partial class ACO_SceneBaker
         {
             if (a.Progress != progress) { a.Progress = progress; MarkChanged(a); }
         }
+        BakePilotOnly();
+    }
+
+    /// 탑승자 전용 충돌(6-259) ↔ 기체 자동화, 플레이어 기체 목록.
+    private static void BakePilotOnly()
+    {
+        ACO_PilotOnlyColliders po = Object.FindObjectOfType<ACO_PilotOnlyColliders>(true);
+        var autos = Object.FindObjectsOfType<ACO_VehicleAutomation>(true);
+        foreach (ACO_VehicleAutomation a in autos)
+        {
+            if (a.PilotOnly != po) { a.PilotOnly = po; MarkChanged(a); }
+        }
+        if (po == null) { return; }
+        var list = new List<SaccFlightAndVehicles.SaccEntity>();
+        foreach (ACO_VehicleAutomation a in autos)
+        {
+            SaccFlightAndVehicles.SaccEntity e = a.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>();
+            if (e != null && !list.Contains(e)) { list.Add(e); }
+        }
+        bool same = po.Aircraft != null && po.Aircraft.Length == list.Count;
+        for (int i = 0; same && i < list.Count; i++) { if (po.Aircraft[i] != list[i]) { same = false; } }
+        if (!same) { po.Aircraft = list.ToArray(); MarkChanged(po); }
     }
 
     /// 항모 프리팹 안의 이름으로 찾는다(인스턴스 값이 Transform에 있어 비활성도 찾는다).
@@ -378,6 +400,9 @@ public partial class ACO_SceneBaker
             Debug.Log($"[ACO] 갑판 요원을 놓았습니다: {go.name}");
         }
         foreach (ACO_CatapultCrew crew in crews) { BakeJbd(crew); }
+        RemoveLaunchBubbleLid();   // 6-259
+        FillLaunchBubblePit();
+        MakeLaunchBubbleFloorPilotOnly();
         InstallLaunchOperator(crews);
     }
 
@@ -462,6 +487,308 @@ public partial class ACO_SceneBaker
             GameObjectUtility.SetStaticEditorFlags(jbd.gameObject, flags & ~StaticEditorFlags.BatchingStatic);
             MarkChanged(jbd.gameObject);
         }
+        FixJbdCollision(crew);
+    }
+
+    // ───────────── JBD 충돌 없애기 · 자리 바닥 (6-253) ─────────────
+    // 항모 갑판 충돌(모델 메시)은 JBD 자리가 약 1m 파여 있고, 그 위를 JBD 판의 충돌이 덮고 있었다. JBD 충돌을 지우면 바퀴 · 발이 빠지므로
+    // 갑판 높이에 맞춘 납작한 상자 충돌을 JBD 옆(같은 부모 — 항모와 함께 움직인다)에 둔다. JBD는 모양만 움직인다(올라가 있어도 지나간다).
+    private const string JbdFloorSuffix = " Floor";
+    private const float JbdFloorThickness = 0.3f;
+    private const float JbdFloorMargin = 0.1f;   // 구덩이 가장자리 갑판에 걸치게(이음매 없게)
+    private const float JbdScanStep = 0.1f;
+    private const int JbdDeckMask = 2049;        // 기체 접지와 같은 마스크
+
+    /// JBD 자리 바닥(JBD와 같은 부모의 "<JBD 이름> Floor" + BoxCollider). 없으면 null.
+    public static BoxCollider FindJbdFloor(Transform jbd)
+    {
+        if (jbd == null || jbd.parent == null) { return null; }
+        Transform f = jbd.parent.Find(jbd.name + JbdFloorSuffix);
+        return f != null ? f.GetComponent<BoxCollider>() : null;
+    }
+
+    /// 바닥이 없으면 구덩이를 재서 만들고(JBD 충돌을 잠깐 끄고 잰다), JBD와 그 자식의 충돌을 지운다. 여러 번 불러도 같다.
+    private static void FixJbdCollision(ACO_CatapultCrew crew)
+    {
+        Transform jbd = crew.Jbd;
+        if (jbd == null || jbd.parent == null) { return; }
+        Collider[] cols = jbd.GetComponentsInChildren<Collider>(true);
+        if (FindJbdFloor(jbd) == null)
+        {
+            var wasEnabled = new bool[cols.Length];
+            for (int i = 0; i < cols.Length; i++) { wasEnabled[i] = cols[i].enabled; cols[i].enabled = false; }
+            Physics.SyncTransforms();
+            try { CreateJbdFloor(jbd); }
+            finally
+            {
+                for (int i = 0; i < cols.Length; i++) { cols[i].enabled = wasEnabled[i]; }
+                Physics.SyncTransforms();
+            }
+        }
+        if (FindJbdFloor(jbd) == null) { return; }   // 바닥을 못 만들었으면 충돌을 남겨 둔다(빠지는 것보다 낫다)
+        foreach (Collider c in cols)
+        {
+            if (c == null) { continue; }
+            Debug.Log($"[ACO] {jbd.name}: 충돌({c.GetType().Name})을 지웠습니다(6-253).");
+            Undo.DestroyObjectImmediate(c);
+        }
+        if (cols.Length > 0) { MarkChanged(jbd.gameObject); }
+    }
+
+    // ───────────── 발함 지휘소 뚜껑 충돌 없애기 (6-259) ─────────────
+    // 두 캐터펄트 사이 지휘소(항모 모델 '発艦指揮所')는 갑판 위로 돔 · 테두리가 약 0.95m 솟아 기체 바퀴가 걸리면 떠서(SAV Taxiing 아님) 갑판 택싱 제한이 풀렸다.
+    // 충돌 메시를 갑판 높이에서 잘라 위(뚜껑 · 턱)만 없앤 메시로 바꾼다 — 갑판 아래 구덩이 벽은 그대로. 원본 FBX는 건드리지 않는다.
+    public const string LaunchBubbleName = "発艦指揮所";
+    private const string LaunchBubbleMeshPath = "Assets/ACO_Addon/Generated/ACO_LaunchBubbleCollider.asset";
+
+    /// 항모의 발함 지휘소 충돌(없으면 null).
+    public static MeshCollider FindLaunchBubble()
+    {
+        foreach (MeshCollider c in Object.FindObjectsOfType<MeshCollider>(true)) { if (c.name == LaunchBubbleName) { return c; } }
+        return null;
+    }
+
+    /// 지휘소 충돌이 아직 뚜껑까지 있는 원본 메시인가.
+    public static bool LaunchBubbleLidRemains()
+    {
+        MeshCollider c = FindLaunchBubble();
+        return c != null && c.sharedMesh != null && AssetDatabase.GetAssetPath(c.sharedMesh) != LaunchBubbleMeshPath;
+    }
+
+    /// 지휘소 충돌 메시를 둘레 갑판 높이에서 잘라 아래만 남긴 메시로 바꾼다(여러 번 불러도 같다).
+    public static void RemoveLaunchBubbleLid()
+    {
+        MeshCollider c = FindLaunchBubble();
+        if (c == null || c.sharedMesh == null || !LaunchBubbleLidRemains()) { return; }
+        // 둘레 갑판 높이: 충돌 바깥 앞 · 뒤 · 좌 · 우 2m에서 잰 높이 중 가장 높은 값(지휘소 충돌은 잠깐 끄고 잰다)
+        Bounds b = c.bounds;
+        bool was = c.enabled;
+        c.enabled = false;
+        Physics.SyncTransforms();
+        float deckY = float.MinValue;
+        foreach (Vector3 d in new[] { Vector3.forward, Vector3.back, Vector3.left, Vector3.right })
+        {
+            Vector3 p = b.center + Vector3.Scale(d, b.extents + Vector3.one * 2f);
+            if (Physics.Raycast(new Vector3(p.x, b.max.y + 10f, p.z), Vector3.down, out RaycastHit h, 30f, 2049, QueryTriggerInteraction.Ignore)) { deckY = Mathf.Max(deckY, h.point.y); }
+        }
+        c.enabled = was;
+        Physics.SyncTransforms();
+        if (deckY == float.MinValue) { Debug.LogWarning("[ACO] 발함 지휘소: 둘레 갑판을 찾지 못해 뚜껑 충돌을 그대로 둡니다."); return; }
+
+        Mesh clipped = ClipMeshBelow(c.sharedMesh, c.transform, deckY);
+        clipped.name = "ACO_LaunchBubbleCollider";
+        if (!AssetDatabase.IsValidFolder("Assets/ACO_Addon/Generated")) { AssetDatabase.CreateFolder("Assets/ACO_Addon", "Generated"); }
+        Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(LaunchBubbleMeshPath);
+        if (existing != null) { EditorUtility.CopySerialized(clipped, existing); clipped = existing; }
+        else { AssetDatabase.CreateAsset(clipped, LaunchBubbleMeshPath); }
+        AssetDatabase.SaveAssets();
+        Undo.RecordObject(c, "ACO launch bubble lid");
+        c.sharedMesh = clipped;
+        MarkChanged(c);
+        Debug.Log($"[ACO] 발함 지휘소: 갑판 높이 {deckY:0.00}에서 뚜껑 · 턱 충돌을 잘라냈습니다(삼각형 {clipped.triangles.Length / 3}개 남음, 6-259).");
+    }
+
+    /// 지휘소 구덩이 바닥(지휘소와 같은 부모의 "発艦指揮所 Floor" + BoxCollider). 없으면 null.
+    public static BoxCollider FindLaunchBubbleFloor()
+    {
+        MeshCollider c = FindLaunchBubble();
+        if (c == null || c.transform.parent == null) { return null; }
+        Transform f = c.transform.parent.Find(LaunchBubbleName + JbdFloorSuffix);
+        return f != null ? f.GetComponent<BoxCollider>() : null;
+    }
+
+    /// 지휘소 구덩이(약 2 × 4.5m · 깊이 3m — 뚜껑 충돌을 지워 열렸다)를 갑판 높이의 기본(Default) 레이어 바닥으로 덮는다(6-259).
+    /// 워크스루 레이어는 SAV 땅 감지 레이(Default · Environment)에 안 잡혀 그 위에선 공중으로 판정되므로 쓰지 않는다. 여러 번 불러도 같다.
+    public static void FillLaunchBubblePit()
+    {
+        MeshCollider c = FindLaunchBubble();
+        if (c == null || c.transform.parent == null || FindLaunchBubbleFloor() != null) { return; }
+        Transform parent = c.transform.parent;
+        Vector3 right = Vector3.ProjectOnPlane(parent.right, Vector3.up).normalized;
+        Vector3 fwd = Vector3.ProjectOnPlane(parent.forward, Vector3.up).normalized;
+        Bounds b = c.bounds;
+        Vector3 c0 = new Vector3(b.center.x, 0f, b.center.z);
+        float reachA = Mathf.Abs(right.x) * b.extents.x + Mathf.Abs(right.z) * b.extents.z + 1.5f;
+        float reachB = Mathf.Abs(fwd.x) * b.extents.x + Mathf.Abs(fwd.z) * b.extents.z + 1.5f;
+        float top = b.max.y + 10f;
+
+        bool was = c.enabled;
+        c.enabled = false;   // 남은 구덩이 벽은 빼고 잰다
+        Physics.SyncTransforms();
+        try
+        {
+            float deckY = float.MinValue;
+            GameObject deckObj = null;
+            foreach (Vector3 d in new[] { fwd * (reachB + 1.5f), -fwd * (reachB + 1.5f), right * (reachA + 1.5f), -right * (reachA + 1.5f) })
+            {
+                Vector3 p = c0 + d;
+                if (Physics.Raycast(new Vector3(p.x, top, p.z), Vector3.down, out RaycastHit h, 40f, JbdDeckMask, QueryTriggerInteraction.Ignore) && h.point.y > deckY)
+                {
+                    deckY = h.point.y;
+                    deckObj = h.collider.gameObject;
+                }
+            }
+            if (deckObj == null) { Debug.LogWarning("[ACO] 발함 지휘소: 둘레 갑판을 찾지 못해 구덩이 바닥을 만들지 않았습니다."); return; }
+
+            float minA = float.MaxValue, maxA = float.MinValue, minB = float.MaxValue, maxB = float.MinValue;
+            int n = 0;
+            for (float a = -reachA; a <= reachA; a += JbdScanStep)
+            {
+                for (float bb = -reachB; bb <= reachB; bb += JbdScanStep)
+                {
+                    Vector3 p = c0 + right * a + fwd * bb;
+                    bool hit = Physics.Raycast(new Vector3(p.x, top, p.z), Vector3.down, out RaycastHit h, 40f, JbdDeckMask, QueryTriggerInteraction.Ignore);
+                    if (hit && h.point.y > deckY - 0.3f) { continue; }   // 갑판(또는 그 위) — 구덩이 아님
+                    n++;
+                    minA = Mathf.Min(minA, a); maxA = Mathf.Max(maxA, a);
+                    minB = Mathf.Min(minB, bb); maxB = Mathf.Max(maxB, bb);
+                }
+            }
+            if (n == 0) { Debug.Log("[ACO] 발함 지휘소: 갑판에 파인 자리가 없어 바닥을 만들지 않았습니다."); return; }
+
+            float sizeA = maxA - minA + JbdScanStep + JbdFloorMargin * 2f;
+            float sizeB = maxB - minB + JbdScanStep + JbdFloorMargin * 2f;
+            Vector3 center = c0 + right * ((minA + maxA) * 0.5f) + fwd * ((minB + maxB) * 0.5f);
+            center.y = deckY - JbdFloorThickness * 0.5f;
+
+            var go = new GameObject(LaunchBubbleName + JbdFloorSuffix);
+            Undo.RegisterCreatedObjectUndo(go, "ACO launch bubble floor");
+            go.layer = deckObj.layer;   // 갑판과 같은 레이어(Default) — SAV 땅 감지에 잡힌다
+            go.transform.SetParent(parent, false);
+            go.transform.SetPositionAndRotation(center, Quaternion.LookRotation(fwd, Vector3.up));
+            go.transform.localScale = Vector3.one;
+            Vector3 s = go.transform.lossyScale;
+            var box = go.AddComponent<BoxCollider>();
+            box.size = new Vector3(sizeA / Mathf.Abs(s.x), JbdFloorThickness / Mathf.Abs(s.y), sizeB / Mathf.Abs(s.z));
+            MarkChanged(go);
+            Debug.Log($"[ACO] 발함 지휘소: 구덩이 바닥을 만들었습니다 — {sizeA:0.00} × {sizeB:0.00}m, 윗면 {deckY:0.00}, 레이어 {LayerMask.LayerToName(go.layer)}(6-259).");
+        }
+        finally
+        {
+            c.enabled = was;
+            Physics.SyncTransforms();
+        }
+    }
+
+    /// 지휘소 구덩이 바닥이 탑승자 전용(ACO_PilotOnlyColliders)인가 — 걸어 다니는 사람은 구덩이로 내려간다.
+    public static bool LaunchBubbleFloorPilotOnly()
+    {
+        BoxCollider f = FindLaunchBubbleFloor();
+        return f == null || f.GetComponent<ACO_PilotOnlyColliders>() != null;
+    }
+
+    /// 지휘소 구덩이 바닥에 탑승자 전용 스크립트를 붙인다(6-259). 기체 자동화 · 기체 목록 연결은 Bake(BakePilotOnly).
+    public static void MakeLaunchBubbleFloorPilotOnly()
+    {
+        BoxCollider f = FindLaunchBubbleFloor();
+        if (f == null || f.GetComponent<ACO_PilotOnlyColliders>() != null) { return; }
+        ACO_PilotOnlyColliders po = f.gameObject.AddUdonSharpComponent<ACO_PilotOnlyColliders>();
+        po.Colliders = new Collider[] { f };
+        MarkChanged(po);
+        Debug.Log("[ACO] 발함 지휘소: 구덩이 바닥을 탑승자 전용으로 했습니다 — 기체를 탄 사람 화면에만 바닥, 걸어 다니면 구덩이로 내려간다(6-259).");
+    }
+
+    /// 메시를 월드 높이 cutY 아래만 남긴다 — 걸치는 삼각형은 그 높이에서 자른다(Sutherland–Hodgman, 한 평면).
+    private static Mesh ClipMeshBelow(Mesh src, Transform t, float cutY)
+    {
+        Vector3[] v = src.vertices;
+        int[] tri = src.triangles;
+        var outV = new List<Vector3>();
+        var outT = new List<int>();
+        var poly = new List<Vector3>(6);
+        var next = new List<Vector3>(6);
+        for (int i = 0; i < tri.Length; i += 3)
+        {
+            poly.Clear();
+            poly.Add(t.TransformPoint(v[tri[i]])); poly.Add(t.TransformPoint(v[tri[i + 1]])); poly.Add(t.TransformPoint(v[tri[i + 2]]));
+            next.Clear();
+            for (int k = 0; k < poly.Count; k++)
+            {
+                Vector3 a = poly[k], bb = poly[(k + 1) % poly.Count];
+                bool ain = a.y <= cutY, bin = bb.y <= cutY;
+                if (ain) { next.Add(a); }
+                if (ain != bin)
+                {
+                    float f = (cutY - a.y) / (bb.y - a.y);
+                    next.Add(Vector3.Lerp(a, bb, f));
+                }
+            }
+            if (next.Count < 3) { continue; }
+            int start = outV.Count;
+            for (int k = 0; k < next.Count; k++) { outV.Add(t.InverseTransformPoint(next[k])); }
+            for (int k = 1; k + 1 < next.Count; k++) { outT.Add(start); outT.Add(start + k); outT.Add(start + k + 1); }
+        }
+        var m = new Mesh();
+        if (outV.Count > 65000) { m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; }
+        m.SetVertices(outV);
+        m.SetTriangles(outT, 0);
+        m.RecalculateBounds();
+        m.RecalculateNormals();
+        return m;
+    }
+
+    /// JBD 둘레를 항모 축(부모의 앞 · 오른쪽)으로 훑어, 둘레 갑판보다 0.3m 넘게 낮은 칸(구덩이)을 감싸는 상자를 갑판 높이에 만든다.
+    private static void CreateJbdFloor(Transform jbd)
+    {
+        Renderer r = jbd.GetComponent<Renderer>();
+        if (r == null) { return; }
+        Transform parent = jbd.parent;
+        Vector3 right = Vector3.ProjectOnPlane(parent.right, Vector3.up).normalized;
+        Vector3 fwd = Vector3.ProjectOnPlane(parent.forward, Vector3.up).normalized;
+        Bounds b = r.bounds;
+        Vector3 c0 = new Vector3(b.center.x, 0f, b.center.z);
+        float top = b.max.y + 5f;
+        // 훑는 범위: 판 크기(항모 축으로) + 1.5m — 더 넓으면 캐터펄트 홈 같은 다른 파인 자리까지 잡는다
+        float reachA = Mathf.Abs(right.x) * b.extents.x + Mathf.Abs(right.z) * b.extents.z + 1.5f;
+        float reachB = Mathf.Abs(fwd.x) * b.extents.x + Mathf.Abs(fwd.z) * b.extents.z + 1.5f;
+
+        // 둘레 갑판 높이: 판 바깥 앞 · 뒤 · 좌 · 우에서 잰 높이 중 가장 높은 값
+        float deckY = float.MinValue;
+        GameObject deckObj = null;
+        foreach (Vector3 d in new[] { fwd * reachB, -fwd * reachB, right * reachA, -right * reachA })
+        {
+            Vector3 p = c0 + d + d.normalized * 1.5f;
+            if (Physics.Raycast(new Vector3(p.x, top, p.z), Vector3.down, out RaycastHit h, 20f, JbdDeckMask, QueryTriggerInteraction.Ignore) && h.point.y > deckY)
+            {
+                deckY = h.point.y;
+                deckObj = h.collider.gameObject;
+            }
+        }
+        if (deckObj == null) { Debug.LogWarning($"[ACO] {jbd.name}: 둘레 갑판을 찾지 못해 바닥을 만들지 않았습니다."); return; }
+
+        float minA = float.MaxValue, maxA = float.MinValue, minB = float.MaxValue, maxB = float.MinValue;
+        int n = 0;
+        for (float a = -reachA; a <= reachA; a += JbdScanStep)
+        {
+            for (float bb = -reachB; bb <= reachB; bb += JbdScanStep)
+            {
+                Vector3 p = c0 + right * a + fwd * bb;
+                if (!Physics.Raycast(new Vector3(p.x, top, p.z), Vector3.down, out RaycastHit h, 20f, JbdDeckMask, QueryTriggerInteraction.Ignore)) { continue; }
+                if (h.point.y > deckY - 0.3f) { continue; }
+                n++;
+                minA = Mathf.Min(minA, a); maxA = Mathf.Max(maxA, a);
+                minB = Mathf.Min(minB, bb); maxB = Mathf.Max(maxB, bb);
+            }
+        }
+        if (n == 0) { Debug.LogWarning($"[ACO] {jbd.name}: 갑판에 파인 자리가 없어 바닥을 만들지 않았습니다."); return; }
+
+        float sizeA = maxA - minA + JbdScanStep + JbdFloorMargin * 2f;
+        float sizeB = maxB - minB + JbdScanStep + JbdFloorMargin * 2f;
+        Vector3 center = c0 + right * ((minA + maxA) * 0.5f) + fwd * ((minB + maxB) * 0.5f);
+        center.y = deckY - JbdFloorThickness * 0.5f;
+
+        var go = new GameObject(jbd.name + JbdFloorSuffix);
+        Undo.RegisterCreatedObjectUndo(go, "ACO JBD floor");
+        go.layer = deckObj.layer;
+        go.transform.SetParent(parent, false);
+        go.transform.SetPositionAndRotation(center, Quaternion.LookRotation(fwd, Vector3.up));
+        go.transform.localScale = Vector3.one;
+        Vector3 s = go.transform.lossyScale;
+        var box = go.AddComponent<BoxCollider>();
+        box.center = Vector3.zero;
+        box.size = new Vector3(sizeA / Mathf.Abs(s.x), JbdFloorThickness / Mathf.Abs(s.y), sizeB / Mathf.Abs(s.z));
+        MarkChanged(go);
+        Debug.Log($"[ACO] {jbd.name}: 자리 바닥을 만들었습니다 — {sizeA:0.00} × {sizeB:0.00}m, 윗면 {deckY:0.00}(둘레 갑판), 파인 칸 {n}개(6-253).");
     }
 
     private static void BakeEcm()

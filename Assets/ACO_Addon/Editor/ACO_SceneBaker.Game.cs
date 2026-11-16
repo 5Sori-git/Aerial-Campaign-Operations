@@ -32,6 +32,10 @@ public partial class ACO_SceneBaker
                     MarkChanged(m);
                 }
                 if (modules.Length > 0) { Debug.Log($"[ACO] 미션 관리자 '{manager.name}'에 페이즈 모듈 {modules.Length}개를 연결했습니다.", manager); }
+                // 호위 페이즈 중간 대사(6-265 — 콘보이 웨이포인트 매복, 상륙전 2차 공습)
+                ACO_Chatter radio = Object.FindObjectOfType<ACO_Chatter>(true);
+                foreach (ACO_PhaseConvoy c in manager.GetComponentsInChildren<ACO_PhaseConvoy>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); } }
+                foreach (ACO_PhaseAmphibious a in manager.GetComponentsInChildren<ACO_PhaseAmphibious>(true)) { if (a.Chatter != radio) { a.Chatter = radio; MarkChanged(a); } }
                 // 상륙전: 해상 상륙함(VIP)이 풀에 없으면 늘 배치 불가로 걸러진다
                 if (manager.GetComponentInChildren<ACO_PhaseAmphibious>(true) != null && manager.Generator != null)
                 {
@@ -324,6 +328,7 @@ public partial class ACO_SceneBaker
             up.Weapons = weapons.ToArray();
             up.Flares = entity.GetComponentsInChildren<SaccFlightAndVehicles.DFUNC_Flares>(true);   // 대응탄 포드 소모품
             up.GunBonuses = CollectGunBonuses(entity);
+            up.Guns = entity.GetComponentsInChildren<SaccFlightAndVehicles.DFUNC_Gun>(true);   // 기총 탄약 강화(6-257)
             MarkChanged(up);
 
             if (ACO_PlayerMissileSetup.RegisterExtension(entity, up))

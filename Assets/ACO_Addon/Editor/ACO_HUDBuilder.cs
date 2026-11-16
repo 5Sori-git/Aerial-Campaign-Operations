@@ -3211,8 +3211,8 @@ public static partial class ACO_HUDBuilder
     public static Sprite[] BuildUpgradeIcons(ACO_PlayerProgress p)
     {
         var icons = new Sprite[ACO_PlayerProgress.UPGRADE_COUNT];
-        string[] airframe = { "hull", "mobility", "engine", "fuel", "cm_pod", "damage" };
-        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_COUNTERMEASURE, ACO_PlayerProgress.UP_GUN };
+        string[] airframe = { "hull", "mobility", "engine", "fuel", "cm_pod", "damage", "gun_ammo" };
+        int[] airIds = { ACO_PlayerProgress.UP_HULL, ACO_PlayerProgress.UP_MOBILITY, ACO_PlayerProgress.UP_ENGINE, ACO_PlayerProgress.UP_FUEL, ACO_PlayerProgress.UP_COUNTERMEASURE, ACO_PlayerProgress.UP_GUN, ACO_PlayerProgress.UP_GUN_AMMO };
         for (int i = 0; i < airIds.Length; i++) { if (airIds[i] < icons.Length) { icons[airIds[i]] = LoadIcon(airframe[i]); } }
         // STAT_* 순서
         string[] stats = { "damage", "ammo", "turn", "lock_speed", "lock_range", "seeker", "blast", "reload" };

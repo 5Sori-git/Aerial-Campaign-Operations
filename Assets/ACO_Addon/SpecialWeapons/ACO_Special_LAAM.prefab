@@ -49,8 +49,8 @@ MonoBehaviour:
   DisplayName: LAAM
   Description: 'LONG-RANGE AAM
 
-    LOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW,
-    SLOW LOCK.'
+    LOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. SLOW
+    OFF THE RAIL, BUT THE FASTEST OF ALL AT LONG RANGE. SLOW LOCK.'
   Price: 12000
   Icon: {fileID: 21300000, guid: 85f6a0fc0f979ad4ca7eb142fc9b36f0, type: 3}
   SortOrder: 60
@@ -126,8 +126,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 16
   AllowFiringWhenGrounded: 0
-  LockRange: 9000
-  LockAngle: 8
+  LockRange: 7000
+  LockAngle: 45
   LockFromCcip: 1
   LockTime: 2
   MaxLockTargets: 1
@@ -137,14 +137,14 @@ MonoBehaviour:
   MaxAmmo: 16
   SlotReloadTime: 10
   LaunchPoints: []
-  Damage: 120
-  MaxSpeed: 520
-  Acceleration: 320
-  TurnRate: 80
-  GuidanceMode: 2
+  Damage: 200
+  MaxSpeed: 2400
+  Acceleration: 200
+  TurnRate: 110
+  GuidanceMode: 0
   NavigationConstant: 3
   ProximityRadius: 12
-  SplashRadius: 25
+  SplashRadius: 10
   MinSplashFraction: 0.25
   MissileSplash: 0
   FullPartSplash: 0
@@ -180,7 +180,7 @@ MonoBehaviour:
   FireInterval: 0.12
   Missile: {fileID: 0}
   NumPreInstantiated: 2
-  MissileType: 0
+  MissileType: 1
   AllowUnguidedFire: 0
   InheritVelocity: 1
   WorldParent: {fileID: 0}

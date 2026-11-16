@@ -20,7 +20,7 @@ namespace ACO
     /// - 소모품(진행도 CONS_*, 사 둔 것만): 장갑판 = 체력 배수, 연료탱크 = 연료 용량(SaccAirVehicle.FullFuel — 남은 연료는 같은 비율로),
     ///   대응탄 포드 = SAV 플레어(DFUNC_Flares.FullFlares, 채워서 시작), 탄약 증량 = 특수무장(대공·대지·폭탄 계열) 탄수 배수. 내릴 때 되돌린다.
     /// - 무장(Weapons, ACO_DFUNC_Missile): 무장 인스펙터에서 고른 계열(UpgradeFamily)의 강화로 ACO_DFUNC_Missile.ApplyUpgrades. None이면 그대로.
-    ///   SAV 무장(DFUNC_Bomb 등)과 기관포는 강화하지 않는다.
+    ///   SAV 무장(DFUNC_Bomb 등)은 강화하지 않는다. 기관포(DFUNC_Gun)는 피해(ACO_GunDamageBonus — 덤 피해)와 탄약(사격 가능 시간 × 배수, 6-257)만.
     /// 또 진행도에 출격(탑승)과 격추(조종 중 폭발 — 추락 포함), 내림(안전지대 밖이면 격추로 센다 — 폭발로 내려진 경우는 빼고)을 알린다.
     /// - 소모품 외형(ConsumableVisuals, CONS_* 순서): 사 둔 소모품으로 탑승하면 그 오브젝트를 켠다 — 조종사가 모든 클라이언트에 알린다(NetConsumableVisuals,
     ///   늦게 들어온 사람에게는 다시 보낸다). 내리면(SFEXT_G_PilotExit, 모든 클라이언트) 끈다.
@@ -40,6 +40,8 @@ namespace ACO
         public DFUNC_Flares[] Flares;
         [Tooltip("이 기체의 기총 탄 파티클에 붙은 피해 강화(빌드 시 Bake가 붙이고 넣는다)")]
         public ACO_GunDamageBonus[] GunBonuses;
+        [Tooltip("이 기체의 SAV 기총(빌드 시 Bake가 넣는다) — 기총 탄약 강화가 사격 가능 시간을 늘린다(6-257)")]
+        public DFUNC_Gun[] Guns;
         [Header("공중 충돌 방지 (Bake가 채운다)")]
         [Tooltip("이 기체의 충돌 콜라이더(트리거·바퀴 제외) — NPC 전투기와는 서로 통과한다(충돌 데미지 없음)")]
         public Collider[] BodyColliders;
@@ -122,6 +124,7 @@ namespace ACO
         private float _baseLift;
         private float _baseFullFuel;
         private int[] _baseFlares;
+        private float[] _baseGunAmmo;   // 기총마다 원래 사격 가능 시간(초)
         private DFUNC_Limits _limits;
         private bool _limitsSearched;
         private float _baseAoABegin;
@@ -540,6 +543,32 @@ namespace ACO
             {
                 float gun = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_GUN) : 1f;
                 for (int i = 0; i < GunBonuses.Length; i++) { if (GunBonuses[i]) { GunBonuses[i].Factor = gun; } }
+            }
+
+            // 기총 탄약(6-257): SAV 기총의 사격 가능 시간 × 배수. 남은 탄은 같은 비율로(가득이면 가득으로), 내리면 원래 시간으로.
+            // SAV가 시작할 때 계산해 두는 재보급 속도(reloadspeed)와 탄 막대 눈금(FullGunAmmoDivider)도 같이 맞춘다.
+            if (Guns != null)
+            {
+                if (_baseGunAmmo == null || _baseGunAmmo.Length != Guns.Length)
+                {
+                    _baseGunAmmo = new float[Guns.Length];
+                    for (int i = 0; i < Guns.Length; i++) { _baseGunAmmo[i] = Guns[i] ? Guns[i].FullGunAmmoInSeconds : 0f; }
+                }
+                float ammo = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_GUN_AMMO) : 1f;
+                for (int i = 0; i < Guns.Length; i++)
+                {
+                    DFUNC_Gun g = Guns[i];
+                    if (!g) { continue; }
+                    if (_baseGunAmmo[i] <= 0f) { _baseGunAmmo[i] = g.FullGunAmmoInSeconds; }   // SAV가 아직 시작 전이었다
+                    if (_baseGunAmmo[i] <= 0f) { continue; }
+                    float oldFull = g.FullGunAmmoInSeconds;
+                    float newFull = _baseGunAmmo[i] * ammo;
+                    if (Mathf.Approximately(oldFull, newFull)) { continue; }
+                    if (oldFull > 0f) { g.GunAmmoInSeconds = Mathf.Min(g.GunAmmoInSeconds * (newFull / oldFull), newFull); }
+                    g.FullGunAmmoInSeconds = newFull;
+                    g.SetProgramVariable("reloadspeed", newFull / Mathf.Max(g.FullReloadTimeSec, 0.01f));
+                    g.SetProgramVariable("FullGunAmmoDivider", 1f / newFull);
+                }
             }
 
             // 대응탄 수 강화(단계마다 한 발씩 더함) → 대응탄 포드(소모품 배수): SAV 플레어 최대 수를 늘리고 채운다(내릴 때 원래 수로 채운다)

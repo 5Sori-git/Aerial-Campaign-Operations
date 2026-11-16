@@ -75,6 +75,10 @@ public partial class ACO_SceneBaker
         if (features.RadarPrefab == null) { features.RadarPrefab = ACO_DecoBuilder.Load(ACO_DecoBuilder.RadarName); }
         if (features.CommTowerPrefab == null) { features.CommTowerPrefab = ACO_DecoBuilder.Load(ACO_DecoBuilder.TowerName); }
         if (features.RuinsPrefab == null) { features.RuinsPrefab = ACO_DecoBuilder.Load(ACO_DecoBuilder.RuinsName); }
+        // 터널 랜드마크(6-266) — 1 · 2 · 3칸
+        if (features.TunnelPrefab == null) { features.TunnelPrefab = ACO_TunnelBuilder.Load(1); }
+        if (features.TunnelPrefab2 == null) { features.TunnelPrefab2 = ACO_TunnelBuilder.Load(2); }
+        if (features.TunnelPrefab3 == null) { features.TunnelPrefab3 = ACO_TunnelBuilder.Load(3); }
         PrefabUtility.RecordPrefabInstancePropertyModifications(features);
         EditorUtility.SetDirty(features);
         if (features.Terrain == null) { Debug.LogWarning("[ACO] 지형 장식에 연결할 육각 지형(ACO_HexTerrain)이 없습니다 — 장식이 놓이지 않습니다.", features); }

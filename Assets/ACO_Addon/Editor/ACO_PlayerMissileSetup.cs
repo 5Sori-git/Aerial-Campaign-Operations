@@ -198,7 +198,10 @@ public static class ACO_PlayerMissileSetup
         m.NumPreInstantiated = 4;
     }
 
-    /// RKT: 무유도 로켓. 누르고 있으면 0.08초마다 연사. 슬롯 8 / 총 72발 / 쏜 슬롯마다 3초 뒤 재장전. 피해 100, 범위 50m(F/A-18 설정 기준).
+    /// RKT: 무유도 로켓. 누르고 있으면 0.08초마다 연사. 슬롯 8 / 총 72발 / 쏜 슬롯마다 4초 뒤 재장전(6-260 — 예전 64발 · 3초는 풀업 때 지속 화력이
+    /// 다른 무장의 2~3배였다. 풀업 1000/초 · 총 36,000 = UGB와 같은 총량). 피해 100, 범위 50m(F/A-18 설정 기준).
+    public const int RocketAmmo = 72;
+    public const float RocketSlotReload = 4f;   // 6-260 6초 → 4초: 범위가 좁은 만큼 지속 화력은 UGB보다 높게(풀업 약 1000/초, UGB 750)
     public static void ApplyRocketPreset(ACO_DFUNC_Missile m)
     {
         m.UpgradeFamily = ACO_UpgradeFamily.SpecialBomb;
@@ -208,8 +211,8 @@ public static class ACO_PlayerMissileSetup
         m.HoldToFire = true;
         m.FireInterval = 0.08f;
         m.SlotCount = 8;
-        m.MaxAmmo = 72;
-        m.SlotReloadTime = 3f;
+        m.MaxAmmo = RocketAmmo;
+        m.SlotReloadTime = RocketSlotReload;
         m.Damage = 100f;
         m.SplashRadius = 50f;
         m.MinSplashFraction = 0.3f;

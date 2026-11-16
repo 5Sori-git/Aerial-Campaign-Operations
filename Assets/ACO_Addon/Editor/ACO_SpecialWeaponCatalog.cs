@@ -36,9 +36,9 @@ public static class ACO_SpecialWeaponCatalog
     {
         { "4AAM", "MULTI-TARGET AAM\nLOCKS UP TO FOUR AIRCRAFT AT ONCE AND FIRES ONE MISSILE AT EACH. LONGER LOCK RANGE THAN STANDARD MISSILES." },
         { "UGB", "UNGUIDED BOMB\nFREE-FALL BOMBS. AIM WITH THE CCIP PIPPER. THE WIDEST BLAST OF ANY BOMB." },
-        { "RKT", "ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. DEEP MAGAZINE, QUICK RELOAD." },
-        { "LGB", "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. TIGHTER BLAST THAN UNGUIDED BOMBS, BUT HITS HARDER." },
-        { "LGR", "LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. SAME PUNCH AS PLAIN ROCKETS, BUT SLOWER TO RELOAD." },
+        { "RKT", "ROCKET LAUNCHER\nUNGUIDED ROCKET SALVOS FOR GROUND TARGETS. FIRES IN 8-ROUND BURSTS." },
+        { "LGB", "LASER-GUIDED BOMB\nLOCK A GROUND TARGET AND RELEASE - THE BOMB STEERS ONTO IT. NARROW BLAST, BUT THE HARDEST-HITTING SINGLE BOMB." },
+        { "LGR", "LASER-GUIDED ROCKETS\nLOCKED ROCKETS CORRECT IN FLIGHT ONTO THE TARGET. RELIABLE HITS, BUT FEWER ROCKETS AND A SLOWER RELOAD." },
         { "4AGM", "MULTI-TARGET AGM\nLOCKS UP TO FOUR GROUND TARGETS AND FIRES ONE MISSILE AT EACH." },
         { "LAGM", "LONG-RANGE AGM\nHEAVY MISSILE THAT HITS GROUND TARGETS FROM OUTSIDE THEIR AIR DEFENSE RANGE. NARROW, SLOW LOCK." },
         { "LASM", "LONG-RANGE ANTI-SHIP MISSILE\nSEA-SKIMS INTO SHIPS AT HIGH SPEED WITH A HEAVY WARHEAD. SHIP CIWS CANNOT STOP IT." },
@@ -47,10 +47,10 @@ public static class ACO_SpecialWeaponCatalog
         { "RGP", "RAIL GUN POD\nHYPERSONIC SLUG THAT HITS HARD AT VERY LONG RANGE. A NARROW INSTANT LOCK AIMS IT. LONG CHARGE BETWEEN SHOTS." },
         { "FLAK", "PROXIMITY-FUSED ROCKETS\nHOLD TO FIRE UNGUIDED ROCKETS THAT BURST NEAR ANY ENEMY AIRCRAFT." },
         { "SASM", "AERIAL SUPPRESSION AAM\nA VERY WIDE PROXIMITY FUSE - EVEN A MISSILE THAT SLIPS PAST STILL BURSTS AND DAMAGES. SHORT LOCK RANGE." },
-        { "LAAM", "LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. NARROW, SLOW LOCK." },
+        { "LAAM", "LONG-RANGE AAM\nLOCKS AIRCRAFT FROM BEYOND VISUAL RANGE. SLOW OFF THE RAIL, BUT THE FASTEST OF ALL AT LONG RANGE. SLOW LOCK." },
         { "QAAM", "QUICK MANEUVER AAM\nWIDE, FAST LOCK AND EXTREME TURN RATE FOR CLOSE DOGFIGHTS. SHORT RANGE." },
-        { "HVAA", "HIGH-VELOCITY AAM\nVERY FAST AND HARD TO OUTRUN, BUT TURNS WIDE." },
-        { "CCAA", "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES. NARROW, SLOW LOCK AND TURNS WIDE." },
+        { "HVAA", "HIGH-VELOCITY AAM\nHITS TOP SPEED RIGHT OFF THE RAIL - THE QUICKEST TO REACH CLOSE TARGETS. TURNS WIDE." },
+        { "CCAA", "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES AND DECOYS - THE ACE HUNTER. NARROW LOCK, LONG RELOAD." },
         { "HPAA", "HIGH-POWER AAM\nHEAVY WARHEAD THAT HITS FAR HARDER THAN OTHER AAMS, WITH A WIDER BLAST AS A BONUS. LONG RELOAD." },
         { "ADAM", "AREA DENIAL AIR MUNITION\nDROPS, THEN HUNTS THE NEAREST AIRCRAFT. HUGE BLAST, FEW ROUNDS." },
         { "ECM", "ELECTRONIC WARFARE POD\nBRIEFLY JAMS THE AREA AROUND YOU. BREAKS ENEMY LOCKS AND MISSILES, THROWS OFF AA GUNS." },
@@ -112,13 +112,13 @@ public static class ACO_SpecialWeaponCatalog
             new Example { Id = "SASM", Name = "SASM", Order = 70, Price = 10000, Icon = "weapon_sasm", Preset = ApplySASM,
                 Projectile = P + "ACO_Missile_SRAAM.prefab", Desc = "SHORT-RANGE AERIAL SUPPRESSION AAM\nHUGE PROXIMITY BLAST - ALSO HITS NEARBY AIRCRAFT" },
             new Example { Id = "LAAM", Name = "LAAM", Order = 60, Price = 12000, Icon = "weapon_laam", Preset = ApplyLAAM,
-                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "LONG-RANGE AAM\nLOCKS AIR TARGETS FROM BEYOND VISUAL RANGE" },
+                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "LONG-RANGE AAM\nBEYOND VISUAL RANGE - SLOW START, FASTEST AT LONG RANGE" },
             new Example { Id = "QAAM", Name = "QAAM", Order = 80, Price = 15000, Icon = "weapon_qaam", Preset = ApplyQAAM,
                 Projectile = P + "ACO_Missile_SRAAM.prefab", Desc = "QUICK MANEUVER AAM\nWIDE SEEKER, EXTREME TURN RATE FOR DOGFIGHTS" },
             new Example { Id = "HVAA", Name = "HVAA", Order = 90, Price = 13000, Icon = "weapon_hvaa", Preset = ApplyHVAA,
-                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "HIGH-VELOCITY AAM\nVERY FAST - HARD TO OUTRUN, LESS AGILE" },
+                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "HIGH-VELOCITY AAM\nTOP SPEED RIGHT OFF THE RAIL - LESS AGILE" },
             new Example { Id = "CCAA", Name = "CCAA", Order = 150, Price = 16000, Icon = "weapon_ccaa", Preset = ApplyCCAA,
-                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES AND CHAFF - SLOW LOCK, LESS AGILE" },
+                Projectile = P + "ACO_Missile_AAM.prefab", Desc = "COUNTER-COUNTERMEASURE AAM\nIGNORES FLARES AND DECOYS - NARROW LOCK, LONG RELOAD" },
             new Example { Id = "HPAA", Name = "HPAA", Order = 100, Price = 14000, Icon = "weapon_hpaa", Preset = ApplyHPAA,
                 Projectile = P + "ACO_Missile_AAM.prefab", Desc = "HIGH-POWER AAM\nHUGE WARHEAD AND WIDE PROXIMITY FUSE" },
             new Example { Id = "ADAM", Name = "ADAM", Order = 160, Price = 18000, Icon = "weapon_adam", Preset = ApplyADAM,
@@ -268,25 +268,33 @@ public static class ACO_SpecialWeaponCatalog
         m.SplashRadius = 100f; m.MinSplashFraction = 0.6f;
     }
 
-    /// LGB(Laser-Guided Bomb): UGB와 같은 투하·피해(150)인데 락온한 지상 표적으로 속도 방향을 돌려 떨어진다(초당 10도, 시커 90도).
-    /// 대신 장전이 느리고(10초, UGB 4초) 범위가 좁다(60m, UGB 200m). 락온 없이 떨어뜨리면 UGB처럼 자유 낙하(CCIP 표시).
+    /// LGB(Laser-Guided Bomb): 락온한 지상 표적으로 속도 방향을 돌려 떨어진다(초당 10도, 시커 90도). 한 발이 가장 센 정밀 폭탄(6-261) —
+    /// 피해 500 · 범위 50m · 12발 · 장전 10초(풀업 1250 · 125m · 24발 — 구축함 · 순양함 직격 1발). 락온 없이 떨어뜨리면 UGB처럼 자유 낙하(CCIP 표시).
+    public const float LgbDamage = 500f, LgbSplash = 50f;
+    public const int LgbAmmo = 12;
     private static void ApplyLGB(ACO_DFUNC_Missile m)
     {
         ACO_PlayerMissileSetup.ApplyBombPreset(m);
         GuidedOrdnance(m, 5000f, 45f, 10f, 5f);
         m.SlotReloadTime = 10f;
-        m.SplashRadius = 60f;
+        m.Damage = LgbDamage;
+        m.SplashRadius = LgbSplash;
+        m.MaxAmmo = LgbAmmo;
     }
 
     /// LGR(Laser-Guided Rocket): RKT와 같은 연사·피해(100)인데 락온한 지상 표적으로 휘어 날아간다(초당 30도). 누르고 있으면 락온한 한 표적에 연달아.
-    /// 대신 장전이 느리고(8초, RKT 3초) 범위가 좁다(15m, RKT 50m). 락온 없이 쏘면 RKT처럼 곧게.
+    /// 확실히 맞는 대신 장전이 느리고(6초, RKT 4초) 범위가 좁고(15m) 탄수가 적다(60발, RKT 72). 6-261: 유도형 짝(LGB · LGR)은 무유도형(UGB · RKT)의
+    /// 약 5/6 총량, 짝 안에선 로켓이 폭탄보다 화력이 높고 총량은 같다 — 풀업 LGR 약 667/초 · 30,000(LGB 500/초 · 30,000). 락온 없이 쏘면 RKT처럼 곧게.
+    public const int LgrAmmo = 60;
+    public const float LgrReload = 6f;
     private static void ApplyLGR(ACO_DFUNC_Missile m)
     {
         ACO_PlayerMissileSetup.ApplyRocketPreset(m);
         GuidedOrdnance(m, 3000f, 30f, 30f, 4f);
         m.FireInterval = 0.15f;
-        m.SlotReloadTime = 8f;
+        m.SlotReloadTime = LgrReload;
         m.SplashRadius = 15f;
+        m.MaxAmmo = LgrAmmo;
     }
 
     /// 유도 폭탄·로켓 공통: 지상 표적(레이어 30) 락온 1초, 락온 없이도 쏜다(무유도), 표적 마커 중심 근접 폭발 반경.
@@ -662,10 +670,12 @@ public static class ACO_SpecialWeaponCatalog
         m.SplashRadius = 50f; m.MinSplashFraction = 0.6f;
     }
 
-    /// LAAM: 먼 거리 대공(10km). 락온 2초, 빠르다(1200).
+    /// LAAM: 장거리 요격 대공. 락온 7km(락온 거리 풀업 17.5km) · 2초. 6-262: 느리게 출발해(가속 200) 멀리 갈수록 가장 빨라진다(최고 2400 — HVAA 1900보다 빠름).
+    /// 7km 약 6.9초, 17.5km 약 11.8초(기체 250m/s 발사, 멈춘 표적). 선회 110 — 최고 속도에서 반경 약 1.25km라 직진하는 폭격기·수송기 요격용.
+    public const float LaamSpeed = 2400f, LaamAccel = 200f, LaamTurn = 110f;
     private static void ApplyLAAM(ACO_DFUNC_Missile m)
     {
-        Guided(m, false, 1, 2, 16, 10f, 10000f, 45f, 2f, 200f, 1200f, 320f, 90f, 12f);
+        Guided(m, false, 1, 2, 16, 10f, 7000f, 45f, 2f, 200f, LaamSpeed, LaamAccel, LaamTurn, 12f);
     }
 
     /// QAAM: 근접전. 넓은 탐색(60도), 빠른 락온(0.5초), 매우 큰 선회율(360).
@@ -674,10 +684,11 @@ public static class ACO_SpecialWeaponCatalog
         Guided(m, false, 1, 2, 16, 8f, 2000f, 60f, 0.5f, 200f, 900f, 400f, 360f, 9f);
     }
 
-    /// HVAA: 고속(1900). 매우 빠르지만 덜 돌고 피해가 작다.
+    /// HVAA: 고속(1900). 6-262: 가속 1500 — 약 1초 만에 최고 속도, 단거리(2km)에서 가장 빨리 꽂힌다(1km 약 1.0초). 덜 돈다(70).
+    public const float HvaaAccel = 1500f;
     private static void ApplyHVAA(ACO_DFUNC_Missile m)
     {
-        Guided(m, false, 1, 2, 16, 10f, 2000f, 45f, 1.5f, 130f, 1900f, 700f, 70f, 10f);
+        Guided(m, false, 1, 2, 24, 10f, 2000f, 45f, 1.5f, 200f, 1900f, HvaaAccel, 70f, 10f);
     }
 
     /// HPAA: 고위력(400). 넓은 근접 신관(20m), 장전이 느리다.
@@ -686,8 +697,11 @@ public static class ACO_SpecialWeaponCatalog
         Guided(m, false, 1, 2, 12, 14f, 2000f, 45f, 1.5f, 400f, 800f, 300f, 90f, 20f);
     }
 
-    /// FLAK: 무유도 대공 로켓. 누르고 있으면 0.12초마다 연사, 적 항공기 마커 중심이 12m 안을 지나면 터져 범위(20m)로 맞힌다.
-    /// 락온이 없어 기총처럼 앞을 겨눠 쏜다 — 편대·폭격기·헬기 상대. 강화는 특수 대공 탭(피해·탄수·장전).
+    /// FLAK: 무유도 대공 로켓. 누르고 있으면 0.12초마다 연사, 적 항공기 마커 중심이 100m 안에 드는 순간 터져 범위(150m)로 맞힌다.
+    /// 락온이 없어 기총처럼 앞을 겨눠 쏜다 — 편대·폭격기·헬기 상대, 플레어와 무관. 강화는 특수 대공 탭(피해·탄수·장전).
+    /// 6-263: 피해 30 → 50. 신관이 거의 늘 범위 가장자리(약 95m)에서 터져 실제 약 절반(25)이 들어간다 — 전투기 8발, 에이스(600) 24발,
+    /// 총 약 1,350(ADAM 1,200과 비슷). 풀업 약 62/발 · 250/초(무유도라 에이스엔 실제로 절반쯤 — CCAA 167/초 근처, 대에이스는 CCAA).
+    public const float FlakDamage = 50f;
     private static void ApplyFLAK(ACO_DFUNC_Missile m)
     {
         m.UpgradeFamily = ACO_UpgradeFamily.SpecialAAM;
@@ -697,24 +711,28 @@ public static class ACO_SpecialWeaponCatalog
         m.HoldToFire = true;
         m.FireInterval = 0.12f;
         m.SlotCount = 6;
-        m.MaxAmmo = 60;
+        m.MaxAmmo = 54;
         m.SlotReloadTime = 3f;
-        m.Damage = 90f;
-        m.SplashRadius = 20f;
-        m.MinSplashFraction = 0.4f;
+        m.Damage = FlakDamage;
+        m.SplashRadius = 150f;
+        m.MinSplashFraction = 0.2f;
         m.MaxSpeed = 900f;
         m.Acceleration = 900f;
-        m.ProximityRadius = 12f;
+        m.GuidanceMode = 0;
+        m.CrossLockIndicator = true;
+        m.ProximityRadius = 100f;
         m.ProximityAnyEnemy = true;
         m.InheritVelocity = true;
         m.AllowFiringWhenGrounded = false;
         m.NumPreInstantiated = 8;
     }
 
-    /// CCAA(Counter-Countermeasure AAM): 대응책 대응 시커라 플레어·채프·노칭이 통하지 않는다. 대신 락온이 느리고(2.5초) 좁으며(30도) 덜 돈다(70).
+    /// CCAA(Counter-Countermeasure AAM): 대응책 대응 시커라 플레어·채프·노칭(에이스 태양·코브라 미끼 포함)이 통하지 않는 대에이스 무장.
+    /// 6-262 상향: 락온 2.5 → 1.5초, 선회 70 → 90. 대가는 좁은 락온 각도(30도)와 긴 장전(12초). 유도는 직접 추적(비례항법은 동기화 탓에 오히려 덜 맞는다).
+    public const float CcaaLockTime = 1.5f, CcaaTurn = 90f;
     private static void ApplyCCAA(ACO_DFUNC_Missile m)
     {
-        Guided(m, false, 1, 2, 12, 12f, 2000f, 30f, 2.5f, 200f, 900f, 300f, 70f, 9f);
+        Guided(m, false, 1, 2, 20, 12f, 2000f, 30f, CcaaLockTime, 200f, 900f, 300f, CcaaTurn, 9f);
         m.IgnoreCountermeasures = true;
     }
 

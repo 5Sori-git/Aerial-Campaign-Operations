@@ -88,7 +88,7 @@ public static partial class ACO_PrefabBuilder
         return new ShipSpec
         {
             PrefabName = "NPC_Carrier", TargetName = "Aircraft Carrier", Label = "CV", HighValue = true, Score = 3000,
-            Health = 1600f, Armor = 4f, NoDamageBelow = 3f, PartHullDamage = 0.05f,
+            Health = 1600f, Armor = 4f, NoDamageBelow = 0f, PartHullDamage = 0.05f,   // 6-256: 기총도 먹힌다(예전 문턱 3 — 기총 면역)
             CruiseSpeed = 0f, CruiseRadius = 0f, EscortSpacing = 500f,
             HullSize = new Vector3(70f, 22f, 300f),
             BridgeSize = new Vector3(14f, 34f, 50f), BridgeCenter = new Vector3(26f, 30f, -20f),

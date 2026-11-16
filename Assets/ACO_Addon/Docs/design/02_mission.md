@@ -19,7 +19,7 @@
 - **지상**: 공역 안 무작위 중심 → `RaycastHeight`에서 아래로 Raycast(`GroundLayers`). 공역 밖·안전지대(콜라이더 바운딩 박스 + `SafeZoneMargin` 5km)·급경사(`MaxGroundSlope`)·너무 낮음(`MinGroundHeight`)이면 다시. 그룹 4~8대: 콘보이(진행 방향 일렬, `ConvoySpacing`, 같은 방향) 또는 부대(반경 `ClusterRadius`, 최소 간격 `MinUnitSpacing`, 무작위 방향). 유닛마다 지면을 다시 잰다. 자리를 못 찾으면 3번 더 시도 후 남은 유닛은 이번 미션에서 끈다.
 - **안전지대 여유** `SafeZoneMargin` **5km**(지상 유닛과 적 함선 공통, 예전 기본 500m는 Bake가 5km로): 안전지대(콜라이더 바운딩 박스) 경계에서 이만큼 밖에만 놓는다 — 항모·기지에서 막 이륙한 기체가 대공 무기에 바로 잡히지 않게. 적 함선(전함·구축함 — `SampleSea`)은 순항 원 전체(기함 순항 반경 + 호위 편대 폭)의 중심과 둘레 확인점 모두. 안전지대 근처가 좁은 지형이면 해당 페이즈가 다른 종류로 바뀔 수 있다(그땐 값을 줄인다).
 - **고가치 표적**(페이즈 목표 — 타격 페이즈가 플레이어 근처에 놓는다): 서로 `HighValueMinSeparation`(8km) 이상 떨어뜨려 지면에 놓고, `DefenseChance` 확률로 반경 `DefenseRadius`(450m) 원 위에 방공 호위 `DefenseSizeMin~Max`(3~5)대(지상 풀에서, 바깥을 바라보게)를 두른다. 표적은 `ACO_StaticTarget` — 무장 없음, 체력/피격은 SaccTarget, 파괴 시 `HideOnDeath` 숨기고 `ShowOnDeath`(잔해) 켬, 히트박스 끔. `TargetName`/`ScoreValue`/`IsDestroyed()`는 미션 목표 판정용.
-  - 프리팹(`ACO → Create Prefabs...`의 공장/벙커): `NPC_Factory`(40x15x30, 체력 300, 장갑 1), `NPC_Bunker`(18x5x18, 체력 400, `ArmorStrength` 4, `NoDamageBelow` 20 — SAV 기총처럼 작은 데미지는 무시, 폭탄/미사일로 부숴야 함). SaccEntity 없이 SaccTarget + 레이어 30 마커만으로 락온/피격된다. ⚠ SAV 미사일 기본값(`AAMDamage` 1 = FullHealth의 100%)은 체력과 무관하게 한 발에 부수므로, 여러 발이 필요하게 하려면 플레이어 무장의 `AAMDamage_AbsoluteMode`를 켠다.
+  - 프리팹(`ACO → Create Prefabs...`의 공장/벙커): `NPC_Factory`(40x15x30, 체력 300, 장갑 1), `NPC_Bunker`(18x5x18, 체력 400, `ArmorStrength` 4, `NoDamageBelow` 20 — SAV 기총처럼 작은 데미지는 무시, 폭탄/미사일로 부숴야 함 — 바뀜(6-256): 문턱 0, 기총도 2.5씩). SaccEntity 없이 SaccTarget + 레이어 30 마커만으로 락온/피격된다. ⚠ SAV 미사일 기본값(`AAMDamage` 1 = FullHealth의 100%)은 체력과 무관하게 한 발에 부수므로, 여러 발이 필요하게 하려면 플레이어 무장의 `AAMDamage_AbsoluteMode`를 켠다.
 - **전투기**: 4기(`FourShipChance`) 또는 2기 편대, 핑거팁 대형(`FormationSpacing`). 편대마다 **임무 지점**:
   - 엄호: 배치돼 있고 살아 있는(이번에 놓은 것 포함) 지상 유닛/고가치 표적 중 하나의 상공 `CoverAltitudeMin~Max`(1.5~3km). 없으면 경계에서 `IngressInset` 안쪽 무작위 지점(CAP 지점 `CapPoints`는 지웠다 — 6-188).
   - 스폰: 전체 배치는 `FullDeploySpawnInside`면 임무 지점에서 `InsideSpawnDistanceMin~Max`(3~8km) 떨어진 공역 안, 증원은 공역 경계 바깥 `SpawnOutsideMin~Max`에서 임무 지점을 향해.
@@ -59,7 +59,7 @@
 | TIME SENSITIVE 시한 표적 | 표적 `TstCount`(3)개가 하나씩 등장 | `OBJ_GROUND` 1대씩, 플레이어 `TstDistanceMin~Max`(5~12km) | 표적마다 처음 보인 순간부터 `TstTimeLimit`(90초), 못 잡으면 도주(철수). `TstInterval`(8초) 뒤 다음. 다 지나가면 종료 — 잡은 수 × `TstBonus`. **하나라도 도주하면 그 즉시 미션 실패**(`FAIL_TARGET_ESCAPED` → HUD "TIME-SENSITIVE TARGET ESCAPED", 디브리핑 "(TARGET ESCAPED)"). 배치 실패로 건너뛴 표적은 놓친 것으로 치지 않는다 |
 | AIR SUPERIORITY 제공권 | 적 편대 `AirFightersBase + PerPhase·(n−1)`기 | `OBJ_FLIGHT` — 플레이어 쪽으로 진입, 숙련도 무작위 | 전부 격추 |
 | ACE SQUADRON 보스 | 이름 붙은 에이스 `BossFighters`(4)기(`BossNames` 무작위) | `OBJ_FLIGHT` 숙련도 에이스 고정, 4기 편대 | 전부 격추 |
-| CONVOY 지상 호위 | 아군 콘보이 `ConvoySize`(3)대를 지상 항로 끝(`ConvoyRouteLength` 6km)까지 | `RequestDeployEscort`(지상, 여러 대) — 항로 옆 전차 매복조 `ConvoyAmbushBase + PerPhase·(n−1)`곳 + 방공 시설 `ConvoySites`(1) | 살아남은 차량이 모두 도착 = 클리어(+ `ConvoyBonus` × 생존 비율 × 배율), 전멸 = **미션 실패**(`FAIL_CONVOY_LOST` → "CONVOY DESTROYED", 6-10) |
+| CONVOY 지상 호위 | 아군 콘보이 `ConvoySize`(3)대를 지상 항로 끝(`ConvoyRouteLength` 6km)까지 | `RequestDeployEscort`(지상, 여러 대) — 항로 옆 전차 매복조 `ConvoyAmbushBase + PerPhase·(n−1)`곳 + 방공 시설 `ConvoySites`(1) (바뀜(6-265): 매복은 처음에 깔지 않고 웨이포인트마다 차례로) | 살아남은 차량이 모두 도착 = 클리어(+ `ConvoyBonus` × 생존 비율 × 배율), 전멸 = **미션 실패**(`FAIL_CONVOY_LOST` → "CONVOY DESTROYED", 6-10) |
 | ESCORT 호위 | 아군 수송기를 항로 끝(`EscortRouteLength` 32km)까지 | `RequestDeployEscort` — 항로 + 항로 아래 방공 시설 `EscortSites`(2, 지면이 있는 곳만), 진행에 맞춰 요격 편대 | 도착 = 클리어(+ `EscortBonus` × 남은 체력 × 배율), 격추 = **미션 실패**(`FAIL_VIP_LOST` → "ESCORT TARGET SHOT DOWN", 6-9) |
 
 - **흐름**: 미션 시작 = 생성기 전체 배치(고가치 표적 없이 배경 병력 `BackgroundGround`(12)/`BackgroundFighters`(4)만) → `FirstPhaseDelay`(5초) → 페이즈 시작(목표 배치) → 클리어 → `PhaseTransitionDelay`(10초) → 다음 페이즈 … 마지막 페이즈 클리어 = 미션 클리어.
@@ -297,3 +297,19 @@
 - **바뀐 동작 없음**: 미션 시작은 늘 지금 지형 그대로(게임 진행이 꺼 두던 지형 재생성 분기를 지움 — 지형은 브리핑 리롤 · 미션 뒤 갱신으로만 바뀐다). 게임 진행이 생성기의 `AllowInteract` · `DisableInteractive` · `RegenerateTerrainEachMission`을 끄던 줄도 지웠다. 편집기 기즈모의 CAP 표시도 지웠다.
 - **원점 콜라이더**: 생성기 오브젝트의 박스 콜라이더(원점, 1m — 예전 '눌러서 시작'용)를 Setup Check `generator-collider-1`로 지웠다.
 - 확인(ClientSim): 미리 배치(브리핑) #1 — 지상 그룹 5개(19대), 전투기 4기 → 미션 시작 "브리핑 때 미리 배치한 병력을 그대로 씁니다".
+
+### 6-265. 호위 페이즈 증원 — 콘보이 웨이포인트 매복 · 상륙전 2차 공습
+- 배경(사용자 "콘보이 호위랑 상륙전, 적 한 번 스폰하고 끝이야?"): 두 페이즈는 시작할 때 적을 한 번 배치하고 끝이었다(공통 웨이브 — 2페이즈부터 시작 웨이브, 교착 웨이브 — 만 있었다). 앞쪽을 정리하면 뒤로 갈수록 한산했다.
+- **콘보이 웨이포인트 매복**(사용자 "웨이포인트마다 매복이 있으면 좋겠어"): 매복조를 처음에 한꺼번에 깔지 않고(`RequestDeployEscort` 매복 0), 항로의 웨이포인트(중간 경유점들 + 목적지 — 기본 4점 항로면 3곳)마다 차례로 낸다.
+  - 웨이포인트 k의 매복은 콘보이 선두(살아 있는 VIP 중 가장 앞선 차량)가 웨이포인트 k − 1을 지나는 순간 출발(첫 웨이포인트 몫은 출발과 함께).
+    한 지점 매복의 출발점은 생성기 `PointAmbushApproachDistance`(700m — 일반 매복 1500m의 절반 남짓): 전차(10m/s)가 약 70초에 자리에 닿아, 콘보이(20m/s)가 웨이포인트 사이 약 2~3km(100초 남짓)를 오는 동안 먼저 기다린다(1500m면 150초라 늦었다 — 점검에서 고침). 곡사포는 원래 400m, 헬기는 100m/s라 그대로.
+  - 수: 웨이포인트마다 `WaypointAmbushGroups`(1)조, `FinalAmbushExtraFromPhase`(3) 페이즈부터 목적지에 1조 더(예전 2 + 페이즈 총량과 비슷). 종류 · 옆 거리 · 접근 거리는 예전 매복과 같다(생성기 `PlaceAmbushGroups` — 예전 `PlaceAmbushes`도 이걸 쓴다).
+  - 새 생성기 API `RequestAmbushAt(점, 방향, 조 수, 이동 방식, 종류 고정)` — 한 지점 옆 매복(태그 없음, 목표 아님). 파괴된 유닛을 다시 쓴다.
+  - 무전(AWACS, 음성 `Convoy/Convoy_Ambush` · `Convoy_Final`): 두 번째 매복부터 "Enemy reinforcements inbound! Cover the convoy!", 목적지 매복은 "Enemy reinforcements inbound! Get the convoy home!". 첫 매복은 시작 대사가 대신한다.
+    처음엔 "다음 통과 지점에 적이 몰려온다" · "목적지에 적이 집결" · "공격기와 헬기 접근"처럼 무엇이 어디로 오는지 말했는데, 매복이 실제로 놓였는지(풀 · 자리)는 화면마다 알 수 없어 안 오면 틀린 말이 된다 — 사용자 "적이 접근 중이라고 하자, 증원 대사 거의 그대로"로 공통 증원 대사(radio.chatter.06)에 대상만 붙였다(escort-waves-2).
+- **상륙전 2차 공습**(사용자 "10km 중에 3km로"): 선두 LCAC가 해변까지 `StrikeRemaining`(3km — 항로 10km 중 7km 지점)에 들어오면 한 번 — 공격기 `StrikeAttackersBase`(2) + `StrikeAttackersPerPhase`(1) × (페이즈 번호 − 1)기(상륙 해변에서 6~9km 밖에서 진입, 풀에 없으면 헬기만) + 적 헬기 `StrikeHelicopterGroups`(1)조(선두 LCAC 앞 1.2km 항로 옆 바다 위로). 무전 "Enemy reinforcements inbound! Cover the landing craft!"(음성 `Amphibious/Amphibious_Strike`). 처음 제안 해변 2km는 너무 가깝다고 해서 3km.
+- 판단은 동기화 값 없이 호위 대상 진행(생성기 배치 시각 기준 — 모든 화면이 같은 값)만으로 — 대사는 각 화면이 0.5초마다 보고 같은 순간에 낸다(이 페이즈를 처음 보는 화면은 지금 상태를 기준으로 삼아 지난 대사를 듣지 않는다).
+  - 오너가 바뀌면 새 오너는 이미 지난 웨이포인트 몫(이미 3km 안이면 2차 공습)은 앞 오너가 냈다고 본다 — 넘기는 순간과 겹치면 하나를 놓칠 수 있다(드묾, 중복은 없다).
+  - 매복 · 2차 공습을 내면 교착 웨이브 기준 시각을 지금으로(`MarkModuleProgress`) — 새 위협이 나온 직후 엉뚱한 증원이 오지 않게.
+  - 풀에 남은 유닛 · 자리가 없으면 그 매복은 건너뛴다(로그). 콘보이 도착 · 전멸 뒤엔 내지 않는다.
+- 적용: Setup Check 튜닝 escort-waves-1(씬 모듈 음성 칸 채우기 + 무전 연결 — Bake가 콘보이 · 상륙전 모듈에 `Chatter`를 넣는다), 번역 `radio.phaseconvoy.04 · 05`, `radio.phaseamphibious.04`.
