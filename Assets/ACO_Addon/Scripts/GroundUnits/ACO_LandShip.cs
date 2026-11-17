@@ -95,6 +95,10 @@ namespace ACO
         private bool _dead;
         private bool _silentDead;        // 늦게 들어와 이미 격파된 것으로 본 상태(연출 없음) — 체력이 살아 있는 걸로 오면 되돌린다
         private bool _blasted;
+        private float _liveAt = -100f;   // 켜지거나 스폰된 시각(로컬) — 출현 직후 격파 판정은 지난 미션 값으로 보고 대사를 내지 않는다(6-268)
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;   // 보류한 격파가 이만큼 그대로면(체력 0) 진짜 — 대사 없이 격파 상태로
+        private float _pendingExplodeAt = -1f;
         private float _deadAt;
         private float _secondaryTimer;
         private int _appliedStage = -1;
@@ -163,6 +167,8 @@ namespace ACO
             _dead = false;
             _silentDead = false;
             _blasted = false;
+            _liveAt = Time.time;
+            RestartPending();
             _poseReady = false;
             _spawnPos = Warship != null ? Warship.MissionSpawnPosition : transform.position;
             _spawnRot = Warship != null ? Warship.MissionSpawnRotation : transform.rotation;
@@ -182,11 +188,20 @@ namespace ACO
         {
             _spawned = false;
             _dead = false;
+            _pendingExplodeAt = -1f;
         }
 
         /// 코어 파괴(SaccTarget.ExplodeOther — 모든 클라이언트): 그 자리에 멈추고 연쇄 폭발 뒤 대폭발.
         public void Explode()
         {
+            if (_dead && !_silentDead) { return; }
+            if (JustSpawned()) { if (_pendingExplodeAt < 0f) { _pendingExplodeAt = Time.time; } return; }   // 출현 직후 격파는 보류(6-268)
+            ApplyExplode(true);
+        }
+
+        private void ApplyExplode(bool say)
+        {
+            _pendingExplodeAt = -1f;
             if (_dead && !_silentDead) { return; }
             _silentDead = false;
             _blasted = false;
@@ -199,8 +214,22 @@ namespace ACO
             _secondaryTimer = 0f;
             SetAll(CoreMarkers, false);
             if (CoreHitbox) { CoreHitbox.enabled = false; }
-            if (Phase != null && Phase.IsLive()) { Phase.SayDown(); }
+            if (say && Phase != null && Phase.IsLive()) { Phase.SayDown(); }
             StopDust();
+        }
+
+        void OnEnable() { _liveAt = Time.time; }
+
+        /// 스폰 전이거나 켜진 지 SPAWN_DOWN_GRACE초 안(이때 온 격파는 보류): 풀에서 다시 쓴 전함에 지난 미션의 체력 0이 먼저 들어온 것으로 본다(6-268).
+        private bool JustSpawned() { return !_spawned || Time.time - _liveAt < SPAWN_DOWN_GRACE; }
+
+        /// 켜질 때 먼저 온 격파면 스폰부터 다시 센다.
+        private void RestartPending() { if (_pendingExplodeAt >= 0f) { _pendingExplodeAt = Time.time; } }
+
+        private bool CoreDown()
+        {
+            if (TargetHealth != null) { return TargetHealth.Health <= 0f; }
+            return Warship == null || Warship.IsDestroyed();
         }
 
         // ───────────── 매 프레임 ─────────────
@@ -209,6 +238,12 @@ namespace ACO
         {
             if (!_spawned) { return; }
             float dt = Time.deltaTime;
+            if (_pendingExplodeAt >= 0f)
+            {
+                // 보류한 출현 직후 격파(6-268): 체력이 살아 있으면 지난 미션 값이었다 — 취소. 오래 0이면 진짜(대사 없이).
+                if (!CoreDown()) { _pendingExplodeAt = -1f; }
+                else if (Time.time - _pendingExplodeAt >= DOWN_CONFIRM) { if (_dead) { _pendingExplodeAt = -1f; } else { ApplyExplode(false); } }
+            }
             // 늦게 들어왔는데 이미 격파됐다: 연출 없이 멈춘다.
             // 스폰 직후 몇 초(_forceUntil)는 보지 않는다 — 풀에서 다시 쓰는 전함은 지난 격파의 체력 0이 남아 있고,
             // 오너는 2프레임 뒤에·다른 클라이언트는 동기화로 늦게 되살린다. 그 사이에 멈추면 이번 미션 내내 멈춘 채 남는다

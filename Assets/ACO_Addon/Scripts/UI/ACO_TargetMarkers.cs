@@ -73,6 +73,11 @@ namespace ACO
         [Tooltip("목표 위 TGT 글자 색 / 아군 위 이름(VIP 등) 글자 색")]
         public Color ObjectiveLabelColor = new Color(1f, 0.25f, 0.2f, 0.9f);
         public Color FriendlyLabelColor = new Color(0.4f, 0.75f, 1f, 0.9f);
+        [Tooltip("시가지 정밀 타격(6-270): 미확인 도시 차량(회색 ?) · 식별된 민간 차량(초록 CIV) 테두리. 비우면 지상 · 아군 머티리얼")]
+        public Material UnknownMaterial;
+        public Material CivilianMaterial;
+        public Color UnknownLabelColor = new Color(0.75f, 0.75f, 0.75f, 0.9f);
+        public Color CivilianLabelColor = new Color(0.35f, 1f, 0.45f, 0.9f);
 
         [Header("아군기 (플레이어)")]
         [Tooltip("빌드 시 Bake가 게임 진행을 넣는다 — 참가자 기체(칸)를 읽어 다른 플레이어가 탄 기체에 파란 테두리 + WINGMAN 칸 번호를 그린다")]
@@ -92,6 +97,7 @@ namespace ACO
         public string SupportBomberLabel = "SUPPORT BOMBER";
         public string SupportTankerLabel = "TANKER DRONE";
         public string SupportGuardianLabel = "GUARDIAN DRONE";
+        public string SupportWingmanLabel = "WINGMAN";
 
         [Header("항모 (아군 기지, 고정 위치)")]
         [Tooltip("Bake가 작전 테이블의 HomeBase(항모)를 넣는다. 비우면 그리지 않는다")]
@@ -175,6 +181,8 @@ namespace ACO
         private const int KIND_WAYPOINT = 6;
         private const int KIND_DESTINATION = 7;
         private const int KIND_HOME = 8;      // 항모: 아군 색 마름모 + CVN 거리
+        private const int KIND_UNKNOWN = 9;   // 미확인 도시 차량(6-270): 회색 테두리 + ?
+        private const int KIND_CIVILIAN = 10; // 식별된 민간 차량: 초록 테두리 + CIV
 
         // 시작 시 생성기 풀에서 만든 유닛 목록(캐시)
         private Transform[] _unitTransform;
@@ -188,6 +196,7 @@ namespace ACO
         private bool[] _unitObjective;
         private bool[] _unitHidden;      // 격침된 함선과 같이 가라앉는 부위
         private bool[] _unitFriendly;    // 호위 대상(아군) — 파란 테두리 + 이름, 목표처럼 멀리서도 보인다
+        private ACO_CityVehicle[] _unitCity;   // 도시 차량(6-270) — 식별 전 회색 ?, 식별된 민간 초록 CIV(목표처럼 멀리서도 보인다)
         private int _unitCount;
         private float _objectiveTimer;
 
@@ -280,6 +289,7 @@ namespace ACO
             _unitObjective = new bool[total];
             _unitHidden = new bool[total];
             _unitFriendly = new bool[total];
+            _unitCity = new ACO_CityVehicle[total];
             _unitCount = 0;
 
             for (int i = 0; i < fighters; i++)
@@ -355,6 +365,7 @@ namespace ACO
             _unitFighter[_unitCount] = fighter;
             _unitCat[_unitCount] = category;
             _unitIdx[_unitCount] = index;
+            _unitCity[_unitCount] = category == ACO_MissionGenerator.CAT_GROUND ? Generator.GetCityVehicle(index) : null;
             _unitCount++;
         }
 
@@ -375,6 +386,9 @@ namespace ACO
                     ACO_TelUnit tel = Generator.GroundUnits[_unitIdx[u]].GetComponent<ACO_TelUnit>();
                     if (tel != null) { _unitLabel[u] = airborne ? tel.MissileLabel : tel.MarkerLabel; }
                 }
+                // 도시 차량: 식별 전에는 이름을 숨긴다(초점 · 락온 정보 줄도 ?)
+                ACO_CityVehicle city = _unitCity[u];
+                if (city != null) { _unitLabel[u] = city.Identified ? city.MarkerLabel : "?"; }
                 if (_unitFriendly[u]) { _unitObjective[u] = false; }
                 else if (Manager == null) { _unitObjective[u] = _unitCat[u] == ACO_MissionGenerator.CAT_HVT; }
                 else { _unitObjective[u] = tag != 0 && Generator.GetUnitTag(_unitCat[u], _unitIdx[u]) == tag; }
@@ -458,6 +472,10 @@ namespace ACO
 
                 bool objective = _unitObjective[u];
                 bool friendly = _unitFriendly[u];
+                ACO_CityVehicle city = _unitCity[u];
+                bool unknown = city != null && !city.Identified;
+                bool civilian = city != null && city.Identified && !city.IsEnemy;
+                if (unknown || civilian) { objective = false; }
                 // 락온 중인 표적: 테두리를 락온 지점(락온 표적 오브젝트 — 마름모가 쫓는 자리)에 그린다(유닛 기준점과 달라 위에서 보면 어긋났다)
                 int lockK = -1;
                 for (int k = 0; k < MAX_LOCKS; k++) { if (_lockUnit[k] == u) { lockK = k; break; } }
@@ -467,12 +485,14 @@ namespace ACO
                 if (lockK >= 0 && _lockObj[lockK] != null && _lockObj[lockK].activeInHierarchy) { point = _lockObj[lockK].transform.position; }
                 Vector3 d = point - headPos;
                 float sq = d.sqrMagnitude;
-                if (sq > ((objective || friendly) ? objectiveMaxSq : maxSq) || sq < 1f) { continue; }
+                if (sq > ((objective || friendly || city != null) ? objectiveMaxSq : maxSq) || sq < 1f) { continue; }
 
                 float dist = Mathf.Sqrt(sq);
                 Vector3 dir = d / dist;
                 int kind = _unitKind[u];
                 if (friendly) { kind = kind == KIND_AIR ? KIND_FRIENDLY_AIR : KIND_FRIENDLY_GROUND; }
+                else if (unknown) { kind = KIND_UNKNOWN; }
+                else if (civilian) { kind = KIND_CIVILIAN; }
                 else if (objective) { kind = kind == KIND_AIR ? KIND_OBJECTIVE_AIR : KIND_OBJECTIVE; }
 
                 Transform m = Markers[used];
@@ -562,6 +582,15 @@ namespace ACO
                     for (int k = 0; k < guardians.Length && used < Markers.Length; k++)
                     {
                         if (guardians[k] && guardians[k].gameObject.activeInHierarchy) { used = DrawSupport(used, guardians[k].transform.position, SupportGuardianLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+                ACO_Wingman[] wingmen = Support.Wingmen;   // 아군 편대(6-273)
+                if (wingmen != null)
+                {
+                    for (int k = 0; k < wingmen.Length && used < Markers.Length; k++)
+                    {
+                        ACO_Wingman w = wingmen[k];
+                        if (w && w.gameObject.activeInHierarchy && !w.IsDead()) { used = DrawSupport(used, w.transform.position, SupportWingmanLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
                     }
                 }
             }
@@ -912,9 +941,10 @@ namespace ACO
             _markerKind[i] = kind;
             if (Frames != null && i < Frames.Length && Frames[i])
             {
-                Frames[i].sharedMesh = (kind == KIND_AIR || kind == KIND_OBJECTIVE_AIR || kind == KIND_FRIENDLY_AIR || kind >= KIND_WAYPOINT) ? AirMesh : GroundMesh;
+                bool diamond = kind >= KIND_WAYPOINT && kind <= KIND_HOME;
+                Frames[i].sharedMesh = (kind == KIND_AIR || kind == KIND_OBJECTIVE_AIR || kind == KIND_FRIENDLY_AIR || diamond) ? AirMesh : GroundMesh;
                 // 경유점/목적지: 사각형 테두리만 45° 돌려 마름모로(마커 루트를 돌리면 위 글자까지 기운다)
-                Frames[i].transform.localRotation = kind >= KIND_WAYPOINT ? Quaternion.Euler(0f, 0f, 45f) : Quaternion.identity;
+                Frames[i].transform.localRotation = diamond ? Quaternion.Euler(0f, 0f, 45f) : Quaternion.identity;
             }
             if (FrameRenderers != null && i < FrameRenderers.Length && FrameRenderers[i])
             {
@@ -928,6 +958,8 @@ namespace ACO
                 else if (kind == KIND_WAYPOINT) { mat = WaypointMaterial != null ? WaypointMaterial : (FriendlyMaterial != null ? FriendlyMaterial : AirMaterial); }
                 else if (kind == KIND_DESTINATION) { mat = DestinationMaterial != null ? DestinationMaterial : (FriendlyMaterial != null ? FriendlyMaterial : AirMaterial); }
                 else if (kind == KIND_HOME) { mat = FriendlyMaterial != null ? FriendlyMaterial : AirMaterial; }
+                else if (kind == KIND_UNKNOWN) { mat = UnknownMaterial != null ? UnknownMaterial : GroundMaterial; }
+                else if (kind == KIND_CIVILIAN) { mat = CivilianMaterial != null ? CivilianMaterial : (FriendlyMaterial != null ? FriendlyMaterial : GroundMaterial); }
                 FrameRenderers[i].sharedMaterial = mat;
             }
             if (TgtLabels != null && i < TgtLabels.Length && TgtLabels[i])
@@ -935,8 +967,11 @@ namespace ACO
                 bool friendly = kind == KIND_FRIENDLY_AIR || kind == KIND_FRIENDLY_GROUND || kind == KIND_HOME;
                 bool objective = kind == KIND_OBJECTIVE || kind == KIND_OBJECTIVE_AIR;
                 bool route = kind == KIND_WAYPOINT || kind == KIND_DESTINATION;
-                TgtLabels[i].gameObject.SetActive(friendly || objective || route);
+                bool city = kind == KIND_UNKNOWN || kind == KIND_CIVILIAN;
+                TgtLabels[i].gameObject.SetActive(friendly || objective || route || city);
                 if (objective) { SetTopText(i, "TGT"); TgtLabels[i].color = ObjectiveLabelColor; }
+                else if (kind == KIND_UNKNOWN) { SetTopText(i, "?"); TgtLabels[i].color = UnknownLabelColor; }
+                else if (kind == KIND_CIVILIAN) { SetTopText(i, "CIV"); TgtLabels[i].color = CivilianLabelColor; }
                 else if (friendly) { TgtLabels[i].color = FriendlyLabelColor; }
                 else if (kind == KIND_WAYPOINT) { TgtLabels[i].color = WaypointLabelColor; }
                 else if (kind == KIND_DESTINATION) { TgtLabels[i].color = DestinationLabelColor; }

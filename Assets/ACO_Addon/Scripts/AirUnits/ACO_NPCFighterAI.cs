@@ -80,6 +80,11 @@ namespace ACO
         [Header("타겟 탐지")]
         [Tooltip("적으로 간주할 레이어. 기본값은 아군 항공기(25)")]
         public LayerMask TargetLayers = 1 << 25;
+        [Tooltip("아군 편대(6-273): 이 레이어의 표적(적 공중 29)을 이만큼(m) 가깝게 본다 — 공중 먼저, 없으면 지상. 0이면 없음")]
+        public float AirTargetBonus = 0f;
+        public LayerMask AirPriorityLayers = 1 << 29;
+        [Tooltip("아군 편대(6-273): 도시 차량(시가지 정밀 타격 — 민간 · 적 모두)은 노리지 않는다(민간 오폭 감점 · 실패를 막는다)")]
+        public bool SkipCityVehicles = false;
         public float DetectRange = 2500f;
         [Tooltip("이 거리를 넘어가면 타겟을 놓는다")]
         public float LoseTargetRange = 3500f;
@@ -329,7 +334,7 @@ namespace ACO
             // 원격에서는 예측 자세로 판단하므로 피격자는 자기 화면에 보이는 NPC 기수 방향대로 맞는다.
             if (Gun)
             {
-                int gunTarget = (_mode == MODE_PURSUIT && _target != null) ? _targetIdx : -1;
+                int gunTarget = (!HoldFire && _mode == MODE_PURSUIT && _target != null) ? _targetIdx : -1;
                 Gun.GunTick(gunTarget, _targetVel, dt);
             }
         }
@@ -720,8 +725,12 @@ namespace ACO
         }
 
         /// 오너만 호출한다. 락온 누적과 경고 전송은 런처가 담당하므로 여기서는 "조준 중인지"만 알린다.
+        /// 아군 편대(6-273): 이탈 중에는 표적을 잡지도 쏘지도 않는다(모든 화면 — 기총 발사는 각 화면이 판단한다).
+        [System.NonSerialized] public bool HoldFire;
+
         private void TryFireMissile(float dt)
         {
+            if (HoldFire) { if (MissileLauncher) { MissileLauncher.ReleaseAim(); } return; }
             if (!MissileLauncher || _targetIdx < 0 || !_target) { return; }
 
             Vector3 toTarget = _target.position - transform.position;
@@ -1078,6 +1087,7 @@ namespace ACO
         private void AcquireTarget()
         {
             if (!EntityControl) { return; }
+            if (HoldFire) { if (_target) { ClearTarget(); } return; }
             GameObject[] targets = EntityControl.AAMTargets;
             if (targets == null) { return; }
 
@@ -1086,12 +1096,15 @@ namespace ACO
             {
                 _targetPriority = new float[targets.Length];
                 _priorityResolved = new bool[targets.Length];
+                _targetExcluded = new bool[targets.Length];
+                _targetHealthRef = new SaccTarget[targets.Length];
             }
 
             if (_target)
             {
                 bool stillValid = _target.gameObject.activeInHierarchy
-                    && Vector3.Distance(myPos, _target.position) <= LoseTargetRange;
+                    && Vector3.Distance(myPos, _target.position) <= LoseTargetRange
+                    && !TargetDead(_targetIdx);
                 // 대기 중이면 정원이 빈 다른 타겟이 있는지 다시 본다 — 플레이어가 여럿일 때 대기열이 한쪽에 고이지 않게.
                 // 우선순위가 더 높은 표적(호위 대상)이 탐지 거리에 들어오면 교전 중이어도 다시 고른다.
                 if (stillValid && _mode != MODE_WAIT && !HigherPriorityInRange(targets, myPos)) { return; }
@@ -1107,13 +1120,15 @@ namespace ACO
                 GameObject g = targets[i];
                 if (!g || !g.activeInHierarchy) { continue; }
                 if (((1 << g.layer) & mask) == 0) { continue; }
+                float pri = PriorityOf(i, g);
+                if (_targetExcluded[i] || TargetDead(i)) { continue; }
 
                 float d = Vector3.Distance(myPos, g.transform.position);
                 // 지금 기다리는 타겟은 탐지 거리 밖(놓침 거리 안)이어도 후보로 남긴다.
                 if (d > DetectRange && i != _targetIdx) { continue; }
 
                 // 정원이 찬 타겟은 그만큼 멀리 있는 것처럼 본다 → 비어 있는 타겟으로 흩어진다.
-                float score = d - PriorityOf(i, g);
+                float score = d - pri;
                 if (Director && Director.IsTargetFull(i, this)) { score += Director.FullTargetPenalty; }
 
                 if (score < bestScore)
@@ -1137,8 +1152,29 @@ namespace ACO
                 _priorityResolved[i] = true;
                 ACO_EscortUnit escort = g.GetComponentInParent<ACO_EscortUnit>();
                 _targetPriority[i] = escort != null ? Mathf.Max(escort.AttackPriority, 0f) : 0f;
+                if (AirTargetBonus > 0f && ((1 << g.layer) & AirPriorityLayers) != 0) { _targetPriority[i] += AirTargetBonus; }
+                if (SkipCityVehicles && g.GetComponentInParent<ACO_CityVehicle>() != null) { _targetExcluded[i] = true; }
+                _targetHealthRef[i] = g.GetComponentInParent<SaccTarget>();
             }
             return _targetPriority[i];
+        }
+
+        private bool[] _targetExcluded;
+        private SaccTarget[] _targetHealthRef;
+
+        /// 체력을 가진 표적(NPC · 지상 유닛)이 이미 부서졌는가 — 잔해 마커를 쫓지 않게. 플레이어 기체(체력 없음)는 거짓.
+        private bool TargetDead(int i)
+        {
+            if (_targetHealthRef == null || i < 0 || i >= _targetHealthRef.Length) { return false; }
+            SaccTarget h = _targetHealthRef[i];
+            return h != null && h.Health <= 0f;
+        }
+
+        /// 아군 편대(6-273): 집결 지점을 옮긴다(표적이 없을 때 이 주변을 돈다 — 부른 사람이 없을 때 마지막 자리).
+        public void SetMissionHold(Vector3 pos)
+        {
+            _missionHold = true;
+            _missionHoldPos = pos;
         }
 
         /// 지금 표적보다 우선순위가 높은 표적이 탐지 거리 안에 살아 있는지.
@@ -1153,7 +1189,9 @@ namespace ACO
                 GameObject g = targets[i];
                 if (!g || !g.activeInHierarchy || ((1 << g.layer) & mask) == 0) { continue; }
                 if ((g.transform.position - myPos).sqrMagnitude > rangeSq) { continue; }
-                if (PriorityOf(i, g) > current) { return true; }
+                float pri = PriorityOf(i, g);
+                if (_targetExcluded[i] || TargetDead(i)) { continue; }
+                if (pri > current) { return true; }
             }
             return false;
         }
@@ -1304,6 +1342,8 @@ namespace ACO
         public void _RespawnTargetHealth()
         {
             if (!TargetHealth) { return; }
+            // 2프레임 사이에 다른 사람이 소유권을 가져갔다(아군 편대를 부른 사람 등 — 6-273): RespawnTarget은 소유권을 다시 뺏으므로 값만 맞춘다
+            if (!Networking.IsOwner(TargetHealth.gameObject)) { _LocalRefillHealth(); return; }
             _ApplyTierHealth();   // 숙련도 최대 체력으로 채운다(RespawnTarget = FullHealth)
             TargetHealth.RespawnTarget();
         }

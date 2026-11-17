@@ -141,15 +141,19 @@ prog.eqdesc.fuel_tank	미션 1회 동안 다는 외부 연료 탱크.	AN EXTERNA
 prog.call.strike	벙커버스터	BUNKER BUSTER	バンカーバスター
 prog.call.tanker	급유 드론	TANKER DRONE	給油ドローン
 prog.call.guardian	가디언 드론	GUARDIAN DRONE	ガーディアンドローン
+prog.call.wingmen	아군 편대	WINGMEN	僚機編隊
 prog.callfx.strike	레이저 유도 폭격 500M	LASER STRIKE 500M	レーザー誘導爆撃 500M
 prog.callfx.tanker	완전 보급	FULL RESUPPLY	完全補給
 prog.callfx.guardian	미사일 방어 90초	MISSILE DEFENSE 90s	ミサイル防御 90秒
+prog.callfx.wingmen	전투기 2기 180초	2 FIGHTERS 180s	戦闘機2機 180秒
 prog.calldesc.strike	폭격기가 지정한 곳에 유도 폭탄을 떨어뜨립니다.	A BOMBER DROPS A GUIDED BOMB ON THE SPOT YOU MARK.	爆撃機が指定地点に誘導爆弾を投下します。
 prog.calldesc.tanker	드론이 날아와 연료, 탄약, 플레어를 채워 줍니다.	A DRONE FLIES TO YOU AND REFILLS FUEL, AMMO AND FLARES.	ドローンが飛来し、燃料・弾薬・フレアを補給します。
 prog.calldesc.guardian	드론이 곁에서 호위하며 나를 노린 미사일을 격추합니다.	A DRONE FLIES ESCORT AND SHOOTS DOWN MISSILES AIMED AT YOU.	ドローンが護衛し、自機を狙うミサイルを撃墜します。
+prog.calldesc.wingmen	아군 AI 전투기 2기가 합류해 적 전투기를 먼저, 없으면 지상 표적을 공격합니다. 격추 점수는 부른 사람에게 들어갑니다.	TWO FRIENDLY AI FIGHTERS JOIN YOU AND ATTACK ENEMY FIGHTERS FIRST, THEN GROUND TARGETS. THEIR KILLS COUNT AS YOURS.	味方AI戦闘機2機が合流し、敵戦闘機を優先し、いなければ地上目標を攻撃します。撃墜スコアは呼んだ人に入ります。
 prog.callnote.strike	부를 때 지정한 곳에 떨어지고 도착까지 시간이 걸립니다. 움직이는 표적은 그 사이 떠날 수 있습니다.	THE BOMB HITS THE SPOT MARKED WHEN YOU CALL IT AND TAKES TIME TO ARRIVE. MOVING TARGETS MAY BE GONE BY THEN.	要請時に指定した地点に着弾し、到着まで時間がかかります。移動目標はその間に離れることがあります。
 prog.callnote.tanker	호스가 연결될 때까지 일정한 속도로 수평 직진하세요. 급선회하거나 너무 느리면 연결이 끊깁니다.	FLY STRAIGHT AND LEVEL AT A STEADY SPEED UNTIL THE HOSE CONNECTS. HARD TURNS OR FLYING TOO SLOW BREAK CONTACT.	ホースが接続されるまで一定速度で水平直進してください。急旋回や低速すぎると接続が切れます。
 prog.callnote.guardian	나만 지키고 편대원은 지키지 않으며, 얼마 뒤 돌아갑니다.	IT ONLY PROTECTS YOU, NOT YOUR WINGMEN, AND LEAVES AFTER A WHILE.	守るのは自機だけで僚機は守らず、しばらくすると帰還します。
+prog.callnote.wingmen	작전 중에만 부를 수 있고, 격추될 수 있습니다.	ONLY DURING AN OPERATION. THEY CAN BE SHOT DOWN.	作戦中のみ呼べます。撃墜されることがあります。
 prog.reward.nosortie	보상 0 CR  (출격 안 함)	REWARD 0 CR  (NO SORTIE)	報酬 0 CR  (出撃なし)
 prog.reward.base	보상 +{0} CR  (팀 {1} + 나 {2})	REWARD +{0} CR  (TEAM {1} + YOU {2})	報酬 +{0} CR  (チーム {1} + 自分 {2})
 prog.reward.shotdown	격추당함 {0}	SHOT DOWN {0}	被撃墜 {0}
@@ -396,6 +400,7 @@ log.myresult	격추<pos=45%>{0}\n크레딧<pos=45%>{1}	KILLS<pos=45%>{0}\nCREDIT
 log.scoretitle	점수	SCORE	スコア
 log.mytitle	내 미션	MY MISSION	自分のミッション
 log.hiscore	최고 기록	HIGH SCORE	ハイスコア
+log.civilian	민간	CIVILIAN	民間
 bgm.title	BGM	BGM	BGM
 bgm.hint	로컬 설정입니다(나에게만 적용)	LOCAL SETTINGS (APPLY ONLY TO YOU)	ローカル設定です(自分にだけ適用)
 bgm.playing	재생 중\n{0}	NOW PLAYING\n{0}	再生中\n{0}
@@ -553,6 +558,9 @@ radio.supportmanager.06	급유 완료. 이탈해도 좋다.	Transfer complete. C
 radio.supportmanager.07	브레이크어웨이, 브레이크어웨이. 급유기 귀환한다.	Breakaway, breakaway. Tanker is returning.	ブレイクアウェイ、ブレイクアウェイ。給油機、帰投する。
 radio.supportmanager.08	가디언 드론 배치 완료. 미사일 방어 가동.	Guardian drone on station. Missile defense active.	ガーディアンドローン配置完了。ミサイル防御、作動中。
 radio.supportmanager.09	가디언 드론 귀환한다.	Guardian drone returning to base.	ガーディアンドローン、帰投する。
+radio.supportmanager.10	아군 편대 진입. 귀관 편대에 합류한다.	Wingmen inbound. Forming up on you.	僚機編隊、進入。貴機に合流する。
+radio.supportmanager.11	아군기 격추됐다!	Wingman down!	僚機がやられた！
+radio.supportmanager.12	아군 편대 연료 한계. 귀환한다.	Wingmen are bingo fuel. RTB.	僚機編隊、燃料限界。帰投する。
 radio.phaseshade.01	적기 넷, 밀집 다이아몬드. 셰이드 비행대다... 너희 바로 앞에서 실속 기동을 한다. 꼬리에 오래 붙지 마라, 놈들은 어느 방향으로든 쏠 수 있다!	Four bandits, tight diamond. Shade squadron... They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!	敵機四、密集ダイヤモンド。シェイド飛行隊だ……目の前で失速機動をしてくるぞ。後ろに張り付くな、奴らはどの方向にも撃てる！
 radio.phaseshade.02	셰이드 비행대 전멸! 훌륭한 비행이었다, 전 항공기!	Shade squadron is wiped out! Outstanding flying, all aircraft!	シェイド飛行隊全滅！見事な飛行だ、全機！
 radio.borderless.01	아직 발 디딜 국경이 남아 있다면, 잡아 봐.	Catch me if you can still find a border to stand on.	まだ立つべき国境が残っているなら、捕まえてみろ。
@@ -569,6 +577,15 @@ radio.phasetimesensitive.05	미사일 요격! 스플래시 원!	Missile intercep
 radio.phasetimesensitive.06	긴급 임무! 적 TEL이 이동 중이다. 시간이 촉박하다, 절대 발사하게 두지 마라!	Priority tasking! Enemy TELs are on the move. We have a narrow window, so do not let them launch!	最優先任務！敵TELが移動中だ。猶予はわずかだ、発射させるな！
 radio.phasetimesensitive.07	발사대 전부 파괴. 위협 제거. 훌륭했다, 조종사들!	All launchers destroyed. Threat eliminated. Outstanding work, pilots!	発射機全滅。脅威排除。見事だ、パイロット諸君！
 radio.phasetimesensitive.08	요격 실패. 탄두가 날아가고 있다. 신이시여, 그들을 도우소서.	Intercept failed. The warhead is on its way. God help them.	迎撃失敗。弾頭が向かっている。神よ、彼らを救いたまえ。
+radio.phaseprecision.01	적 지휘 차량이 시내 민간 차량 사이에 숨어 있다. 낮게 날아 눈으로 확인한 뒤에 쏴라.	Enemy command vehicles are hiding in the city among civilian traffic. Fly low and get eyes on before you shoot.	敵の指揮車両が市街地の民間車両に紛れている。低く飛んで目で確かめてから撃て。
+radio.phaseprecision.02	적 차량 전부 격파. 깔끔했다, 전 항공기.	All hostile vehicles are down. Clean work, all aircraft.	敵車両すべて撃破。見事な仕事だ、全機。
+radio.phaseprecision.03	민간인 피해가 너무 크다. 작전을 중단한다. 전 항공기, 기지로 귀환하라.	Too many civilian casualties. We're calling off the operation. All aircraft, return to base.	民間人の被害が大きすぎる。作戦を中止する。全機、帰投せよ。
+radio.phaseprecision.04	적 차량 확인. 그 차량만 교전을 허가한다.	Hostile vehicle confirmed. Weapons free on that one only.	敵車両を確認。その車両のみ交戦を許可する。
+radio.phaseprecision.05	민간 차량 피격! 조준 똑바로 해!	Civilian vehicle hit! Watch your fire!	民間車両に被弾！よく狙え！
+radio.phaseprecision.06	민간 차량 둘째 피해다. 한 번만 더 나오면 작전을 중단한다!	That's two civilians down. One more and we abort the operation!	民間車両の被害は二台目だ。もう一台出たら作戦を中止する！
+radio.phaseprecision.07	적 차량 격파.	Hostile vehicle destroyed.	敵車両を撃破。
+radio.phasetunnel.01	적 TEL이 터널 안에 숨어 있다. 한 대씩 밖으로 나온다. 발사하게 두지 마라!	Enemy TELs are hiding inside the tunnel. They'll roll out one at a time. Don't let them launch!	敵TELがトンネル内に潜んでいる。一台ずつ外に出てくる。発射させるな！
+radio.phasetunnel.02	TEL이 터널에서 나오고 있다! 발사 준비 전에 쳐라!	A TEL is rolling out of the tunnel! Hit it before it sets up!	TELがトンネルから出てくる！発射準備の前に叩け！
 radio.chatter.01	새 목표다. HUD를 확인하라.	New objective. Check your HUD.	新たな目標だ。HUDを確認しろ。
 radio.chatter.02	목표 달성.	Objective complete.	目標達成。
 radio.chatter.03	목표 실패.	Objective failed.	目標失敗。

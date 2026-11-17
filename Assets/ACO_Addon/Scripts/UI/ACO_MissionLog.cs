@@ -379,9 +379,17 @@ namespace ACO
                 int tier = Generator.GetFighterTier(i);
                 target = f != null ? f.GetDisplayLabel(tier) : "FTR";
             }
-            else { target = _unitLabel[u]; }
+            else
+            {
+                target = _unitLabel[u];
+                // 도시 차량(6-270)은 배치 때 역할이 정해진다 — 그때그때 이름을 읽는다(처음 읽은 이름은 "?")
+                ACO_CityVehicle car = category == ACO_MissionGenerator.CAT_GROUND ? Generator.GetCityVehicle(i) : null;
+                if (car != null) { target = car.MarkerLabel; }
+            }
+            bool penalty = points < 0;   // 민간 차량(6-270)
+            if (penalty) { target = "<color=#FF5544>" + T("log.civilian", "CIVILIAN") + "</color>"; }
             // 페이즈 목표로 배치된 유닛(태그 있음)은 빨간 TGT
-            if (Generator.GetUnitTag(category, i) != 0) { target = "<color=#FF5544>TGT " + target + "</color>"; }
+            else if (Generator.GetUnitTag(category, i) != 0) { target = "<color=#FF5544>TGT " + target + "</color>"; }
 
             Transform t = _unitTransform[u];
             string grid = t != null ? GridLabel(t.position) : "-";
@@ -390,17 +398,17 @@ namespace ACO
                 + "<pos=13%>" + grid
                 + "<pos=27%>" + pilot
                 + "<pos=62%>" + target
-                + "<pos=90%>+" + points;
+                + (penalty ? "<pos=90%><color=#FF5544>" + points + "</color>" : "<pos=90%>+" + points);
             if (mine) { row = "<color=#FFD24D>" + row + "</color>"; }
 
             PushRow(row);
             if (!npcKill) { AddPilotScore(pilot, points); }
             if (mine && Progress)
             {
-                Progress.AddPersonalScore(points);
-                Progress.AddMissionKill();
+                Progress.AddPersonalScore(points);   // 민간 차량이면 감점
+                if (!penalty) { Progress.AddMissionKill(); }
             }
-            if (Chatter && valid) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
+            if (Chatter && valid && !penalty) { Chatter.Report(mine ? ACO_Chatter.EV_KILL : ACO_Chatter.EV_ALLY_KILL, killer.displayName); }
         }
 
         private void PushRow(string row)
@@ -449,14 +457,14 @@ namespace ACO
             {
                 if (_pilotName[p] == pilot)
                 {
-                    _pilotKills[p]++;
+                    if (points >= 0) { _pilotKills[p]++; }   // 감점(민간 차량 — 6-270)은 격파 수에 넣지 않는다
                     _pilotScore[p] += points;
                     return;
                 }
             }
             if (_pilotCount >= _pilotName.Length) { return; }
             _pilotName[_pilotCount] = pilot;
-            _pilotKills[_pilotCount] = 1;
+            _pilotKills[_pilotCount] = points >= 0 ? 1 : 0;
             _pilotScore[_pilotCount] = points;
             _pilotCount++;
         }

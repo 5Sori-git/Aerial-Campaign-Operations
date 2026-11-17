@@ -913,6 +913,10 @@ namespace ACO
             if (!_targetLooked[i]) { LookUpTarget(i); }
             SaccEntity e = _targetEntities[i];
             if (e && (e.dead || e == EntityControl)) { return false; }
+            // 어디서도 락온되지 않는 표적(식별된 민간 차량 — 6-270)은 후보에서 뺀다: 칸을 차지하면 테두리만 뜨고 옆의 적으로 넘어가지 않는다.
+            // 방향에 따라 풀리는 원뿔 제한(BORDERLESS ECM)은 그대로 후보로 두고 락온 시간만 막는다(UpdateLock).
+            ACO_LockGate gate = _targetGates[i];
+            if (gate != null && gate.Active && gate.Mode == ACO_LockGate.MODE_BLOCK) { return false; }
             return (g.transform.position - origin).sqrMagnitude <= rangeSq;
         }
 

@@ -317,6 +317,7 @@ public partial class ACO_SceneBaker
     }
 
     private const int TelPoolSize = 3;
+    private const int CityVehiclePoolSize = 20;   // 시가지 정밀 타격 적 3 + 민간 14 + 여유(6-270)
 
     /// 유닛 풀에 없는 필수 유닛(프리팹 이름). Setup Check가 보여 주고 [고치기]가 AddPoolUnits로 넣는다.
     public static List<string> MissingPoolUnits(Transform poolRoot)
@@ -325,6 +326,8 @@ public partial class ACO_SceneBaker
         if (poolRoot.GetComponentInChildren<ACO_FlyingFortress>(true) == null) { missing.Add("NPC_Fortress"); }
         int tels = poolRoot.GetComponentsInChildren<ACO_TelUnit>(true).Length;
         for (int i = tels; i < TelPoolSize; i++) { missing.Add("NPC_TEL"); }
+        int cars = poolRoot.GetComponentsInChildren<ACO_CityVehicle>(true).Length;
+        for (int i = cars; i < CityVehiclePoolSize; i++) { missing.Add(ACO_PrefabBuilder.CityVehiclePrefab); }
         bool hasFlagship = false;
         foreach (ACO_EscortUnit e in poolRoot.GetComponentsInChildren<ACO_EscortUnit>(true)) { if (e.Role == ACO_EscortUnit.ROLE_FLAGSHIP) { hasFlagship = true; } }
         if (!hasFlagship) { missing.Add("NPC_Flagship"); }
@@ -364,6 +367,7 @@ public partial class ACO_SceneBaker
             case "NPC_Railgun": return ACO_PrefabBuilder.BuildRailgun();
             case ACO_PrefabBuilder.LandShipPrefab: return ACO_PrefabBuilder.BuildLandShip();
             case ACO_PrefabBuilder.SubmarinePrefab: return ACO_PrefabBuilder.BuildSubmarine();
+            case ACO_PrefabBuilder.CityVehiclePrefab: return ACO_PrefabBuilder.BuildCityVehicle();
         }
         return null;
     }

@@ -78,12 +78,14 @@ namespace ACO
         public string[] CallDescriptions = new string[] {
             "A BOMBER DROPS A GUIDED BOMB ON THE SPOT YOU MARK.",
             "A DRONE FLIES TO YOU AND REFILLS FUEL, AMMO AND FLARES.",
-            "A DRONE FLIES ESCORT AND SHOOTS DOWN MISSILES AIMED AT YOU." };
+            "A DRONE FLIES ESCORT AND SHOOTS DOWN MISSILES AIMED AT YOU.",
+            "TWO FRIENDLY AI FIGHTERS JOIN YOU AND ATTACK ENEMY FIGHTERS FIRST, THEN GROUND TARGETS. THEIR KILLS COUNT AS YOURS." };
         [Tooltip("호출권 주의사항(CALL_* 순서 — 상세 칸 셋째 줄, 노랑). 정확한 수치는 쓰지 않는다")]
         public string[] CallCautions = new string[] {
             "THE BOMB HITS THE SPOT MARKED WHEN YOU CALL IT AND TAKES TIME TO ARRIVE. MOVING TARGETS MAY BE GONE BY THEN.",
             "FLY STRAIGHT AND LEVEL AT A STEADY SPEED UNTIL THE HOSE CONNECTS. HARD TURNS OR FLYING TOO SLOW BREAK CONTACT.",
-            "IT ONLY PROTECTS YOU, NOT YOUR WINGMEN, AND LEAVES AFTER A WHILE." };
+            "IT ONLY PROTECTS YOU, NOT YOUR WINGMEN, AND LEAVES AFTER A WHILE.",
+            "ONLY DURING AN OPERATION. THEY CAN BE SHOT DOWN." };
         // 설명 · 상세 칸 · 안내 문장은 번역 표(prog.* · shop.*)에서 — 위 배열은 번역 장치가 없을 때의 영어(6-166)
         [Tooltip("번역 장치(6-166). Bake가 넣는다")]
         public ACO_Localization Loc;

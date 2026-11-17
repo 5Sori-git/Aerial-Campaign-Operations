@@ -307,10 +307,11 @@ public static partial class ACO_PrefabBuilder
             }
             Undo.RegisterCreatedObjectUndo(guardians.gameObject, "ACO support manager");
         }
+        EnsureWingmenPool(m);   // 아군 편대(6-273)
         PrefabUtility.RecordPrefabInstancePropertyModifications(m);
         EditorUtility.SetDirty(m);
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-        Debug.Log("[ACO] 지원 관리자(벙커버스터·급유 드론·가디언 드론 풀)를 만들었습니다. Bake 하세요.", m);
+        Debug.Log("[ACO] 지원 관리자(벙커버스터·급유 드론·가디언 드론·아군 편대 풀)를 만들었습니다. Bake 하세요.", m);
     }
 
     private static bool HasNull(Object[] list)

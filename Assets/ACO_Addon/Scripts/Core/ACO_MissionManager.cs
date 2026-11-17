@@ -458,6 +458,9 @@ namespace ACO
         /// 모듈: 지금 페이즈의 하위 태그(시한 표적처럼 목표마다 다른 태그) — 기본 페이즈와 같은 규칙((페이즈 번호 + 1) × 100 + sub).
         public int MakePhaseTag(int sub) { return PhaseTag(_phaseIndex, sub); }
 
+        /// 지금 목표 태그(동기화 — 모듈이 자기 동기화 값을 못 받은 새 오너가 읽는다).
+        public int GetActiveTag() { return _activeTag; }
+
         /// 모듈: 지금 목표 태그를 바꾼다(표적 마커·항로 표시가 따라간다). 0 = 지금은 목표 없음.
         public void SetModuleActiveTag(int tag)
         {
@@ -1030,7 +1033,9 @@ namespace ACO
                 if (aliveSerial[i] != serial || countedSerial[i] == serial) { continue; }
 
                 countedSerial[i] = serial;
-                _teamScore += GetKillScore(category, i);
+                int points = GetKillScore(category, i);
+                _teamScore += points;
+                if (points < 0) { continue; }   // 민간 차량(감점)은 격파 수에 넣지 않는다(6-270)
                 if (category == ACO_MissionGenerator.CAT_FIGHTER || category == ACO_MissionGenerator.CAT_ESCORT) { _killFighters++; }
                 else if (category != ACO_MissionGenerator.CAT_HVT) { _killGround++; } // 지상 유닛, 함선 부위
             }
@@ -1049,6 +1054,7 @@ namespace ACO
             else if (category == ACO_MissionGenerator.CAT_HVT) { score = Generator.GetUnitScoreValue(category, i, ScoreObjectiveFallback); }
             else if (category == ACO_MissionGenerator.CAT_ESCORT) { score = BomberKillScore; }
             else { score = Generator.GetUnitScoreValue(category, i, ScoreGroundFallback); } // 지상 유닛, 함선 부위
+            if (score < 0) { return score; }   // 감점(민간 차량 — 6-270)은 페이즈 배율 없이 그대로
             return Mathf.RoundToInt(score * GetScoreMultiplier());
         }
 
@@ -1110,6 +1116,12 @@ namespace ACO
         /// 지금 목표 중 살아 있는 하나의 위치. 없으면(아직 배치 전, 할당량 등) 페이즈 기준점.
         private Vector3 CurrentObjectivePosition(int now)
         {
+            ACO_PhaseModule m = _phaseActive ? GetModule(GetCurrentPhaseType()) : null;
+            if (m != null && m.WaveAroundSite())
+            {
+                // 작전 지역 가운데 — 생성기가 그 둘레(FocusGroundRadius의 30~100%, 장식 칸은 피한다)에 흩어 놓는다
+                return _phaseSite >= 0 ? Generator.GetSitePosition(_phaseSite) : _phaseFocus;
+            }
             CountTagged(_activeTag, now);
             if (_cntHasAlive) { return _cntAlivePos; }
             return _phaseFocus;

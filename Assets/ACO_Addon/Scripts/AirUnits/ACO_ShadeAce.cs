@@ -103,6 +103,12 @@ namespace ACO
 
         private bool _started;
         private bool _wasAlive;
+        // 출현 직후 격추 판정(6-268): 풀에서 다시 쓴 기체에 지난 미션의 체력 0·격추 상태가 먼저 들어오면 살아난 직후 죽은 것으로 보인다.
+        // 살아난 지 SPAWN_DOWN_GRACE초 안의 격추는 보류하고(그동안 살아 있는 걸로 친다 — 편대원도 알리지 않는다), DOWN_CONFIRM초 안에 되살아나면 없던 일로 한다.
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;
+        private float _aliveSince = -100f;
+        private float _pendingDownAt = -1f;
         private bool _cobra;
         private float _cobraStart;
         private float _lureAt;
@@ -136,6 +142,7 @@ namespace ACO
             if (AI != null && AI.Flares != null) { AI.Flares.RearHandled = false; }
             EndCobra();
             _wasAlive = false;
+            _pendingDownAt = -1f;
         }
 
         public string AceName() { return Callsign + " " + Number; }
@@ -148,19 +155,34 @@ namespace ACO
         {
             if (!_started) { Start(); }
             bool alive = Alive();
-            if (alive && !_wasAlive) { HandleSpawn(); }
-            if (!alive && _wasAlive)
+            if (_pendingDownAt >= 0f)
             {
-                if (Chatter != null) { Chatter.DropQueued(AceName()); }   // 밀린 기술 대사는 버린다
-                SayNow(Tr(LineDown).Replace("{n}", Number.ToString()), ClipAt(ClipDown, Number));   // 격추 대사는 나오던 대사를 끊고 바로
-                EndCobra();
+                // 출현 직후의 격추 판정 보류(6-268): 되살아나면 지난 미션 값이었다 — 체크인 없이 이어 간다. 오래 그대로면 진짜 격추.
+                if (alive) { _pendingDownAt = -1f; }
+                else if (Time.time - _pendingDownAt >= DOWN_CONFIRM) { _pendingDownAt = -1f; _wasAlive = false; OnAceDown(); }
             }
-            _wasAlive = alive;
+            else
+            {
+                if (alive && !_wasAlive) { _aliveSince = Time.time; HandleSpawn(); }
+                if (!alive && _wasAlive && Time.time - _aliveSince < SPAWN_DOWN_GRACE) { _pendingDownAt = Time.time; }
+                else
+                {
+                    if (!alive && _wasAlive) { OnAceDown(); }
+                    _wasAlive = alive;
+                }
+            }
             WatchSquad();
             if (!alive) { return; }
 
             if (_cobra) { StepCobra(); }
             else if (Networking.IsOwner(AI.gameObject)) { OwnerCobraCheck(); }
+        }
+
+        private void OnAceDown()
+        {
+            if (Chatter != null) { Chatter.DropQueued(AceName()); }   // 밀린 기술 대사는 버린다
+            SayNow(Tr(LineDown).Replace("{n}", Number.ToString()), ClipAt(ClipDown, Number));   // 격추 대사는 나오던 대사를 끊고 바로
+            EndCobra();
         }
 
         private void HandleSpawn()

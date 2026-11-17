@@ -36,6 +36,11 @@ public partial class ACO_SceneBaker
                 ACO_Chatter radio = Object.FindObjectOfType<ACO_Chatter>(true);
                 foreach (ACO_PhaseConvoy c in manager.GetComponentsInChildren<ACO_PhaseConvoy>(true)) { if (c.Chatter != radio) { c.Chatter = radio; MarkChanged(c); } }
                 foreach (ACO_PhaseAmphibious a in manager.GetComponentsInChildren<ACO_PhaseAmphibious>(true)) { if (a.Chatter != radio) { a.Chatter = radio; MarkChanged(a); } }
+                foreach (ACO_PhasePrecision p in manager.GetComponentsInChildren<ACO_PhasePrecision>(true)) { if (p.Chatter != radio) { p.Chatter = radio; MarkChanged(p); } }
+                foreach (ACO_PhaseTunnel p in manager.GetComponentsInChildren<ACO_PhaseTunnel>(true)) { if (p.Chatter != radio) { p.Chatter = radio; MarkChanged(p); } }
+                // TEL ↔ 지형(터널 은신 — 터널 중심선을 따라 달린다, 6-271)
+                ACO_TerrainFeatures features = Object.FindObjectOfType<ACO_TerrainFeatures>(true);
+                foreach (ACO_TelUnit tel in Object.FindObjectsOfType<ACO_TelUnit>(true)) { if (tel.Features != features) { tel.Features = features; MarkChanged(tel); } }
                 // 상륙전: 해상 상륙함(VIP)이 풀에 없으면 늘 배치 불가로 걸러진다
                 if (manager.GetComponentInChildren<ACO_PhaseAmphibious>(true) != null && manager.Generator != null)
                 {
@@ -381,6 +386,7 @@ public partial class ACO_SceneBaker
             }
             ground.AddRange(poolRoot.GetComponentsInChildren<ACO_MobileUnit>(true));
             ground.AddRange(poolRoot.GetComponentsInChildren<ACO_TelUnit>(true));   // 전용 풀 — 생성기가 일반 배치에서 뺀다
+            ground.AddRange(poolRoot.GetComponentsInChildren<ACO_CityVehicle>(true));   // 도시 차량(6-270) — 전용 풀, 일반 배치에서 뺀다
             // 함선: HighValue(전함)는 고가치 표적 풀, 아니면(구축함) 지상 풀 — 생성기가 둘 다 바다에 놓는다.
             var hvts = new List<UdonSharp.UdonSharpBehaviour>();
             hvts.AddRange(poolRoot.GetComponentsInChildren<ACO_StaticTarget>(true));

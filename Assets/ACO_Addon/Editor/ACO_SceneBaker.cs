@@ -102,14 +102,16 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
             npcColliders += fighter.BodyColliders.Length;
             maxNpcColliders = Mathf.Max(maxNpcColliders, fighter.BodyColliders.Length);
 
+            // 아군 편대(6-273)는 적과 따로 — 서로만 간격을 두고(적이 아군 편대를 쫓다가 간격 유지로 밀려나지 않게), 공격 정원(적 디렉터) 밖
+            bool wing = fighter.GetComponent<ACO_Wingman>() != null;
             var others = new List<ACO_NPCFighterAI>(fighters.Count);
             foreach (ACO_NPCFighterAI other in fighters)
             {
-                if (other != fighter) { others.Add(other); }
+                if (other != fighter && (other.GetComponent<ACO_Wingman>() != null) == wing) { others.Add(other); }
             }
 
             fighter.Neighbors = others.ToArray();
-            fighter.Director = director;
+            fighter.Director = wing ? null : director;
             PrefabUtility.RecordPrefabInstancePropertyModifications(fighter);
             EditorUtility.SetDirty(fighter);
         }
@@ -130,6 +132,7 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         foreach (ACO_VehicleUpgrades up in playerUpgrades)
         {
             up.OtherAirUnits = airUnits.ToArray();
+            up.OtherPlayerVehicles = playerUpgrades.FindAll(o => o != up).ToArray();   // 플레이어 기체끼리도 통과
             PrefabUtility.RecordPrefabInstancePropertyModifications(up);
             EditorUtility.SetDirty(up);
         }
@@ -148,7 +151,8 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
 
         if (director != null)
         {
-            director.Fighters = fighters.ToArray();
+            // 아군 편대(6-273)는 적 전투기 디렉터가 다루지 않는다(편대 기동 · 출격 수 계산에 섞이지 않게)
+            director.Fighters = fighters.FindAll(f => f.GetComponent<ACO_Wingman>() == null).ToArray();
             PrefabUtility.RecordPrefabInstancePropertyModifications(director);
             EditorUtility.SetDirty(director);
         }

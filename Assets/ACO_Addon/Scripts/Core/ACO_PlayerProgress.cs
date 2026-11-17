@@ -39,8 +39,8 @@ namespace ACO
     /// 저장은 항목 번호가 아니라 고정 ID로 한다(강화: aco_up_ + _upgradeKeys) — 항목을 더하거나 순서를 바꿔도 기존 기록이 틀어지지 않는다.
     /// 소모품(상점 ITEMS 탭): 장갑판/대응탄 포드/탄약 증량/연료탱크 — 종류마다 1개까지 사 둔다(aco_cons_ + _consumableKeys, 보유 1/0).
     /// 산 소모품은 탑승할 때마다 적용되고(ACO_VehicleUpgrades), 출격한 미션이 끝나 보상을 받을 때 모두 쓴 것으로 사라진다(재출격해도 그 미션 동안은 유지).
-    /// 지원 호출권(6-142, 상점 ITEMS 탭 아래 줄): 벙커버스터 폭격/급유 드론 — 산 만큼 쌓이고(종류마다 CallMaxCount장) 미션이 끝나도 남는다(aco_call_ + _callKeys, 장수 int).
-    /// 격납고에서 이번 출격에 가져갈 지원을 하나 고르고(aco_call_pick: 0 없음 / 1 폭격 / 2 급유) 조종석 SUPPORT 다이얼(ACO_DFUNC_Support)로 부른다.
+    /// 지원 호출권(6-142 · 6-143 · 6-273, 상점 SUPPORT 탭): 벙커버스터 폭격/급유 드론/가디언 드론/아군 편대 — 산 만큼 쌓이고(종류마다 CallMaxCount장) 미션이 끝나도 남는다(aco_call_ + _callKeys, 장수 int).
+    /// 격납고에서 이번 출격에 가져갈 지원을 하나 고르고(aco_call_pick: 0 없음 / 1 + CALL_*) 조종석 SUPPORT 다이얼(ACO_DFUNC_Support)로 부른다.
     /// 쿨타임은 플레이어마다(CallCooldowns초 — 기체를 바꿔 타도 이어진다, 저장하지 않는다). 작전이 시작되면 모두 지운다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PlayerProgress : UdonSharpBehaviour
@@ -109,8 +109,9 @@ namespace ACO
         public const int CALL_STRIKE = 0;     // 벙커버스터 폭격(타게팅 포드 레이저로 지역 지정)
         public const int CALL_TANKER = 1;     // 급유 드론(연결 3초 뒤 연료·체력·무장 가득)
         public const int CALL_GUARDIAN = 2;   // 가디언 드론(옆에 붙어 나를 노린 미사일 요격 — 6-143)
-        public const int CALL_COUNT = 3;
-        private string[] _callKeys = new string[] { "strike", "tanker", "guardian" };
+        public const int CALL_WINGMEN = 3;    // 아군 편대(AI 전투기 2기가 180초 동안 공중 → 지상 순으로 싸운다 — 6-273)
+        public const int CALL_COUNT = 4;
+        private string[] _callKeys = new string[] { "strike", "tanker", "guardian", "wingmen" };
 
         // 강화 저장 ID(항목 번호 순 — UpgradeNames/Steps/BaseCosts와 같은 자리). 인스펙터에 두지 않는다(실수로 바뀌지 않게).
         // 규칙: 한 번 쓴 ID는 절대 바꾸거나 다른 항목에 재사용하지 않는다. 새 항목은 아무 자리에나 넣고 새 ID를 준다.
@@ -192,13 +193,13 @@ namespace ACO
         public float[] ConsumableFactors = new float[] { 1.25f, 1.5f, 1.5f, 1.5f };
         public int[] ConsumablePrices = new int[] { 1500, 800, 1200, 600 };
 
-        [Header("지원 호출권 (상점 SUPPORT 탭 — CALL_* 순서: 벙커버스터, 급유 드론, 가디언 드론)")]
-        public string[] CallNames = new string[] { "BUNKER BUSTER", "TANKER DRONE", "GUARDIAN DRONE" };
+        [Header("지원 호출권 (상점 SUPPORT 탭 — CALL_* 순서: 벙커버스터, 급유 드론, 가디언 드론, 아군 편대)")]
+        public string[] CallNames = new string[] { "BUNKER BUSTER", "TANKER DRONE", "GUARDIAN DRONE", "WINGMEN" };
         [Tooltip("상점에 보일 효과 한 줄")]
-        public string[] CallEffects = new string[] { "LASER STRIKE 500M", "FULL RESUPPLY", "MISSILE DEFENSE 90s" };
-        public int[] CallPrices = new int[] { 10000, 4800, 8000 };
-        [Tooltip("다시 부를 수 있기까지(초). 급유 드론은 돌아가기만 해도(호출권은 그대로), 가디언은 돌아간 뒤부터 쿨타임이 돈다")]
-        public float[] CallCooldowns = new float[] { 120f, 180f, 150f };
+        public string[] CallEffects = new string[] { "LASER STRIKE 500M", "FULL RESUPPLY", "MISSILE DEFENSE 90s", "2 FIGHTERS 180s" };
+        public int[] CallPrices = new int[] { 10000, 4800, 8000, 5000 };
+        [Tooltip("다시 부를 수 있기까지(초). 급유 드론은 돌아가기만 해도(호출권은 그대로), 가디언 · 아군 편대는 돌아간 뒤부터 쿨타임이 돈다")]
+        public float[] CallCooldowns = new float[] { 120f, 180f, 150f, 30f };
         [Tooltip("종류마다 가질 수 있는 최대 장수")]
         public int CallMaxCount = 9;
 
@@ -501,9 +502,26 @@ namespace ACO
         // ───────────── 지원 호출권 ─────────────
 
         public int GetCallCount(int c) { return _restored && c >= 0 && c < CALL_COUNT ? _calls[c] : 0; }
-        public string GetCallName(int c) { return CallNames != null && c >= 0 && c < CallNames.Length ? T("prog.call." + GetCallSaveId(c), CallNames[c]) : ""; }
-        public string GetCallEffect(int c) { return CallEffects != null && c >= 0 && c < CallEffects.Length ? T("prog.callfx." + GetCallSaveId(c), CallEffects[c]) : ""; }
-        public int GetCallPrice(int c) { return CallPrices != null && c >= 0 && c < CallPrices.Length ? CallPrices[c] : 0; }
+        // 씬 · 프리팹에 저장된 배열이 새 종류보다 짧을 수 있다(튜닝 항목이 늘리기 전) — 그때는 기본값(DefaultCall*)을 쓴다. 가격이 0이 되어 공짜로 사지 않게.
+        public string GetCallName(int c)
+        {
+            if (c < 0 || c >= CALL_COUNT) { return ""; }
+            return T("prog.call." + GetCallSaveId(c), CallNames != null && c < CallNames.Length ? CallNames[c] : DefaultCallName(c));
+        }
+        public string GetCallEffect(int c)
+        {
+            if (c < 0 || c >= CALL_COUNT) { return ""; }
+            return T("prog.callfx." + GetCallSaveId(c), CallEffects != null && c < CallEffects.Length ? CallEffects[c] : DefaultCallEffect(c));
+        }
+        public int GetCallPrice(int c)
+        {
+            if (c < 0 || c >= CALL_COUNT) { return 0; }
+            return CallPrices != null && c < CallPrices.Length ? CallPrices[c] : DefaultCallPrice(c);
+        }
+        private string DefaultCallName(int c) { return c == CALL_WINGMEN ? "WINGMEN" : "SUPPORT"; }
+        private string DefaultCallEffect(int c) { return c == CALL_WINGMEN ? "2 FIGHTERS 180s" : ""; }
+        private int DefaultCallPrice(int c) { return c == CALL_WINGMEN ? 5000 : 10000; }
+        private float DefaultCallCooldown(int c) { return c == CALL_WINGMEN ? 30f : 120f; }
         public int GetCallMax() { return Mathf.Max(CallMaxCount, 1); }
 
         /// 호출권을 한 장 산다. 1 = 샀다, 0 = 크레딧 부족, -1 = 최대 장수, -2 = 불러오는 중.
@@ -516,7 +534,7 @@ namespace ACO
             if (_credits < price) { return 0; }
             _credits -= price;
             _calls[c]++;
-            PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]);
+            if (c < _callKeys.Length) { PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]); }
             SaveCredits();
             _version++;
             return 1;
@@ -527,9 +545,18 @@ namespace ACO
         {
             if (!_restored || c < 0 || c >= CALL_COUNT || _calls[c] <= 0) { return false; }
             _calls[c]--;
-            PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]);
+            if (c < _callKeys.Length) { PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]); }
             _version++;
             return true;
+        }
+
+        /// 호출권을 한 장 돌려준다(아군 편대가 동시 호출 경합에서 빈 편대를 못 찾았을 때 — 6-273).
+        public void RefundCall(int c)
+        {
+            if (!_restored || c < 0 || c >= CALL_COUNT) { return; }
+            _calls[c] = Mathf.Min(_calls[c] + 1, 99);
+            if (c < _callKeys.Length) { PlayerData.SetInt(KEY_CALL + _callKeys[c], _calls[c]); }
+            _version++;
         }
 
         /// 격납고에서 고른 지원(CALL_* 또는 CALL_NONE).
@@ -551,7 +578,7 @@ namespace ACO
         public void StartCallCooldown(int c)
         {
             if (c < 0 || c >= CALL_COUNT) { return; }
-            float cd = CallCooldowns != null && c < CallCooldowns.Length ? CallCooldowns[c] : 120f;
+            float cd = CallCooldowns != null && c < CallCooldowns.Length ? CallCooldowns[c] : DefaultCallCooldown(c);
             _callReadyAt[c] = Time.time + Mathf.Max(cd, 0f);
             _version++;
         }

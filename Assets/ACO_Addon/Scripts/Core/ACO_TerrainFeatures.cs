@@ -32,6 +32,8 @@ namespace ACO
         [Header("프리팹 (ACO → Create Prefabs...의 지형 장식 — 직접 만든 모델로 바꿔 끼워도 된다)")]
         [Tooltip("도시 칸 하나를 덮는 블록(원점 = 칸 윗면 중심, 육각 윗면 전체 + 비탈 큰길). 칸마다 무작위 변형. 0도와 180도로만 돌려 놓는다")]
         public GameObject[] CityBlockPrefabs;
+        [Tooltip("CityBlockPrefabs와 같은 순서 — 블록에서 가장 높은 건물 꼭대기(칸 윗면 기준, m). Bake가 프리팹 크기로 잰다. 시가지 정밀 타격의 식별 고도에 쓴다(6-270)")]
+        public float[] CityBlockTopHeights;
         [Tooltip("마을(원점 = 칸 윗면 중심, 반경 약 250m 안)")]
         public GameObject[] VillagePrefabs;
         [Tooltip("항구(원점 = 해수면 높이의 해안선, +Z가 바다 쪽)")]
@@ -60,6 +62,11 @@ namespace ACO
         public float TunnelMaxOverhang = 30f;
         [Tooltip("곡선형은 이웃이 이보다(m) 높으면 직선형으로 — 휜 터널(최대 130m 옆으로)은 칸 경계에 가까워 높은 이웃의 치마가 벽 아래로 들어온다")]
         public float TunnelCurveMaxOverhang = 10f;
+        [Tooltip("곡선 터널 휨 폭(m) — 모델 aco_tunnel_model.py VARIANTS와 같아야 한다(TEL 길 · 막힘 검사가 중심선을 따라간다)")]
+        public float TunnelCurve2C = 50f;
+        public float TunnelCurve3C = 130f;
+        [Tooltip("막힘 검사: 입구 밖으로 이만큼(m)까지 함께 본다(터널 은신 발사대가 나와 서는 자리)")]
+        public float TunnelApproachCheck = 180f;
 
         [Header("수")]
         public int CityCount = 2;
@@ -91,6 +98,10 @@ namespace ACO
         public float FlatTolerance = 20f;
         [Tooltip("이웃 칸이 이보다 더 높으면 그 경사가 칸 위를 덮어 도시/비행장을 놓지 않는다(m)")]
         public float MaxOverhang = 20f;
+        [Tooltip("도시 블록 칸 가장자리(꼭짓점 · 변 가운데)의 지형이 윗면보다 이만큼 넘게 높으면 묻힌 것으로 보고 블록을 놓지 않는다(m, 6-269)")]
+        public float CityBuryTolerance = 0.5f;
+        [Tooltip("묻힘 검사 레이캐스트가 맞히는 층 — 지형 기둥(Default)만. 도시 블록(11)은 넣지 않는다")]
+        public LayerMask BuryCheckLayers = 1;
         [Tooltip("마을/유적 칸의 같은 조건(m) — 건물이 가운데에 모여 있어 더 너그럽다")]
         public float VillageMaxOverhang = 40f;
 
@@ -185,6 +196,20 @@ namespace ACO
 
         // 막힌 곳(건물 자리, 월드 X/Z + 반지름)
         private const int MAX_BLOCKS = 128;
+        // 도시 블록 칸(6-270 — 시가지 정밀 타격이 도로 위에 차를 놓는다): 칸 윗면 중심(월드), 속한 자리, 블록 변형 번호
+        private const int MAX_CITY_CELLS = 64;
+        private Vector3[] _cityCell = new Vector3[MAX_CITY_CELLS];
+        private int[] _cityCellSite = new int[MAX_CITY_CELLS];
+        private int[] _cityCellVariant = new int[MAX_CITY_CELLS];
+        private int _cityCellCount;
+        // 놓은 터널(6-271): 가운데(y = 바닥), 방위(도 — 곡선 휨 쪽 포함), 반길이, 휨 폭, 자리
+        private const int MAX_TUNNELS = 4;
+        private Vector3[] _tunCenter = new Vector3[MAX_TUNNELS];
+        private float[] _tunYaw = new float[MAX_TUNNELS];
+        private float[] _tunHalf = new float[MAX_TUNNELS];
+        private float[] _tunCurve = new float[MAX_TUNNELS];
+        private int[] _tunSite = new int[MAX_TUNNELS];
+        private int _tunCount;
         private float[] _blockX = new float[MAX_BLOCKS];
         private float[] _blockZ = new float[MAX_BLOCKS];
         private float[] _blockR = new float[MAX_BLOCKS];
@@ -217,6 +242,8 @@ namespace ACO
             _placed = false;
             _siteCount = 0;
             _blockCount = 0;
+            _cityCellCount = 0;
+            _tunCount = 0;
             _plCount = 0;
             for (int i = 0; i < _instCount; i++)
             {
@@ -351,6 +378,8 @@ namespace ACO
                 float s = Score(kind, i);
                 if (s <= bestScore) { continue; }
                 if (!FarFromSites(kind, _origin.x + _cx[i], _origin.z + _cz[i])) { continue; }
+                // 높은 이웃의 비탈이 칸 가장자리를 덮으면 블록이 묻힌다(6-269). 레이 12발이라 새 최고점이 될 칸만 본다(고르는 칸은 같다)
+                if (kind == PICK_CITY && !CityCellClear(i)) { continue; }
                 best = i;
                 bestScore = s;
             }
@@ -480,9 +509,11 @@ namespace ACO
             for (int k = -1; k < 6 && blocks < Mathf.Max(CityMaxBlocks, 1); k++)
             {
                 int c = k < 0 ? center : _nb[center * 6 + (startDir + k) % 6];
-                if (k >= 0 && (c < 0 || _taken[c] || _ch[c] < _sea || Mathf.Abs(_ch[c] - h) > FlatTolerance || _over[c] > MaxOverhang)) { continue; }
+                if (k >= 0 && (c < 0 || _taken[c] || _ch[c] < _sea || Mathf.Abs(_ch[c] - h) > FlatTolerance || _over[c] > MaxOverhang || !CityCellClear(c))) { continue; }
                 // 도시 격자는 칸 간격의 정수 배라서 0도, 180도로만 돌려야 칸끼리 도로가 이어진다
-                AddBlock(c, PickVariant(CityBlockPrefabs, c), _hexR * 0.95f, Hash(c, 421, _jobSeed) < 0.5f ? 0f : 180f);
+                GameObject block = PickVariant(CityBlockPrefabs, c);
+                AddBlock(c, block, _hexR * 0.95f, Hash(c, 421, _jobSeed) < 0.5f ? 0f : 180f);
+                AddCityCell(c, site, block);
                 blocks++;
                 if (portCell < 0 && PortPrefab != null && _seaN[c] > 0)
                 {
@@ -619,8 +650,7 @@ namespace ACO
             if (fit < 0) { return; }
             int cells = fit / 8;
             int dir = fit % 8;
-            int site = AddSite(SITE_TUNNEL, cell, _hexR * (0.9f * cells + 0.1f));
-            // 능선 칸 막기 · 가운데 구하기
+            // 가운데 · 이웃 넘침(차지하기 전에 — 막혀 있으면 놓지 않는다)
             float sx = 0f;
             float sz = 0f;
             float maxOver = _over[_nb[cell * 6 + (dir + 3) % 6]];
@@ -628,24 +658,180 @@ namespace ACO
             for (int k = 0; k < cells; k++)
             {
                 if (k > 0) { c = _nb[c * 6 + dir]; }
-                _taken[c] = true;
                 sx += _cx[c];
                 sz += _cz[c];
                 maxOver = Mathf.Max(maxOver, _over[c]);
-                AddBlockAt(_origin.x + _cx[c], _origin.z + _cz[c], _hexR * 0.95f);
             }
             maxOver = Mathf.Max(maxOver, _over[_nb[c * 6 + dir]]);
-            _taken[_nb[c * 6 + dir]] = true;                   // 앞 진입로
-            _taken[_nb[cell * 6 + (dir + 3) % 6]] = true;      // 뒤 진입로
             float x = _origin.x + sx / cells;
             float z = _origin.z + sz / cells;
+            // 곡선형이 휘는 쪽(좌우)을 씨앗으로 — 모델은 앞뒤 대칭이라 180도 돌리면 반대로 휜다
+            float flip = Hash(0, 473, _jobSeed) < 0.5f ? 180f : 0f;
+            float yaw = DirYaw(dir) + flip;
+            Vector3 center = new Vector3(x, _ch[cell], z);
+            float half = TunnelHalfLength(cells);
+            GameObject prefab = TunnelPrefabFor(cells, maxOver <= TunnelCurveMaxOverhang);
+            float curve = TunnelCurveOf(prefab);
+            // 터널 안 · 입구 앞이 지형(옆 칸 비탈)에 막혔는가(6-271): 곡선형이 막히면 직선형으로, 그래도 막히면 놓지 않는다
+            if (!TunnelClear(center, yaw, half, curve))
+            {
+                bool ok = false;
+                if (curve != 0f)
+                {
+                    prefab = TunnelPrefabFor(cells, false);
+                    curve = 0f;
+                    ok = TunnelClear(center, yaw, half, 0f);
+                }
+                if (!ok)
+                {
+                    Debug.Log("[ACO] 터널: 터널 안이 지형에 막혀 놓지 않습니다(" + cells + "칸)");
+                    return;
+                }
+            }
+            int site = AddSite(SITE_TUNNEL, cell, _hexR * (0.9f * cells + 0.1f));
+            c = cell;
+            for (int k = 0; k < cells; k++)   // 능선 칸 막기
+            {
+                if (k > 0) { c = _nb[c * 6 + dir]; }
+                _taken[c] = true;
+                AddBlockAt(_origin.x + _cx[c], _origin.z + _cz[c], _hexR * 0.95f);
+            }
+            _taken[_nb[c * 6 + dir]] = true;                   // 앞 진입로
+            _taken[_nb[cell * 6 + (dir + 3) % 6]] = true;      // 뒤 진입로
             _siteX[site] = x;
             _siteZ[site] = z;
             string city = NearestCityName(x, z);
             _siteName[site] = (city.Length > 0 ? city : _siteName[site]) + TunnelLabel;
-            // 곡선형이 휘는 쪽(좌우)을 씨앗으로 — 모델은 앞뒤 대칭이라 180도 돌리면 반대로 휜다
-            float flip = Hash(0, 473, _jobSeed) < 0.5f ? 180f : 0f;
-            AddPlacement(TunnelPrefabFor(cells, maxOver <= TunnelCurveMaxOverhang), new Vector3(x, _ch[cell], z), DirYaw(dir) + flip);
+            AddPlacement(prefab, center, yaw);
+            if (_tunCount < MAX_TUNNELS)
+            {
+                _tunCenter[_tunCount] = center;
+                _tunYaw[_tunCount] = yaw;
+                _tunHalf[_tunCount] = half;
+                _tunCurve[_tunCount] = curve;
+                _tunSite[_tunCount] = site;
+                _tunCount++;
+            }
+        }
+
+        // ───────────── 터널 모양 (6-271 — 터널 은신 발사대 · 막힘 검사) ─────────────
+
+        /// 산(터널) 반길이 = 칸 간격 절반 × 칸 수 − 20m(모델 aco_tunnel_model.py HALF_LEN과 같다). 입구가 ±반길이.
+        private float TunnelHalfLength(int cells) { return _hexR * 0.8660254f * cells - 20f; }
+
+        private float TunnelCurveOf(GameObject prefab)
+        {
+            if (prefab != null && prefab == TunnelPrefab2C) { return TunnelCurve2C; }
+            if (prefab != null && prefab == TunnelPrefab3C) { return TunnelCurve3C; }
+            return 0f;
+        }
+
+        /// 터널 중심선의 옆 위치(모델 +X, m) — 한쪽 활(포물선), 입구 밖은 끝의 접선으로 곧게(모델 center_x와 같다).
+        public static float TunnelCenterX(float curve, float half, float z)
+        {
+            if (curve == 0f || half <= 0f) { return 0f; }
+            float zz = Mathf.Clamp(z, -half, half);
+            float x = curve * (1f - (zz / half) * (zz / half));
+            if (Mathf.Abs(z) > half) { x += TunnelSlope(curve, half, zz) * (z - zz); }
+            return x;
+        }
+
+        /// dx/dz(입구 밖은 끝 값).
+        public static float TunnelSlope(float curve, float half, float z)
+        {
+            if (curve == 0f || half <= 0f) { return 0f; }
+            float zz = Mathf.Clamp(z, -half, half);
+            return -2f * curve * zz / (half * half);
+        }
+
+        /// 터널 안 · 입구 앞(입구 밖 TunnelApproachCheck m까지)을 중심선을 따라 20m씩 9줄(옆 −15 · 0 · +15m × 높이 6 · 20 · 34m) 훑어 지형(BuryCheckLayers)에 닿으면 막힘.
+        private bool TunnelClear(Vector3 center, float yaw, float half, float curve)
+        {
+            Quaternion rot = Quaternion.Euler(0f, yaw, 0f);
+            float end = half + TunnelApproachCheck;
+            int steps = Mathf.Max(Mathf.CeilToInt(end * 2f / 20f), 1);
+            // 선분은 이미 들어가 있는 콜라이더를 못 맞힌다 — 양 끝(입구 밖 끝, 바닥 위 6m)이 이웃 비탈 속인지 위에서 따로 본다
+            for (int e = -1; e <= 1; e += 2)
+            {
+                float z = e * end;
+                Vector3 p = center + rot * new Vector3(TunnelCenterX(curve, half, z), 6f, z);
+                if (TerrainTopAbove(new Vector3(p.x, p.y + 2000f, p.z), 4000f, p.y)) { return false; }
+            }
+            for (int li = 0; li < 3; li++)
+            {
+                float lat = (li - 1) * 15f;
+                for (int hi = 0; hi < 3; hi++)
+                {
+                    float up = 6f + hi * 14f;
+                    Vector3 prev = Vector3.zero;
+                    for (int s = 0; s <= steps; s++)
+                    {
+                        float z = -end + end * 2f * s / steps;
+                        Vector3 p = center + rot * new Vector3(TunnelCenterX(curve, half, z) + lat, up, z);
+                        if (s > 0 && SegmentHitsTerrain(prev, p)) { return false; }
+                        prev = p;
+                    }
+                }
+            }
+            return true;
+        }
+
+        public int GetTunnelCount() { return _placed ? _tunCount : 0; }
+        /// 터널 가운데(월드, y = 바닥 칸 윗면).
+        public Vector3 GetTunnelCenter(int k) { return k >= 0 && k < _tunCount ? _tunCenter[k] : Vector3.zero; }
+        public float GetTunnelYaw(int k) { return k >= 0 && k < _tunCount ? _tunYaw[k] : 0f; }
+        public float GetTunnelHalfLength(int k) { return k >= 0 && k < _tunCount ? _tunHalf[k] : 0f; }
+        public float GetTunnelCurve(int k) { return k >= 0 && k < _tunCount ? _tunCurve[k] : 0f; }
+
+        /// 터널 k가 이 화면에 놓여 있고 점 p가 그 중심선 위(가로 tol m 안, 길이 안)인가 — 늦게 들어온 화면이 지형보다 유닛을 먼저 받았는지 본다(6-271).
+        public bool IsOnTunnelAxis(int k, Vector3 p, float tol)
+        {
+            if (!_placed || k < 0 || k >= _tunCount) { return false; }
+            Vector3 local = Quaternion.Inverse(Quaternion.Euler(0f, _tunYaw[k], 0f)) * (p - _tunCenter[k]);
+            if (Mathf.Abs(local.z) > _tunHalf[k] + 1f) { return false; }
+            return Mathf.Abs(local.x - TunnelCenterX(_tunCurve[k], _tunHalf[k], local.z)) <= tol;
+        }
+        public int GetTunnelSite(int k) { return k >= 0 && k < _tunCount ? _tunSite[k] : -1; }
+
+        /// 터널 k의 중심선 위 점(월드): 축 위치 z(입구 = ±반길이), 옆 lateral, 바닥 위 up.
+        public Vector3 TunnelPoint(int k, float z, float lateral, float up)
+        {
+            if (k < 0 || k >= _tunCount) { return Vector3.zero; }
+            return _tunCenter[k] + Quaternion.Euler(0f, _tunYaw[k], 0f) * new Vector3(TunnelCenterX(_tunCurve[k], _tunHalf[k], z) + lateral, up, z);
+        }
+
+        /// 터널 k의 축 방향(월드, z가 늘어나는 쪽).
+        public Vector3 TunnelForward(int k, float z)
+        {
+            if (k < 0 || k >= _tunCount) { return Vector3.forward; }
+            return Quaternion.Euler(0f, _tunYaw[k], 0f) * new Vector3(TunnelSlope(_tunCurve[k], _tunHalf[k], z), 0f, 1f).normalized;
+        }
+
+        /// 범위 피해가 터널 바위에 막히는가(6-271): from → to 사이에 터널 콜라이더(부모 이름 ACO_Tunnel…)가 있으면 참.
+        /// 바깥 폭격이 터널 안 유닛에 들어가지 않게 — 다른 지형(기둥)은 막지 않는다(밸런스 그대로).
+        /// 양쪽으로 쏜다: 뒷면은 맞지 않으므로(QueriesHitBackfaces 꺼짐) 폭발점이 바위 표면 바로 안쪽이면 바깥 → 안 레이가 바위를 못 맞힌다 — 안 → 바깥 레이가 터널 안벽을 맞힌다.
+        public static bool SplashBlockedByTunnel(Vector3 from, Vector3 to)
+        {
+            Vector3 d = to - from;
+            float len = d.magnitude;
+            if (len < 1f) { return false; }
+            if (HitsTunnel(from, d / len, len)) { return true; }
+            // 되돌아오는 레이는 폭발점 0.5m 앞에서 멈춘다 — 폭발점이 바위 겉면 위면 그 면 자체에 맞아(부동소수 오차) 정상 범위 피해까지 막는다
+            return len > 0.5f && HitsTunnel(to, -d / len, len - 0.5f);
+        }
+
+        private static bool HitsTunnel(Vector3 origin, Vector3 dir, float len)
+        {
+            if (!Physics.Raycast(origin, dir, len, 1, QueryTriggerInteraction.Ignore)) { return false; }   // 대부분은 아무것도 없다 — 배열을 만들지 않고 끝낸다
+            RaycastHit[] hits = Physics.RaycastAll(origin, dir, len, 1, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider c = hits[i].collider;
+                if (c == null) { continue; }
+                Transform p = c.transform.parent;
+                if (p != null && p.name.StartsWith("ACO_Tunnel")) { return true; }
+            }
+            return false;
         }
 
         private string NearestCityName(float x, float z)
@@ -686,6 +872,63 @@ namespace ACO
         }
 
         /// 칸 윗면 가운데에 프리팹 하나 + 막기.
+        /// 도시 블록이 묻히지 않는가(6-269): 블록 바닥판 · 도로는 칸 윗면(육각, 꼭짓점이 ±z)과 같은 모양이라, 이웃이 조금이라도 높으면
+        /// 그 기둥의 비탈(치마 15°)이 칸 가장자리를 덮어 도로 · 건물이 땅에 묻힌다(높이 차 Δ면 약 3.7Δ m 안쪽까지).
+        /// 꼭짓점 6곳 + 변 가운데 6곳(경계 바로 안쪽)에서 위에서 지형(기둥 층)으로 쏴 윗면보다 CityBuryTolerance 넘게 높으면 묻힌다.
+        /// 지형 기둥은 이 작업 전에 다 만들어졌고, 이전 지형의 장식은 꺼져 있어 맞지 않는다.
+        private bool CityCellClear(int cell)
+        {
+            float h = _ch[cell];
+            float x = _origin.x + _cx[cell];
+            float z = _origin.z + _cz[cell];
+            float top = h + CityBuryTolerance;
+            for (int k = 0; k < 12; k++)
+            {
+                bool corner = k < 6;
+                float ang = (corner ? k * 60f : (k - 6) * 60f + 30f) * Mathf.Deg2Rad;
+                float r = corner ? _hexR * 0.98f : _hexR * 0.8660254f * 0.99f;
+                Vector3 from = new Vector3(x + Mathf.Sin(ang) * r, h + 2000f, z + Mathf.Cos(ang) * r);
+                if (TerrainTopAbove(from, 4000f, top)) { return false; }
+            }
+            return true;
+        }
+
+        // ───────────── 지형 판정 레이 (6-269 · 6-271) ─────────────
+        // 도시 매몰 · 터널 막힘 판정은 모든 화면이 같은 답을 내야 한다(장소 번호가 어긋나면 배치 위치가 갈린다).
+        // 같은 층(Default)에 움직이는 콜라이더(플레이어 · NPC 기체, 유닛)가 있어 그 순간 위치에 따라 답이 달라질 수 있다 — 지형 기둥(Terrain 자식)만 센다.
+
+        private bool IsTerrainCollider(Collider c)
+        {
+            if (c == null) { return false; }
+            if (Terrain == null) { return true; }   // 지형 연결이 없으면 예전처럼 다 센다
+            return c.transform.IsChildOf(Terrain.transform);
+        }
+
+        /// a → b 선분이 지형 기둥에 닿는가. 첫 충돌이 지형이 아니면 선분 전체를 다시 훑는다(드묾).
+        private bool SegmentHitsTerrain(Vector3 a, Vector3 b)
+        {
+            RaycastHit hit;
+            if (!Physics.Linecast(a, b, out hit, BuryCheckLayers, QueryTriggerInteraction.Ignore)) { return false; }
+            if (IsTerrainCollider(hit.collider)) { return true; }
+            Vector3 d = b - a;
+            float len = d.magnitude;
+            if (len < 0.01f) { return false; }
+            RaycastHit[] hits = Physics.RaycastAll(a, d / len, len, BuryCheckLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++) { if (IsTerrainCollider(hits[i].collider)) { return true; } }
+            return false;
+        }
+
+        /// from에서 아래로 쏴 지형 기둥 윗면이 top보다 높은가.
+        private bool TerrainTopAbove(Vector3 from, float dist, float top)
+        {
+            RaycastHit hit;
+            if (!Physics.Raycast(from, Vector3.down, out hit, dist, BuryCheckLayers, QueryTriggerInteraction.Ignore)) { return false; }
+            if (IsTerrainCollider(hit.collider)) { return hit.point.y > top; }
+            RaycastHit[] hits = Physics.RaycastAll(from, Vector3.down, dist, BuryCheckLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++) { if (IsTerrainCollider(hits[i].collider) && hits[i].point.y > top) { return true; } }
+            return false;
+        }
+
         private void AddBlock(int cell, GameObject prefab, float blockRadius, float yaw)
         {
             _taken[cell] = true;
@@ -823,6 +1066,37 @@ namespace ACO
 
         public bool HasSites() { return _placed && _siteCount > 0; }
         public int GetSiteCount() { return _placed ? _siteCount : 0; }
+
+        // ───────────── 도시 블록 칸 (6-270) ─────────────
+
+        private void AddCityCell(int cell, int site, GameObject block)
+        {
+            if (_cityCellCount >= MAX_CITY_CELLS) { return; }
+            int variant = -1;
+            for (int i = 0; CityBlockPrefabs != null && i < CityBlockPrefabs.Length; i++) { if (CityBlockPrefabs[i] == block) { variant = i; break; } }
+            _cityCell[_cityCellCount] = new Vector3(_origin.x + _cx[cell], _ch[cell], _origin.z + _cz[cell]);
+            _cityCellSite[_cityCellCount] = site;
+            _cityCellVariant[_cityCellCount] = variant;
+            _cityCellCount++;
+        }
+
+        public int GetCityCellCount() { return _placed ? _cityCellCount : 0; }
+        /// 블록 칸 윗면 중심(월드). 도로 격자는 이 점 기준 x = i × 86.6m, z = j × 100m(블록은 0 · 180도로만 돌아 격자가 같다).
+        public Vector3 GetCityCellCenter(int k) { return k >= 0 && k < _cityCellCount ? _cityCell[k] : Vector3.zero; }
+        public int GetCityCellSite(int k) { return k >= 0 && k < _cityCellCount ? _cityCellSite[k] : -1; }
+
+        /// 자리(도시) site의 가장 높은 건물 꼭대기(칸 윗면 기준, m). 블록 높이 표가 없으면 0.
+        public float GetCityTopHeight(int site)
+        {
+            float top = 0f;
+            for (int k = 0; k < _cityCellCount; k++)
+            {
+                if (_cityCellSite[k] != site) { continue; }
+                int v = _cityCellVariant[k];
+                if (CityBlockTopHeights != null && v >= 0 && v < CityBlockTopHeights.Length) { top = Mathf.Max(top, CityBlockTopHeights[v]); }
+            }
+            return top;
+        }
         public int GetSiteKind(int i) { return _siteKind[i]; }
         public Vector3 GetSitePosition(int i) { return new Vector3(_siteX[i], _siteY[i], _siteZ[i]); }
         public float GetSiteRadius(int i) { return _siteR[i]; }

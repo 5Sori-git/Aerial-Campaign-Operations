@@ -49,6 +49,10 @@ namespace ACO
         public ACO_NPCFighterAI[] NPCFighters;
         [Tooltip("씬의 다른 공중 유닛(헬기·폭격기·수송기·아군 공격헬기)의 충돌 방지 — 전투기 다음에 한 대씩 건다")]
         public ACO_AirCollisionIgnore[] OtherAirUnits;
+        [Tooltip("다른 플레이어 기체(Bake가 채운다) — 플레이어 기체끼리도 서로 통과한다(충돌 데미지 없음). 탑승 중 PlayerIgnoreInterval초마다 PlayerIgnoreDistance m 안의 기체와 다시 건다")]
+        public ACO_VehicleUpgrades[] OtherPlayerVehicles;
+        public float PlayerIgnoreInterval = 1f;
+        public float PlayerIgnoreDistance = 1500f;
         [Tooltip("이 기체의 데칼(Bake가 만든다) — 탑승하면 내 데칼을 보내고 내리면 끈다")]
         public ACO_VehicleDecal Decal;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(내가/아군이 격추됨 대사)")]
@@ -191,6 +195,41 @@ namespace ACO
                 _ignoring = true;
                 SendCustomEventDelayedFrames(nameof(IgnoreNextNPC), 2);
             }
+            if (!_playerIgnoreLoop)
+            {
+                _playerIgnoreLoop = true;
+                SendCustomEventDelayedFrames(nameof(_RefreshPlayerIgnore), 3);
+            }
+        }
+
+        private bool _playerIgnoreLoop;
+
+        /// 플레이어 기체끼리 충돌 끄기(이 클라이언트에서 내가 조종 중인 기체만 — 충돌 데미지는 조종사 화면에서 계산한다).
+        /// 상대가 격추 · 부활하며 콜라이더를 껐다 켜면 무시 상태가 풀리므로 탑승 중 주기적으로 다시 건다(가까운 기체만).
+        public void _RefreshPlayerIgnore()
+        {
+            if (!_pilot) { _playerIgnoreLoop = false; return; }
+            if (OtherPlayerVehicles != null && BodyColliders != null)
+            {
+                float maxSq = PlayerIgnoreDistance * PlayerIgnoreDistance;
+                for (int k = 0; k < OtherPlayerVehicles.Length; k++)
+                {
+                    ACO_VehicleUpgrades other = OtherPlayerVehicles[k];
+                    if (!other || other == this || other.BodyColliders == null) { continue; }
+                    if ((other.transform.position - transform.position).sqrMagnitude > maxSq) { continue; }
+                    for (int i = 0; i < BodyColliders.Length; i++)
+                    {
+                        Collider a = BodyColliders[i];
+                        if (!a) { continue; }
+                        for (int j = 0; j < other.BodyColliders.Length; j++)
+                        {
+                            Collider b = other.BodyColliders[j];
+                            if (b) { Physics.IgnoreCollision(a, b, true); }
+                        }
+                    }
+                }
+            }
+            SendCustomEventDelayedSeconds(nameof(_RefreshPlayerIgnore), Mathf.Max(PlayerIgnoreInterval, 0.2f));
         }
 
         private int _ignoreIndex;

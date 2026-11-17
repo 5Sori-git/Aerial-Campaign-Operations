@@ -141,6 +141,12 @@ namespace ACO
 
         private bool _started;
         private bool _wasAlive;
+        // 출현 직후 격추 판정(6-268): 풀에서 다시 쓴 기체에 지난 미션의 체력 0·격추 상태가 먼저 들어오면 살아난 직후 죽은 것으로 보인다.
+        // 살아난 지 SPAWN_DOWN_GRACE초 안의 격추는 보류하고(그동안 살아 있는 걸로 친다), DOWN_CONFIRM초 안에 되살아나면 없던 일로 한다.
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;
+        private float _aliveSince = -100f;
+        private float _pendingDownAt = -1f;
         private bool _saidHalf;
         private bool _saidRail;
         private float _lastBanter = -100f;
@@ -186,6 +192,7 @@ namespace ACO
             EndCharge();
             if (AI != null && AI.Flares != null) { AI.Flares.EndSunLure(); }
             _wasAlive = false;
+            _pendingDownAt = -1f;
         }
 
         private bool Alive() { return AI != null && AI.IsAlive() && (TargetHealth == null || TargetHealth.Health > 0f); }
@@ -196,9 +203,23 @@ namespace ACO
         {
             if (!_started) { Start(); }
             bool alive = Alive();
-            if (alive && !_wasAlive) { HandleSpawn(); }
-            if (!alive && _wasAlive) { OnDown(); }
-            _wasAlive = alive;
+            if (_pendingDownAt >= 0f)
+            {
+                // 출현 직후의 격추 판정 보류(6-268): 되살아나면 지난 미션 값이었다 — 등장 대사 없이 이어 간다. 오래 그대로면 진짜 격추.
+                if (alive) { _pendingDownAt = -1f; }
+                else if (Time.time - _pendingDownAt < DOWN_CONFIRM) { return; }
+                else { _pendingDownAt = -1f; _wasAlive = false; OnDown(); return; }
+            }
+            else
+            {
+                if (alive && !_wasAlive) { _aliveSince = Time.time; HandleSpawn(); }
+                if (!alive && _wasAlive)
+                {
+                    if (Time.time - _aliveSince < SPAWN_DOWN_GRACE) { _pendingDownAt = Time.time; return; }
+                    OnDown();
+                }
+                _wasAlive = alive;
+            }
             if (!alive) { return; }
 
             CheckHalf();

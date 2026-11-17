@@ -549,6 +549,34 @@ public static class ACO_PhaseModuleSetup
         Debug.Log("[ACO] MR. S 페이즈 모듈 Phase_MrS를 미션 관리자 아래에 만들었습니다.", m);
     }
 
+    /// 시가지 정밀 타격 페이즈(6-270, 없으면 만든다): 도시 차량 사이에 숨은 적 지휘 차량 — 2페이즈부터.
+    public static void EnsurePrecision(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhasePrecision>(true) != null) { return; }
+        ACO_PhasePrecision m = Create<ACO_PhasePrecision>(manager, "Phase_Precision");
+        Setup(m, "URBAN STRIKE", "TOO MANY CIVILIAN CASUALTIES", 2, false,
+            "Enemy command vehicles are hiding in the city among civilian traffic. Fly low and get eyes on before you shoot.",
+            "All hostile vehicles are down. Clean work, all aircraft.",
+            "Too many civilian casualties. We're calling off the operation. All aircraft, return to base.");
+        m.ClearBonus = 1500;
+        ACO_VoiceLines.ApplyPhase(m);   // 음성(Precision/*)
+        Debug.Log("[ACO] 시가지 정밀 타격 페이즈 모듈 Phase_Precision을 미션 관리자 아래에 만들었습니다. 유닛 풀에 NPC_CityVehicle 20대가 필요합니다(Setup Check).", m);
+    }
+
+    /// 터널 은신 발사대 페이즈(6-271, 없으면 만든다): 터널 랜드마크가 있는 지형 — 2페이즈부터. 성공 · 실패 대사는 시한 표적과 같다.
+    public static void EnsureTunnelPhase(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseTunnel>(true) != null) { return; }
+        ACO_PhaseTunnel m = Create<ACO_PhaseTunnel>(manager, "Phase_Tunnel");
+        Setup(m, "TUNNEL HIDEOUT", "MISSILE LAUNCHED", 2, false,
+            "Enemy TELs are hiding inside the tunnel. They'll roll out one at a time. Don't let them launch!",
+            "All launchers destroyed. Threat eliminated. Outstanding work, pilots!",
+            "Intercept failed. The warhead is on its way. God help them.");
+        m.ClearBonus = 1500;
+        ACO_VoiceLines.ApplyPhase(m);
+        Debug.Log("[ACO] 터널 은신 발사대 페이즈 모듈 Phase_Tunnel을 미션 관리자 아래에 만들었습니다. 지형에 터널이 있고 유닛 풀에 TEL 3대가 있어야 나옵니다.", m);
+    }
+
     /// 궤도 폭격 연출이 온전한가(빛줄기·대폭발이 있다).
     public static bool StrikeComplete(ACO_PhaseLuna m)
     {
@@ -658,6 +686,8 @@ public static class ACO_PhaseModuleSetup
         if (luna == null || !StrikeComplete(luna)) { missing.Add("Phase_Luna"); }
         if (manager.GetComponentInChildren<ACO_PhaseMrS>(true) == null) { missing.Add("Phase_MrS"); }
         if (manager.GetComponentInChildren<ACO_PhaseSubmarine>(true) == null) { missing.Add("Phase_Submarine"); }
+        if (manager.GetComponentInChildren<ACO_PhasePrecision>(true) == null) { missing.Add("Phase_Precision"); }
+        if (manager.GetComponentInChildren<ACO_PhaseTunnel>(true) == null) { missing.Add("Phase_Tunnel"); }
         return missing;
     }
 
@@ -685,6 +715,8 @@ public static class ACO_PhaseModuleSetup
         EnsureLuna(manager);
         EnsureMrS(manager);
         EnsureSubmarine(manager);
+        EnsurePrecision(manager);
+        EnsureTunnelPhase(manager);
         ApplyDefaultWeights(manager);
     }
 

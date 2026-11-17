@@ -301,3 +301,19 @@ Tools/ (프로젝트 루트)
 - **보스 프리팹**: 요새·레일건을 고치던 `Ensure*` 패치를 지웠다. 생성 코드에 같은 내용이 있다.
 - **패널 변경 규칙**: 패널을 고칠 때는 씬이나 기존 프리팹을 패치하지 않는다. 생성 코드를 고치고 `ACO_PrefabVersions.Entries`의 판을 올린다. Setup Check `프리팹 판`이 구버전을 알려 주고 [고치기]가 다시 만든다. 직접 고친 내용이 사라지므로 `자동 수정 모두`에서 빠진다.
 - **Bake에 남긴 값**: 참조 목록, HexRadius, 비 고도, SAV HUD 숨김, UI·FX 레이어처럼 씬에서 매번 다시 맞추는 값만 둔다.
+
+### 6-274. SAV 원본 패치 기록 — SaccTarget 늦은 접속 멈춤
+SAV 폴더(`Assets/SaccFlightAndVehicles/`)는 손대지 않는 게 원칙이고, `Other/SaccTarget.cs`만 사용자 승인으로 최소한 고친다. SAV 폴더는 git에 올라가지 않으므로 **SAV를 새로 받거나 덮어쓰면 아래 패치를 다시 넣어야 한다**. 모든 패치 줄 끝에는 `// ACO PATCH` 표시가 있다(`grep -n "ACO PATCH"`로 확인).
+
+- **증상**: 진행 중인 방에 늦게 들어갈 때마다 콘솔에 `EXTERN to 'VRCSDKBaseVRCPlayerApi.__IsOwner__UnityEngineGameObject__SystemBoolean' … NullReferenceException`이 2~4번 나고, 그 NPC의 SaccTarget이 그 사람 화면에서 멈췄다(피격 · 파괴 표시가 안 바뀜). 2026-11-17 로그에서 접속할 때마다 반복됨.
+- **원인**: 접속 직후 다른 사람이 쏜 피격 네트워크 이벤트(`SendDamageEvent`)가 그 오브젝트의 `Start`보다 먼저 도착한다. `localPlayer`는 `Start`에서 채우므로 아직 null이고, `localPlayer.IsOwner(gameObject)`에서 멈춘다. `KillEvent`도 같은 구조(`localPlayer.playerId`).
+- **패치**: 두 네트워크 이벤트 맨 앞에 `if (localPlayer == null) { return; }// ACO PATCH (6-274): …`를 넣었다.
+  - `localPlayer`를 그 자리에서 채우지 않고 건너뛰는 이유: `Start` 전에는 `FullHealth`도 0이라, 드물게 접속자가 이미 오너면 `Health = Min(Health - dmg, FullHealth)`가 0 이하가 되어 바로 격파된다. 접속 중 피격 한두 번을 건너뛰는 편이 안전하다(체력은 오너 동기화로 곧 맞는다).
+  - 피해 계산 자체는 그대로다.
+
+| 경우 | 결과 |
+|---|---|
+| 늦게 들어오는 중 피격 이벤트 도착(오너 아님) | 건너뜀 — 원래도 오너가 아니면 기록만 하고 끝났다. 멈추지 않음 |
+| 늦게 들어오는 중 오너인 채로 피격(방장이 나가는 순간 등) | 그 한 번 피해를 건너뜀. 체력 0으로 즉사하지 않음 |
+| 접속 중 KillEvent 도착 | 건너뜀 — 킬 알림은 쏜 사람에게만 의미가 있다 |
+| Start 뒤 | 바뀐 것 없음 |

@@ -278,6 +278,26 @@ public static class ACO_VoiceLines
             // 2차 공습 대사(6-265)
             c |= Fill(ref amphibious.StrikeClip, "Amphibious/Amphibious_Strike");
         }
+        else if (m is ACO_PhaseTunnel tunnel)
+        {
+            // 터널 은신 발사대(6-271): 시작 · 출격은 새 음성(Tunnel/*), 성공 · 실패 · 발사 · 지상 격파 · 요격은 시한 표적과 같은 음성(TEL/*)
+            if (!string.IsNullOrEmpty(m.StartText)) { c |= Fill(ref m.StartClip, "Tunnel/Tunnel_Start"); }
+            c |= Fill(ref m.SuccessClip, "TEL/TEL_Clear");
+            c |= Fill(ref m.FailClip, "TEL/TEL_FAIL");
+            c |= Fill(ref tunnel.LineEmergeClip, "Tunnel/Tunnel_Emerge");
+            c |= Fill(ref tunnel.LineLaunchClip, "TEL/TEL_Launch");
+            c |= Fill(ref tunnel.LineTelDownClip, "TEL/TEL_kill");
+            c |= Fill(ref tunnel.LineMissileDownClip, "TEL/TEL_Intercept");
+        }
+        else if (m is ACO_PhasePrecision precision)
+        {
+            // 시가지 정밀 타격(6-270): 시작 · 성공 · 실패 + 식별 · 민간 피격 · 마지막 경고 · 적 격파
+            c |= Common(m, "Precision/Precision_", true);
+            c |= Fill(ref precision.LineFirstHostileClip, "Precision/Precision_Hostile");
+            c |= Fill(ref precision.LineCivilianHitClip, "Precision/Precision_CivHit");
+            c |= Fill(ref precision.LineCivilianLastClip, "Precision/Precision_CivLast");
+            c |= Fill(ref precision.LineEnemyDownClip, "Precision/Precision_EnemyDown");
+        }
         if (c)
         {
             EditorUtility.SetDirty(m);

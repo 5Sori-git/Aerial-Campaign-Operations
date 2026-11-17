@@ -145,6 +145,13 @@ namespace ACO
         private bool _silentDead;
         private float _deadAt;
         private float _spawnedAt;
+        // 출현 직후 격침(6-268): 풀에서 다시 쓴 잠수함에 지난 미션의 체력 0이 먼저 들어오면 스폰 직후 격침 이벤트가 온다 — 예전엔 늦게 들어온 격침으로 보고
+        // 모델을 숨긴 채 페이즈 끝까지 남았다. 켜지거나 스폰된 지 SPAWN_DOWN_GRACE초 안의 격침은 보류하고, 체력이 살아 있는 걸로 오면 취소.
+        // 늦게 들어온 사람(MissionRevive false)이면 바로, 아니면 DOWN_CONFIRM초 넘게 0일 때 연출 없이 가라앉은 상태로.
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;
+        private float _liveAt = -100f;
+        private float _pendingExplodeAt = -1f;
         private bool _blasted;
         private bool _ramBlasted;
         private float _secondaryTimer;
@@ -211,6 +218,8 @@ namespace ACO
             _blasted = false;
             _ramBlasted = false;
             _spawnedAt = Time.time;
+            _liveAt = Time.time;
+            if (_pendingExplodeAt >= 0f) { _pendingExplodeAt = Time.time; }   // 켜질 때 먼저 온 격침이면 스폰부터 다시 센다
             _weaponsOn = -1;
             _armStamp = 0;
             if (DeathFx) { DeathFx.SetActive(false); }
@@ -226,6 +235,7 @@ namespace ACO
         {
             _spawned = false;
             _dead = false;
+            _pendingExplodeAt = -1f;
             DisarmAll();
             SetSonar(false, Vector3.zero, 0f);
             SetCarrierFire(0);
@@ -249,13 +259,33 @@ namespace ACO
         public void Explode()
         {
             if (_dead) { return; }
+            if (!_spawned || Time.time - _liveAt < SPAWN_DOWN_GRACE)
+            {
+                if (_pendingExplodeAt < 0f) { _pendingExplodeAt = Time.time; }   // 출현 직후 격침은 보류(6-268)
+                return;
+            }
+            ApplyExplode(false);
+        }
+
+        void OnEnable() { _liveAt = Time.time; }
+
+        private bool HullDown()
+        {
+            if (TargetHealth != null) { return TargetHealth.Health <= 0f; }
+            return Warship == null || Warship.IsDestroyed();
+        }
+
+        /// silent: 늦게 들어왔거나 출현 때부터 격침돼 있던 것 — 연출 · 대사 없이 가라앉은 상태로.
+        private void ApplyExplode(bool silent)
+        {
+            _pendingExplodeAt = -1f;
+            if (_dead) { return; }
             _dead = true;
             _deadAt = Time.time;
             _deadPos = transform.position;
             _deadRot = transform.rotation;
             _secondaryTimer = 0f;
-            // 늦게 들어와 스폰과 함께 받은 격침: 연출 없이 가라앉은 상태로
-            _silentDead = Time.time - _spawnedAt < 0.5f;
+            _silentDead = silent;
             _blasted = _silentDead;
             if (_silentDead && Model) { Model.SetActive(false); }
             if (DeathFx) { DeathFx.SetActive(!_silentDead); }
@@ -269,6 +299,12 @@ namespace ACO
         {
             if (!_spawned) { return; }
             float dt = Time.deltaTime;
+            if (_pendingExplodeAt >= 0f)
+            {
+                // 보류한 출현 직후 격침(6-268): 체력이 살아 있으면 지난 미션 값이었다 — 취소. 늦게 들어왔거나 오래 0이면 연출 없이 가라앉은 상태로.
+                if (!HullDown()) { _pendingExplodeAt = -1f; }
+                else if ((Warship != null && !Warship.MissionRevive) || Time.time - _pendingExplodeAt >= DOWN_CONFIRM) { ApplyExplode(true); }
+            }
             if (_dead) { UpdateDeath(dt); }
             else { ApplyPose(); CheckBreach(); }
 

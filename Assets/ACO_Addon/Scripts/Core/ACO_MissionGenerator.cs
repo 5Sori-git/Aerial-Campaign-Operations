@@ -112,6 +112,41 @@ namespace ACO
         [Tooltip("전함(고가치 표적 함선)을 놓을 때 붙일 호위 구축함 수")]
         public int EscortCount = 2;
 
+        [Header("시가지 정밀 타격 — 도시 차량 (ACO_CityVehicle — 지상 풀, 6-270)")]
+        [Tooltip("적 차량 중 블록 둘레를 도는 수(나머지는 도로가 주차)")]
+        public int CityEnemyDrivers = 1;
+        [Tooltip("민간 차량 중 블록 둘레를 도는 수")]
+        public int CityCivilianDrivers = 5;
+        [Tooltip("적 차량 하나 둘레에 붙이는 민간 차량 수(최소~최대)")]
+        public int CityClusterMin = 2;
+        public int CityClusterMax = 4;
+        [Tooltip("적 차량 둘레 민간 차량 거리(m, 최소~최대)")]
+        public float CityClusterNear = 30f;
+        public float CityClusterFar = 80f;
+        [Tooltip("주차 차량끼리 최소 간격(m)")]
+        public float CityParkSpacing = 14f;
+        [Tooltip("도로 가운데선에서 주차 자리까지(m — 좁은 길 반폭 6.5m)")]
+        public float CityParkOffset = 5.25f;
+        [Tooltip("교차로 · 주행 고리가 칸 가장자리에서 떨어지는 거리(m)")]
+        public float CityEdgeMargin = 30f;
+        [Tooltip("도시 바깥 대공포 수(최소~최대)와 도시 반경 밖 거리(m)")]
+        public int CityDefenseMin = 2;
+        public int CityDefenseMax = 4;
+        public float CityDefenseOutset = 450f;
+
+        [Header("터널 은신 발사대 (6-271)")]
+        [Tooltip("TEL이 숨는 자리: 나갈 입구에서 안쪽 거리(m)와 같은 입구로 나가는 다음 TEL 간격(m)")]
+        public float TunnelHideInset = 120f;
+        public float TunnelHideSpacing = 200f;
+        [Tooltip("터널 안 대공포 수(최소~최대)와 축에서 옆 거리(m — 터널 폭 50m)")]
+        public int TunnelInnerGunsMin = 1;
+        public int TunnelInnerGunsMax = 2;
+        public float TunnelInnerGunLateral = 18f;
+        [Tooltip("입구 밖 대공포 · SAM 거리(m)와 축에서 옆 거리(m)")]
+        public float TunnelPortalGunOut = 90f;
+        public float TunnelPortalSamOut = 170f;
+        public float TunnelPortalLateral = 45f;
+
         [Header("전차 (ACO_MobileUnit — 지상 풀)")]
         [Tooltip("전체 배치 때 놓을 순찰 소대 수(지면 위 닫힌 고리를 계속 돈다)")]
         public int BackgroundTankPlatoons = 2;
@@ -510,6 +545,10 @@ namespace ACO
         public const int OBJ_SUBMARINE = 18;
         /// 잠수함 사출 무인기(6-217) count기: focus = 사출구 자리, minDist = 나가는 방위각(도). 풀의 Drone 전투기만 쓴다(일반 배치에 안 쓴다).
         public const int OBJ_SUB_DRONE = 19;
+        /// 시가지 정밀 타격(6-270): count = 적 차량 수, tier 자리 = 민간 차량 태그, minDist 자리 = 민간 차량 수, focus = 도시 자리 위치.
+        public const int OBJ_CITY = 20;
+        /// 터널 은신 발사대(6-271): count = TEL 수, tier 자리 = 터널 번호(지형 GetTunnel*), minDist 자리 = 첫 출격까지(초), maxDist 자리 = 출격 간격(초).
+        public const int OBJ_TUNNEL = 21;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -542,6 +581,7 @@ namespace ACO
         // 지상 풀 중 함선(바다에만 놓는다)
         private bool[] _groundIsShip;
         private bool[] _groundIsTel;
+        private bool[] _groundIsCity;
         private bool _partsBuilt;
         // 전체 배치 요청 대기열(오너 로컬). 요청은 하나로 합쳐지고, 지형을 기다리는 루프도 하나만 돈다.
         // 종류: 미션이 미리 배치보다 우선(미리 배치를 기다리는 중에 미션 시작이 오면 미션으로 바뀐다 — 반대는 없다).
@@ -1381,7 +1421,49 @@ namespace ACO
         /// 함선/전차 — 지상 그룹/방공 링/증원에 쓰지 않고 따로 놓는 유닛.
         private bool IsGroundMover(int i)
         {
-            return IsGroundShip(i) || IsMobileUnit(i) || IsTelUnit(i);
+            return IsGroundShip(i) || IsMobileUnit(i) || IsTelUnit(i) || IsCityVehicle(i);
+        }
+
+        /// 도시 차량(6-270 — 전용 풀, 일반 지상 배치에 쓰지 않는다).
+        public bool IsCityVehicle(int i)
+        {
+            if (_groundIsCity == null || _groundIsCity.Length != (GroundUnits != null ? GroundUnits.Length : 0))
+            {
+                int n = GroundUnits != null ? GroundUnits.Length : 0;
+                _groundIsCity = new bool[n];
+                for (int k = 0; k < n; k++) { _groundIsCity[k] = GroundUnits[k] != null && GroundUnits[k].GetComponent<ACO_CityVehicle>() != null; }
+            }
+            return i >= 0 && i < _groundIsCity.Length && _groundIsCity[i];
+        }
+
+        private ACO_CityVehicle[] _cityCars;
+        public ACO_CityVehicle GetCityVehicle(int i)
+        {
+            if (!IsCityVehicle(i)) { return null; }
+            if (_cityCars == null || _cityCars.Length != GroundUnits.Length) { _cityCars = new ACO_CityVehicle[GroundUnits.Length]; }
+            if (_cityCars[i] == null) { _cityCars[i] = GroundUnits[i].GetComponent<ACO_CityVehicle>(); }
+            return _cityCars[i];
+        }
+
+        /// 레이더 · 전술 지도(6-270): 도시 차량은 식별된 적 지휘 차량만 보인다 — 미확인 · 민간 차량을 빨간 목표로 그리지 않는다.
+        public bool IsCityContactHidden(int i)
+        {
+            ACO_CityVehicle car = GetCityVehicle(i);
+            return car != null && !(car.Identified && car.IsEnemy);
+        }
+
+        /// 쉬는(안 쓰거나 파괴된) 도시 차량 수 — 페이즈가 배치할 수 있는지 본다.
+        public int CountFreeCityVehicles()
+        {
+            EnsureArrays();
+            int n = 0;
+            for (int i = 0; i < _groundUsed.Length; i++)
+            {
+                // 보호 태그(이전 페이즈 목표)는 보지 않는다 — 배치가 시작되면 보호가 이번 태그로 넘어가 배치(CollectFreeCity)는 쓸 수 있다
+                if (!IsCityVehicle(i)) { continue; }
+                if (!_groundUsed[i] || IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>())) { n++; }
+            }
+            return n;
         }
 
         /// TEL(전용 풀 — 일반 지상 배치에 쓰지 않는다. 탄도탄을 따라 올라가므로 위치도 실제 위치를 읽는다).
@@ -1992,6 +2074,8 @@ namespace ACO
             if (st != null) { QueueFullHealth(st.TargetHealth, st.BaseHealth, true); }
             ACO_TelUnit tel = unit.GetComponent<ACO_TelUnit>();
             if (tel != null) { QueueFullHealth(tel.TargetHealth, tel.BaseHealth, true); }
+            ACO_CityVehicle car = unit.GetComponent<ACO_CityVehicle>();
+            if (car != null) { QueueFullHealth(car.TargetHealth, car.BaseHealth, true); }
         }
 
         public void _ApplyTierHealth()
@@ -3121,6 +3205,8 @@ namespace ACO
             if (kind == OBJ_HVT) { placed = DeployHvts(tag, count, tier, focus, minDist, maxDist, now); label = "목표 배치(고가치 표적)"; }
             else if (kind == OBJ_FORTRESS) { placed = DeployFortress(tag, tier, focus, now); label = "목표 배치(공중 요새)"; }
             else if (kind == OBJ_TEL) { placed = DeployTel(tag, focus, minDist, maxDist, now); label = "목표 배치(TEL)"; }
+            else if (kind == OBJ_CITY) { placed = DeployCity(tag, tier, count, Mathf.RoundToInt(minDist), focus, now); label = "목표 배치(시가지 정밀 타격)"; }
+            else if (kind == OBJ_TUNNEL) { placed = DeployTunnel(tag, tier, count, minDist, maxDist, now); label = "목표 배치(터널 은신 발사대)"; }
             else if (kind == OBJ_RAILGUN) { placed = DeployRailgun(tag, tier, focus, now); label = "목표 배치(랜스 포대)"; }
             else if (kind == OBJ_LANDSHIP) { placed = DeployLandShip(tag, tier, focus, now); label = "목표 배치(육상전함)"; }
             else if (kind == OBJ_SUBMARINE) { placed = DeploySubmarine(tag, focus, now); label = "목표 배치(잠수함)"; }
@@ -3375,6 +3461,339 @@ namespace ACO
                 if (ship != null) { PlaceEscorts(LEADER_HVT + idx, center, YawRot(_hvtYaw[idx]), EscortCount, now); }
                 if (ship == null && Random.value < DefenseChance) { PlaceDefenseRing(center, now); }
             }
+            return placed;
+        }
+
+        // ───────────── 시가지 정밀 타격 (6-270) ─────────────
+
+        private Vector3[] _cityPlaced = new Vector3[64];
+        private int _cityPlacedCount;
+
+        /// 도시 차량 배치: 가장 가까운 도시(focus)의 블록 칸 도로 위에 적 enemies대(앞 CityEnemyDrivers대는 블록 둘레 주행)와
+        /// 민간 civilians대(적마다 둘레 CityClusterNear~Far m에 CityClusterMin~Max대, 그다음 주행 CityCivilianDrivers대, 나머지는 아무 도로가)를 놓고,
+        /// 도시 바깥(반경 + CityDefenseOutset)에 대공포 CityDefenseMin~Max문을 두른다(태그 없음 — 목표 아님). 반환 = 놓은 적 차량 수.
+        private int DeployCity(int tag, int civTag, int enemies, int civilians, Vector3 focus, int now)
+        {
+            if (Features == null || GroundUnits == null) { return 0; }
+            int site = FindVehicleCitySite(focus);
+            if (site < 0) { return 0; }
+            int total = Features.GetCityCellCount();
+            int[] cells = new int[Mathf.Max(total, 1)];
+            int nc = 0;
+            for (int k = 0; k < total; k++) { if (Features.GetCityCellSite(k) == site) { cells[nc] = k; nc++; } }
+            if (nc == 0) { return 0; }
+            int[] free = new int[_groundUsed.Length];
+            int nf = CollectFreeCity(free);
+            _cityPlacedCount = 0;
+            int next = 0;
+            int placedEnemies = 0;
+            int placedCiv = 0;
+            for (int e = 0; e < enemies && next < nf; e++)
+            {
+                int idx = free[next];
+                bool ok = e < CityEnemyDrivers ? PlaceCityDriver(idx, tag, true, cells, nc, now) : PlaceCityParked(idx, tag, true, cells, nc, Vector3.zero, 0f, 0f, now);
+                if (!ok) { ok = PlaceCityParked(idx, tag, true, cells, nc, Vector3.zero, 0f, 0f, now); }   // 고리 자리가 없으면 주차로
+                if (!ok) { continue; }
+                next++;
+                placedEnemies++;
+                Vector3 at = _groundPos[idx];
+                int cluster = Random.Range(Mathf.Max(CityClusterMin, 0), Mathf.Max(CityClusterMax, CityClusterMin) + 1);
+                for (int c = 0; c < cluster && placedCiv < civilians && next < nf; c++)
+                {
+                    if (PlaceCityParked(free[next], civTag, false, cells, nc, at, CityClusterNear, CityClusterFar, now)) { next++; placedCiv++; }
+                }
+            }
+            if (placedEnemies == 0)
+            {
+                // 적을 하나도 못 놓으면 민간 차량 · 방공도 놓지 않는다 — 교체를 기다리는 동안 민간 피해로 실패하지 않게(모듈이 교체한다)
+                _markTag = 0;
+                Debug.LogWarning("[ACO] 시가지 정밀 타격 배치: 도시 " + Features.GetSiteName(site) + "에 적 차량을 놓지 못함");
+                return 0;
+            }
+            for (int d = 0; d < CityCivilianDrivers && placedCiv < civilians && next < nf; d++)
+            {
+                if (!PlaceCityDriver(free[next], civTag, false, cells, nc, now)) { break; }
+                next++;
+                placedCiv++;
+            }
+            int guard = 0;
+            while (placedCiv < civilians && next < nf && guard < civilians * 4)
+            {
+                guard++;
+                if (PlaceCityParked(free[next], civTag, false, cells, nc, Vector3.zero, 0f, 0f, now)) { next++; placedCiv++; }
+            }
+            _markTag = 0;
+            int guns = PlaceCityDefense(site, now);   // 적을 하나도 못 놓은 경우는 위에서 이미 돌아갔다
+            Debug.Log("[ACO] 시가지 정밀 타격 배치: 도시 " + Features.GetSiteName(site) + " 칸 " + nc + ", 적 " + placedEnemies + "/" + enemies + ", 민간 " + placedCiv + "/" + civilians + ", 대공포 " + guns);
+            return placedEnemies;
+        }
+
+        /// 쉬는 도시 차량(안 쓰던 것 먼저, 그다음 파괴된 것). 섞어 둔다.
+        private int CollectFreeCity(int[] outList)
+        {
+            int n = 0;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int start = n;
+                for (int i = 0; i < _groundUsed.Length; i++)
+                {
+                    if (!IsCityVehicle(i) || IsProtected(_groundTag, i)) { continue; }
+                    bool candidate = pass == 0 ? !_groundUsed[i] : (_groundUsed[i] && IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>()));
+                    if (candidate) { outList[n] = i; n++; }
+                }
+                ShuffleRange(outList, start, n);
+            }
+            return n;
+        }
+
+        private float CityHexR() { return Features != null && Features.Terrain != null ? Features.Terrain.HexRadius : 400f; }
+
+        /// 칸 윗면 중심 기준 (x, z)가 육각 칸(꼭짓점 ±z) 안쪽 margin m 안인가.
+        private bool CityInHex(float x, float z, float margin)
+        {
+            float r = CityHexR();
+            float a = r * 0.8660254f;
+            float ax = Mathf.Abs(x);
+            return ax <= a - margin && Mathf.Abs(z) <= r - ax * 0.57735f - margin * 1.1547f;
+        }
+
+        private int CityVariant(bool enemy)
+        {
+            if (enemy) { return ACO_CityVehicle.VARIANT_COUNT_CIVILIAN + Random.Range(0, 2); }
+            float r = Random.value;
+            if (r < 0.12f) { return 7 + Random.Range(0, 2); }   // 버스 둘
+            if (r < 0.45f) { return 4 + Random.Range(0, 3); }   // 밴 셋
+            return Random.Range(0, 4);                           // 승용차 넷
+        }
+
+        private bool CitySpaced(Vector3 p, float spacing)
+        {
+            float sq = spacing * spacing;
+            for (int k = 0; k < _cityPlacedCount; k++)
+            {
+                float dx = _cityPlaced[k].x - p.x;
+                float dz = _cityPlaced[k].z - p.z;
+                if (dx * dx + dz * dz < sq) { return false; }
+            }
+            return true;
+        }
+
+        private void CityRecord(Vector3 p)
+        {
+            if (_cityPlacedCount >= _cityPlaced.Length) { return; }
+            _cityPlaced[_cityPlacedCount] = p;
+            _cityPlacedCount++;
+        }
+
+        /// 블록 둘레를 도는 차: 교차로 하나와 고리(앞 1~2칸 × 옆 1~2칸, 좌우 회전)가 칸 안에 다 들어가는 것을 고른다.
+        private bool PlaceCityDriver(int idx, int tag, bool enemy, int[] cells, int nc, int now)
+        {
+            for (int attempt = 0; attempt < 40; attempt++)
+            {
+                Vector3 c = Features.GetCityCellCenter(cells[Random.Range(0, nc)]);
+                int gi = Random.Range(-4, 5);
+                int gj = Random.Range(-3, 4);
+                float x = gi * ACO_CityVehicle.GRID_X;
+                float z = gj * ACO_CityVehicle.GRID_Z;
+                int heading = Random.Range(0, 4);
+                bool right = Random.value < 0.5f;
+                int front = Random.Range(1, 3);
+                int side = Random.Range(1, 3);
+                int sideHeading = ACO_CityVehicle.SideHeading(heading, right);
+                Vector3 f = ACO_CityVehicle.HeadingDir(heading) * (front * ACO_CityVehicle.GridStep(heading));
+                Vector3 sv = ACO_CityVehicle.HeadingDir(sideHeading) * (side * ACO_CityVehicle.GridStep(sideHeading));
+                if (!CityInHex(x, z, CityEdgeMargin) || !CityInHex(x + f.x, z + f.z, CityEdgeMargin)
+                    || !CityInHex(x + f.x + sv.x, z + f.z + sv.z, CityEdgeMargin) || !CityInHex(x + sv.x, z + sv.z, CityEdgeMargin)) { continue; }
+                Vector3 pos = new Vector3(c.x + x, c.y + 0.47f, c.z + z);
+                if (!CitySpaced(pos, ACO_CityVehicle.GRID_X * 0.9f)) { continue; }   // 같은 교차로에서 둘이 출발하지 않게
+                int code = ACO_CityVehicle.MakeCode(enemy, CityVariant(enemy), true, right, front, side, heading, Random.Range(0, 8));
+                _markTag = tag;
+                MarkGround(idx, true, pos, Quaternion.LookRotation(ACO_CityVehicle.HeadingDir(heading), Vector3.up), now);
+                _groundLeader[idx] = (short)code;
+                CityRecord(pos);
+                return true;
+            }
+            return false;
+        }
+
+        /// 도로가 주차: far > 0이면 near 둘레 nearDist~far m, 아니면 도시 칸 아무 곳. 가까운 도로 가운데선에서 CityParkOffset만큼 옆,
+        /// 교차로에서 12m 넘게 떨어진 자리, 오른쪽 차선 방향으로 선다.
+        private bool PlaceCityParked(int idx, int tag, bool enemy, int[] cells, int nc, Vector3 near, float nearDist, float far, int now)
+        {
+            for (int attempt = 0; attempt < 40; attempt++)
+            {
+                Vector3 c;
+                float x;
+                float z;
+                if (far > 0f)
+                {
+                    float ang = Random.Range(0f, Mathf.PI * 2f);
+                    float dist = Random.Range(nearDist, far);
+                    float wx = near.x + Mathf.Cos(ang) * dist;
+                    float wz = near.z + Mathf.Sin(ang) * dist;
+                    int best = 0;
+                    float bestSq = float.MaxValue;
+                    for (int k = 0; k < nc; k++)
+                    {
+                        Vector3 cc = Features.GetCityCellCenter(cells[k]);
+                        float d = (cc.x - wx) * (cc.x - wx) + (cc.z - wz) * (cc.z - wz);
+                        if (d < bestSq) { bestSq = d; best = k; }
+                    }
+                    c = Features.GetCityCellCenter(cells[best]);
+                    x = wx - c.x;
+                    z = wz - c.z;
+                }
+                else
+                {
+                    c = Features.GetCityCellCenter(cells[Random.Range(0, nc)]);
+                    x = Random.Range(-350f, 350f);
+                    z = Random.Range(-400f, 400f);
+                }
+                float rx = Mathf.Round(x / ACO_CityVehicle.GRID_X) * ACO_CityVehicle.GRID_X;
+                float rz = Mathf.Round(z / ACO_CityVehicle.GRID_Z) * ACO_CityVehicle.GRID_Z;
+                bool sideSign = Random.value < 0.5f;
+                float px;
+                float pz;
+                Vector3 facing;
+                if (Mathf.Abs(x - rx) <= Mathf.Abs(z - rz))
+                {
+                    // 세로 길(x 고정): +x 쪽이면 +z를 본다(오른쪽 차선)
+                    if (Mathf.Abs(z - rz) < 12f) { continue; }
+                    px = rx + (sideSign ? CityParkOffset : -CityParkOffset);
+                    pz = z;
+                    facing = sideSign ? Vector3.forward : Vector3.back;
+                }
+                else
+                {
+                    // 가로 길(z 고정): −z 쪽이면 +x를 본다
+                    if (Mathf.Abs(x - rx) < 12f) { continue; }
+                    px = x;
+                    pz = rz + (sideSign ? -CityParkOffset : CityParkOffset);
+                    facing = sideSign ? Vector3.right : Vector3.left;
+                }
+                if (!CityInHex(px, pz, 15f)) { continue; }
+                Vector3 pos = new Vector3(c.x + px, c.y + 0.47f, c.z + pz);
+                if (!CitySpaced(pos, CityParkSpacing)) { continue; }
+                int code = ACO_CityVehicle.MakeCode(enemy, CityVariant(enemy), false, false, 1, 1, 0, 0);
+                _markTag = tag;
+                MarkGround(idx, true, pos, Quaternion.LookRotation(facing, Vector3.up), now);
+                _groundLeader[idx] = (short)code;
+                CityRecord(pos);
+                return true;
+            }
+            return false;
+        }
+
+        /// 도시 바깥 대공포(대공포 유닛만, 태그 없음). 반환 = 놓은 수.
+        private int PlaceCityDefense(int site, int now)
+        {
+            int count = Random.Range(Mathf.Max(CityDefenseMin, 0), Mathf.Max(CityDefenseMax, CityDefenseMin) + 1);
+            if (count <= 0) { return 0; }
+            int[] all = new int[_groundUsed.Length];
+            int n = CollectFree(GroundUnits, _groundUsed, all);
+            _groundOrder = new int[Mathf.Max(n, 1)];
+            _groundBudget = 0;
+            for (int k = 0; k < n; k++)
+            {
+                UdonSharpBehaviour u = GroundUnits[all[k]];
+                if (u != null && u.GetComponent<ACO_AAGunSite>() != null) { _groundOrder[_groundBudget] = all[k]; _groundBudget++; }
+            }
+            _groundNext = 0;
+            return PlaceRing(Features.GetSitePosition(site), count, Features.GetSiteRadius(site) + CityDefenseOutset, now);
+        }
+
+        // ───────────── 터널 은신 발사대 (6-271) ─────────────
+
+        public bool CanDeployTunnel(int tels)
+        {
+            if (Features == null || Features.GetTunnelCount() == 0) { return false; }
+            EnsureArrays();
+            int n = 0;
+            for (int i = 0; i < _groundUsed.Length; i++)
+            {
+                // 보호 태그(이전 페이즈의 시한 표적)는 보지 않는다 — 배치(FreeTel)가 쓰는 것과 같은 기준으로 센다
+                if (!IsTelUnit(i)) { continue; }
+                if (!_groundUsed[i] || IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>())) { n++; }
+            }
+            return n >= Mathf.Min(tels, ACO_PhaseTunnel.MAX_TELS);
+        }
+
+        /// 터널 tunnel 안에 TEL count대를 숨긴다: 양쪽 입구로 번갈아 나가게(짝수 순번 +z 입구), 입구에서 TunnelHideInset m 안쪽부터 TunnelHideSpacing m 간격.
+        /// 순번 k의 출격 = 배치 시각 + firstDelay + k × interval(초). 코드(_groundLeader, ACO_TelUnit.MakeTunnelCode)에는 입구 밖에 멈추는 시각(출격 + 주행 시간, 초)을 넣는다 —
+        /// 발사 시각이 지형과 무관해 터널이 아직 없는 화면(늦게 들어온 사람)도 같은 시각에 쏜다. TEL이 스스로 나온다(동기화 추가 없음).
+        /// 배치 시각은 지금 그대로 둔다(미래 시각이면 나오기 전에 들어온 화면이 부활로 보고 이미 부서진 TEL을 다시 채운다).
+        /// 방공(태그 없음): 터널 안 도로 가 대공포 TunnelInnerGunsMin~Max문, 양쪽 입구 밖에 대공포 1 · SAM 1.
+        private int DeployTunnel(int tag, int tunnel, int count, float firstDelay, float interval, int now)
+        {
+            if (Features == null || tunnel < 0 || tunnel >= Features.GetTunnelCount()) { return 0; }
+            float half = Features.GetTunnelHalfLength(tunnel);
+            int placed = 0;
+            count = Mathf.Min(count, ACO_PhaseTunnel.MAX_TELS);
+            for (int k = 0; k < count; k++)
+            {
+                int i = FreeTel();
+                if (i < 0) { break; }
+                float sign = k % 2 == 0 ? 1f : -1f;
+                float z = sign * Mathf.Max(half - TunnelHideInset - (k / 2) * TunnelHideSpacing, 0f);
+                Vector3 pos = Features.TunnelPoint(tunnel, z, 0f, 0f);
+                Quaternion rot = Quaternion.LookRotation(Features.TunnelForward(tunnel, z) * sign, Vector3.up);
+                ACO_TelUnit telUnit = GroundUnits[i].GetComponent<ACO_TelUnit>();
+                float exitDist = telUnit != null ? telUnit.TunnelExitDistance : 150f;
+                float speed = telUnit != null ? Mathf.Max(telUnit.TunnelSpeed, 0.1f) : 10f;
+                float drive = Mathf.Abs(sign * (half + exitDist) - z) / speed;
+                int stopSec = Mathf.RoundToInt(firstDelay + k * interval + drive);
+                _markTag = tag;
+                MarkGround(i, true, pos, rot, now);
+                _groundLeader[i] = (short)ACO_TelUnit.MakeTunnelCode(tunnel, sign > 0f, stopSec);
+                placed++;
+            }
+            _markTag = 0;
+            if (placed == 0) { return 0; }   // TEL을 못 놓으면 방공도 깔지 않는다(모듈이 교체한다)
+            // 방공: 대공포 · SAM 후보(쉬는 것, 움직이는 유닛 · 함선 · TEL 제외)
+            int[] all = new int[_groundUsed.Length];
+            int n = CollectFree(GroundUnits, _groundUsed, all);
+            int[] guns = new int[Mathf.Max(n, 1)];
+            int[] sams = new int[Mathf.Max(n, 1)];
+            int ng = 0;
+            int ns = 0;
+            for (int k = 0; k < n; k++)
+            {
+                UdonSharpBehaviour u = GroundUnits[all[k]];
+                if (u == null) { continue; }
+                if (u.GetComponent<ACO_AAGunSite>() != null) { guns[ng] = all[k]; ng++; }
+                else if (u.GetComponent<ACO_SAMSite>() != null) { sams[ns] = all[k]; ns++; }
+            }
+            int gi = 0;
+            int si = 0;
+            int inner = Random.Range(Mathf.Max(TunnelInnerGunsMin, 0), Mathf.Max(TunnelInnerGunsMax, TunnelInnerGunsMin) + 1);
+            for (int k = 0; k < inner && gi < ng; k++)
+            {
+                float z = Random.Range(-half + 60f, half - 60f);
+                float side = Random.value < 0.5f ? -1f : 1f;
+                Vector3 pos = Features.TunnelPoint(tunnel, z, side * TunnelInnerGunLateral, 0f);
+                Quaternion rot = Quaternion.LookRotation(Features.TunnelForward(tunnel, z) * (Random.value < 0.5f ? 1f : -1f), Vector3.up);
+                MarkGround(guns[gi], true, pos, rot, now);
+                gi++;
+            }
+            for (int end = -1; end <= 1; end += 2)
+            {
+                Vector3 outward = Features.TunnelForward(tunnel, end * half) * end;
+                if (gi < ng)
+                {
+                    Vector3 p = Features.TunnelPoint(tunnel, end * (half + TunnelPortalGunOut), TunnelPortalLateral, 0f);
+                    if (SampleGround(p.x, p.z)) { p.y = _sampleY; }
+                    MarkGround(guns[gi], true, p, Quaternion.LookRotation(outward, Vector3.up), now);
+                    gi++;
+                }
+                if (si < ns)
+                {
+                    Vector3 p = Features.TunnelPoint(tunnel, end * (half + TunnelPortalSamOut), -TunnelPortalLateral, 0f);
+                    if (SampleGround(p.x, p.z)) { p.y = _sampleY; }
+                    MarkGround(sams[si], true, p, Quaternion.LookRotation(outward, Vector3.up), now);
+                    si++;
+                }
+            }
+            Debug.Log("[ACO] 터널 은신 발사대 배치: 터널 " + tunnel + " (반길이 " + half.ToString("0") + "m), TEL " + placed + "/" + count + ", 대공포 " + gi + ", SAM " + si);
             return placed;
         }
 
@@ -3760,7 +4179,12 @@ namespace ACO
         }
 
         /// focus에서 가장 가까운 도시 자리. 없으면 -1.
-        public int FindCitySite(Vector3 focus)
+        public int FindCitySite(Vector3 focus) { return FindCityNear(focus, false); }
+
+        /// 시가지 정밀 타격(6-270): 블록 칸 기록(상한 64)에 든 도시만 — 차량은 기록된 칸의 도로에만 놓인다.
+        public int FindVehicleCitySite(Vector3 focus) { return FindCityNear(focus, true); }
+
+        private int FindCityNear(Vector3 focus, bool needCells)
         {
             int total = Features != null && Features.HasSites() ? Features.GetSiteCount() : 0;
             int best = -1;
@@ -3768,6 +4192,7 @@ namespace ACO
             for (int i = 0; i < total; i++)
             {
                 if (Features.GetSiteKind(i) != ACO_TerrainFeatures.SITE_CITY) { continue; }
+                if (needCells && !CityHasCells(i)) { continue; }
                 Vector3 p = Features.GetSitePosition(i);
                 float dx = p.x - focus.x;
                 float dz = p.z - focus.z;
@@ -3775,6 +4200,13 @@ namespace ACO
                 if (d < bestSq) { bestSq = d; best = i; }
             }
             return best;
+        }
+
+        private bool CityHasCells(int site)
+        {
+            int n = Features.GetCityCellCount();
+            for (int k = 0; k < n; k++) { if (Features.GetCityCellSite(k) == site) { return true; } }
+            return false;
         }
 
         public Vector3 GetSitePosition(int site)
@@ -4298,7 +4730,11 @@ namespace ACO
             int n = 0;
             for (int i = 0; i < _groundUsed.Length; i++)
             {
-                if (_groundUsed[i] && GroundUnits[i] != null && !IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>())) { n++; }
+                if (!_groundUsed[i] || GroundUnits[i] == null) { continue; }
+                // 민간 도시 차량(6-270)은 적 전력이 아니다 — 세면 시가지 페이즈 내내 교착 웨이브가 막힌다
+                ACO_CityVehicle car = GetCityVehicle(i);
+                if (car != null && !car.IsEnemy) { continue; }
+                if (!IsDestroyed(GroundUnits[i].GetComponent<SaccTarget>())) { n++; }
             }
             for (int i = 0; i < _fighterUsed.Length; i++)
             {
@@ -4337,6 +4773,9 @@ namespace ACO
             if (category == CAT_ESCORT) { return _escortUsed.Length; }
             return _hvtUsed.Length;
         }
+
+        /// 배치 번호(배치가 바뀔 때마다 하나씩 — 동기화). 페이즈가 자기 차량 목록을 다시 셀 때 본다.
+        public int GetDeployCount() { return _deployCount; }
 
         public bool IsUnitUsed(int category, int i)
         {
@@ -4769,7 +5208,20 @@ namespace ACO
                     if (units == GroundUnits && IsTelUnit(i))
                     {
                         ACO_TelUnit tel = unit.GetComponent<ACO_TelUnit>();
-                        if (tel != null) { tel.SetStartTime(timeMs[i]); }
+                        if (tel != null)
+                        {
+                            tel.TunnelCode = leader != null && i < leader.Length ? leader[i] : -1;   // 터널 은신(6-271) — 보통 TEL은 -1
+                            tel.SetStartTime(timeMs[i]);
+                        }
+                    }
+                    if (units == GroundUnits && IsCityVehicle(i))
+                    {
+                        ACO_CityVehicle car = unit.GetComponent<ACO_CityVehicle>();
+                        if (car != null)
+                        {
+                            car.CityCode = leader != null && i < leader.Length ? leader[i] : 0;
+                            car.SetStartTime(timeMs[i]);
+                        }
                     }
                     if (units == GroundUnits && IsMobileUnit(i))
                     {

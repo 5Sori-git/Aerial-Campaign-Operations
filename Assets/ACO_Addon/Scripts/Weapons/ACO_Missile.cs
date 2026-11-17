@@ -1153,6 +1153,7 @@ namespace ACO
                 if (!target || target.Health <= 0f) { continue; }
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
                 if (escort != null && !escort.Hostile) { continue; }
+                if (c.GetComponentInParent<ACO_Wingman>() != null) { continue; }   // 아군 편대(6-273)
                 Vector3 p = c.transform.position;
                 float t = lenSq > 0.000001f ? Mathf.Clamp01(Vector3.Dot(p - from, step) / lenSq) : 0f;
                 Vector3 q = from + step * t;
@@ -1286,10 +1287,12 @@ namespace ACO
                 if (EntityControl && c.transform.IsChildOf(EntityControl.transform)) { continue; }
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
                 if (escort != null && !escort.Hostile) { continue; }
+                if (c.GetComponentInParent<ACO_Wingman>() != null) { continue; }   // 아군 편대(6-273)
 
                 bool done = false;
                 for (int k = 0; k < damagedCount; k++) { if (_splashDamaged[k] == target) { done = true; break; } }
                 if (done) { continue; }
+                if (ACO_TerrainFeatures.SplashBlockedByTunnel(center, c.bounds.center)) { continue; }   // 터널 바위 너머(6-271)
 
                 float best = float.MaxValue;
                 for (int j = i; j < n; j++)

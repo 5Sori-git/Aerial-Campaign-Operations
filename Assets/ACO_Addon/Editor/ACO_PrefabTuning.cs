@@ -994,6 +994,12 @@ public static class ACO_PrefabTuning
         new Entry { Id = "escort-waves-1", Text = "호위 페이즈 증원(6-265): 콘보이 웨이포인트 매복 · 상륙전 2차 공습(해변 3km) 무전 음성을 씬 모듈에 넣고 무전 연결(페이즈 모듈 Bake). 고친 뒤 씬 저장", Apply = TuneEscortWaves },
         new Entry { Id = "tunnel-landmark-1", Text = "터널 랜드마크(6-266): Models/Tunnel/ACO_Tunnel.fbx로 Prefabs/ACO_Tunnel 프리팹을 만들고 씬 지형 장식(TunnelPrefab)에 넣습니다 — 같은 높이 3칸 일렬의 가운데 칸에 확률 0.6으로 터널 산(폭 50m x 높이 40m 관통 터널). 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
+        new Entry { Id = "wingmen-note-1", Text = "아군 편대 상점 주의 문구에서 '시가지의 차량은 공격하지 않습니다'를 뺍니다(당연한 내용이라). 격납고 프리팹 · 씬 상점의 4번째 주의 문구가 예전 문장일 때만 바꿉니다", Apply = TuneWingmenNote },
+        new Entry { Id = "wingmen-cd-30-1", Text = "아군 편대(6-273) 쿨타임 180 → 30초(편대가 돌아간 뒤부터). 씬 진행도의 4번째 쿨타임이 180일 때만 바꿉니다", Apply = TuneWingmenCooldown },
+        new Entry { Id = "wingmen-8-180-1", Text = "아군 편대(6-273) 조정: 가격 8,000 → 5,000 CR, 떠 있는 시간 120 → 180초(효과 글자 2 FIGHTERS 180s). 씬 진행도 · 지원 관리자 값을 바꿉니다(예전 값일 때만). 풀 4 → 8기(4편대)는 Setup Check 지원 관리자 [고치기] → Bake", Apply = TuneWingmen8 },
+        new Entry { Id = "precision-identify-200-1", Text = "시가지 정밀 타격 식별 거리(6-270): 80m → 200m — 차량에서 직선 200m 안으로 지나가면 적 · 민간이 식별됩니다. 씬 Phase_Precision 값을 바꿉니다(80이 아니게 손으로 바꾼 값은 그대로)", Apply = TunePrecisionIdentify },
+        new Entry { Id = "wingmen-call-1", Text = "지원 호출 아군 편대(6-273): 씬에 저장된 호출권 배열(이름 · 효과 · 가격 8,000 · 쿨타임 180초 — ACO_PlayerProgress), 지원 무전 문장(ACO_SupportManager.LineTexts — 합류 · 격추 · 귀환 3줄), 상점 설명 · 주의(격납고 프리팹 · 씬 ACO_Shop)를 4번째 칸까지 늘립니다. 이미 있는 칸은 그대로. 뒤에 Setup Check 지원 관리자(아군 편대 풀) · Bake · 씬 저장", Apply = TuneWingmenCall },
+        new Entry { Id = "player-gun-friendly-off-1", Text = "플레이어 기체끼리 기총 피해 끄기(6-272): F/A-18E 프리팹의 SaccEntity.DisableBulletHitEvent를 켭니다 — 아군 기총 탄(SAV 파티클)이 들어가지 않습니다. 적 기총 · 대공포 · 미사일은 직접 피해라 그대로이고, 보급은 트리거라 영향 없습니다(적 전차 탄 파티클이 기본 피해 10을 한 번 더 주던 것도 같이 사라집니다). 씬이 덮어쓴 값은 지웁니다", Apply = TunePlayerGunFriendlyOff },
         new Entry { Id = "tunnel-landmark-3", Text = "터널 랜드마크 3판(6-266): 곡선형 2 · 3칸(한쪽 활 — 휨 50 · 130m, 능선도 같이 휨)을 더해 프리팹 다섯 개를 만들고 씬 지형 장식에 넣습니다 — 2 · 3칸은 반반 곡선형. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "escort-waves-2", Text = "호위 페이즈 증원 대사(6-265): 콘보이 매복 · 상륙전 2차 공습 대사를 무엇이 오는지 말하지 않는 증원 대사로(\"Enemy reinforcements inbound! …\") — 매복이 실제로 놓이지 않아도 틀리지 않게. 씬 모듈 글자를 새 기본값으로(음성은 같은 파일을 새로 만들었다)", Apply = TuneEscortLines },
         new Entry { Id = "canopy-thin-4", Text = "FA-18E 캐노피 앞 프레임 다시 만들기: 프레임 안쪽에 붙은 손잡이 · 거울이 떠 있던 것을 붙은 자리 프레임 안쪽 면과 같이 옮겨 붙임(6-264)", Apply = ACO_CanopyThin.Apply },
@@ -1475,6 +1481,217 @@ public static class ACO_PrefabTuning
     }
 
     /// tunnel-landmark-1 · 2(6-266): 터널 프리팹(1 · 2 · 3칸)을 만들고 씬 지형 장식에 넣는다. 2판부터 확률 0.9(놓을 수 있으면 가장 긴 것).
+    /// wingmen-note-1: 상점 주의 문구 줄이기(사용자 "도시안의 적은 공격하지않습니다 빼줘").
+    private const string WingmenNoteOld = "ONLY DURING AN OPERATION. THEY CAN BE SHOT DOWN AND WILL NOT ATTACK VEHICLES IN THE CITY.";
+    private const string WingmenNoteNew = "ONLY DURING AN OPERATION. THEY CAN BE SHOT DOWN.";
+
+    public static void TuneWingmenNote()
+    {
+        int n = 0;
+        const string hangar = "Assets/ACO_Addon/Prefabs/ACO_Hangar.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(hangar) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(hangar);
+            try
+            {
+                bool ch = false;
+                foreach (ACO_Shop shop in root.GetComponentsInChildren<ACO_Shop>(true)) { ch |= ShortenWingmenNote(shop); }
+                if (ch) { PrefabUtility.SaveAsPrefabAsset(root, hangar); n++; }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        foreach (ACO_Shop shop in FindInScene<ACO_Shop>())
+        {
+            Undo.RecordObject(shop, "ACO wingmen note");
+            if (ShortenWingmenNote(shop)) { PrefabUtility.RecordPrefabInstancePropertyModifications(shop); EditorUtility.SetDirty(shop); n++; }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 아군 편대 주의 문구: {n}곳을 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    private static bool ShortenWingmenNote(ACO_Shop shop)
+    {
+        int c = ACO_PlayerProgress.CALL_WINGMEN;
+        if (shop.CallCautions == null || shop.CallCautions.Length <= c || shop.CallCautions[c] != WingmenNoteOld) { return false; }
+        shop.CallCautions[c] = WingmenNoteNew;
+        return true;
+    }
+
+    /// wingmen-cd-30-1: 아군 편대 쿨타임 30초(사용자 "윙맨호출 쿨타임 30초로해주고").
+    public static void TuneWingmenCooldown()
+    {
+        int n = 0;
+        int c = ACO_PlayerProgress.CALL_WINGMEN;
+        foreach (ACO_PlayerProgress p in FindInScene<ACO_PlayerProgress>())
+        {
+            if (p.CallCooldowns == null || p.CallCooldowns.Length <= c || !Mathf.Approximately(p.CallCooldowns[c], 180f)) { continue; }
+            Undo.RecordObject(p, "ACO wingmen cooldown");
+            p.CallCooldowns[c] = 30f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(p);
+            EditorUtility.SetDirty(p);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 아군 편대 쿨타임 30초: {n}곳을 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// wingmen-8-180-1: 아군 편대 가격 5,000 · 180초(사용자 "한 5000CR로하고", "떠있는시간 180초로하자").
+    public static void TuneWingmen8()
+    {
+        int n = 0;
+        int c = ACO_PlayerProgress.CALL_WINGMEN;
+        foreach (ACO_PlayerProgress p in FindInScene<ACO_PlayerProgress>())
+        {
+            Undo.RecordObject(p, "ACO wingmen 8");
+            bool ch = false;
+            if (p.CallPrices != null && p.CallPrices.Length > c && p.CallPrices[c] == 8000) { p.CallPrices[c] = 5000; ch = true; }
+            if (p.CallEffects != null && p.CallEffects.Length > c && p.CallEffects[c] == "2 FIGHTERS 120s") { p.CallEffects[c] = "2 FIGHTERS 180s"; ch = true; }
+            if (ch) { PrefabUtility.RecordPrefabInstancePropertyModifications(p); EditorUtility.SetDirty(p); n++; }
+        }
+        foreach (ACO_SupportManager m in FindInScene<ACO_SupportManager>())
+        {
+            if (!Mathf.Approximately(m.WingmenDuration, 120f)) { continue; }
+            Undo.RecordObject(m, "ACO wingmen 8");
+            m.WingmenDuration = 180f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 아군 편대 5,000 CR · 180초: {n}곳을 바꿨습니다. Setup Check 지원 관리자(풀 8기) [고치기] → Bake → 씬 저장.");
+    }
+
+    /// precision-identify-200-1: 시가지 정밀 타격 식별 거리 80 → 200m(사용자 "정밀타격 인식 한 200m로하자").
+    public static void TunePrecisionIdentify()
+    {
+        int n = 0;
+        foreach (ACO_PhasePrecision p in FindInScene<ACO_PhasePrecision>())
+        {
+            if (!Mathf.Approximately(p.IdentifyDistance, 80f)) { continue; }
+            Undo.RecordObject(p, "ACO precision identify");
+            p.IdentifyDistance = 200f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(p);
+            EditorUtility.SetDirty(p);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 정밀 타격 식별 거리: Phase_Precision {n}곳을 200m로 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// wingmen-call-1(6-273): 저장된 배열이 3칸(벙커버스터 · 급유 · 가디언)이면 아군 편대 칸을 더한다. 길면 그대로.
+    public static void TuneWingmenCall()
+    {
+        int n = 0;
+        foreach (ACO_PlayerProgress p in FindInScene<ACO_PlayerProgress>())
+        {
+            int c = ACO_PlayerProgress.CALL_WINGMEN;
+            bool ch = false;
+            if (p.CallNames == null || p.CallNames.Length <= c) { p.CallNames = GrowStrings(p.CallNames, c + 1, "WINGMEN"); ch = true; }
+            if (p.CallEffects == null || p.CallEffects.Length <= c) { p.CallEffects = GrowStrings(p.CallEffects, c + 1, "2 FIGHTERS 180s"); ch = true; }
+            if (p.CallPrices == null || p.CallPrices.Length <= c)
+            {
+                var a = new int[c + 1];
+                if (p.CallPrices != null) { System.Array.Copy(p.CallPrices, a, p.CallPrices.Length); }
+                a[c] = 5000;
+                p.CallPrices = a;
+                ch = true;
+            }
+            if (p.CallCooldowns == null || p.CallCooldowns.Length <= c)
+            {
+                var a = new float[c + 1];
+                if (p.CallCooldowns != null) { System.Array.Copy(p.CallCooldowns, a, p.CallCooldowns.Length); }
+                a[c] = 30f;
+                p.CallCooldowns = a;
+                ch = true;
+            }
+            if (ch) { EditorUtility.SetDirty(p); n++; }
+        }
+        foreach (ACO_SupportManager m in FindInScene<ACO_SupportManager>())
+        {
+            string[] add = { "Wingmen inbound. Forming up on you.", "Wingman down!", "Wingmen are bingo fuel. RTB." };
+            int need = ACO_SupportManager.LINE_WINGMEN_END + 1;
+            if (m.LineTexts != null && m.LineTexts.Length >= need) { continue; }
+            var t = new string[need];
+            int had = m.LineTexts != null ? m.LineTexts.Length : 0;
+            if (m.LineTexts != null) { System.Array.Copy(m.LineTexts, t, had); }
+            for (int i = had; i < need; i++) { int k = i - ACO_SupportManager.LINE_WINGMEN_CALL; t[i] = k >= 0 && k < add.Length ? add[k] : ""; }
+            m.LineTexts = t;
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        // 상점 설명 · 주의: 격납고 프리팹(브리핑실 사본 · 격납고 방 패널의 원본)과 씬 인스턴스
+        const string hangar = "Assets/ACO_Addon/Prefabs/ACO_Hangar.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(hangar) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(hangar);
+            try
+            {
+                bool ch = false;
+                foreach (ACO_Shop shop in root.GetComponentsInChildren<ACO_Shop>(true)) { ch |= GrowShop(shop); }
+                if (ch) { PrefabUtility.SaveAsPrefabAsset(root, hangar); n++; }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        foreach (ACO_Shop shop in FindInScene<ACO_Shop>()) { if (GrowShop(shop)) { EditorUtility.SetDirty(shop); n++; } }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 아군 편대 호출권(6-273): 배열 {n}곳을 4번째 칸까지 늘렸습니다. Setup Check(지원 관리자 · 아군 편대 풀) → Bake → 씬 저장.");
+    }
+
+    private static bool GrowShop(ACO_Shop shop)
+    {
+        int c = ACO_PlayerProgress.CALL_WINGMEN;
+        bool ch = false;
+        if (shop.CallDescriptions == null || shop.CallDescriptions.Length <= c)
+        {
+            shop.CallDescriptions = GrowStrings(shop.CallDescriptions, c + 1, "TWO FRIENDLY AI FIGHTERS JOIN YOU AND ATTACK ENEMY FIGHTERS FIRST, THEN GROUND TARGETS. THEIR KILLS COUNT AS YOURS.");
+            ch = true;
+        }
+        if (shop.CallCautions == null || shop.CallCautions.Length <= c)
+        {
+            shop.CallCautions = GrowStrings(shop.CallCautions, c + 1, "ONLY DURING AN OPERATION. THEY CAN BE SHOT DOWN.");
+            ch = true;
+        }
+        return ch;
+    }
+
+    private static string[] GrowStrings(string[] a, int len, string last)
+    {
+        var r = new string[len];
+        int had = a != null ? Mathf.Min(a.Length, len) : 0;
+        if (a != null) { System.Array.Copy(a, r, had); }
+        for (int i = had; i < len; i++) { r[i] = i == len - 1 ? last : ""; }
+        return r;
+    }
+
+    /// player-gun-friendly-off-1(6-272): 플레이어 기체(F/A-18E 프리팹)가 파티클 탄 피해를 받지 않게 — 기총 팀킬 방지.
+    public static void TunePlayerGunFriendlyOff()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        int n = 0;
+        try
+        {
+            foreach (SaccEntity e in root.GetComponentsInChildren<SaccEntity>(true))
+            {
+                if (e.DisableBulletHitEvent) { continue; }
+                e.DisableBulletHitEvent = true;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        int scene = 0;
+        foreach (SaccEntity e in FindInScene<SaccEntity>())
+        {
+            if (e.GetComponentInChildren<ACO_VehicleUpgrades>(true) == null) { continue; }   // 플레이어 기체만(NPC 값은 그대로)
+            Revert(e, "DisableBulletHitEvent");
+            if (!e.DisableBulletHitEvent) { e.DisableBulletHitEvent = true; EditorUtility.SetDirty(e); }
+            scene++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 기총 팀킬 방지(6-272): {path}의 SaccEntity {n}곳을 바꾸고 씬 플레이어 기체 {scene}대를 확인했습니다. 씬을 저장하세요.");
+    }
+
     public static void TuneTunnelLandmark()
     {
         GameObject[] prefabs = ACO_TunnelBuilder.BuildAll();

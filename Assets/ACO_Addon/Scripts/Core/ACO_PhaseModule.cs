@@ -144,6 +144,8 @@ namespace ACO
 
         /// 표적 마커가 지금 목표 태그를 목표로 표시하는가(점수 할당량처럼 아무거나 잡으면 되는 페이즈는 false).
         public virtual bool MarksObjectiveTag() { return true; }
+        /// 웨이브 증원을 살아 있는 목표 대신 작전 지역(SetModuleSite) 둘레에 뿌린다 — 숨은 목표 위치가 드러나지 않게(6-270 시가지).
+        public virtual bool WaveAroundSite() { return false; }
         /// HUD에 지금 목표 태그의 호위 대상(Role VIP) 항로를 그리는가.
         public virtual bool ShowsEscortRoute() { return false; }
 

@@ -33,6 +33,8 @@ namespace ACO
         public ACO_DFUNC_Support[] Supports;
         public ACO_PlayerProgress Progress;
         public ACO_Chatter Chatter;
+        [Tooltip("미션 관리자(Bake) — 아군 편대는 작전 중에만 부르고, 작전이 끝나면 돌아간다(6-273)")]
+        public ACO_MissionManager Mission;
 
         [Header("벙커버스터 — 풀(같은 길이, 빌더가 만든다)")]
         public Transform[] Bombers;
@@ -149,6 +151,15 @@ namespace ACO
         [Tooltip("다시 옆 자리로 붙는 속도 = MinSpeedKt × 이것(오락가락하지 않게 조금 높게)")]
         public float GuardianRejoinFactor = 1.1f;
 
+        [Header("아군 편대 (6-273) — 풀(빌더가 만든다, 두 기씩 한 편대)")]
+        public ACO_Wingman[] Wingmen;
+        public float WingmenDuration = 180f;
+        [Tooltip("시간이 다 된 뒤 빠져나가 꺼질 때까지(초)")]
+        public float WingmenLeaveTime = 12f;
+        [Tooltip("나타나는 자리(부른 사람 기체 기준 m — 진행 방향 뒤 · 위). 편대 둘은 좌우로 벌린다")]
+        public Vector3 WingmenStartOffset = new Vector3(0f, 200f, -2500f);
+        public float WingmenStartSpread = 80f;
+
         [Header("무전 (호출한 사람만, LINE_* 순서)")]
         [TextArea] public string[] LineTexts = new string[] {
             "Copy your mark. Bomber inbound.",
@@ -159,8 +170,11 @@ namespace ACO
             "Transfer complete. Clear to break.",
             "Breakaway, breakaway. Tanker is returning.",
             "Guardian drone on station. Missile defense active.",
-            "Guardian drone returning to base." };
-        public AudioClip[] LineClips = new AudioClip[9];
+            "Guardian drone returning to base.",
+            "Wingmen inbound. Forming up on you.",
+            "Wingman down!",
+            "Wingmen are bingo fuel. RTB." };
+        public AudioClip[] LineClips = new AudioClip[12];
         public float LineMaxDelay = 4f;
 
         public const int LINE_STRIKE_CALL = 0;
@@ -172,6 +186,19 @@ namespace ACO
         public const int LINE_TANKER_BREAK = 6;
         public const int LINE_GUARDIAN_CALL = 7;
         public const int LINE_GUARDIAN_END = 8;
+        public const int LINE_WINGMEN_CALL = 9;
+        public const int LINE_WINGMEN_DOWN = 10;
+        public const int LINE_WINGMEN_END = 11;
+
+        private const int W_IDLE = 0;
+        private const int W_ACTIVE = 1;
+        private const int W_LEAVE = 2;
+        // 편대(두 기)마다 — 모든 화면이 시작 이벤트로 같은 값을 가진다
+        private int[] _wState;
+        private int[] _wSupport;
+        private int[] _wCaller;
+        private float[] _wEnd;
+        private float[] _wStart;
 
         private const int G_IDLE = 0;
         private const int G_ACTIVE = 1;
@@ -259,6 +286,14 @@ namespace ACO
             _sImpacted = new bool[s];
             _sSaidImpact = new bool[s];
             for (int i = 0; i < s; i++) { HideStrike(i); }
+            int wf = Wingmen != null ? Wingmen.Length / 2 : 0;
+            _wState = new int[wf];
+            _wSupport = new int[wf];
+            _wCaller = new int[wf];
+            _wEnd = new float[wf];
+            _wStart = new float[wf];
+            for (int i = 0; i < wf; i++) { _wSupport[i] = -1; _wCaller[i] = -1; }
+            if (Wingmen != null) { for (int i = 0; i < Wingmen.Length; i++) { if (Wingmen[i]) { Wingmen[i].gameObject.SetActive(false); } } }
             int d = Drones != null ? Drones.Length : 0;
             _dSupport = new int[d];
             _dState = new int[d];
@@ -346,6 +381,195 @@ namespace ACO
             Say(LINE_GUARDIAN_CALL);
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetGuardianStart), support, Networking.LocalPlayer.playerId, side, GuardianDuration);
             return true;
+        }
+
+        // ───────────── 아군 편대 (6-273) ─────────────
+
+        /// 작전(미션)이 진행 중인가 — 아군 편대는 작전 중에만 부른다.
+        public bool IsMissionRunning() { return Mission != null && Mission.GetState() == ACO_MissionManager.STATE_RUNNING; }
+
+        public ACO_DFUNC_Support GetSupport(int support) { return SupportAt(support); }
+
+        /// 아군 편대를 부른다(호출한 사람 화면). 나타날 자리는 여기서 정해 모든 화면에 보낸다. 빈 편대가 없으면 false.
+        public bool CallWingmen(int support)
+        {
+            Init();
+            ACO_DFUNC_Support sup = SupportAt(support);
+            if (support < 0 || sup == null || sup.EntityControl == null || WingmenOf(support) >= 0) { return false; }
+            int f = FreeFlight();
+            if (f < 0) { return false; }
+            Say(LINE_WINGMEN_CALL);
+            SendWingmenStart(f, support, WingmenDuration);
+            return true;
+        }
+
+        /// 편대 f로 시작을 보낸다(부른 사람 화면). 두 기의 소유권을 이벤트보다 먼저 가져온다 — 다른 화면의 스폰 체력 채우기가 소유권을 되가져가지 않게.
+        private void SendWingmenStart(int f, int support, float seconds)
+        {
+            ACO_DFUNC_Support sup = SupportAt(support);
+            if (sup == null || sup.EntityControl == null) { return; }
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[f * 2 + k];
+                if (w != null && !Networking.IsOwner(w.gameObject)) { Networking.SetOwner(Networking.LocalPlayer, w.gameObject); }
+            }
+            Transform vt = sup.EntityControl.transform;
+            Vector3 fwd = vt.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            fwd = fwd.normalized;
+            Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);
+            Vector3 pos = vt.position + right * WingmenStartOffset.x + Vector3.up * WingmenStartOffset.y + fwd * WingmenStartOffset.z;
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetWingmenStart), f, support, Networking.LocalPlayer.playerId, seconds, pos, fwd, true);
+        }
+
+        /// 동시 호출 경합에서 진 부른 사람 화면: 다른 빈 편대로 다시 부른다. 없으면 호출권을 돌려준다.
+        private void RetryWingmen(int support, int exclude, float seconds)
+        {
+            int f = -1;
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (i == exclude || _wState[i] != W_IDLE) { continue; }
+                ACO_Wingman a = Wingmen[i * 2];
+                ACO_Wingman b = Wingmen[i * 2 + 1];
+                if (a != null && b != null && !a.IsActive() && !b.IsActive()) { f = i; break; }
+            }
+            if (f >= 0) { SendWingmenStart(f, support, seconds); return; }
+            if (Progress) { Progress.RefundCall(ACO_PlayerProgress.CALL_WINGMEN); }
+            ACO_DFUNC_Support sup = SupportAt(support);
+            if (sup != null) { sup.Warn("BUSY", "WINGMEN\nNO FLIGHT AVAILABLE"); }
+        }
+
+        /// 이 기체가 부른 편대가 떠 있으면 남은 시간(초), 아니면 0.
+        public float GetWingmenLeft(int support)
+        {
+            Init();
+            int f = WingmenOf(support);
+            return f >= 0 && _wState[f] == W_ACTIVE ? Mathf.Max(_wEnd[f] - Time.time, 0.01f) : 0f;
+        }
+
+        /// 모든 화면: 편대 시작(fresh = 새로 부름, 아니면 늦게 들어온 사람에게 다시 알림 — 위치 · 생사는 동기화가 맞춘다).
+        [NetworkCallable]
+        public void NetWingmenStart(int flight, int support, int callerId, float seconds, Vector3 pos, Vector3 fwd, bool fresh)
+        {
+            Init();
+            if (flight < 0 || flight >= _wState.Length) { return; }
+            int local = Networking.LocalPlayer != null ? Networking.LocalPlayer.playerId : -1;
+            if (fresh && _wState[flight] != W_IDLE && _wCaller[flight] != callerId)
+            {
+                // 같은 편대를 두 사람이 거의 동시에 불렀다(시작 3초 안): 화면마다 받는 순서가 달라도 같은 답이 나오게 번호가 작은 사람이 이긴다.
+                // 진 사람 화면은 다른 빈 편대로 다시 부른다(없으면 호출권을 돌려준다). 이미 오래 떠 있는 편대면 새 쪽이 진다.
+                bool contested = _wState[flight] == W_ACTIVE && Time.time - _wStart[flight] < 3f;
+                if (!contested || callerId > _wCaller[flight])
+                {
+                    if (local == callerId) { RetryWingmen(support, flight, seconds); }
+                    return;
+                }
+                if (local == _wCaller[flight]) { RetryWingmen(_wSupport[flight], flight, Mathf.Max(_wEnd[flight] - Time.time, 0f)); }
+            }
+            _wState[flight] = W_ACTIVE;
+            _wStart[flight] = Time.time;
+            _wSupport[flight] = support;
+            _wCaller[flight] = callerId;
+            _wEnd[flight] = Time.time + Mathf.Max(seconds, 0f);
+            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            Quaternion rot = Quaternion.LookRotation(fwd.normalized, Vector3.up);
+            Vector3 right = rot * Vector3.right;
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w == null) { continue; }
+                if (!fresh && w.IsActive()) { continue; }   // 이미 보이는 화면은 그대로
+                Vector3 p = pos + right * (k == 0 ? WingmenStartSpread : -WingmenStartSpread);
+                w.Begin(flight, k, support, callerId, fresh, p, rot, seconds, WingmenLeaveTime);
+            }
+        }
+
+        /// 아군 편대 한 기가 격추됐다(모든 화면 — ACO_Wingman.Explode).
+        public void OnWingmanDown(int flight)
+        {
+            Init();
+            if (flight < 0 || flight >= _wState.Length || _wState[flight] == W_IDLE) { return; }
+            if (IsLocalCaller(flight)) { Say(LINE_WINGMEN_DOWN); }
+            if (FlightAllDown(flight)) { EndFlight(flight, false); }
+        }
+
+        /// 아군 편대 한 기가 빠져나가 꺼졌다(모든 화면).
+        public void OnWingmanGone(int flight)
+        {
+            Init();
+            if (flight < 0 || flight >= _wState.Length) { return; }
+            bool any = false;
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w != null && w.IsActive()) { any = true; }
+            }
+            if (!any) { _wState[flight] = W_IDLE; _wSupport[flight] = -1; }
+        }
+
+        private bool FlightAllDown(int flight)
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w != null && w.IsActive() && !w.IsDead()) { return false; }
+            }
+            return true;
+        }
+
+        /// 편대를 돌려보낸다(시간 끝 · 작전 끝 · 모두 격추). 쿨타임 · 무전은 부른 사람만.
+        private void EndFlight(int flight, bool sayEnd)
+        {
+            if (_wState[flight] != W_ACTIVE) { return; }
+            _wState[flight] = W_LEAVE;
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w != null) { w.StartLeave(); }
+            }
+            if (IsLocalCaller(flight))
+            {
+                if (sayEnd) { Say(LINE_WINGMEN_END); }
+                if (Progress) { Progress.StartCallCooldown(ACO_PlayerProgress.CALL_WINGMEN); }
+            }
+        }
+
+        private bool IsLocalCaller(int flight)
+        {
+            return Networking.LocalPlayer != null && _wCaller[flight] == Networking.LocalPlayer.playerId;
+        }
+
+        private int WingmenOf(int support)
+        {
+            if (_wState == null || support < 0) { return -1; }
+            for (int i = 0; i < _wState.Length; i++) { if (_wState[i] == W_ACTIVE && _wSupport[i] == support) { return i; } }
+            return -1;
+        }
+
+        private int FreeFlight()
+        {
+            if (_wState == null) { return -1; }
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (_wState[i] != W_IDLE) { continue; }
+                ACO_Wingman a = Wingmen[i * 2];
+                ACO_Wingman b = Wingmen[i * 2 + 1];
+                if (a != null && b != null && !a.IsActive() && !b.IsActive()) { return i; }
+            }
+            return -1;
+        }
+
+        /// 매 프레임(모든 화면): 시간이 다 됐거나 작전이 끝난 편대를 돌려보낸다.
+        private void UpdateWingmen()
+        {
+            bool running = IsMissionRunning();
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (_wState[i] != W_ACTIVE) { continue; }
+                if (Time.time >= _wEnd[i]) { EndFlight(i, true); }
+                else if (!running && Time.time - _wStart[i] > 2f) { EndFlight(i, false); }   // 시작 직후 2초는 화면마다 작전 상태가 잠깐 다를 수 있어 보지 않는다
+            }
         }
 
         /// 가디언이 떠 있으면 남은 시간(초), 아니면 0.
@@ -498,6 +722,15 @@ namespace ACO
                 if (_gState[i] != G_ACTIVE || !_gLocal[i]) { continue; }
                 SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetGuardianStart), _gSupport[i], Networking.LocalPlayer.playerId, (int)_gSide[i], Mathf.Max(_gEnd[i] - Time.time, 0f));
             }
+            // 아군 편대(6-273): 내가 부른 편대가 떠 있으면 남은 시간으로 다시 알린다(이미 보이는 화면은 그대로 — fresh false)
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (_wState[i] != W_ACTIVE || !IsLocalCaller(i)) { continue; }
+                ACO_Wingman w = Wingmen[i * 2];
+                Vector3 p = w != null ? w.transform.position : Vector3.zero;
+                Vector3 f = w != null ? w.transform.forward : Vector3.forward;
+                SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenStart), i, _wSupport[i], _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, false);
+            }
         }
 
         // ───────────── 매 프레임 ─────────────
@@ -506,6 +739,7 @@ namespace ACO
         {
             if (!_init) { return; }
             for (int i = 0; i < _sActive.Length; i++) { if (_sActive[i]) { UpdateStrike(i); } }
+            UpdateWingmen();
         }
 
         /// 기체를 따라붙는 급유 드론·가디언 드론은 그 프레임 기체 자세가 다 정해진 뒤에 놓는다(Update에선 기체가 그 뒤에 움직여
@@ -790,9 +1024,11 @@ namespace ACO
                 if (EntityControl != null && c.transform.IsChildOf(EntityControl.transform)) { continue; }
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
                 if (escort != null && !escort.Hostile) { continue; }
+                if (c.GetComponentInParent<ACO_Wingman>() != null) { continue; }   // 아군 편대(6-273)
                 bool done = false;
                 for (int k = 0; k < damagedCount; k++) { if (_damaged[k] == target) { done = true; break; } }
                 if (done) { continue; }
+                if (ACO_TerrainFeatures.SplashBlockedByTunnel(center, c.bounds.center)) { continue; }   // 터널 바위 너머(6-271)
                 float best = float.MaxValue;
                 for (int j = i; j < n; j++)
                 {

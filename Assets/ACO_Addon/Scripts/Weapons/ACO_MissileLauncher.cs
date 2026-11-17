@@ -24,6 +24,8 @@ namespace ACO
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 무전 자막을 넣는다(나를 노린 미사일 경보)")]
         [UnityEngine.Serialization.FormerlySerializedAs("Radio")]
         public ACO_Chatter Chatter;
+        [Tooltip("아군 편대(6-273): 켜면 미사일 명중을 쏜 기체의 오너(부른 사람)가 판정하고 플레이어 무기로 넣는다 — 격추 점수가 부른 사람에게. 미사일 무전은 내지 않는다")]
+        public bool CreditOwner = false;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 RWR을 넣는다(락온 방향·날아오는 미사일 방향/거리 표시)")]
         public ACO_RWR Rwr;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미사일 요격 CIWS를 넣는다 — 아군을 노린 이 런처의 미사일은 아군 CIWS(호위함 등)에 요격될 수 있다")]
@@ -156,6 +158,14 @@ namespace ACO
                 _ammo = NumMissiles;
             }
             return Time.time >= _nextFireTime;
+        }
+
+        /// 탄을 가득 채운다(아군 편대가 새로 출격할 때 — 6-273).
+        public void ResetAmmo()
+        {
+            _ammo = NumMissiles;
+            _reloadDoneTime = 0f;
+            _nextFireTime = 0f;
         }
 
         public int GetAmmo()
@@ -344,7 +354,7 @@ namespace ACO
             // 자체 미사일(ACO_Missile)은 발사 정보를 직접 주입한다.
             // SAV 미사일은 GetProgramVariable로 이 스크립트를 읽으므로 주입이 필요 없다.
             ACO_Missile acoMissile = missile.GetComponent<ACO_Missile>();
-            if (acoMissile) { acoMissile.Chatter = Chatter; acoMissile.Rwr = Rwr; }
+            if (acoMissile) { acoMissile.Chatter = CreditOwner ? null : Chatter; acoMissile.Rwr = Rwr; }
             if (acoMissile != null)
             {
                 acoMissile.EntityControl = EntityControl;
@@ -352,9 +362,9 @@ namespace ACO
                 acoMissile.LaunchMissileType = MissileType;
                 acoMissile.LaunchInheritSpeed = InheritVelocityFrom != null ? InheritVelocityFrom.Speed : 0f;
                 acoMissile.PoolParent = transform;
-                acoMissile.FromNpc = true;            // 작전판: 아군 유닛 격추로 표시(개인 점수 없음)
-                acoMissile.ShooterJudgesHit = false; // NPC 미사일은 피격자가 판정한다
-                acoMissile.IsShooter = false;
+                acoMissile.FromNpc = !CreditOwner;            // 작전판: 아군 유닛 격추로 표시(개인 점수 없음) — 아군 편대는 부른 사람 격추
+                acoMissile.ShooterJudgesHit = CreditOwner;   // NPC 미사일은 피격자가, 아군 편대는 쏜 기체의 오너가 판정한다
+                acoMissile.IsShooter = CreditOwner && EntityControl != null && Networking.IsOwner(EntityControl.gameObject);
                 acoMissile.InterceptSites = InterceptSites;
                 acoMissile.EcmHub = EcmHub;
                 // 플레이어 무장이 넣는 특수 동작은 NPC 미사일에선 늘 끈다(풀은 이 런처 것)

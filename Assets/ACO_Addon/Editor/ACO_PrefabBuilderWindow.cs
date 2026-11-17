@@ -57,6 +57,8 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         new Entry { Label = "이펙트 미리보기", Description = "ACO_FxPreview — 대폭발(땅·물)·연쇄 폭발·탄환을 에디터에서 재생해 본다. 씬에 넣지 않는다. 덮어써도 된다", PrefabNames = new[] { "ACO_FxPreview" } },
         new Entry { Label = "유닛 파괴 효과", Description = "ACO_DeathFx_Air/Ground/Ship/Building/Part — 유닛 폭발, 남는 불과 연기, 폭발음. NPC의 ShowOnDeath 오브젝트에 중첩된다. 다시 만들면 손으로 고친 값이 처음 값으로 돌아간다", PrefabNames = ACO_FxBuilder.DeathFxNames },
         new Entry { Label = "육상전함 (보스)", Description = "NPC_LandShip — Models/LandShip/ACO_LandShip.fbx 모델, 스커트 12·궤도 12·배기구 8·코어, 주포 3(소형 레일건 2연발)·부포 4(Flak). VLS·CIWS는 프리팹에 직접 놓는다. 없으면 Bake가 만들어 유닛 풀에 넣는다. 다시 만들면 직접 놓은 포대가 사라진다", PrefabNames = new[] { ACO_PrefabBuilder.LandShipPrefab } },
+        new Entry { Label = "도시 차량 (시가지 정밀 타격)", Description = "NPC_CityVehicle — 민간 승용차 · 밴 · 버스, 적 지휘 · 통신 차량(변형 11, 배치 때 하나만 켠다). 도시 도로에 주차하거나 블록 둘레를 돈다. 없으면 Setup Check가 만들어 유닛 풀에 20대 넣는다", PrefabNames = new[] { ACO_PrefabBuilder.CityVehiclePrefab } },
+        new Entry { Label = "아군 편대 (지원 호출 WINGMEN)", Description = "NPC_Wingman — NPC_Fighter를 복사한 아군 AI 전투기(적 공중 · 지상을 노림, 회청색, 점수는 부른 사람). 없으면 Setup Check가 만들어 지원 관리자 아래에 4기 넣는다", PrefabNames = new[] { ACO_PrefabBuilder.WingmanPrefab } },
     };
 
     private bool[] _selected;
@@ -204,6 +206,8 @@ public class ACO_PrefabBuilderWindow : EditorWindow
         if (_selected[38]) { Log(built, ACO_FxBuilder.CreatePreviewPrefab()); }
         if (_selected[39]) { foreach (GameObject fx in ACO_FxBuilder.CreateDeathFxPrefabs()) { Log(built, fx); } }
         if (_selected[40]) { Log(built, ACO_PrefabBuilder.BuildLandShip()); }
+        if (_selected[41]) { Log(built, ACO_PrefabBuilder.BuildCityVehicle()); }
+        if (_selected[42]) { Log(built, ACO_PrefabBuilder.BuildWingmanPrefab()); }
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();

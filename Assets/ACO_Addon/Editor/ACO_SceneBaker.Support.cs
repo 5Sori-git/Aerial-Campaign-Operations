@@ -34,8 +34,27 @@ public partial class ACO_SceneBaker
             if (!SameRefs(manager.Supports, supports.ToArray())) { manager.Supports = supports.ToArray(); }
             manager.Progress = progress;
             manager.Chatter = chatter;
+            manager.Mission = Object.FindObjectOfType<ACO_MissionManager>(true);
+            // 아군 편대(6-273): 각 기체 → 관리자, 레이더 → 관리자
+            if (manager.Wingmen != null)
+            {
+                foreach (ACO_Wingman w in manager.Wingmen)
+                {
+                    if (w == null || w.Manager == manager) { continue; }
+                    Undo.RecordObject(w, "ACO bake support");
+                    w.Manager = manager;
+                    MarkChanged(w);
+                }
+            }
+            foreach (ACO_RadarContacts rc in Object.FindObjectsOfType<ACO_RadarContacts>(true))
+            {
+                if (rc.Support == manager) { continue; }
+                Undo.RecordObject(rc, "ACO bake support");
+                rc.Support = manager;
+                MarkChanged(rc);
+            }
             // 무전 음성: 빈 칸만 만든 파일로(LINE_* 순서 — Tools/aco_voice_lines.json의 support_*)
-            string[] clipNames = { "StrikeCall", "StrikeRelease", "StrikeImpact", "TankerCall", "TankerContact", "TankerDone", "TankerBreak", "GuardianCall", "GuardianEnd" };
+            string[] clipNames = { "StrikeCall", "StrikeRelease", "StrikeImpact", "TankerCall", "TankerContact", "TankerDone", "TankerBreak", "GuardianCall", "GuardianEnd", "WingmenCall", "WingmenDown", "WingmenEnd" };
             if (manager.LineClips == null || manager.LineClips.Length < clipNames.Length)
             {
                 var grown = new AudioClip[clipNames.Length];

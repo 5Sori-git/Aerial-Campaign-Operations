@@ -519,3 +519,44 @@
 - 원인: 6-195의 프레임 안쪽 깊이 줄이기(×0.4)가 안쪽 면을 바깥쪽(유리 쪽)으로 크게 옮기는데, 작은 덩어리(손잡이 2 · 거울 3)는 자기 가장 바깥 정점 — 프레임 속에 박힌 끝이라 바깥면 근처, 변위가 작다 — 의 변위로 옮겨져 안쪽 면과 벌어졌다.
 - 고침(`ACO_CanopyThin.GlueParts`, Canopy.E만, 프레임 면에 3mm 안으로 직접 닿은 덩어리만 — 손잡이 2 · 옆 거울 2. 가운데 거울은 면에서 약 7mm 떨어져 매달린 모양이라 붙이면 오히려 벌어져 예전 방식 그대로): 덩어리 정점 둘레 2cm 안의 프레임 면 점 중 안쪽 면(단면 중심에서 가장 가까운 점 + 5mm)의 변위(모으기 · 올리기 · 깊이 줄이기 · 홈 메우기 모두 넣은 값) 평균으로 덩어리를 통째로 옮긴다 — 박힌 깊이가 원본과 같다. 바깥면을 고르지 않는 것은 박힌 끝에서 가장 가까운 면이 바깥면일 수 있어서.
 - 적용: Setup Check 튜닝 canopy-thin-4(메시 다시 만들기 — 기체 프리팹 · 격납고 미리보기).
+
+### 6-272. 플레이어 기체끼리 기총 피해 · 충돌 끄기
+- 사용자 요청("건이나 무유도무기로 팀킬가능해?" → "막아줘, 그리고 가능하다면 기체끼리 충돌도 끄고싶은데").
+- 조사: 무유도 폭탄 · 로켓(`ACO_Ordnance`)은 직격 · 범위 모두 `SaccTarget`(NPC 체력)에만 주고, 유도 미사일은 락온 후보(`Targets`)에 플레이어 기체가 없어 원래 팀킬이 없다. 기총만 SAV 방식(탄 파티클 → 맞은 기체 `SaccEntity.OnParticleCollision`)이라 아군 기체에 들어갔다.
+- **기총**: 플레이어 기체(F/A-18E 프리팹)의 `SaccEntity.DisableBulletHitEvent`를 켠다(튜닝 `player-gun-friendly-off-1`). 플레이어 기체가 파티클로 받는 피해는 아군 기총뿐이었다 — 적 기총 · 대공포(`ACO_NPCGun`) · 레일건 · 미사일은 `WeaponDamageVehicle` 직접 피해라 그대로, 보급(`SaccResupplyTrigger`)은 트리거라 영향 없음. 적 전차 탄 파티클(보이기용)이 기체에 닿으면 SAV 기본 피해 10이 한 번 더 들어가던 것도 같이 사라진다.
+- **충돌**: `ACO_VehicleUpgrades`가 탑승 중 `PlayerIgnoreInterval`(1초)마다 `PlayerIgnoreDistance`(1500m) 안의 다른 플레이어 기체(`OtherPlayerVehicles`, Bake가 채운다)와 충돌 콜라이더 쌍을 `Physics.IgnoreCollision`으로 끈다. NPC 공중 유닛과 같은 규칙 — 충돌 데미지는 조종사(오너) 화면에서 계산하므로 각자 자기 기체만 건다. 주기적으로 다시 거는 건 상대가 격추 · 부활하며 콜라이더를 껐다 켜면 무시 상태가 풀리기 때문. 기총 · 미사일 · 지형 · 갑판 충돌은 그대로.
+
+### 6-273. 지원 호출 — 아군 편대(WINGMEN)
+- 사용자 요청("아군 ai기체를 부르는 지원권 만들수있을까?" → 역할 둘 다(공대공 먼저, 없으면 지상), 2기 120초, 격추될 수 있음, 점수는 부른 사람에게 전부).
+- **호출권**: `CALL_WINGMEN = 3`(저장 ID `wingmen` — 바꾸지 않는다), 5,000 CR(처음 8,000 — 바뀜 2026-11-17, 튜닝 `wingmen-8-180-1`), 쿨타임 30초(편대가 돌아간 뒤부터 — 처음 180초, 바뀜 2026-11-18, 튜닝 `wingmen-cd-30-1`), 최대 9장. 상점 SUPPORT 탭 4번째 줄 · 격납고 SUPPORT 줄 · 다이얼 HUD 이름 `WM`(떠 있으면 `ON 64s`). 아이콘 `aco_icon_sup_wingmen`(앞 테두리 기체 + 뒤 양옆 채운 기체). 저장된 배열이 3칸이면 튜닝 `wingmen-call-1`이 늘린다 — 그 전에도 가격 · 이름은 코드 기본값(공짜로 사지 않게).
+- **부르기**(`ACO_DFUNC_Support.TryWingmen` → `ACO_SupportManager.CallWingmen`): 작전 중에만(`NO OPERATION IN PROGRESS`), 같은 기체로 이미 떠 있으면 `ALREADY ON STATION`, 빈 편대가 없으면 `NO FLIGHT AVAILABLE`(호출권 그대로). 부르면 호출권 1장, 무전 "Wingmen inbound. Forming up on you."
+- **풀**: 지원 관리자 아래 `Wingmen` 8기(두 기씩 한 편대 — 동시에 네 사람 = 플레이어 기체 4대 모두. 처음 4기 — 바뀜 2026-11-17, 사용자 "아군기 총8대로해서 모두다 부르게"). 편대 수는 풀 크기 / 2로 정해져 코드는 그대로. 프리팹 `NPC_Wingman` = `NPC_Fighter` 복사본 — 노리는 대상 적 공중(29) · 지상(30)(`AAMTargetsLayer`, SAV가 빌드 때 328개를 굽는다), 락온 마커는 아군 공중(25 — 적 전투기 · 대공포 · SAM이 노리고 플레이어 미사일은 잠그지 않는다), 체력 400, 플레이어 기총은 맞지 않는다(`SaccTarget.DisableBulletHitEvent`), 회청색 도색(`Generated/ACO_Wingman_*.mat`), 소유권 넘기기 끔. Setup Check가 없으면 만든다.
+- **시작**(모든 화면 — 이벤트 `NetWingmenStart`(편대 · 다이얼 · 부른 사람 · 남은 초 · 자리 · 방향 · 새로 부름)): 부른 사람 기체 뒤 2.5km · 위 200m에 좌우 80m로 나타난다. 부른 사람이 두 기의 소유권을 가져가 계산한다(`ACO_NPCFighterNet`가 위치를 보낸다). 늦게 들어온 사람에겐 부른 사람이 남은 시간으로 다시 알린다(위치 · 생사는 동기화가 맞춘다).
+- **전투**(`ACO_NPCFighterAI` 그대로 — 새 옵션은 기본 꺼짐이라 적 AI는 그대로): `AirTargetBonus` 3000m(공중 표적을 그만큼 가깝게 본다 — 3km 안의 적 전투기가 어떤 지상 표적보다 앞선다), `SkipCityVehicles`(시가지 정밀 타격의 도시 차량은 적 · 민간 모두 노리지 않는다), 공격 정원(적 디렉터) 밖, 적과 서로 간격 유지 목록이 따로(아군 편대끼리만). 체력 0인 표적은 쫓지 않는다(모든 NPC 공통 — 잔해 마커를 쫓지 않게).
+- **편대 · 이탈**(`ACO_Wingman`, 오너): 표적이 없으면 부른 사람 기체 뒤쪽 옆(오른쪽 · 왼쪽 60m, 뒤 70m)으로 따라가고, 4km 넘게 멀어지면 교전을 멈추고 돌아온다. 부른 사람이 기체에 없으면(내림 · 격추 · 다른 사람이 탐) 마지막 자리 주변에서 싸운다. 180초(처음 120 — 바뀜 2026-11-17, 사용자 "생각보다 강하진 않더라")가 지나거나 작전이 끝나면 위로 빠져 12초 뒤 꺼진다. 귀환 무전 "Wingmen are bingo fuel. RTB."(시간 끝일 때만).
+- **점수**: 기총(`ACO_NPCGun.CreditOwner`) · 미사일(`ACO_MissileLauncher.CreditOwner` → 쏜 기체의 오너가 판정, NPC 무기 표시 없음)의 명중을 부른 사람 화면이 판정해 `LastHitByPlayer` = 부른 사람 — 팀 점수 · 개인 점수 · 작전 기록 격파 모두 직접 잡은 것과 같다. 미사일 무전은 내지 않는다.
+- **격추**: 적이 노리고 맞힐 수 있다(SaccTarget이 `ExplodeOther`로 `ACO_Wingman.Explode`). 부른 사람에게 "Wingman down!", 둘 다 떨어지면 편대 종료(쿨타임 시작).
+- **아군 오폭 없음**: 플레이어 폭탄 · 로켓(`ACO_Ordnance` 범위 · 직격 · 근접 신관), 미사일 범위 · 근접(`ACO_Missile`), 벙커버스터 범위(`ACO_SupportManager`)가 아군 편대를 건너뛴다. 아군 편대와 플레이어 기체는 서로 통과(6-272와 같은 IgnoreCollision 목록).
+- **표시**: HUD 마커 아군 테두리 + `WINGMAN`(`ACO_TargetMarkers.SupportWingmanLabel`, 150m보다 가까우면 안 그린다), 레이더 아군 공중(`ACO_RadarContacts.Support` — Bake).
+- **무전**(AWACS, 새 음성 `Audio/AWACSVoiceLines/Support/Support_Wingmen{Call,Down,End}.mp3`, 번역 `radio.supportmanager.10~12`), 상점 문구 `prog.call/callfx/calldesc/callnote.wingmen`.
+- **디버그 검토 수정**(2026-11-17, 편대 자리 배정 문제는 그대로 둠):
+  - 이탈 중 사격 금지: `ACO_NPCFighterAI.HoldFire`(NonSerialized, 모든 화면) — 켜지면 표적을 놓고 미사일 · 기총을 쏘지 않는다. `StartLeave`가 켜고 `Begin` · `Finish`가 끈다.
+  - 복귀 히스테리시스: 4km 넘으면 복귀를 시작하고, `ReturnFraction` 0.6(2.4km) 안으로 들어와야 다시 교전한다.
+  - 격추 후 재사용: 락온 마커(아군 공중 25 층)를 `HideOnDeath`에 넣어 격추되면 꺼진다(부활 때 다시 켜진다). AI가 살아 있으면 `_dead`를 되돌린다. 새로 부르면 `MissileLauncher.ResetAmmo()`. `Finish`가 관리자 `OnWingmanGone`보다 먼저 돈다.
+  - 소유권: `SendWingmenStart`는 두 기의 소유권을 먼저 가져온 뒤 이벤트를 보낸다. `_RespawnTargetHealth`는 그 사이 소유권이 넘어갔으면 다시 뺏지 않고 값만 맞춘다.
+  - 동시 호출: 3초 안에 같은 편대를 두 사람이 부르면 플레이어 번호가 낮은 쪽이 갖고, 진 쪽은 남은 편대로 다시 부르거나 없으면 호출권을 돌려받는다(`ACO_PlayerProgress.RefundCall`) + `WINGMEN NO FLIGHT AVAILABLE` 경고.
+  - 시작 직후 2초는 작전 진행 여부를 보지 않는다(상태 동기화가 늦게 와도 바로 끝나지 않게).
+  - 기총 점수: `ACO_NPCGun` 오너 판정이 `LastHitByPlayer` · `LastHitWeaponType`을 먼저 적는다(미사일과 같다).
+  - 상위 표적 재탐색(`HigherPriorityInRange`)이 체력 0인 표적을 건너뛴다(모든 NPC).
+  - 적 디렉터 `Fighters`에서 아군 편대를 뺀다(Bake). 빌더: 미사일 락온 경고 끔(`SendLockWarning`), 플레어가 있으면 `Friendly`, 이미 칠한 `ACO_Wingman_*` 재질은 다시 칠하지 않는다.
+  - 저장: 호출권 저장 키 범위 확인(`c < _callKeys.Length`).
+- **전용 미사일**(2026-11-17 사용자 결정 — "전용 미사일로 가자"): `ACO_Missile_Wingman` = `ACO_Missile_AAM`의 프리팹 변형(겉모습 · 소리 같음). 피해 100 · 선회 60°/초 · 최고 속도 900 · 근접신관 9m(플레이어 기본 MSL, 강화 전), 플레어에는 그대로 속는다, 미사일 접근 경고 없음. 적 전투기는 신참 · 베테랑 2발, 에이스 3발. 발사 조건(4발 · 1.5초 · 재장전 20초 · 300~2000m · 15°)과 점수는 그대로. 빌더 `BuildWingmanMissile`이 없으면 만들고, 있으면 값만 다시 넣는다(GUID 유지).
+- **기체 모델 · 도장**(2026-11-17): 사용자가 프리팹 모델을 `Jet_02`(CartoonMilitaryModelPack)로 바꿨고, 등급별 모델 목록은 비웠다(항상 같은 모습). 원본 FBX · 텍스처는 그대로 두고 `Tools/aco_wingman_jet.py`(Blender)가 만든다:
+  - `bake`: UV를 다시 편다(Smart UV, 섬 크기 = 3D 면적 비례). 위치 · 법선 · 원본색 · AO · 면 구분(캐노피 / 흡입구 · 노즐 — 원본 텍스처의 면 가운데 색)을 굽고, 메시를 `Models/Wingman/ACO_WingmanJet_Mesh.json`으로 쓴다.
+  - `paint`: 3D 위치 기준으로 칠한다(섬 경계에서 끊기지 않음) → `ACO_WingmanJet_Albedo.png`(2048). 윗면 회청 2색 위장 · 아랫면 옅은 회색, 레이돔 · 눈부심 방지 판, 패널 라인(동체 이음매 · 점검 해치 · 날개 앞전 플랩 · 플랩/에일러론 경첩 · 리브 · 방향타 — 날개 · 꼬리 앞전 · 뒷전은 직선으로 맞춤), 날개 끝 · 꼬리 끝 남색 띠, 편대등, 원형 표식(왼날개 윗면 · 오른날개 아랫면 — 가공), 수직꼬리 바깥 `WM`, 기수 옆 `201`, 구조 표시, 캐노피 유리 · 테, 흡입구 · 노즐, AO. 표식은 모두 가공.
+  - Unity: `BuildWingmanPrefab`이 모델 아래 `Jet_02_Body`를 찾아 JSON으로 메시 에셋 `ACO_WingmanJet.asset`(x 반전 · 0.1배 · 감기 뒤집기 — 원본 꼭짓점과 오차 0)과 재질 `ACO_Wingman_Jet.mat`(Standard, 회청색 곱하기 제외)을 넣는다. 삼각형 수는 원본과 같다(902).
+- **플레어**(2026-11-17, 사용자 "윙맨에 플레어좀 붙여줘라" → 확률 60%): 적 전투기의 플레어 장치는 Setup Check가 씬에서 붙이는데 아군 편대 풀은 그 검사 밖이라 플레어가 없었다. 빌더가 `NPC_Wingman` 프리팹에 `ACO_FlareDispenser`를 넣는다 — 아군 표시(`Friendly`, 무전은 아군 플레어 대사), 출격마다 6회(AI 스폰 때 `ResetSalvos`), 확률 60%(아군 편대는 항상 베테랑이라 `VeteranFlareChance` — 신참 · 에이스 값도 0.6), 반응 1,500m · 쿨타임 3초(장치 기본값), 나오는 자리 `Flares` 파티클을 Jet_02 꼬리 배 아래(로컬 0, −1, −7.5)로. 이탈 중에도 뿌린다.
+- **그대로 두기로 한 것**(사용자 결정):
+  - 레일건 포대(`ACO_MiniRailgun`)는 가장 가까운 표적을 따라 아군 편대도 겨누지만, 피해는 플레이어 기체만 받는다(아군 편대는 맞지 않음).
+  - 대공포 · SAM은 아군 편대만으로는 깨어나지 않는다(사람이 탄 기체만 깨운다).
+  - 6-272 충돌 끄기는 세워 둔 빈 기체에도 적용된다.

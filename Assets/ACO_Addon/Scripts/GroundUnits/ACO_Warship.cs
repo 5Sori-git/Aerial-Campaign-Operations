@@ -119,6 +119,12 @@ namespace ACO
         private float _partTimer;
 
         private bool _dead;
+        // 출현 직후 격침(6-268): 풀에서 다시 쓴 함선에 지난 미션의 체력 0이 먼저 들어오면 스폰 직후 격침 이벤트가 온다(그 화면만 격침 상태로 남았다).
+        // 켜지거나 스폰된 지 SPAWN_DOWN_GRACE초 안의 격침은 보류하고, 체력이 살아 있는 걸로 오면 취소 · DOWN_CONFIRM초 넘게 0이면 그때 격침 상태로.
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;
+        private float _liveAt = -100f;
+        private float _pendingExplodeAt = -1f;
         private float _advance;
         private float _advanceSpeed;
         private int _advanceMs;
@@ -165,6 +171,13 @@ namespace ACO
         {
             if (!_spawned) { return; }
             float dt = Time.deltaTime;
+
+            if (_pendingExplodeAt >= 0f)
+            {
+                // 보류한 출현 직후 격침(6-268): 체력이 살아 있으면 지난 미션 값이었다 — 취소. 오래 0이면 진짜.
+                if (TargetHealth == null || TargetHealth.Health > 0f) { _pendingExplodeAt = -1f; }
+                else if (Time.time - _pendingExplodeAt >= DOWN_CONFIRM) { ApplyExplode(); }
+            }
 
             // 격침되면 그 자리에 멈춘다(가라앉는 연출은 애니메이션 몫).
             if (!_dead && !ExternalPose) { ApplyCruisePose(); }
@@ -293,10 +306,24 @@ namespace ACO
         public void Explode()
         {
             if (_dead) { return; }
+            if (!_spawned || Time.time - _liveAt < SPAWN_DOWN_GRACE)
+            {
+                if (_pendingExplodeAt < 0f) { _pendingExplodeAt = Time.time; }
+                return;
+            }
+            ApplyExplode();
+        }
+
+        private void ApplyExplode()
+        {
+            _pendingExplodeAt = -1f;
+            if (_dead) { return; }
             _dead = true;
             SetDeathVisuals(true);
             SilenceParts();
         }
+
+        void OnEnable() { _liveAt = Time.time; }
 
         private void SilenceParts()
         {
@@ -362,6 +389,8 @@ namespace ACO
             }
             _spawned = true;
             _dead = false;
+            _liveAt = Time.time;
+            if (_pendingExplodeAt >= 0f) { _pendingExplodeAt = Time.time; }   // 켜질 때 먼저 온 격침이면 스폰부터 다시 센다
             if (!ExternalPose) { ApplyCruisePose(); }
 
             // 부위는 각자 부활/상태 복원한다(위치는 이 오브젝트를 따라간다).
@@ -380,7 +409,7 @@ namespace ACO
             else { SetDeathVisuals(false); }
             if (PoseOwner != null) { PoseOwner.SendCustomEvent("ShipSpawned"); }
             // 늦게 들어왔는데 이미 격침됐다: 보스가 단계를 적용한 뒤에 끈다(히트박스까지 꺼진다)
-            if (!MissionRevive && TargetHealth != null && TargetHealth.Health <= 0f) { Explode(); }
+            if (!MissionRevive && TargetHealth != null && TargetHealth.Health <= 0f) { ApplyExplode(); }
         }
 
         /// 이번 미션에 쓰지 않는다. 생성기가 곧 오브젝트를 끈다.
@@ -388,6 +417,7 @@ namespace ACO
         {
             Init();
             _spawned = false;
+            _pendingExplodeAt = -1f;
             if (PoseOwner != null) { PoseOwner.SendCustomEvent("ShipDespawned"); }
             if (Parts == null) { return; }
             for (int i = 0; i < Parts.Length; i++)
@@ -429,6 +459,7 @@ namespace ACO
                 else { SendCustomEventDelayedFrames(nameof(_LocalRefillHealth), 3); }   // 소유자가 아닌 화면은 같은 값으로 직접 채운다(6-247)
             }
             _dead = false;
+            _pendingExplodeAt = -1f;
             SetDeathVisuals(false);
         }
 

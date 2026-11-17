@@ -27,10 +27,13 @@ namespace ACO
         private const int SRC_HVT = 3;
         private const int SRC_ESCORT = 4;
         private const int SRC_SLCM = 5;   // 잠수함 보스의 SLCM(번호 = 잠수함의 고가치 표적 번호 — 목표 태그를 따른다)
+        private const int SRC_WINGMAN = 6;   // 아군 편대(6-273 — 지원 관리자 풀)
 
         [Header("참조 (빌드 시 ACO_SceneBaker가 넣는다)")]
         public ACO_MissionGenerator Generator;
         public ACO_GameFlow Flow;
+        [Tooltip("지원 관리자(Bake) — 아군 편대(6-273)를 아군 항공기로 그린다")]
+        public ACO_SupportManager Support;
 
         [Tooltip("배치·격파·종류를 다시 보는 간격(초). 위치는 그리는 쪽이 매번 읽는다")]
         public float RefreshInterval = 0.5f;
@@ -126,7 +129,8 @@ namespace ACO
             int escorts = Generator != null && Generator.EscortUnits != null ? Generator.EscortUnits.Length : 0;
             ACO_Submarine sub = Generator != null ? Generator.Submarine : null;
             int slcms = sub != null && sub.Slcms != null ? sub.Slcms.Length : 0;
-            int total = players + fighters + ground + hvts + escorts + slcms;
+            int wingmen = Support != null && Support.Wingmen != null ? Support.Wingmen.Length : 0;
+            int total = players + fighters + ground + hvts + escorts + slcms + wingmen;
             Targets = new Transform[total];
             Kinds = new int[total];
             Visible = new bool[total];
@@ -166,6 +170,11 @@ namespace ACO
             {
                 ACO_EscortUnit e = Generator.EscortUnits[i];
                 if (e) { Add(SRC_ESCORT, i, e.transform, e.MoveMode == ACO_EscortUnit.MOVE_AIR, e.TargetHealth); }
+            }
+            for (int i = 0; i < wingmen; i++)
+            {
+                ACO_Wingman w = Support.Wingmen[i];
+                if (w) { Add(SRC_WINGMAN, i, w.transform, true, null); }
             }
         }
 
@@ -225,11 +234,19 @@ namespace ACO
                 Kinds[k] = KIND_FRIENDLY_AIR;
                 return;
             }
+            if (src == SRC_WINGMAN)
+            {
+                ACO_Wingman w = Support.Wingmen[_index[k]];
+                Visible[k] = w != null && w.IsActive() && !w.IsDead() && t.gameObject.activeInHierarchy;
+                Kinds[k] = KIND_FRIENDLY_AIR;
+                return;
+            }
             int cat = Category(src);
             if (Generator == null || !Generator.IsUnitUsed(cat, _index[k])) { Visible[k] = false; return; }
             SaccTarget h = _health[k];
             if (h != null && h.Health <= 0f) { Visible[k] = false; return; }
             if (src == SRC_HVT && Generator.IsHvtHidden(_index[k])) { Visible[k] = false; return; }   // 물속의 잠수함
+            if (src == SRC_GROUND && Generator.IsCityContactHidden(_index[k])) { Visible[k] = false; return; }   // 미확인 · 민간 도시 차량(6-270)
             Visible[k] = true;
             bool friendly = src == SRC_ESCORT && !Generator.EscortUnits[_index[k]].Hostile;
             bool objective = !friendly && Generator.GetUnitTag(cat, _index[k]) != 0;

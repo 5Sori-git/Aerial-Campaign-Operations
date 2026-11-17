@@ -542,6 +542,13 @@ def i_sup_guardian(c):
         seg(c, (cx + r0 * math.cos(a), cy + r0 * math.sin(a)), (cx + r1 * math.cos(a), cy + r1 * math.sin(a)), 3.5)
 
 
+def i_sup_wingmen(c):
+    # 아군 편대(6-273): 앞에 테두리 기체(나) + 뒤 양옆에 채운 기체 둘(편대)
+    jet(c, 50, 34, 0.40, w=5)
+    jet(c, 22, 68, 0.34, fill=True)
+    jet(c, 78, 68, 0.34, fill=True)
+
+
 def i_sup_radio(c):
     # 지원(탭 · 로드아웃 지원 구획): 휴대 무전기 + 안테나 끝에서 퍼지는 전파
     rrect(c, 30, 40, 68, 94, 7)
@@ -863,7 +870,7 @@ ICONS = [
     ("weapon_flak", i_w_flak), ("weapon_ccaa", i_w_ccaa), ("weapon_adam", i_w_adam), ("weapon_lasm", i_w_lasm),
     ("weapon_lgb", i_w_lgb), ("weapon_lgr", i_w_lgr), ("weapon_scm", i_w_scm), ("weapon_ecm", i_w_ecm), ("weapon_mmp", i_w_mmp), ("weapon_rgp", i_w_rgp),
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
-    ("sup_strike", i_sup_strike), ("sup_tanker", i_sup_tanker), ("sup_guardian", i_sup_guardian),
+    ("sup_strike", i_sup_strike), ("sup_tanker", i_sup_tanker), ("sup_guardian", i_sup_guardian), ("sup_wingmen", i_sup_wingmen),
     ("sup_radio", i_sup_radio), ("free_flight", i_free_flight),
     ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),

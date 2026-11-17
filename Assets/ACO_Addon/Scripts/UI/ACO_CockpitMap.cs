@@ -71,6 +71,10 @@ namespace ACO
         public Color ObjectiveColor = new Color(1f, 0.25f, 0.2f, 1f);  // 목표 빨강
         public Color FriendlyColor = new Color(0.35f, 0.65f, 1f, 1f);
         public Color SelfColor = new Color(1f, 1f, 1f, 1f);
+        [Tooltip("내 기체 표시의 어두운 테두리 — 설산(흰 지형) 위에서도 보이게. 알파 0이면 그리지 않는다")]
+        public Color SelfOutlineColor = new Color(0.05f, 0.05f, 0.05f, 1f);
+        [Tooltip("테두리 삼각형 크기(내 기체 표시 대비)")]
+        public float SelfOutlineScale = 1.45f;
 
         private ACO_HexTerrain _terrain;
         private Vector3 _center;
@@ -226,7 +230,11 @@ namespace ACO
             {
                 Transform me = EntityControl.transform;
                 Vector3 mf = me.forward;
-                Tri(ToMap(me.position), Mathf.Atan2(mf.x, mf.z) * Mathf.Rad2Deg, s * SelfScale, SelfColor);
+                Vector3 mp = ToMap(me.position);
+                float bearing = Mathf.Atan2(mf.x, mf.z) * Mathf.Rad2Deg;
+                // 어두운 테두리를 먼저(조금 큰 같은 삼각형) — 같은 메시라 나중에 그린 흰 삼각형이 위에 온다
+                if (SelfOutlineColor.a > 0f) { Tri(mp, bearing, s * SelfScale * SelfOutlineScale, SelfOutlineColor); }
+                Tri(mp, bearing, s * SelfScale, SelfColor);
             }
 
             for (int v = _n * 4; v < _v.Length; v++) { _v[v] = Vector3.zero; }

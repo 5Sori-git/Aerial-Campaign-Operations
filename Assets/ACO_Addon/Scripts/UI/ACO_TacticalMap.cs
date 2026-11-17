@@ -263,6 +263,7 @@ namespace ACO
                 return e && (e.Occupied || Vector3.Distance(e.transform.position, _home[k]) > 200f);
             }
             int cat = Category(_kind[k]);
+            if (_kind[k] == KIND_GROUND && Generator.IsCityContactHidden(_index[k])) { return false; }   // 미확인 · 민간 도시 차량(6-270)
             return Generator.IsUnitUsed(cat, _index[k]) && !Generator.IsUnitDestroyed(cat, _index[k]);
         }
 

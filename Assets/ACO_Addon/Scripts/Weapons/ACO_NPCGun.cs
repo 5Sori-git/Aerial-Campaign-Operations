@@ -55,6 +55,8 @@ namespace ACO
         public float MaxDamageInterval = 0.5f;
         [Tooltip("SAV 무기 타입. 1 = 총탄")]
         public byte WeaponType = 1;
+        [Tooltip("아군 편대(6-273): 켜면 명중을 이 기체의 오너(부른 사람)가 판정하고 플레이어 무기로 넣는다 — 격추 점수가 부른 사람에게(LastHitByPlayer). 끄면 피격 대상의 오너가 판정하는 NPC 무기")]
+        public bool CreditOwner = false;
         [Tooltip("지형에 가려지면 데미지가 들어가지 않는다")]
         public LayerMask GroundLayers = 2049;
         [Tooltip("탄 도착 판정 반경(m): 탄이 조준점에 닿을 때 표적이 이 안에 있어야 맞는다. 0 = 도착을 기다리지 않고 바로 맞는다(전투기 기총)")]
@@ -276,6 +278,7 @@ namespace ACO
 
         private bool IOwnTarget()
         {
+            if (CreditOwner) { return EntityControl != null && Networking.IsOwner(EntityControl.gameObject); }
             if (_targetStatic) { return Networking.IsOwner(_targetStatic.gameObject); }
             if (_targetEntity) { return Networking.IsOwner(_targetEntity.gameObject); }
             return false;
@@ -312,7 +315,14 @@ namespace ACO
         /// damagingObject로 이 오브젝트를 넘기면 SAV가 부모를 타고 올라가 쏜 NPC의 SaccEntity를 찾아 킬을 기록한다.
         private void ApplyDamage(float damage)
         {
-            if (_targetStatic)
+            if (_targetStatic && CreditOwner)
+            {
+                // 격추를 미리 보는 표적(PredictExplosion)은 쏜 사람 화면의 기록으로 점수를 매긴다 — 미사일(NoteHit)과 같이 먼저 적는다
+                _targetStatic.LastHitByPlayer = Networking.LocalPlayer;
+                _targetStatic.LastHitWeaponType = WeaponType;
+                _targetStatic.WeaponDamageTarget(damage, gameObject, WeaponType);   // 플레이어 무기처럼 — 부른 사람 격추로 센다
+            }
+            else if (_targetStatic)
             {
                 // NPC 무기 표시(작전판이 아군 유닛 격추로 가른다)
                 _targetStatic.LastHitWeaponType = (byte)(WeaponType + ACO_Missile.NPC_WEAPON_OFFSET);

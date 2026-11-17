@@ -60,8 +60,22 @@ namespace ACO
         [Tooltip("레일이 일어나는 각도(도)")]
         public float RailErectAngle = 88f;
 
+        [Header("터널 은신 (6-271)")]
+        [Tooltip("Bake가 넣는다 — 지형의 터널 모양(TEL이 터널 중심선을 따라 달린다)")]
+        public ACO_TerrainFeatures Features;
+        [Tooltip("터널에서 나오는 속도(m/s)")]
+        public float TunnelSpeed = 10f;
+        [Tooltip("입구 밖에 멈춘 뒤 발사까지(초 — 레일을 세운다)")]
+        public float TunnelErectTime = 10f;
+        [Tooltip("입구 밖 멈추는 거리(m)")]
+        public float TunnelExitDistance = 150f;
+
         // 미션 생성기 계약(SetProgramVariable + MissionSpawn)
         [System.NonSerialized] public Vector3 MissionSpawnPosition;
+        /// 터널 은신 코드(생성기 _groundLeader 칸): -1 = 보통 시한 표적 TEL, 아니면 MakeTunnelCode — 비트 0 = +z 쪽 입구로 나간다, 1~2 = 터널 번호,
+        /// 3~ = 배치 뒤 입구 밖에 멈출 때까지(초 — 출격 지연 + 주행 시간, 생성기가 계산). 시작 시각(SetStartTime)은 배치 시각 그대로다(미래 시각이면 늦게 들어온 화면이 부활로 오해한다).
+        /// 발사 시각 = 배치 시각 + 멈춤 초 + TunnelErectTime — 지형이 없는 화면도 같은 시각을 얻는다. 나오기 시작하는 시각은 멈춤 − 주행 시간(지형으로 잰다).
+        [System.NonSerialized] public int TunnelCode = -1;
         [System.NonSerialized] public Quaternion MissionSpawnRotation = Quaternion.identity;
         [System.NonSerialized] public bool MissionRevive;
 
@@ -72,6 +86,18 @@ namespace ACO
         private int _startMs;
         private Vector3 _launchPos;
         private Vector3 _chassisLocal;
+        // 터널 모드
+        private bool _tunnelMode;
+        private int _tunnel;
+        private float _hideZ;
+        private float _exitZ;
+        private int _driveMs;
+        private int _emergeMs;
+        private int _stopMs;
+        private bool _tunnelPending;   // 터널 코드는 받았는데 이 화면 지형에 아직 그 터널이 없다(늦게 들어온 화면) — Update가 다시 본다
+        private float _spawnTime;
+        private const float TUNNEL_AXIS_TOLERANCE = 6f;
+        private const float TUNNEL_WAIT = 60f;   // 이 화면에서 켠 뒤 이만큼 기다려도 터널이 없으면 숨은 자리에서 쏜다
 
         void Start() { Init(); }
 
@@ -87,11 +113,31 @@ namespace ACO
         /// 배치 시각(생성기가 MissionSpawn 전에 넣는다 — 모든 클라이언트가 같다).
         public void SetStartTime(int ms) { _startMs = ms; }
 
+        public static int MakeTunnelCode(int tunnel, bool exitPlusZ, int stopSec)
+        {
+            return (exitPlusZ ? 1 : 0) | ((tunnel & 3) << 1) | (Mathf.Clamp(stopSec, 0, 4000) << 3);
+        }
+        public static int TunnelOf(int code) { return (code >> 1) & 3; }
+        public static bool TunnelExitPlusZ(int code) { return (code & 1) != 0; }
+        public static int TunnelStopSec(int code) { return code >> 3; }
+
+        /// 이 화면에 마지막으로 적용된 배치 시각(생성기 배치 시각과 다르면 아직 이번 배치가 적용되지 않았다).
+        public int GetStartMs() { return _startMs; }
+
         // ───────────── 상태 (모듈·표적 마커·레이더가 읽는다) ─────────────
 
         public bool IsDestroyed() { return TargetHealth != null && TargetHealth.Health <= 0f; }
         public bool IsAirborne() { return _launched && !_dead; }
-        public int GetLaunchMs() { return _startMs + Mathf.RoundToInt(LaunchDelay * 1000f); }
+        public int GetLaunchMs() { return LaunchBaseMs() + Mathf.RoundToInt(ErectTime() * 1000f); }
+
+        /// 레일이 일어나기 시작하는 시각(터널 은신: 입구 밖에 멈춘 순간 — 지형과 무관하게 모든 화면이 같다).
+        private int LaunchBaseMs() { return TunnelCode >= 0 ? _stopMs : _startMs; }
+        private float ErectTime() { return TunnelCode >= 0 ? TunnelErectTime : LaunchDelay; }
+
+        /// 터널 은신: 나오기 시작하는 시각(-1 = 터널 은신 아님). 이 화면에 터널이 아직 없으면 멈추는 시각.
+        public int GetEmergeMs() { return TunnelCode < 0 ? -1 : (_tunnelMode ? _emergeMs : _stopMs); }
+        /// 터널 은신 TEL인가(이 화면 지형에 터널이 아직 없어 기다리는 중도 포함).
+        public bool IsTunnelMode() { return TunnelCode >= 0; }
 
         /// 지금 해수면 고도(m).
         public float GetAltitude() { return transform.position.y; }
@@ -101,10 +147,33 @@ namespace ACO
         void Update()
         {
             if (!_spawned || _dead) { return; }
-            float t = (Networking.GetServerTimeInMilliseconds() - _startMs) * 0.001f;
-            if (t < LaunchDelay)
+            int now = Networking.GetServerTimeInMilliseconds();
+            if (TunnelCode >= 0 && !_tunnelMode)
             {
-                if (Rail) { Rail.localRotation = Quaternion.Euler(-RailErectAngle * Mathf.Clamp01(t / Mathf.Max(LaunchDelay * 0.8f, 0.01f)), 0f, 0f); }
+                // 이 화면 지형에 터널이 아직 없다(늦게 들어온 화면 — 생성기는 지형을 기다리지 않고 유닛을 켠다).
+                // 놓이면 바로 터널 모드 — 위치 · 시각이 서버 시각 함수라 그 순간 제자리에 맞는다. 그때까지는 숨은 자리에서 기다린다.
+                if (TrySetupTunnel()) { _tunnelPending = false; }
+                else if (_tunnelPending)
+                {
+                    if (Time.time - _spawnTime < TUNNEL_WAIT) { return; }
+                    // 끝내 안 놓인다(지형이 어긋난 화면 — 드묾): 숨은 자리에서 같은 시각에 쏜다. 그 뒤에 놓여도 위에서 터널 모드로 바꾼다
+                    _tunnelPending = false;
+                    Debug.LogWarning("[ACO] TEL " + gameObject.name + ": 이 화면에 터널이 없어 숨은 자리에서 발사");
+                }
+            }
+            if (_tunnelMode && now - _stopMs < 0)
+            {
+                // 터널 안에 숨어 있다가 중심선을 따라 나온다
+                float f = now - _emergeMs <= 0 ? 0f : Mathf.Clamp01((now - _emergeMs) / (float)Mathf.Max(_driveMs, 1));
+                PlaceInTunnel(Mathf.Lerp(_hideZ, _exitZ, f));
+                return;
+            }
+            float delay = ErectTime();
+            float t = (now - LaunchBaseMs()) * 0.001f;
+            if (t < delay)
+            {
+                if (_tunnelMode && transform.position != _launchPos) { PlaceInTunnel(_exitZ); }
+                if (Rail) { Rail.localRotation = Quaternion.Euler(-RailErectAngle * Mathf.Clamp01(t / Mathf.Max(delay * 0.8f, 0.01f)), 0f, 0f); }
                 AimRam();
                 return;
             }
@@ -112,15 +181,25 @@ namespace ACO
             {
                 _launched = true;
                 // 발사 뒤에 들어온 클라이언트는 일어나는 과정을 못 봤다 — 다 선 자세로 맞춘다
+                if (_tunnelMode) { PlaceInTunnel(_exitZ); }   // 발사 뒤에 들어온 화면: 숨은 자리 방향이 아니라 출구 방향으로(곡선 터널)
                 if (Rail) { Rail.localRotation = Quaternion.Euler(-RailErectAngle, 0f, 0f); }
                 AimRam();
                 ApplyState();
             }
-            float k = Mathf.Clamp01((t - LaunchDelay) / Mathf.Max(FlightTime, 0.01f));
+            float k = Mathf.Clamp01((t - delay) / Mathf.Max(FlightTime, 0.01f));
             float y = _launchPos.y + Mathf.Max(CeilingAltitude - _launchPos.y, 0f) * (k * k);
             transform.position = new Vector3(_launchPos.x, y, _launchPos.z);
             // 차체는 발사 자리에 남는다(자식이라 루트와 함께 올라가지 않게 되돌린다)
             if (Chassis) { Chassis.position = transform.TransformPoint(_chassisLocal) + Vector3.down * (y - _launchPos.y); }
+        }
+
+        /// 터널 모드: 축 위치 z의 중심선 위에 출구를 보고 선다.
+        private void PlaceInTunnel(float z)
+        {
+            if (Features == null || Features.GetTunnelCount() <= _tunnel) { return; }   // 리롤 중(터널 기록이 비었다) — 원점으로 튀지 않게
+            Vector3 p = Features.TunnelPoint(_tunnel, z, 0f, 0f);
+            Vector3 fwd = Features.TunnelForward(_tunnel, z) * (_exitZ >= _hideZ ? 1f : -1f);
+            transform.SetPositionAndRotation(p, Quaternion.LookRotation(fwd, Vector3.up));
         }
 
         /// 유압 실린더 세 단을 두 축 사이에 놓는다. 겹쳐 있던 단이 이렉터가 일어나면서 뽑혀 나온다.
@@ -184,6 +263,16 @@ namespace ACO
             if (Rail) { Rail.localRotation = Quaternion.identity; }
             AimRam();
             _launchPos = MissionSpawnPosition;
+            _tunnelMode = false;
+            _tunnelPending = false;
+            if (TunnelCode >= 0)
+            {
+                _stopMs = _startMs + TunnelStopSec(TunnelCode) * 1000;
+                _emergeMs = _stopMs;
+                _spawnTime = Time.time;
+                // 늦게 들어온 화면은 생성기가 지형을 기다리지 않고 유닛을 켠다 — 터널이 아직 없으면 Update가 놓일 때까지 다시 본다
+                if (!TrySetupTunnel()) { _tunnelPending = true; }
+            }
             _spawned = true;
             _launched = false;
             if (MissionRevive)
@@ -199,10 +288,28 @@ namespace ACO
             ApplyState();
         }
 
+        /// 이 화면 지형에 터널이 있고 숨은 자리가 그 중심선 위면 터널 모드 값을 정한다.
+        private bool TrySetupTunnel()
+        {
+            int tunnel = TunnelOf(TunnelCode);
+            if (Features == null || !Features.IsOnTunnelAxis(tunnel, MissionSpawnPosition, TUNNEL_AXIS_TOLERANCE)) { return false; }
+            _tunnel = tunnel;
+            _tunnelMode = true;
+            float half = Features.GetTunnelHalfLength(_tunnel);
+            Vector3 local = Quaternion.Inverse(Quaternion.Euler(0f, Features.GetTunnelYaw(_tunnel), 0f)) * (MissionSpawnPosition - Features.GetTunnelCenter(_tunnel));
+            _hideZ = local.z;
+            _exitZ = (TunnelExitPlusZ(TunnelCode) ? 1f : -1f) * (half + TunnelExitDistance);
+            _driveMs = Mathf.RoundToInt(Mathf.Abs(_exitZ - _hideZ) / Mathf.Max(TunnelSpeed, 0.1f) * 1000f);
+            _emergeMs = _stopMs - _driveMs;
+            _launchPos = Features.TunnelPoint(_tunnel, _exitZ, 0f, 0f);
+            return true;
+        }
+
         public void MissionDespawn()
         {
             Init();
             _spawned = false;
+            _launched = false;   // 다시 쓸 때 적용 전 몇 프레임 동안 지난 발사 상태(마감 지난 탄도탄)로 보이지 않게
         }
 
         /// 풀에서 막 켠 유닛은 SaccTarget의 Start가 아직 안 돌아 2프레임 뒤에 부른다(ACO_Warship과 같다).

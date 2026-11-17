@@ -113,6 +113,12 @@ namespace ACO
 
         private bool _started;
         private bool _wasAlive;
+        // 출현 직후 격추 판정(6-268): 풀에서 다시 쓴 기체에 지난 미션의 체력 0·격추 상태가 먼저 들어오면 살아난 직후 죽은 것으로 보인다.
+        // 살아난 지 SPAWN_DOWN_GRACE초 안의 격추는 보류하고(그동안 살아 있는 걸로 친다 — 짝도 화내지 않는다), DOWN_CONFIRM초 안에 되살아나면 없던 일로 한다.
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;
+        private float _aliveSince = -100f;
+        private float _pendingDownAt = -1f;
         private float _nextFlareLine;
         private bool _decoyFlare;   // 분신과 같이 뿌리는 플레어(분신 대사가 나온다)
         private bool _halfSaid;
@@ -153,6 +159,7 @@ namespace ACO
             // 생성기가 기체를 거둬들이면(비활성) 떠 있던 기만체도 치운다.
             HideDecoys();
             _wasAlive = false;
+            _pendingDownAt = -1f;
         }
 
         void Update()
@@ -161,15 +168,23 @@ namespace ACO
             bool alive = AI != null && AI.IsAlive() && (TargetHealth == null || TargetHealth.Health > 0f);
 
             // 등장/격추(모든 클라이언트 — 생성기 배치와 체력 동기화로 같은 순간을 본다)
-            if (alive && !_wasAlive) { OnAceSpawn(); }
-            if (!alive && _wasAlive)
+            if (_pendingDownAt >= 0f)
             {
-                if (Chatter != null) { Chatter.DropQueued(AceName); }   // 밀린 기술 대사는 버린다
-                SayNow(LineDown, ClipDown);   // 격추 대사는 나오던 대사를 끊고 바로
-                HideDecoys();
-                _salvoState = 0;
+                // 출현 직후의 격추 판정 보류(6-268): 되살아나면 지난 미션 값이었다 — 등장 대사 없이 이어 간다. 오래 그대로면 진짜 격추.
+                if (alive) { _pendingDownAt = -1f; }
+                else if (Time.time - _pendingDownAt < DOWN_CONFIRM) { return; }
+                else { _pendingDownAt = -1f; _wasAlive = false; OnAceDown(); return; }
             }
-            _wasAlive = alive;
+            else
+            {
+                if (alive && !_wasAlive) { _aliveSince = Time.time; OnAceSpawn(); }
+                if (!alive && _wasAlive)
+                {
+                    if (Time.time - _aliveSince < SPAWN_DOWN_GRACE) { _pendingDownAt = Time.time; return; }
+                    OnAceDown();
+                }
+                _wasAlive = alive;
+            }
             if (!alive) { return; }
 
             TwinTick();
@@ -185,6 +200,14 @@ namespace ACO
             if (!Networking.IsOwner(AI.gameObject)) { return; }
             OwnerSalvo();
             OwnerDecoys();
+        }
+
+        private void OnAceDown()
+        {
+            if (Chatter != null) { Chatter.DropQueued(AceName); }   // 밀린 기술 대사는 버린다
+            SayNow(LineDown, ClipDown);   // 격추 대사는 나오던 대사를 끊고 바로
+            HideDecoys();
+            _salvoState = 0;
         }
 
         private void OnAceSpawn()

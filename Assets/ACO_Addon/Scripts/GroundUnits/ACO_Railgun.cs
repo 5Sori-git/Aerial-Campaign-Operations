@@ -131,6 +131,10 @@ namespace ACO
         private bool _initialized;
         private bool _spawned;
         private bool _dying;
+        private float _liveAt = -100f;   // 켜지거나 스폰된 시각(로컬) — 출현 직후 격파 판정은 지난 미션 값으로 보고 대사를 내지 않는다(6-268)
+        private const float SPAWN_DOWN_GRACE = 1f;
+        private const float DOWN_CONFIRM = 5f;   // 보류한 격파가 이만큼 그대로면(체력 0) 진짜 — 대사 없이 격파 상태로
+        private float _pendingExplodeAt = -1f;
         private bool _gone;
         private float _deathLeft;
         private float _secondaryTimer;
@@ -181,6 +185,8 @@ namespace ACO
             _dying = false;
             _gone = false;
             _appliedStage = -1;
+            _liveAt = Time.time;
+            RestartPending();
             _appliedArmor = -1f;
             _armor = 0f;
             _elevation = RestElevation;
@@ -200,6 +206,7 @@ namespace ACO
             _spawned = false;
             _dying = false;
             _gone = false;
+            _pendingExplodeAt = -1f;
             if (ChargeSound && ChargeSound.isPlaying) { ChargeSound.Stop(); }
             if (WarnBeam) { WarnBeam.enabled = false; }
             if (FireBeam) { FireBeam.enabled = false; }
@@ -209,13 +216,35 @@ namespace ACO
         public void Explode()
         {
             if (_gone || _dying) { return; }
+            if (JustSpawned()) { if (_pendingExplodeAt < 0f) { _pendingExplodeAt = Time.time; } return; }   // 출현 직후 격파는 보류(6-268)
+            ApplyExplode(true);
+        }
+
+        private void ApplyExplode(bool say)
+        {
+            _pendingExplodeAt = -1f;
+            if (_gone || _dying) { return; }
             _dying = true;
             _deathLeft = DeathDelay;
             _secondaryTimer = 0f;
             SetCore(false);
             if (ChargeSound && ChargeSound.isPlaying) { ChargeSound.Stop(); }
             if (WarnBeam) { WarnBeam.enabled = false; }
-            if (Phase != null && Phase.IsLive()) { Phase.SayDown(); }
+            if (say && Phase != null && Phase.IsLive()) { Phase.SayDown(); }
+        }
+
+        void OnEnable() { _liveAt = Time.time; }
+
+        /// 스폰 전이거나 켜진 지 SPAWN_DOWN_GRACE초 안(이때 온 격파는 보류): 풀에서 다시 쓴 포대에 지난 미션의 체력 0이 먼저 들어온 것으로 본다(6-268).
+        private bool JustSpawned() { return !_spawned || Time.time - _liveAt < SPAWN_DOWN_GRACE; }
+
+        /// 켜질 때 먼저 온 격파면 스폰부터 다시 센다.
+        private void RestartPending() { if (_pendingExplodeAt >= 0f) { _pendingExplodeAt = Time.time; } }
+
+        private bool CoreDown()
+        {
+            if (TargetHealth != null) { return TargetHealth.Health <= 0f; }
+            return Warship == null || Warship.IsDestroyed();
         }
 
         // ───────────── 매 프레임 ─────────────
@@ -225,6 +254,12 @@ namespace ACO
             UpdateSkyFlash(Time.deltaTime);
             if (!_spawned || _gone) { return; }
             float dt = Time.deltaTime;
+            if (_pendingExplodeAt >= 0f)
+            {
+                // 보류한 출현 직후 격파(6-268): 체력이 살아 있으면 지난 미션 값이었다 — 취소. 오래 0이면 진짜(대사 없이).
+                if (!CoreDown()) { _pendingExplodeAt = -1f; }
+                else if (Time.time - _pendingExplodeAt >= DOWN_CONFIRM) { ApplyExplode(false); }
+            }
             UpdateFireBeam(dt);
             if (_dying)
             {

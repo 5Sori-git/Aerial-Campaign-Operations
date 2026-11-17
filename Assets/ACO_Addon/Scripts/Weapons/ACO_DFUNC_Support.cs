@@ -137,6 +137,7 @@ namespace ACO
                 {
                     if (_pick == ACO_PlayerProgress.CALL_TANKER) { TryTanker(); }
                     else if (_pick == ACO_PlayerProgress.CALL_GUARDIAN) { TryGuardian(); }
+                    else if (_pick == ACO_PlayerProgress.CALL_WINGMEN) { TryWingmen(); }
                     else { Warn("NONE", "SUPPORT\nNONE - PICK IN LOADOUT"); }
                 }
             }
@@ -231,6 +232,18 @@ namespace ACO
             Progress.UseCall(c);   // 쿨타임은 드론이 돌아간 뒤부터(관리자)
         }
 
+        // ───────────── 아군 편대 (6-273) ─────────────
+
+        private void TryWingmen()
+        {
+            int c = ACO_PlayerProgress.CALL_WINGMEN;
+            if (Manager && Manager.GetWingmenLeft(SupportIndex) > 0f) { Warn("ACTIVE", "WINGMEN\nALREADY ON STATION"); return; }
+            if (!CanCall(c)) { return; }
+            if (!Manager.IsMissionRunning()) { Warn("NO OPS", "WINGMEN\nNO OPERATION IN PROGRESS"); return; }
+            if (!Manager.CallWingmen(SupportIndex)) { Warn("BUSY", "WINGMEN\nNO FLIGHT AVAILABLE"); return; }
+            Progress.UseCall(c);   // 쿨타임은 편대가 돌아간 뒤부터(관리자)
+        }
+
         private bool CanCall(int c)
         {
             if (!Manager || !Progress || SupportIndex < 0) { Warn("N/A", "SUPPORT\nUNAVAILABLE"); return false; }
@@ -253,7 +266,7 @@ namespace ACO
         public void ShowAlert(string shortCode, string alert) { Warn(shortCode, alert); }
 
         /// 조건이 맞지 않을 때: 잔탄 줄·MFD에 짧은 글자(shortCode), HUD 상태 줄에 긴 경고(alert — 깜빡임, AlertTime초).
-        private void Warn(string shortCode, string alert)
+        public void Warn(string shortCode, string alert)
         {
             Notice(shortCode);
             _alert = alert;
@@ -293,11 +306,13 @@ namespace ACO
             return second == "" ? s : s + "\n" + second;
         }
 
-        /// 가디언이 떠 있으면 "ON 64s", 아니면 "".
+        /// 가디언 · 아군 편대가 떠 있으면 "ON 64s", 아니면 "".
         private string GuardianOnText(int pick)
         {
-            if (pick != ACO_PlayerProgress.CALL_GUARDIAN || !Manager) { return ""; }
-            float left = Manager.GetGuardianLeft(SupportIndex);
+            if (!Manager) { return ""; }
+            float left = 0f;
+            if (pick == ACO_PlayerProgress.CALL_GUARDIAN) { left = Manager.GetGuardianLeft(SupportIndex); }
+            else if (pick == ACO_PlayerProgress.CALL_WINGMEN) { left = Manager.GetWingmenLeft(SupportIndex); }
             return left > 0f ? "ON " + Mathf.CeilToInt(left) + "s" : "";
         }
 
@@ -314,6 +329,7 @@ namespace ACO
             if (p == ACO_PlayerProgress.CALL_STRIKE) { return "BB"; }
             if (p == ACO_PlayerProgress.CALL_TANKER) { return "TNK"; }
             if (p == ACO_PlayerProgress.CALL_GUARDIAN) { return "GD"; }
+            if (p == ACO_PlayerProgress.CALL_WINGMEN) { return "WM"; }
             return "SUP";
         }
 

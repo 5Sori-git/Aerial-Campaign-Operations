@@ -15,7 +15,7 @@ public static partial class ACO_HUDBuilder
     private const string PrefabDir = "Assets/ACO_Addon/Prefabs";
     private const string FontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
     private const string FlightFontPath = "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Electronic Highway Sign SDF.asset";
-    private const int MarkerCount = 64;
+    private const int MarkerCount = 96;   // 판 3: 64 → 96(시가지 정밀 타격 도시 차량 17대가 함께 뜨면 아군기 · 폭격기 마커가 모자랐다)
     // 테두리 두께(마커 한 변 1 기준)
     private const float FrameThickness = 0.04f;   // 마커 테두리·락온 마름모(한 변의 4% — 예전 8%)
     // 체력 바 크기(마커 한 변 1 기준)
@@ -790,7 +790,7 @@ public static partial class ACO_HUDBuilder
     }
 
     /// 지원 호출 아이콘(ACO_PlayerProgress.CALL_* 순서): 벙커버스터 = 폭탄 탭, 급유 드론 = 연료, 가디언 드론 = 장갑.
-    public static Sprite[] SupportCallIcons() { return new[] { LoadIcon("sup_strike"), LoadIcon("sup_tanker"), LoadIcon("sup_guardian") }; }   // CALL_* 순서(벙커버스터 · 급유 드론 · 가디언 드론)
+    public static Sprite[] SupportCallIcons() { return new[] { LoadIcon("sup_strike"), LoadIcon("sup_tanker"), LoadIcon("sup_guardian"), LoadIcon("sup_wingmen") }; }   // CALL_* 순서(벙커버스터 · 급유 드론 · 가디언 드론 · 아군 편대)
 
     /// 게임 진행 상태 글자. Bake가 이 이름(FlowStatusName)의 글자를 찾아 ACO_GameFlow.StatusTexts에 넣는다.
     public const string FlowStatusName = "ACO_FlowStatus";
@@ -998,7 +998,8 @@ public static partial class ACO_HUDBuilder
 
     /// 디버그 패널 프리팹(ACO_DebugPanel): 1페이즈 강제(페이즈 모듈마다 P1), 에이스·베테랑·보너스 페이즈 확률(−/+), 내 크레딧(−100K/−10K/+10K/+100K).
     /// 판 1.8m x 2.0m(월드 공간 Canvas), 앞면은 루트 +Z 쪽. 모듈 줄은 ModuleRowCount개(남는 줄은 게임 중 숨긴다). 관리자·생성기·진행도는 Bake가 연결한다.
-    public const int DebugModuleRows = 20;
+    public const int DebugModuleRows = 30;
+    public const float DebugRowPitch = 50f;   // 줄 간격(처음 14줄 판은 72) — 줄이 늘어도 판이 너무 길어지지 않게
     public static void CreateDebugPanelPrefab()
     {
         EnsureFolder("Assets/ACO_Addon", "Prefabs");
@@ -1011,8 +1012,8 @@ public static partial class ACO_HUDBuilder
 
         GameObject root = new GameObject("ACO_DebugPanel");
         ACO_DebugPanel panel = root.AddUdonSharpComponent<ACO_DebugPanel>();
-        // 처음 판(14줄, 높이 2400)보다 줄이 많으면 판을 위아래로 같이 늘린다
-        float grow = Mathf.Max(DebugModuleRows - 14, 0) * 36f;
+        // 처음 판(14줄 × 72, 높이 2400)보다 줄 영역이 길면 판을 위아래로 같이 늘린다(grow = 늘어난 길이의 절반)
+        float grow = Mathf.Max(DebugModuleRows * DebugRowPitch - 14 * 72f, 0f) * 0.5f;
         RectTransform canvas = MakeUiPanel(root.transform, 1800f, 2400f + grow * 2f);
         MakeUiText(canvas, "Title", new Vector2(0f, 1120f + grow), new Vector2(1700f, 100f), 70f, font, "DEBUG PANEL");
 
@@ -1022,22 +1023,22 @@ public static partial class ACO_HUDBuilder
         var texts = new TextMeshProUGUI[DebugModuleRows];
         for (int k = 0; k < DebugModuleRows; k++)
         {
-            float y = 970f + grow - k * 72f;
+            float y = 970f + grow - k * DebugRowPitch;
             var row = new GameObject($"Module_{k}", typeof(RectTransform));
             row.layer = 0;
             RectTransform rr = row.GetComponent<RectTransform>();
             rr.SetParent(canvas, false);
             rr.anchoredPosition = new Vector2(0f, y);
-            rr.sizeDelta = new Vector2(1700f, 68f);
-            TextMeshProUGUI t = MakeUiText(rr, "Text", new Vector2(-180f, 0f), new Vector2(1250f, 64f), 34f, font, $"MODULE {k}");
+            rr.sizeDelta = new Vector2(1700f, DebugRowPitch - 4f);
+            TextMeshProUGUI t = MakeUiText(rr, "Text", new Vector2(-180f, 0f), new Vector2(1250f, DebugRowPitch - 6f), 30f, font, $"MODULE {k}");
             t.alignment = TextAlignmentOptions.Left;
-            DebugButton(rr, panel, font, "P1", new Vector2(625f, 0f), new Vector2(240f, 60f), ACO_DebugPanel.ACT_FIRST_PHASE, k, 0f);
+            DebugButton(rr, panel, font, "P1", new Vector2(625f, 0f), new Vector2(240f, DebugRowPitch - 8f), ACO_DebugPanel.ACT_FIRST_PHASE, k, 0f);
             rows[k] = row;
             texts[k] = t;
         }
 
         // 출현 확률
-        float y0 = 970f + grow - DebugModuleRows * 72f - 30f;
+        float y0 = 970f + grow - DebugModuleRows * DebugRowPitch - 30f;
         MakeUiLabel(canvas, "ChanceHeader", new Vector2(0f, y0), new Vector2(1700f, 60f), 40f, font, "SPAWN CHANCES");
         panel.AceText = DebugValueRow(canvas, panel, font, "Ace", y0 - 70f, ACO_DebugPanel.ACT_ACE, 0.05f);
         panel.VeteranText = DebugValueRow(canvas, panel, font, "Veteran", y0 - 140f, ACO_DebugPanel.ACT_VETERAN, 0.05f);
@@ -3602,16 +3603,22 @@ public static partial class ACO_HUDBuilder
     }
     private static readonly Color WaypointBlue = new Color(0.55f, 0.8f, 1f, 0.45f);
     private static readonly Color DestinationCyan = new Color(0.4f, 0.9f, 1f, 0.85f);
+    private static readonly Color UnknownGrey = new Color(0.75f, 0.75f, 0.75f, 0.7f);
+    private static readonly Color CivilianGreen = new Color(0.35f, 1f, 0.45f, 0.7f);
 
     /// Bake용: 표적 마커의 빈 아군/경유점/목적지 머티리얼을 채운다(예전 HUD 프리팹에는 이 칸이 없었다). 바꿨으면 true.
     public static bool FillMarkerMaterials(ACO_TargetMarkers markers)
     {
-        if (markers.FriendlyMaterial != null && markers.WaypointMaterial != null && markers.DestinationMaterial != null) { return false; }
+        if (markers.FriendlyMaterial != null && markers.WaypointMaterial != null && markers.DestinationMaterial != null
+            && markers.UnknownMaterial != null && markers.CivilianMaterial != null) { return false; }
         Shader markerShader = Shader.Find("ACO/MarkerOverlay");
         if (markerShader == null) { return false; }
         if (markers.FriendlyMaterial == null) { markers.FriendlyMaterial = LoadOrSaveMaterial(markerShader, FriendlyBlue, "ACO_MarkerFriendly"); }
         if (markers.WaypointMaterial == null) { markers.WaypointMaterial = LoadOrSaveMaterial(markerShader, WaypointBlue, "ACO_MarkerWaypoint"); }
         if (markers.DestinationMaterial == null) { markers.DestinationMaterial = LoadOrSaveMaterial(markerShader, DestinationCyan, "ACO_MarkerDestination"); }
+        // 시가지 정밀 타격(6-270): 미확인 회색 · 민간 초록
+        if (markers.UnknownMaterial == null) { markers.UnknownMaterial = LoadOrSaveMaterial(markerShader, UnknownGrey, "ACO_MarkerUnknown"); }
+        if (markers.CivilianMaterial == null) { markers.CivilianMaterial = LoadOrSaveMaterial(markerShader, CivilianGreen, "ACO_MarkerCivilian"); }
         return true;
     }
 

@@ -57,6 +57,37 @@ public partial class ACO_SceneBaker
     }
 
     /// 지형 장식 ↔ 육각 지형 연결 + 빈 프리팹 칸 채우기(빌더 프리팹이 있으면).
+    /// 블록 프리팹마다 메시가 가장 높이 올라간 곳(원점 = 칸 윗면 기준, m).
+    private static float[] CityBlockTops(GameObject[] blocks)
+    {
+        int n = blocks != null ? blocks.Length : 0;
+        var tops = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            if (blocks[i] == null) { continue; }
+            float top = 0f;
+            foreach (MeshFilter mf in blocks[i].GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null) { continue; }
+                Bounds b = mf.sharedMesh.bounds;
+                Matrix4x4 m = blocks[i].transform.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                for (int c = 0; c < 8; c++)
+                {
+                    Vector3 corner = new Vector3((c & 1) == 0 ? b.min.x : b.max.x, (c & 2) == 0 ? b.min.y : b.max.y, (c & 4) == 0 ? b.min.z : b.max.z);
+                    top = Mathf.Max(top, m.MultiplyPoint3x4(corner).y);
+                }
+            }
+            tops[i] = Mathf.Round(top);
+        }
+        return tops;
+    }
+
+    private static bool SameFloats(float[] a, float[] b)
+    {
+        for (int i = 0; i < a.Length; i++) { if (!Mathf.Approximately(a[i], b[i])) { return false; } }
+        return true;
+    }
+
     private static void LinkFeatures(ACO_TerrainFeatures features, ACO_HexTerrain hex)
     {
         if (features.Terrain == null && hex != null) { features.Terrain = hex; }
@@ -68,6 +99,14 @@ public partial class ACO_SceneBaker
         }
         // 비었거나 지워진 프리팹(Missing)이 섞여 있으면 기본(상자판) 장식으로 다시 채운다.
         if (HasMissing(features.CityBlockPrefabs)) { features.CityBlockPrefabs = LoadAll(ACO_DecoBuilder.CityNames); }
+        // 블록별 가장 높은 건물(시가지 정밀 타격 식별 고도 — 6-270): 연결한 프리팹의 메시 높이
+        float[] tops = CityBlockTops(features.CityBlockPrefabs);
+        if (features.CityBlockTopHeights == null || features.CityBlockTopHeights.Length != tops.Length || !SameFloats(features.CityBlockTopHeights, tops))
+        {
+            features.CityBlockTopHeights = tops;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(features);
+            EditorUtility.SetDirty(features);
+        }
         if (HasMissing(features.VillagePrefabs)) { features.VillagePrefabs = LoadAll(ACO_DecoBuilder.VillageNames); }
         if (features.PortPrefab == null) { features.PortPrefab = ACO_DecoBuilder.Load(ACO_DecoBuilder.PortName); }
         if (features.AirfieldPrefab == null) { features.AirfieldPrefab = ACO_DecoBuilder.Load(ACO_DecoBuilder.AirfieldName); }

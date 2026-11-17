@@ -728,6 +728,10 @@ public partial class ACO_SetupValidator : EditorWindow
         {
             Add(g, WARN, "지원 관리자의 풀(폭격기·급유 드론·가디언 드론)이 비었습니다 — [고치기]가 채웁니다.", supportManager, ACO_PrefabBuilder.EnsureSupportManager);
         }
+        else if (supportManager.Wingmen == null || supportManager.Wingmen.Length < ACO_PrefabBuilder.WingmanPool || System.Array.IndexOf(supportManager.Wingmen, null) >= 0)
+        {
+            Add(g, WARN, $"지원 관리자에 아군 편대(6-273 — 지원 호출 WINGMEN) 풀이 없습니다 — [고치기]가 NPC_Wingman 프리팹(없으면 NPC_Fighter를 복사해 만든다)으로 {ACO_PrefabBuilder.WingmanPool}기를 만듭니다. 뒤에 Bake.", supportManager, () => ACO_PrefabBuilder.EnsureWingmenPool(supportManager));
+        }
         else if (ACO_PrefabBuilder.SupportPoolsNotPrefab(supportManager) > 0)
         {
             Add(g, WARN, $"지원 관리자의 폭격기·가디언 드론 {ACO_PrefabBuilder.SupportPoolsNotPrefab(supportManager)}칸이 프리팹이 아닌 씬 오브젝트입니다 — [고치기]가 프리팹(ACO_SupportBomber·ACO_GuardianDrone, 없으면 만든다)의 인스턴스로 바꿉니다(같은 자리·이름). 뒤에 Bake.", supportManager, ACO_PrefabBuilder.ConvertSupportPoolsToPrefabs);

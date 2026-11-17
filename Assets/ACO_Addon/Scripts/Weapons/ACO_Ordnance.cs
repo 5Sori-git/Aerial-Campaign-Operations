@@ -195,6 +195,7 @@ namespace ACO
                     if (DebugHitLog && IsShooter) { LogHit(hit); }
                     // 유닛 히트박스에 닿았을 때만 직접 맞은 표적 — 선체(Environment) 같은 큰 콜라이더는 본체로 이어져 코어가 "직접" 맞은 걸로 잘못 친다
                     _directPart = hit.collider && hit.collider.gameObject.layer == UNIT_HITBOX_LAYER ? hit.collider.GetComponentInParent<SaccTarget>() : null;
+                    if (_directPart != null && !HitFriendlies && _directPart.GetComponentInParent<ACO_Wingman>() != null) { _directPart = null; }   // 아군 편대는 직접 맞혀도 피해 없음(6-273)
                     Explode(hit.point, SurfaceOf(hit.collider), hit.normal);
                     return;
                 }
@@ -274,6 +275,7 @@ namespace ACO
                 if (!target || target.Health <= 0f) { continue; }
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
                 if (escort != null && !escort.Hostile) { continue; }
+                if (c.GetComponentInParent<ACO_Wingman>() != null) { continue; }   // 아군 편대(6-273)
                 Vector3 p = c.transform.position;
                 float t = lenSq > 0.000001f ? Mathf.Clamp01(Vector3.Dot(p - from, step) / lenSq) : 0f;
                 Vector3 q = from + step * t;
@@ -365,13 +367,14 @@ namespace ACO
                 if (IsOwnVehicle(c)) { continue; }
                 // 아군(호위 대상)은 피해를 받지 않는다. 적 포탄(HitFriendlies)은 반대로 아군만 맞는다.
                 ACO_EscortUnit escort = c.GetComponentInParent<ACO_EscortUnit>();
-                bool friendly = escort != null && !escort.Hostile;
+                bool friendly = (escort != null && !escort.Hostile) || c.GetComponentInParent<ACO_Wingman>() != null;   // 아군 편대(6-273)도 아군
                 if (friendly == !HitFriendlies) { continue; }
 
                 // 같은 유닛은 가장 가까운 콜라이더로 한 번만 — 이미 준 대상이면 건너뛴다(가까운 것부터 오지 않으므로 최소 거리를 먼저 구한다).
                 bool done = false;
                 for (int k = 0; k < damagedCount; k++) { if (_damaged[k] == target) { done = true; break; } }
                 if (done) { continue; }
+                if (ACO_TerrainFeatures.SplashBlockedByTunnel(center, c.bounds.center)) { continue; }   // 터널 바위 너머(6-271)
 
                 float best = float.MaxValue;
                 for (int j = i; j < n; j++)
