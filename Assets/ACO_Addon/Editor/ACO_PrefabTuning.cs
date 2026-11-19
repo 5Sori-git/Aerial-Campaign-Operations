@@ -995,6 +995,16 @@ public static class ACO_PrefabTuning
         new Entry { Id = "tunnel-landmark-1", Text = "터널 랜드마크(6-266): Models/Tunnel/ACO_Tunnel.fbx로 Prefabs/ACO_Tunnel 프리팹을 만들고 씬 지형 장식(TunnelPrefab)에 넣습니다 — 같은 높이 3칸 일렬의 가운데 칸에 확률 0.6으로 터널 산(폭 50m x 높이 40m 관통 터널). 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "wingmen-note-1", Text = "아군 편대 상점 주의 문구에서 '시가지의 차량은 공격하지 않습니다'를 뺍니다(당연한 내용이라). 격납고 프리팹 · 씬 상점의 4번째 주의 문구가 예전 문장일 때만 바꿉니다", Apply = TuneWingmenNote },
+        new Entry { Id = "goggles-pilot-view-3", Text = "CIC 고글 조종사 시점을 기체 기준 자리로(6-290 추가): 조종사 머리 기준 → 기체 원점 기준 AircraftViewOffset(0, 4.66, 3.04 — 지금 자리 그대로). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView3 },
+        new Entry { Id = "goggles-pilot-view-2", Text = "CIC 고글 조종사 시점 높이 1m 더(6-290 추가): 조종사 머리 기준 위 1.2 → 2.2m(뒤 1.4m 그대로). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView2 },
+        new Entry { Id = "goggles-pilot-view-1", Text = "CIC 고글 조종사 시점 자리(6-290): 조종사 머리 기준 위 0.3 · 뒤 0.8m → 위 1.2 · 뒤 1.4m(좌석 등받이에 묻히던 것). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView },
+        new Entry { Id = "precision-identify-300-1", Text = "시가지 정밀 타격 식별(6-290): 일반 식별 직선 200 → 300m, CIC 정찰 UAV 식별 수평 반경 300 → 700m(씬 Phase_Precision — 이전 값일 때만). 뒤에 씬 저장", Apply = TunePrecisionIdentify300 },
+        new Entry { Id = "wingman-flare-quiet-1", Text = "아군 편대 플레어 무전 끄기(6-289): NPC_Wingman 프리팹 플레어 장치 RadioCallout 끔(아군 플레어 대사가 수송기 목소리 · TRANSPORT라 윙맨이 수송기처럼 들렸다), 씬 편대의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneWingmanFlareQuiet },
+        new Entry { Id = "map-vip-marker-1", Text = "작전 테이블(6-285): 아군 호위 대상 마커 원본 VipMarker(초록 + 이름표 VIP)를 씬 테이블에 넣습니다. 아군 편대는 이름표 없는 초록 마커. 뒤에 Bake(지원 관리자 연결) · 씬 저장", Apply = TuneMapVipMarker },
+        new Entry { Id = "cic-wingmen-cd-40-1", Text = "CIC 지역 편대 쿨타임 20 → 40초(6-284 — 모두가 같이 쓰는 쿨타임, 편대가 돌아간 뒤부터). 씬 지원 관리자 CicWingmenCooldown이 20일 때만 바꿉니다. 조종석 지원 호출 편대 쿨타임(30초)은 그대로", Apply = TuneCicWingmenCooldown },
+        new Entry { Id = "cic-wingmen-area-5km-1", Text = "CIC 지역 편대 구역 3 → 5km(6-283): 씬 지원 관리자 CicWingmenRadius(3000일 때만), NPC_Wingman 프리팹 AreaOrbitRadius 1500 → 2500(씬에 남은 덮어쓴 값은 지운다). 탐지 6.5km · 놓침 8km · 복귀 6.5km는 새 칸(스크립트 기본값)", Apply = TuneCicWingmenArea },
+        new Entry { Id = "ecm-20s-1", Text = "ECM 재밍 시간 10 → 20초(6-281 — 재충전 20초는 그대로). 플레이어 기체 프리팹의 Module_ECM과 특수무장 정의(ACO_Special_ECM)를 바꾸고 씬에 남은 덮어쓴 값을 지웁니다", Apply = TuneEcmDuration },
+        new Entry { Id = "cic-table-exag-1", Text = "CIC 전술 테이블(6-275) 높이 과장 3 → 1.5배 — 지도 바닥을 찍을 때 산 때문에 어긋나는 걸 줄인다. 함내 격실 안의 작전 테이블이 3일 때만 바꿉니다(브리핑실 테이블은 그대로)", Apply = TuneCicTableExaggeration },
         new Entry { Id = "wingmen-cd-30-1", Text = "아군 편대(6-273) 쿨타임 180 → 30초(편대가 돌아간 뒤부터). 씬 진행도의 4번째 쿨타임이 180일 때만 바꿉니다", Apply = TuneWingmenCooldown },
         new Entry { Id = "wingmen-8-180-1", Text = "아군 편대(6-273) 조정: 가격 8,000 → 5,000 CR, 떠 있는 시간 120 → 180초(효과 글자 2 FIGHTERS 180s). 씬 진행도 · 지원 관리자 값을 바꿉니다(예전 값일 때만). 풀 4 → 8기(4편대)는 Setup Check 지원 관리자 [고치기] → Bake", Apply = TuneWingmen8 },
         new Entry { Id = "precision-identify-200-1", Text = "시가지 정밀 타격 식별 거리(6-270): 80m → 200m — 차량에서 직선 200m 안으로 지나가면 적 · 민간이 식별됩니다. 씬 Phase_Precision 값을 바꿉니다(80이 아니게 손으로 바꾼 값은 그대로)", Apply = TunePrecisionIdentify },
@@ -1515,6 +1525,208 @@ public static class ACO_PrefabTuning
         if (shop.CallCautions == null || shop.CallCautions.Length <= c || shop.CallCautions[c] != WingmenNoteOld) { return false; }
         shop.CallCautions[c] = WingmenNoteNew;
         return true;
+    }
+
+    public const float EcmDuration = 20f;
+
+    /// goggles-pilot-view-3(6-290 추가): 조종사 머리 기준 → 기체 기준(사용자 "조종사 머리 말고 기체에 상대적 위치로 하자, 이전 위치를 상대적 위치로 해줘").
+    public static void TuneGogglesPilotView3() { SetGogglesPilotView(new Vector3(0f, 4.66f, 3.04f)); }
+
+    /// goggles-pilot-view-2(6-290 추가): 조종사 시점 높이 1m 더 — 머리 기준 칸(CockpitOffset)은 없어졌다. goggles-pilot-view-3이 대신한다.
+    public static void TuneGogglesPilotView2() { Debug.Log("[ACO] goggles-pilot-view-2는 goggles-pilot-view-3(기체 기준 자리)로 바뀌었습니다 — 할 일 없음."); }
+
+    private static void SetGogglesPilotView(Vector3 want)
+    {
+        const string path = "Assets/ACO_Addon/Prefabs/ACO_CicGogglesStation.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_CicGoggles g in root.GetComponentsInChildren<ACO_CicGoggles>(true)) { g.AircraftViewOffset = want; n++; }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        int s = 0;
+        foreach (ACO_CicGoggles g in FindInScene<ACO_CicGoggles>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(g)) { Revert(g, "AircraftViewOffset"); }
+            else { Undo.RecordObject(g, "ACO goggles pilot view"); g.AircraftViewOffset = want; EditorUtility.SetDirty(g); }
+            s++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 고글 조종사 시점(기체 기준): 프리팹 고글 {n}개, 씬 고글 {s}개를 {want}로 맞췄습니다. 씬을 저장하세요.");
+    }
+
+    /// goggles-pilot-view-1(6-290): 고글 조종사 시점 카메라를 캐노피 위 뒤로 — 머리 기준 칸(CockpitOffset)은 없어졌다. goggles-pilot-view-3이 대신한다.
+    public static void TuneGogglesPilotView() { Debug.Log("[ACO] goggles-pilot-view-1은 goggles-pilot-view-3(기체 기준 자리)로 바뀌었습니다 — 할 일 없음."); }
+
+    /// precision-identify-300-1(6-290): 식별 거리 일반 200 → 300m, UAV 300 → 700m(사용자 "일반 식별 조건은 300m, UAV 식별 조건은 700m로 하자").
+    public static void TunePrecisionIdentify300()
+    {
+        int n = 0;
+        foreach (ACO_PhasePrecision p in FindInScene<ACO_PhasePrecision>())
+        {
+            bool changed = false;
+            Undo.RecordObject(p, "ACO precision identify 300");
+            if (Mathf.Approximately(p.IdentifyDistance, 200f)) { p.IdentifyDistance = 300f; changed = true; }
+            if (Mathf.Approximately(p.DroneIdentifyRadius, 300f)) { p.DroneIdentifyRadius = 700f; changed = true; }
+            if (!changed) { continue; }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(p);
+            EditorUtility.SetDirty(p);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 정밀 타격 식별 300m · UAV 700m(6-290): Phase_Precision {n}곳을 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// wingman-flare-quiet-1(6-289): 아군 편대 플레어는 무전을 내지 않는다.
+    public static void TuneWingmanFlareQuiet()
+    {
+        const string path = "Assets/ACO_Addon/Prefabs/NPC_Wingman.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_FlareDispenser f in root.GetComponentsInChildren<ACO_FlareDispenser>(true)) { f.RadioCallout = false; n++; }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        int s = 0;
+        foreach (ACO_Wingman w in FindInScene<ACO_Wingman>())
+        {
+            foreach (ACO_FlareDispenser f in w.GetComponentsInChildren<ACO_FlareDispenser>(true))
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(f)) { Revert(f, "RadioCallout"); s++; }
+            }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 아군 편대 플레어 무전 끔(6-289): 편대 프리팹 플레어 장치 {n}개, 씬 편대 {s}기의 덮어쓴 값을 지웠습니다. 씬을 저장하세요.");
+    }
+
+    /// map-vip-marker-1(6-285): 씬의 작전 테이블에 VIP 마커 원본을 넣는다.
+    public static void TuneMapVipMarker()
+    {
+        int n = 0;
+        foreach (ACO_TacticalMap m in FindInScene<ACO_TacticalMap>())
+        {
+            if (ACO_HUDBuilder.EnsureMapVipMarker(m)) { n++; }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 작전 테이블 VIP 마커(6-285): {n}곳에 넣었습니다. Bake · 씬 저장하세요.");
+    }
+
+    /// cic-wingmen-cd-40-1(6-284): CIC 지역 편대 쿨타임 40초(사용자 "윙맨 쿨타임 40초하자").
+    public static void TuneCicWingmenCooldown()
+    {
+        int n = 0;
+        foreach (ACO_SupportManager m in FindInScene<ACO_SupportManager>())
+        {
+            if (!Mathf.Approximately(m.CicWingmenCooldown, 20f)) { continue; }
+            Undo.RecordObject(m, "ACO CIC wingmen cooldown");
+            m.CicWingmenCooldown = 40f;
+            Mark(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] CIC 편대 쿨타임 40초(6-284): 지원 관리자 {n}곳. 씬을 저장하세요.");
+    }
+
+    /// cic-wingmen-area-5km-1(6-283): CIC 지역 편대 구역 5km — 사용자 "3km 너무 짧지 않나" → A안.
+    public static void TuneCicWingmenArea()
+    {
+        int sm = 0;
+        foreach (ACO_SupportManager m in FindInScene<ACO_SupportManager>())
+        {
+            if (!Mathf.Approximately(m.CicWingmenRadius, 3000f)) { continue; }
+            Undo.RecordObject(m, "ACO CIC wingmen area");
+            m.CicWingmenRadius = 5000f;
+            Mark(m);
+            sm++;
+        }
+        const string path = "Assets/ACO_Addon/Prefabs/NPC_Wingman.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_Wingman w in root.GetComponentsInChildren<ACO_Wingman>(true)) { w.AreaOrbitRadius = 2500f; n++; }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        int s = 0;
+        foreach (ACO_Wingman w in FindInScene<ACO_Wingman>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(w)) { Revert(w, "AreaOrbitRadius"); s++; }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] CIC 지역 편대 5km(6-283): 지원 관리자 {sm}곳, 편대 프리팹 {n}기, 씬 편대 {s}기의 덮어쓴 선회 반경을 지웠습니다. 씬을 저장하세요.");
+    }
+
+    /// ecm-20s-1(6-281): ECM 재밍 시간 10 → 20초(사용자 "재밍시간을 20초로하자") — 기체 프리팹 Module_ECM, 특수무장 정의, 씬 덮어쓰기.
+    public static void TuneEcmDuration()
+    {
+        const string path = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        int n = 0;
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_DFUNC_Missile m in root.GetComponentsInChildren<ACO_DFUNC_Missile>(true))
+            {
+                if (!m.EcmMode) { continue; }
+                m.EcmDuration = EcmDuration;
+                n++;
+            }
+            if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        int d = 0;
+        foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/ACO_Addon/SpecialWeapons" }))
+        {
+            string defPath = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject defRoot = PrefabUtility.LoadPrefabContents(defPath);
+            try
+            {
+                ACO_SpecialWeaponDef def = defRoot.GetComponent<ACO_SpecialWeaponDef>();
+                if (def == null || def.Module == null || !def.Module.EcmMode) { continue; }
+                def.Module.EcmDuration = EcmDuration;
+                PrefabUtility.SaveAsPrefabAsset(defRoot, defPath);
+                d++;
+            }
+            finally { PrefabUtility.UnloadPrefabContents(defRoot); }
+        }
+        int s = 0;
+        foreach (ACO_DFUNC_Missile m in FindInScene<ACO_DFUNC_Missile>())
+        {
+            if (m.EcmMode && PrefabUtility.IsPartOfPrefabInstance(m)) { Revert(m, "EcmDuration"); s++; }
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] ECM 재밍 {EcmDuration}초(6-281): 기체 프리팹 모듈 {n}개, 특수무장 정의 {d}개를 바꾸고 씬 모듈 {s}개의 덮어쓴 값을 지웠습니다. 씬을 저장하세요.");
+    }
+
+    /// cic-table-exag-1: CIC 테이블 높이 과장 1.5배(사용자 "테이블 높이과장은 지금의 절반정도로 해줘").
+    public static void TuneCicTableExaggeration()
+    {
+        int n = 0;
+        ACO_InteriorZone zone = Object.FindObjectOfType<ACO_InteriorZone>(true);
+        foreach (ACO_TacticalMap m in FindInScene<ACO_TacticalMap>())
+        {
+            if (zone == null || !zone.Contains(m.transform.position) || !Mathf.Approximately(m.VerticalExaggeration, 3f)) { continue; }
+            Undo.RecordObject(m, "ACO CIC table");
+            m.VerticalExaggeration = 1.5f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] CIC 테이블 높이 과장 1.5배: {n}곳을 바꿨습니다. 씬을 저장하세요.");
     }
 
     /// wingmen-cd-30-1: 아군 편대 쿨타임 30초(사용자 "윙맨호출 쿨타임 30초로해주고").

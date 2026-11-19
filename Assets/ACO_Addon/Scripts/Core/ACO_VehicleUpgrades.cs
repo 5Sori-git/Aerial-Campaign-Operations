@@ -503,6 +503,15 @@ namespace ACO
                 AirVehicle.YawThrustVecMulti = yawTvc;
                 AirVehicle.RollThrustVecMulti = rollTvc;
             }
+            // 뒤로 미끄러질 때(속도 기준 받음각 90° 넘음) 조작 뒤집기 끔(6-295, 사용자 "그냥 기본적으로 뒤집히지 않게 하자"):
+            // SAV는 시작 때 TVC가 0인 축을 −2 · −2.4 · −1.6배로 정해 두어 PSM 중 조작이 반대로 걸렸다. 모든 단계 · 모든 축 1(뒤집지 않음).
+            // 엔진을 켤 때 SAV가 *Start 값으로 되돌리므로 그것도 1로.
+            AirVehicle.SetProgramVariable("ReversingPitchStrengthZero", 1f);
+            AirVehicle.SetProgramVariable("ReversingYawStrengthZero", 1f);
+            AirVehicle.SetProgramVariable("ReversingRollStrengthZero", 1f);
+            AirVehicle.SetProgramVariable("ReversingPitchStrengthZeroStart", 1f);
+            AirVehicle.SetProgramVariable("ReversingYawStrengthZeroStart", 1f);
+            AirVehicle.SetProgramVariable("ReversingRollStrengthZeroStart", 1f);
         }
 
         private void Apply(bool on)

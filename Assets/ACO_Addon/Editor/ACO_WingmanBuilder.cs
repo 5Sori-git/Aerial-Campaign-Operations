@@ -15,7 +15,7 @@ using ACO;
 public static partial class ACO_PrefabBuilder
 {
     public const string WingmanPrefab = "NPC_Wingman";
-    public const int WingmanPool = 8;   // 4편대 — 플레이어 기체 4대가 모두 동시에 부를 수 있게(2026-11-17)
+    public const int WingmanPool = 10;   // 5편대 — 플레이어 기체 4대가 모두 동시에 부르고 CIC 지역 편대(6-275)도 뜰 수 있게(8 → 10, 2026-11-18)
     private const int LayerAirFriendly = 25;
     private static readonly Color WingmanTint = new Color(0.62f, 0.72f, 0.9f);
 
@@ -70,6 +70,7 @@ public static partial class ACO_PrefabBuilder
             flares.TargetHealth = health;
             flares.Flight = flight;
             flares.Friendly = true;
+            flares.RadioCallout = false;   // 아군 플레어 대사는 호위 수송기 목소리 · TRANSPORT 화자라 윙맨은 말하지 않는다(6-289, 사용자 "지금은 윙맨 대사를 빼자")
             flares.FlareSalvos = 6;
             if (flares.FlareParticles == null)
             {

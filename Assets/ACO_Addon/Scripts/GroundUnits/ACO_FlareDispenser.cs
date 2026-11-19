@@ -48,6 +48,8 @@ namespace ACO
         [Range(0f, 1f)] public float GunSmokeChance = 0.5f;
         [Tooltip("아군 유닛(호위 대상). 호위 유닛이 출발할 때 넣는다 — 무전 대사 구분용")]
         public bool Friendly = false;
+        [Tooltip("끄면 뿌려도 무전 대사를 내지 않는다(아군 편대 — 아군 플레어 대사는 수송기 목소리라 6-289)")]
+        public bool RadioCallout = true;
         /// 보스 에이스(AI가 Init에서 넣는다 — 모든 화면). 있으면 일반 적 플레어 무전 대신 에이스의 OnFlare(전용 대사 또는 없음).
         [System.NonSerialized] public ACO_AceBase Ace;
 
@@ -267,7 +269,7 @@ namespace ACO
             StartVisual();
             if (FlareSound && FlareSound.clip) { FlareSound.PlayOneShot(FlareSound.clip); }
             if (Ace != null) { Ace.OnFlare(); }
-            else if (Chatter)
+            else if (Chatter && RadioCallout)
             {
                 int ev = Friendly ? (SmokeMode ? ACO_Chatter.EV_ALLY_SMOKE : ACO_Chatter.EV_ALLY_FLARE) : ACO_Chatter.EV_ENEMY_FLARE;
                 Chatter.ReportNear(ev, transform.position, "");

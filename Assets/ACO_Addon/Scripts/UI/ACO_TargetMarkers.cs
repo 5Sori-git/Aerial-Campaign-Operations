@@ -104,6 +104,15 @@ namespace ACO
         public Transform HomeBase;
         [Tooltip("항모 마커 위 글자(뒤에 거리)")]
         public string HomeLabel = "CVN";
+        [Tooltip("CIC 도구(6-275): 웨이포인트(목적지 마름모 + CIC WP + 거리), CIC 지역 편대 구역 중심(경유점 마름모 + CIC CAP + 거리). Bake가 넣는다")]
+        public ACO_CicConsole Cic;
+        [Tooltip("CIC 고글(6-286) — 쓰고 보는 동안 마커를 고글 카메라 기준으로 그린다. Bake가 넣는다")]
+        public ACO_CicGoggles[] Goggles;
+        public string CicWaypointLabel = "CIC WP";
+        public string CicAreaLabel = "CIC CAP";
+        public string CicUavLabel = "RECON UAV";
+        [Tooltip("CIC 순항미사일 마커 이름(LACM — 대지 순항미사일)")]
+        public string CicLacmLabel = "LACM";
         [Tooltip("이 거리(m)보다 가까우면 그리지 않는다(갑판 위 · 착함 직전에 시야를 가리지 않게)")]
         public float HomeMinDistance = 1500f;
         [Tooltip("마커를 기지 기준점에서 이만큼(m) 위에 그린다(갑판 높이)")]
@@ -413,13 +422,22 @@ namespace ACO
             VRCPlayerApi local = Networking.LocalPlayer;
             if (local == null) { return; }
             VRCPlayerApi.TrackingData head = local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
-            _inInterior = Interior != null && Interior.Contains(head.position);
             UpdateCrosshair(head.position, head.rotation);
             if (Markers == null) { return; }
 
             Vector3 headPos = head.position;
-            Vector3 headFwd = head.rotation * Vector3.forward;
-            Vector3 headUp = head.rotation * Vector3.up;
+            Quaternion headRot = head.rotation;
+            // CIC 고글(6-286): 쓰고 UAV · 조종사 시점이 보이는 동안은 그 카메라가 머리 — 갑판에서 보이는 마커가 고글 화면에 그대로
+            if (Goggles != null)
+            {
+                for (int g = 0; g < Goggles.Length; g++)
+                {
+                    if (Goggles[g] != null && Goggles[g].GetView()) { headPos = Goggles[g].GetViewPosition(); headRot = Goggles[g].GetViewRotation(); break; }
+                }
+            }
+            _inInterior = Interior != null && Interior.Contains(headPos);
+            Vector3 headFwd = headRot * Vector3.forward;
+            Vector3 headUp = headRot * Vector3.up;
 
             if (_inInterior)
             {
@@ -593,6 +611,28 @@ namespace ACO
                         if (w && w.gameObject.activeInHierarchy && !w.IsDead()) { used = DrawSupport(used, w.transform.position, SupportWingmanLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
                     }
                 }
+                // CIC 정찰 UAV(6-275): 아군 테두리 + 이름
+                if (Cic != null && Cic.IsDroneActive() && used < Markers.Length) { used = DrawSupport(used, Cic.GetDronePosition(), CicUavLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                // CIC 순항미사일(6-276): 아군 테두리 + 이름(나는 동안)
+                ACO_CicStrike strike = Cic != null ? Cic.Strike : null;
+                if (strike != null)
+                {
+                    int cn = strike.GetMissileCount();
+                    for (int k = 0; k < cn && used < Markers.Length; k++)
+                    {
+                        if (strike.IsMissileFlying(k)) { used = DrawSupport(used, strike.GetMissilePosition(k), CicLacmLabel, headPos, headUp, baseSize, nearDist, logRange, objectiveMaxSq, minSq); }
+                    }
+                }
+            }
+
+            // CIC 도구(6-275): 웨이포인트 · 지역 편대 구역 — 거리 제한 없이(공역 어디든)
+            if (Cic != null && used < Markers.Length && Cic.IsWaypointActive())
+            {
+                used = DrawPoint(used, Cic.GetWaypoint() + Vector3.up * 30f, KIND_DESTINATION, CicWaypointLabel, ObjectiveScale, headPos, headUp, baseSize);
+            }
+            if (Support != null && used < Markers.Length && Support.GetCicFlight() >= 0)
+            {
+                used = DrawPoint(used, Support.GetCicCenter(), KIND_WAYPOINT, CicAreaLabel, WaypointScale, headPos, headUp, baseSize);
             }
 
             // 호위 항로: 남은 경유점 + 목적지
@@ -884,6 +924,24 @@ namespace ACO
                 used++;
             }
             return used;
+        }
+
+        /// 한 점(마름모 + 이름 + 거리)을 마커 풀 used에 놓는다. 반환: 다음 빈 마커.
+        private int DrawPoint(int used, Vector3 p, int kind, string label, float scale, Vector3 headPos, Vector3 headUp, float baseSize)
+        {
+            Vector3 d = p - headPos;
+            float sq = d.sqrMagnitude;
+            if (sq < 1f) { return used; }
+            float dist = Mathf.Sqrt(sq);
+            Vector3 dir = d / dist;
+            Transform m = Markers[used];
+            if (!_markerOn[used]) { m.gameObject.SetActive(true); _markerOn[used] = true; }
+            m.SetPositionAndRotation(headPos + dir * DisplayDistance, Quaternion.LookRotation(dir, headUp));
+            float size = baseSize * scale;
+            m.localScale = new Vector3(size, size, size);
+            if (_markerKind[used] != kind) { SetMarkerKind(used, kind); }
+            SetTopText(used, label + " " + FormatDistance(dist));
+            return used + 1;
         }
 
         /// 마커 위 글자(TGT/아군 이름/항로) — 바뀔 때만 TMP에 넣는다.

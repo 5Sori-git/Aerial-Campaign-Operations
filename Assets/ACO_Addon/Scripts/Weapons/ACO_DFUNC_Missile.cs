@@ -174,7 +174,7 @@ namespace ACO
         [Tooltip("켜면 트리거로 재밍을 켠다: EcmDuration초 동안 ACO_RadarContacts.EcmRange 안의 적 미사일이 표적을 놓치고, NPC가 락온하지 못하고, 적 대공포가 흔들린다. 슬롯·다이얼·격납고는 무장과 같다")]
         public bool EcmMode = false;
         [Tooltip("재밍 지속 시간(초). 끝난 뒤 SlotReloadTime초 재충전한다")]
-        public float EcmDuration = 10f;
+        public float EcmDuration = 20f;
         [Tooltip("빌드 시 ACO_SceneBaker가 넣는다 — 재밍 상태를 모은다")]
         public ACO_RadarContacts EcmHub;
 

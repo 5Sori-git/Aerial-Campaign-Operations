@@ -5,7 +5,7 @@ using VRC.SDKBase;
 namespace ACO
 {
     /// 시가지 정밀 타격 페이즈(6-270): 도시 도로에 적 지휘 · 통신 차량 EnemyCount대가 민간 차량 CivilianCount대 사이에 섞여 있다(일부는 블록 둘레를 돈다).
-    /// 처음엔 모두 미확인(회색 ?) — 누군가 차량에서 직선 IdentifyDistance(200m) 안으로 지나가면(건물 가림은 따지지 않는다)
+    /// 처음엔 모두 미확인(회색 ?) — 누군가 차량에서 직선 IdentifyDistance(300m — 6-290) 안으로 지나가면(건물 가림은 따지지 않는다)
     /// 그 차량이 식별된다(적 = 빨간 TGT, 민간 = 초록 CIV — 식별된 민간 차량은 락온이 막힌다). 식별은 모두에게 공유되고 계속 유지된다.
     /// 적 차량을 모두 부수면 성공, 민간 차량이 CivilianFailCount대 부서지면 미션 실패. 민간 차량 하나 = 팀 · 파괴한 사람 감점(ACO_CityVehicle.CivilianScore).
     ///
@@ -24,9 +24,13 @@ namespace ACO
         [Tooltip("민간 차량이 이만큼 부서지면 미션 실패")]
         public int CivilianFailCount = 3;
         [Tooltip("식별 — 차량까지 직선 거리(m). 건물에 가려도 식별된다")]
-        public float IdentifyDistance = 200f;
+        public float IdentifyDistance = 300f;   // 200 → 300(6-290, 사용자 "도시 상공을 날아도 마킹이 안 돼")
         [Tooltip("식별 판정 간격(초, 관리자 오너)")]
         public float IdentifyInterval = 0.25f;
+        [Tooltip("CIC 정찰 드론(6-275): 드론 아래 수평 이 반경(m) 안에 DroneIdentifyTime초 머문 차량도 식별된다. Bake가 콘솔을 넣는다")]
+        public ACO_CicConsole Cic;
+        public float DroneIdentifyRadius = 700f;   // 300 → 700(6-290)
+        public float DroneIdentifyTime = 3f;
 
         [Header("대사 (관제 — 비우면 안 나온다)")]
         [Tooltip("Bake가 넣는다")]
@@ -48,6 +52,7 @@ namespace ACO
 
         private int _planSite = -1;
         private float _identNext;
+        private float[] _droneDwell = new float[32];   // 차량 순번마다 드론 아래 머문 시간(오너)
 
         // 모든 화면 — 이번 페이즈 차량 목록과 대사 상태
         private int[] _slots = new int[MAX_VEHICLES];
@@ -90,6 +95,7 @@ namespace ACO
         {
             _stamp = CurrentStamp();
             _ident = 0;
+            for (int i = 0; i < _droneDwell.Length; i++) { _droneDwell[i] = 0f; }
             _site = _planSite;
             _tag = tag;
             _clearHoldUntil = -1f;
@@ -158,6 +164,9 @@ namespace ACO
             VRCPlayerApi.GetPlayers(players);
             float r2 = IdentifyDistance * IdentifyDistance;
             int ident = _ident;
+            bool drone = Cic != null && Cic.IsDroneActive();
+            Vector3 dp = drone ? Cic.GetDronePosition() : Vector3.zero;
+            float dr2 = DroneIdentifyRadius * DroneIdentifyRadius;
             for (int s = 0; s < _slotCount; s++)
             {
                 if ((ident & (1 << s)) != 0) { continue; }
@@ -166,6 +175,15 @@ namespace ACO
                 // 이 화면에 아직 이번 배치가 적용되지 않은 차량(생성기 오너 ≠ 관리자 오너)은 예전 자리에 있다 — 적용된 뒤에 본다
                 if (unit.GetStartMs() != Generator.GetUnitDeployTimeMs(ACO_MissionGenerator.CAT_GROUND, _slots[s])) { continue; }
                 Vector3 car = unit.transform.position;
+                // 드론: 수평 반경 안에 이어서 머문 시간을 센다(벗어나면 처음부터)
+                if (s < _droneDwell.Length)
+                {
+                    float hx = car.x - dp.x;
+                    float hz = car.z - dp.z;
+                    if (drone && hx * hx + hz * hz <= dr2) { _droneDwell[s] += IdentifyInterval; }
+                    else { _droneDwell[s] = 0f; }
+                    if (_droneDwell[s] >= DroneIdentifyTime) { ident |= 1 << s; continue; }
+                }
                 for (int p = 0; p < players.Length; p++)
                 {
                     if (!Utilities.IsValid(players[p])) { continue; }

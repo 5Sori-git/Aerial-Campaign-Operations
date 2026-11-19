@@ -69,6 +69,9 @@ namespace ACO
         public ACO_Rain Rain;
         [Tooltip("관전 카메라 전용 빗방울(카메라 자식, 레이어 18 — Bake가 만든다)")]
         public Renderer RainRenderer;
+        [Tooltip("카메라 기준 안개(6-275): 내가 함내 격실 안에서 이 카메라 화면(관전 · CIC 고글)을 보는 동안 구름 속 · 층 안개를 카메라 자리로 잰다. Bake가 넣는다")]
+        public ACO_CloudField Clouds;
+        public ACO_InteriorZone Interior;
         [Tooltip("Bake: 미션 생성기 해수면·지면 레이어")]
         public float SeaLevel = 0f;
         public LayerMask GroundLayers = 2049;
@@ -227,7 +230,9 @@ namespace ACO
             {
                 RenderTexture next = _fhd ? TextureHD : TextureFHD;
                 if (!next) { return ACO_UiSound.KIND_DENY; }
-                SetResolution(!_fhd);
+                // 고글이 카메라를 빌려 쓰는 중이면 고르기만 기억하고 렌더 텍스처는 그대로(돌려받을 때 적용 — 디버깅 2026-11-18)
+                if (_ext) { _fhd = !_fhd; }
+                else { SetResolution(!_fhd); }
                 UpdateTexts();
                 return ACO_UiSound.KIND_CLICK;
             }
@@ -262,17 +267,17 @@ namespace ACO
             _on = on;
             if (!on)
             {
-                if (Cam) { Cam.enabled = false; }
+                if (Cam && !_ext) { Cam.enabled = false; }   // 고글이 빌려 쓰는 중이면 카메라는 그대로(6-275)
                 if (Screen && OffMaterial) { Screen.sharedMaterial = OffMaterial; }
                 SetOverlay(false);
-                if (RainRenderer) { RainRenderer.enabled = false; }
+                if (RainRenderer && !_ext) { RainRenderer.enabled = false; }
             }
             else
             {
                 _subject = -1;
                 _hasSub = false;
             }
-            if (SkyFogDome) { SkyFogDome.gameObject.SetActive(on); }
+            if (SkyFogDome) { SkyFogDome.gameObject.SetActive(on || _ext); }
             UpdateTexts();
         }
 
@@ -305,7 +310,8 @@ namespace ACO
 
         public override void PostLateUpdate()
         {
-            if (!_on || !Cam) { return; }
+            if (_ext) { ExternalFrame(); return; }
+            if (!_on || !Cam) { SetFogViewer(false); return; }
             float dt = Mathf.Max(Time.deltaTime, 0.0001f);
             UpdateSubject();
             bool live = _subject >= 0;
@@ -321,6 +327,7 @@ namespace ACO
             if (!live)
             {
                 if (RainRenderer && RainRenderer.enabled) { RainRenderer.enabled = false; }
+                SetFogViewer(false);
                 return;
             }
 
@@ -330,6 +337,88 @@ namespace ACO
             Direct();
             Shoot(dt);
             UpdateRain(dt);
+            SetFogViewer(true);
+        }
+
+        // ───────────── CIC 고글이 빌려 쓰기 (6-275) ─────────────
+        // 고글(ACO_CicGoggles)을 쓰는 동안 이 카메라를 고글 자리 · 방향으로 옮겨 고글 렌더 텍스처에 그린다(감독 · 스크린은 쉰다).
+        // 하늘 안개 돔 · 체적 구름 · 비 · 컬링을 그대로 쓰려고 카메라를 따로 두지 않는다. 다 쓰면 원래 상태(켜짐/꺼짐, 해상도)로 돌린다.
+
+        private bool _ext;
+        private bool _fogViewer;
+        [Tooltip("고글이 빌려 쓰는 동안 더 그릴 레이어(6-286 — 표적 마커 UI 레이어 5). 돌려받으면 원래 값")]
+        public LayerMask ExternalExtraLayers = 1 << 5;
+        private int _savedMask = -1;
+
+        public bool IsExternal() { return _ext; }
+
+        public void ExternalBegin(RenderTexture rt)
+        {
+            if (!Cam) { return; }
+            _ext = true;
+            Cam.targetTexture = rt;
+            Cam.enabled = true;
+            if (_savedMask == -1) { _savedMask = Cam.cullingMask; }
+            Cam.cullingMask = _savedMask | ExternalExtraLayers.value;
+            SetOverlay(false);
+            if (SkyFogDome) { SkyFogDome.gameObject.SetActive(true); }
+            _rainHasLast = false;
+        }
+
+        /// 고글이 매 프레임(PostLateUpdate) 부른다. live = 보여 줄 대상이 있다(없으면 카메라를 쉰다).
+        public void ExternalPose(bool live, Vector3 pos, Quaternion rot, float fov)
+        {
+            if (!_ext || !Cam) { return; }
+            if (Cam.enabled != live) { Cam.enabled = live; }
+            if (!live) { return; }
+            Cam.transform.SetPositionAndRotation(pos, rot);
+            Cam.fieldOfView = fov;
+        }
+
+        public void ExternalEnd()
+        {
+            if (!_ext) { return; }
+            _ext = false;
+            if (Cam && _savedMask != -1) { Cam.cullingMask = _savedMask; _savedMask = -1; }
+            // 렌더 텍스처를 관전 스크린 것으로 되돌린다(고른 것이 없으면 있는 쪽, 둘 다 없으면 카메라를 끈다)
+            bool fhd = _fhd && TextureFHD != null;
+            if ((fhd ? TextureFHD : TextureHD) != null) { SetResolution(fhd); }
+            else if (Cam) { Cam.targetTexture = null; Cam.enabled = false; }   // 텍스처 없이 켜 두면 본 화면에 그린다
+            if (!_on)
+            {
+                if (Cam) { Cam.enabled = false; }
+                if (SkyFogDome) { SkyFogDome.gameObject.SetActive(false); }
+                if (RainRenderer) { RainRenderer.enabled = false; }
+                SetFogViewer(false);
+            }
+            _rainHasLast = false;
+        }
+
+        private void ExternalFrame()
+        {
+            if (!Cam || !Cam.enabled)
+            {
+                if (RainRenderer && RainRenderer.enabled) { RainRenderer.enabled = false; }
+                SetFogViewer(false);
+                return;
+            }
+            UpdateRain(Mathf.Max(Time.deltaTime, 0.0001f));
+            SetFogViewer(true);
+        }
+
+        /// 카메라 기준 안개: 카메라가 그리는 중이고 내 머리가 함내 격실 안이면 안개를 카메라 자리로 잰다(물속 안개는 빼고 — ACO_CloudField).
+        private void SetFogViewer(bool camLive)
+        {
+            if (!Clouds) { return; }
+            bool want = false;
+            if (camLive && Cam && Interior)
+            {
+                VRCPlayerApi me = Networking.LocalPlayer;
+                want = Utilities.IsValid(me) && Interior.Contains(me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position);
+            }
+            if (!want && !_fogViewer) { return; }
+            _fogViewer = want;
+            Clouds.SetFogViewer(want, want ? Cam.transform.position : Vector3.zero);
         }
 
         // 관전 카메라의 비

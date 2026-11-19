@@ -412,6 +412,20 @@ namespace ACO
             Enqueue(who, color, text, clip, maxDelay, channel, true);
         }
 
+        /// 잡담 급으로 바로 넣는다(페이즈 · 보스 대사 뒤에 나오고, maxDelay보다 밀리면 버린다) — CIC 도구 무전(6-282).
+        public void SayLow(string who, Color color, string text, AudioClip clip, float maxDelay, int channel)
+        {
+            Start();
+            if (string.IsNullOrEmpty(text) && clip == null) { return; }
+            Enqueue(who, color, text, clip, maxDelay, channel, false);
+        }
+
+        /// 관제(PhaseSpeaker) 이름 · 색 · 채널로 잡담 급 대사를 넣는다(6-282).
+        public void SayControlLow(string text, AudioClip clip, float maxDelay)
+        {
+            SayLow(SpeakerName(PhaseSpeaker), SpeakerColor(PhaseSpeaker), text, clip, maxDelay, SpeakerChannel(PhaseSpeaker));
+        }
+
         /// 에이스 고유 대사(등장·기술·격추 — clip이 없으면 자막만). 잡담 급: 페이즈 대사 뒤에 나오고, AceLineKeep초(또는 maxDelay — 짧은 쪽)보다 밀리면 버린다.
         public void SayAce(string who, Color color, string text, AudioClip clip, float maxDelay, int channel)
         {

@@ -140,7 +140,8 @@ public static class ACO_LocalizationSetup
         {
             if (mb == null) { continue; }
             System.Type ty = mb.GetType();
-            bool radio = ty == typeof(ACO_Chatter) || typeof(ACO_PhaseModule).IsAssignableFrom(ty) || typeof(ACO_AceBase).IsAssignableFrom(ty) || ty == typeof(ACO_SupportManager);
+            bool radio = ty == typeof(ACO_Chatter) || typeof(ACO_PhaseModule).IsAssignableFrom(ty) || typeof(ACO_AceBase).IsAssignableFrom(ty) || ty == typeof(ACO_SupportManager)
+                || ty == typeof(ACO_CicConsole) || ty == typeof(ACO_CicStrike);   // CIC 도구 무전(6-282)
             if (!radio) { continue; }
             foreach (System.Reflection.FieldInfo f in ty.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {

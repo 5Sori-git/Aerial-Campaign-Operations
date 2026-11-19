@@ -344,6 +344,9 @@ namespace ACO
                 _priorityResolved[i] = true;
                 ACO_EscortUnit escort = g.GetComponentInParent<ACO_EscortUnit>();
                 _targetPriority[i] = escort != null && escort.PriorityForSites ? Mathf.Max(escort.AttackPriority, 0f) : 0f;
+                // CIC 순항미사일(6-276): 미끼 — 조종사보다 먼저 노린다
+                ACO_CicCruiseMissile cruise = g.GetComponentInParent<ACO_CicCruiseMissile>();
+                if (cruise != null) { _targetPriority[i] = Mathf.Max(cruise.DecoyPriority, 0f); }
             }
             return _targetPriority[i];
         }

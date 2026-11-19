@@ -36,7 +36,7 @@ public static partial class ACO_HUDBuilder
     private static readonly string[,] TutorialTexts =
     {
         { "tut.button", "?  튜토리얼", "?  TUTORIAL", "?  チュートリアル" },
-        { "tut.p1.title", "1 / 8   개요", "1 / 8   Overview", "1 / 8   概要" },
+        { "tut.p1.title", "1 / 9   개요", "1 / 9   Overview", "1 / 9   概要" },
         { "tut.p1.name", "AERIAL CAMPAIGN OPERATIONS", "AERIAL CAMPAIGN OPERATIONS", "AERIAL CAMPAIGN OPERATIONS" },
         { "tut.p1.tagline", "최대 4명이 함께하는 협동 공중전", "Co-op air combat for up to 4 pilots", "最大4人で挑む協力空戦" },
         { "tut.p1.c1.title", "매번 새로운 전장", "Fresh Battlefields", "毎回新しい戦場" },
@@ -48,7 +48,7 @@ public static partial class ACO_HUDBuilder
         { "tut.p1.c4.title", "크레딧과 성장", "Credits & Upgrades", "クレジットと強化" },
         { "tut.p1.c4.body", "보상으로 다양한 특수무장을 해금하고 기체와 무장을 강화합니다. 출격 중에 부를 수 있는 지원도 있습니다", "Spend rewards to unlock special weapons and upgrade your aircraft and weapons. You can also call in support mid-sortie", "報酬で様々な特殊兵装を解放し、機体と兵装を強化します。出撃中に呼べる支援もあります" },
 
-        { "tut.p2.title", "2 / 8   출격 방법", "2 / 8   How to Sortie", "2 / 8   出撃の手順" },
+        { "tut.p2.title", "2 / 9   출격 방법", "2 / 9   How to Sortie", "2 / 9   出撃の手順" },
         { "tut.p2.s1.label", "참가", "Join", "参加" },
         { "tut.p2.s1.text", "정면 브리핑 콘솔에서 빈 칸(JOIN)을 누르세요", "Tap an open slot (JOIN) on the briefing console in front", "正面のブリーフィングコンソールで空き枠(JOIN)を押します" },
         { "tut.p2.s2.label", "무장", "Arm", "兵装" },
@@ -60,7 +60,7 @@ public static partial class ACO_HUDBuilder
         { "tut.p2.tip", "작전 콘솔 맨 위에 지금 할 일이 표시됩니다", "The top of the operations console shows what to do next", "作戦コンソールの一番上に今やることが表示されます" },
         { "tut.p2.tip2", "격추되면 로드아웃 패널의 LAUNCH로 다시 출격합니다", "If you are shot down, press LAUNCH on the LOADOUT panel to sortie again", "撃墜されたらロードアウトパネルのLAUNCHで再出撃します" },
 
-        { "tut.p3.title", "3 / 8   비행 중", "3 / 8   In Flight", "3 / 8   飛行中" },
+        { "tut.p3.title", "3 / 9   비행 중", "3 / 9   In Flight", "3 / 9   飛行中" },
         { "tut.p3.desktop", "데스크톱", "Desktop", "デスクトップ" },
         { "tut.p3.d1", "스로틀  <color=#F0FFF4><b>Shift / Ctrl</b></color>", "Throttle  <color=#F0FFF4><b>Shift / Ctrl</b></color>", "スロットル  <color=#F0FFF4><b>Shift / Ctrl</b></color>" },
         { "tut.p3.d2", "피치·롤  <color=#F0FFF4><b>W A S D</b></color>    요  <color=#F0FFF4><b>Q E</b></color>", "Pitch/Roll  <color=#F0FFF4><b>W A S D</b></color>    Yaw  <color=#F0FFF4><b>Q E</b></color>", "ピッチ・ロール  <color=#F0FFF4><b>W A S D</b></color>    ヨー  <color=#F0FFF4><b>Q E</b></color>" },
@@ -82,13 +82,25 @@ public static partial class ACO_HUDBuilder
         { "tut.p3.n3", "캐터펄트: 노란 옷 유도요원의 신호를 따라 캐터펄트에 오르고, 사출장교가 신호하면 스로틀을 끝까지(애프터버너) 올리세요. 점검이 끝나면 사출됩니다(설정에서 갑판 요원을 끄면 풀스로틀 2초)", "Catapult: follow the yellow-shirt director onto the catapult. When the shooter signals, push the throttle all the way (afterburner). You launch after the final check (with deck crew off in Settings: full throttle for 2 s)", "カタパルト：黄色い服の誘導員の合図でカタパルトに乗り、射出士官の合図でスロットルを最大(アフターバーナー)に。点検後に射出されます(設定で甲板要員をオフにすると全開2秒)" },
         { "tut.p3.n4", "착함하지 않아도 미션이 끝나면 브리핑실로 돌아옵니다", "No need to land: when the mission ends, you return to the briefing room", "着艦しなくても、ミッションが終わるとブリーフィングルームに戻ります" },
 
-        { "tut.p4.title", "4 / 8   크레딧과 강화", "4 / 8   Credits and Upgrades", "4 / 8   クレジットと強化" },
+        { "tut.p4.title", "4 / 9   크레딧과 강화", "4 / 9   Credits and Upgrades", "4 / 9   クレジットと強化" },
         { "tut.p4.r1", "미션이 끝나면 보상을 받습니다: 팀 점수의 절반 + 내 격추 점수", "Rewards are paid when a mission ends: half the team score + your kill score", "ミッション終了時に報酬を獲得：チームスコアの半分 + 自分の撃墜スコア" },
         { "tut.p4.r2", "격추되거나 함선 밖에서 조종석을 내리면 보상이 줄어듭니다", "Getting shot down or leaving the cockpit away from the ship reduces your reward", "撃墜されたり、艦の外で降機すると報酬が減ります" },
         { "tut.p4.r3", "로드아웃 패널에서 특수무장 해금, 기체와 무장 강화, 장비(미션 1회 적용), 지원 호출권(쓸 때까지 보관)", "On the LOADOUT panel: unlock special weapons, upgrade aircraft and weapons, buy equipment (lasts one mission) and support tickets (kept until used)", "ロードアウトパネルで特殊兵装の解放、機体と兵装の強化、装備(ミッション1回分)、支援要請券(使うまで保管)" },
         { "tut.p4.r4", "진행은 VRChat 계정에 저장되어 다음에도 이어집니다", "Progress is saved to your VRChat account and carries over", "進行状況はVRChatアカウントに保存され、次回も引き継がれます" },
 
-        { "tut.pc.title", "5 / 8   기체 꾸미기", "5 / 8   Customize Your Aircraft", "5 / 8   機体のカスタマイズ" },
+        { "tut.pk.title", "5 / 9   CIC 작전 지원", "5 / 9   CIC Operations Support", "5 / 9   CIC作戦支援" },
+        { "tut.pk.where", "CIC · 작전 테이블", "CIC · Operations table", "CIC · 作戦テーブル" },
+        { "tut.pk.i1.title", "좌표 찍기", "Mark Coordinates", "座標の指定" },
+        { "tut.pk.i1.body", "작전 중 테이블 지도를 가리키고 트리거(클릭)로 찍으면 빛기둥이 섭니다. 테이블 옆 패널에서 도구를 고릅니다", "During an operation, point at the table map and pull the trigger (click) to place a light beam. Then pick a tool on the panel beside the table", "作戦中にテーブルの地図を指してトリガー(クリック)で指定すると光の柱が立ちます。テーブル横のパネルでツールを選びます" },
+        { "tut.pk.i2.title", "웨이포인트 · 정찰 UAV", "Waypoint · Recon UAV", "ウェイポイント · 偵察UAV" },
+        { "tut.pk.i2.body", "웨이포인트는 모든 조종사 HUD에 30초 표시됩니다. 정찰 UAV는 찍은 좌표 상공을 선회하며 정찰합니다(정밀 타격 임무의 타겟도 식별 가능합니다)", "A waypoint shows on every pilot's HUD for 30 seconds. The recon UAV circles over the marked coordinates to scout them (it can also identify Urban Strike targets)", "ウェイポイントは全パイロットのHUDに30秒表示されます。偵察UAVは指定した座標の上空を旋回して偵察します(精密攻撃任務の目標も識別できます)" },
+        { "tut.pk.i3.title", "아군 편대 · 순항미사일", "Wingmen · Cruise Missiles", "僚機編隊 · 巡航ミサイル" },
+        { "tut.pk.i3.body", "편대는 AI 전투기 2기가 60초, 순항미사일은 4발 일제 발사로 적 방공망에 격추될 수 있습니다", "Wingmen send 2 AI fighters for 60 seconds. Cruise missiles fire a salvo of 4 that enemy air defenses can shoot down", "僚機はAI戦闘機2機が60秒、巡航ミサイルは4発の一斉発射で、敵の防空網に撃墜されることがあります" },
+        { "tut.pk.i4.title", "1인칭 고글", "First-Person Goggles", "一人称ゴーグル" },
+        { "tut.pk.i4.body", "책상 위 고글을 얼굴에 대면(데스크톱은 집기) UAV나 조종사 시점으로 봅니다. UAV 시점에서는 트리거로 바라보는 지점의 좌표를 찍을 수 있습니다", "Bring the goggles on the desk to your face (desktop: pick them up) to watch from the UAV or a pilot. In the UAV view, pull the trigger to mark the coordinates you are looking at", "机の上のゴーグルを顔に近づけると(デスクトップは持つだけ)UAVやパイロットの視点で見られます。UAV視点ではトリガーで見ている地点の座標を指定できます" },
+        { "tut.pk.note", "비행하지 않고 CIC 도구만 써도 보상의 20%를 받습니다. 도구의 쿨타임은 모두가 함께 씁니다", "Players who only use the CIC tools without flying still get 20% of the reward. Tool cooldowns are shared by everyone", "出撃せずCICツールだけを使っても報酬の20%を受け取れます。ツールのクールタイムは全員共通です" },
+
+        { "tut.pc.title", "6 / 9   기체 꾸미기", "6 / 9   Customize Your Aircraft", "6 / 9   機体のカスタマイズ" },
         { "tut.pc.where", "격납고 · 꾸미기 코너", "Hangar · Customization corner", "格納庫 · カスタマイズコーナー" },
         { "tut.pc.i1.title", "콜사인 · 헐넘버", "Callsign · Hull Number", "コールサイン · 機体番号" },
         { "tut.pc.i1.body", "격납고 TAC 네임 패널에서 정합니다. 콜사인(영문 · 숫자 12자)은 아군 마커와 기체 옆면에, 헐넘버(6자)는 기수와 플랩에 표시됩니다", "Set them on the TAC NAME panel in the hangar. Your callsign (12 letters or digits) shows on friendly markers and the fuselage, the hull number (6 characters) on the nose and flaps", "格納庫のTACネームパネルで設定します。コールサイン(英数字12文字)は味方マーカーと機体側面に、機体番号(6文字)は機首とフラップに表示されます" },
@@ -100,7 +112,7 @@ public static partial class ACO_HUDBuilder
         { "tut.pc.i4.body", "한 미션에서 쓰러뜨린 수의 최고 기록이 기체에 마크로 표시됩니다(자동)", "Your best kill count in a single mission appears on your aircraft as marks (automatic)", "1回のミッションで倒した数の最高記録が機体にマークで表示されます(自動)" },
         { "tut.pc.note", "꾸민 내용은 VRChat 계정에 저장되어 내가 탄 기체에 적용됩니다. 다른 사람 데칼은 HIDE OTHERS로 숨길 수 있습니다", "Your customization is saved to your VRChat account and applied to whichever jet you fly. Hide other pilots' decals with HIDE OTHERS", "カスタマイズはVRChatアカウントに保存され、搭乗した機体に適用されます。他の人のデカールはHIDE OTHERSで非表示にできます" },
 
-        { "tut.pf.title", "6 / 8   자유 비행", "6 / 8   Free Flight", "6 / 8   フリーフライト" },
+        { "tut.pf.title", "7 / 9   자유 비행", "7 / 9   Free Flight", "7 / 9   フリーフライト" },
         { "tut.pf.s1.label", "켜기", "Turn On", "オン" },
         { "tut.pf.s1.text", "작전 콘솔의 FREE FLIGHT 버튼으로 켭니다. 인스턴스 주인만 바꿀 수 있고, 버튼 아래에 바꿀 수 있는 사람이 표시됩니다", "Turn it on with the FREE FLIGHT button on the operations console. Only the instance owner can switch it, and their name is shown under the button", "作戦コンソールのFREE FLIGHTボタンでオンにします。切り替えられるのはインスタンスのオーナーだけで、ボタンの下に名前が表示されます" },
         { "tut.pf.s2.label", "타기", "Board", "搭乗" },
@@ -112,7 +124,7 @@ public static partial class ACO_HUDBuilder
         { "tut.pf.tip", "자유 비행 중에는 보상이 없습니다. 지형 새로 만들기(NEW TERRAIN)는 됩니다", "Free flight gives no rewards. You can still generate new terrain (NEW TERRAIN)", "フリーフライト中は報酬がありません。地形の再生成(NEW TERRAIN)はできます" },
         { "tut.pf.tip2", "켜고 끄는 데 10초 대기 시간이 있습니다", "There is a 10-second cooldown between switching on and off", "オン・オフの切り替えには10秒の待ち時間があります" },
 
-        { "tut.pb.title", "7 / 8   BGM", "7 / 8   BGM", "7 / 8   BGM" },
+        { "tut.pb.title", "8 / 9   BGM", "8 / 9   BGM", "8 / 9   BGM" },
         { "tut.pb.where1", "브리핑실 · BGM 패널", "Briefing · BGM panel", "ブリーフィング · BGMパネル" },
         { "tut.pb.where2", "선원실 · 영상 플레이어", "Crew quarters · Video player", "船員室 · 動画プレイヤー" },
         { "tut.pb.i1.title", "상황별 BGM", "Dynamic BGM", "ダイナミックBGM" },
@@ -125,9 +137,9 @@ public static partial class ACO_HUDBuilder
         { "tut.pb.i4.body", "TV에 영상 주소를 넣어 다 같이 보고 들을 수 있습니다(글로벌). 아래 셋톱박스 버튼으로 NEAR(선원실 안에서만) · GLOBAL(출격 중에도 어디서나)을 고릅니다(로컬 설정)", "Paste a video link into the TV to watch and listen together (global). The set-top box button below switches between NEAR (crew quarters only) and GLOBAL (everywhere, even in flight) — a local setting", "TVに動画のURLを入れて一緒に視聴できます(グローバル)。下のセットトップボックスのボタンでNEAR(船員室の中だけ)・GLOBAL(出撃中もどこでも)を切り替えます(ローカル設定)" },
         { "tut.pb.note", "영상을 GLOBAL로 들을 때는 DYNAMIC BGM을 꺼 두면 소리가 겹치지 않습니다", "When listening to the video GLOBAL, turn DYNAMIC BGM off so the two don't overlap", "動画をGLOBALで聴くときは、DYNAMIC BGMをオフにすると音が重なりません" },
 
-        { "tut.p5.title", "8 / 8   함내 지도", "8 / 8   Ship Map", "8 / 8   艦内マップ" },
+        { "tut.p5.title", "9 / 9   함내 지도", "9 / 9   Ship Map", "9 / 9   艦内マップ" },
         { "tut.p5.briefing", "브리핑실 · 지금 위치", "Briefing · You are here", "ブリーフィング · 現在地" },
-        { "tut.p5.cic", "CIC · 관전 화면", "CIC · Spectator screens", "CIC · 観戦画面" },
+        { "tut.p5.cic", "CIC · 작전 테이블 · 관전", "CIC · Ops table · Spectate", "CIC · 作戦テーブル · 観戦" },
         { "tut.p5.corridor", "복도 · 하이스코어", "Corridor · High scores", "廊下 · ハイスコア" },
         { "tut.p5.berth", "선원실 · 설정", "Crew quarters · Settings", "船員室 · 設定" },
         { "tut.p5.hangar", "격납고 · 커스터마이징", "Hangar · Customization", "格納庫 · カスタマイズ" },
@@ -404,10 +416,13 @@ public static partial class ACO_HUDBuilder
         canvas.localScale = Vector3.one * TutScale;
         canvas.GetComponent<Canvas>().sortingOrder = 2;   // 판(0)과 튜토리얼 버튼(1) 위에 그린다
         Image frame = MakeUiBox(canvas, "Frame", Vector2.zero, new Vector2(TutW + 8f, TutH + 8f), new Color(0.18f, 0.42f, 0.27f, 1f));
+        // 창 전체가 클릭을 받아 막는다(6-291): 예전엔 닫기 · 이전 · 다음 버튼만 받아, 나머지 자리를 누르면 뒤 작전 콘솔 버튼이 눌렸다
+        // (VRChat UI는 겹친 캔버스마다 따로 찾는다 — 앞 창에서 잡힌 게 없으면 뒤 캔버스 버튼이 잡힌다)
+        frame.raycastTarget = true;
         frame.transform.SetAsFirstSibling();
 
-        // 쪽 순서(6-200 · 6-220): 개요 · 출격 방법 · 비행 중 · 크레딧과 강화 · 기체 꾸미기 · 자유 비행 · BGM · 함내 지도(참고용이라 맨 끝)
-        string[] titleKeys = { "tut.p1.title", "tut.p2.title", "tut.p3.title", "tut.p4.title", "tut.pc.title", "tut.pf.title", "tut.pb.title", "tut.p5.title" };
+        // 쪽 순서(6-200 · 6-220 · 6-279): 개요 · 출격 방법 · 비행 중 · 크레딧과 강화 · CIC 작전 지원 · 기체 꾸미기 · 자유 비행 · BGM · 함내 지도(참고용이라 맨 끝)
+        string[] titleKeys = { "tut.p1.title", "tut.p2.title", "tut.p3.title", "tut.p4.title", "tut.pk.title", "tut.pc.title", "tut.pf.title", "tut.pb.title", "tut.p5.title" };
         var pages = new GameObject[titleKeys.Length];
         for (int i = 0; i < pages.Length; i++)
         {
@@ -421,10 +436,11 @@ public static partial class ACO_HUDBuilder
         BuildTutPage2((RectTransform)pages[1].transform, font);
         BuildTutPage3((RectTransform)pages[2].transform, font);
         BuildTutPage4((RectTransform)pages[3].transform, font);
-        BuildTutPageCustom((RectTransform)pages[4].transform, font);
-        BuildTutPageFree((RectTransform)pages[5].transform, font);
-        BuildTutPageBgm((RectTransform)pages[6].transform, font);
-        BuildTutPage5((RectTransform)pages[7].transform, font);
+        BuildTutPageCic((RectTransform)pages[4].transform, font);
+        BuildTutPageCustom((RectTransform)pages[5].transform, font);
+        BuildTutPageFree((RectTransform)pages[6].transform, font);
+        BuildTutPageBgm((RectTransform)pages[7].transform, font);
+        BuildTutPage5((RectTransform)pages[8].transform, font);
         for (int i = 1; i < pages.Length; i++) { pages[i].SetActive(false); }
 
         // 아래 띠: X · 페이지 점 · < >
@@ -577,27 +593,33 @@ public static partial class ACO_HUDBuilder
         }
     }
 
-    // 5 기체 꾸미기(사용자 요청): 왼쪽 격납고 꾸미기 코너 사진(tut_custom.png) + 아래 안내, 오른쪽 항목 4개(굵은 이름 + 설명)
-    private static void BuildTutPageCustom(RectTransform p, TMP_FontAsset font)
+    // 5 CIC 작전 지원(6-279): 기체 꾸미기 쪽과 같은 짜임 — 왼쪽 CIC 작전 테이블 · 도구 패널 사진(tut_cicops.png) + 아래 안내, 오른쪽 항목 4개
+    private static void BuildTutPageCic(RectTransform p, TMP_FontAsset font) { BuildTutPagePhotoItems(p, font, "tut.pk", "cicops"); }
+
+    // 6 기체 꾸미기(사용자 요청): 왼쪽 격납고 꾸미기 코너 사진(tut_custom.png) + 아래 안내, 오른쪽 항목 4개(굵은 이름 + 설명)
+    private static void BuildTutPageCustom(RectTransform p, TMP_FontAsset font) { BuildTutPagePhotoItems(p, font, "tut.pc", "custom"); }
+
+    /// 사진 하나 + 위치 이름표 + 아래 안내, 오른쪽 항목 4개(키: {prefix}.where · .note · .i1~4.title/body).
+    private static void BuildTutPagePhotoItems(RectTransform p, TMP_FontAsset font, string prefix, string photo)
     {
         Vector2 photoPos = new Vector2(-385f, 150f);
         Vector2 photoSize = new Vector2(690f, 388f);
-        MakeUiBox(p, "Frame_custom", photoPos, photoSize + new Vector2(6f, 6f), new Color(0.45f, 1f, 0.6f, 0.95f));
-        TutPhoto(p, "Photo_custom", "custom", photoPos, photoSize);
+        MakeUiBox(p, $"Frame_{photo}", photoPos, photoSize + new Vector2(6f, 6f), new Color(0.45f, 1f, 0.6f, 0.95f));
+        TutPhoto(p, $"Photo_{photo}", photo, photoPos, photoSize);
         Vector2 tag = photoPos + new Vector2(0f, -photoSize.y * 0.5f + 24f);
-        MakeUiBox(p, "TagPlate_custom", tag, new Vector2(photoSize.x, 48f), new Color(0f, 0f, 0f, 0.72f));
-        TutText(p, "tut.pc.where", tag + new Vector2(6f, 0f), new Vector2(photoSize.x - 24f, 48f), 28f, font, new Color(0.94f, 1f, 0.96f, 1f), TextAlignmentOptions.Left).fontStyle = FontStyles.Bold;
-        TutText(p, "tut.pc.note", new Vector2(-385f, -190f), new Vector2(690f, 200f), 30f, font, TutDim, TextAlignmentOptions.TopLeft, true);
+        MakeUiBox(p, $"TagPlate_{photo}", tag, new Vector2(photoSize.x, 48f), new Color(0f, 0f, 0f, 0.72f));
+        TutText(p, $"{prefix}.where", tag + new Vector2(6f, 0f), new Vector2(photoSize.x - 24f, 48f), 28f, font, new Color(0.94f, 1f, 0.96f, 1f), TextAlignmentOptions.Left).fontStyle = FontStyles.Bold;
+        TutText(p, $"{prefix}.note", new Vector2(-385f, -190f), new Vector2(690f, 200f), 30f, font, TutDim, TextAlignmentOptions.TopLeft, true);
         for (int i = 0; i < 4; i++)
         {
             float y = 335f - i * 178f;
             MakeUiBox(p, $"ItemLine{i + 1}", new Vector2(398f, y + 30f), new Vector2(720f, 3f), TutLine);
-            TutText(p, $"tut.pc.i{i + 1}.title", new Vector2(398f, y), new Vector2(720f, 50f), 36f, font, TutBright, TextAlignmentOptions.Left).fontStyle = FontStyles.Bold;
-            TutText(p, $"tut.pc.i{i + 1}.body", new Vector2(398f, y - 82f), new Vector2(720f, 112f), 28f, font, TutBody, TextAlignmentOptions.TopLeft, true);
+            TutText(p, $"{prefix}.i{i + 1}.title", new Vector2(398f, y), new Vector2(720f, 50f), 36f, font, TutBright, TextAlignmentOptions.Left).fontStyle = FontStyles.Bold;
+            TutText(p, $"{prefix}.i{i + 1}.body", new Vector2(398f, y - 82f), new Vector2(720f, 112f), 28f, font, TutBody, TextAlignmentOptions.TopLeft, true);
         }
     }
 
-    // 6 자유 비행: 2쪽(출격 방법)처럼 번호 단계 4개 + 아래 안내 두 줄. 단계 설명이 두 줄까지 들어가게 줄바꿈
+    // 7 자유 비행: 2쪽(출격 방법)처럼 번호 단계 4개 + 아래 안내 두 줄. 단계 설명이 두 줄까지 들어가게 줄바꿈
     private static void BuildTutPageFree(RectTransform p, TMP_FontAsset font)
     {
         for (int i = 0; i < 4; i++)
@@ -612,7 +634,7 @@ public static partial class ACO_HUDBuilder
         TutText(p, "tut.pf.tip2", new Vector2(0f, -295f), new Vector2(1520f, 56f), 34f, font, TutDim, TextAlignmentOptions.Left);
     }
 
-    // 7 BGM(6-220): 왼쪽 사진 둘(브리핑실 BGM 패널 tut_bgm.png · 선원실 TV와 셋톱박스 tut_video.png) + 아래 안내, 오른쪽 항목 4개(5쪽과 같은 짜임)
+    // 8 BGM(6-220): 왼쪽 사진 둘(브리핑실 BGM 패널 tut_bgm.png · 선원실 TV와 셋톱박스 tut_video.png) + 아래 안내, 오른쪽 항목 4개(5쪽과 같은 짜임)
     private static void BuildTutPageBgm(RectTransform p, TMP_FontAsset font)
     {
         Vector2 size = new Vector2(338f, 254f);
@@ -636,7 +658,7 @@ public static partial class ACO_HUDBuilder
         }
     }
 
-    // 8 함내 지도(예전 5쪽 — 글자 키는 tut.p5.* 그대로): 가운데 위에서 본 도면(tut_plan.png — 월드 X 오른쪽, Z 위) + 위아래 방 사진 6장, 도면의 그 자리에서 사진까지 선으로 잇는다.
+    // 9 함내 지도(예전 5쪽 — 글자 키는 tut.p5.* 그대로): 가운데 위에서 본 도면(tut_plan.png — 월드 X 오른쪽, Z 위) + 위아래 방 사진 6장, 도면의 그 자리에서 사진까지 선으로 잇는다.
     // 위 줄 = 도면 위쪽(복도 쪽) 시설, 아래 줄 = 아래쪽 시설 — 선이 엇갈리지 않게 왼쪽부터 같은 순서로 둔다.
     // 도면 범위·자리는 지금 함내 배치 기준(월드 좌표) — 배치를 옮기면 이 값과 촬영 범위·카메라 자리를 함께 고친다.
     private const float PlanCenterX = 10.5f;
@@ -727,7 +749,7 @@ public static partial class ACO_HUDBuilder
     {
         foreach (string id in TutorialMapPhotos) { if (!File.Exists(TutorialPhotoPath(id))) { return false; } }
         return File.Exists(TutorialPhotoPath("plan")) && File.Exists(TutorialPhotoPath("cover")) && File.Exists(TutorialPhotoPath("custom"))
-            && File.Exists(TutorialPhotoPath("bgm")) && File.Exists(TutorialPhotoPath("video"));
+            && File.Exists(TutorialPhotoPath("bgm")) && File.Exists(TutorialPhotoPath("video")) && File.Exists(TutorialPhotoPath("cicops"));
     }
 
     /// 함내 도면(위에서 본 직교 촬영 — 천장 보·배관 아래에서 찍어 바닥과 가구만), 방 사진 6장, 표지가 없으면 항모 사진을 찍어 Textures/Tutorial에 저장한다.
@@ -749,6 +771,8 @@ public static partial class ACO_HUDBuilder
         // BGM 쪽(6-220): 브리핑실 BGM 패널(모니터) · 선원실 TV와 셋톱박스(소리 토글)
         TutShot("bgm", new Vector3(0.95f, -248.86f, 2.45f), new Vector3(0.95f, -249.05f, 3.08f), 52f, 300f);
         TutShot("video", new Vector3(19.3f, -248.95f, -1.15f), new Vector3(19.3f, -249.3f, 0.39f), 62f, 300f);
+        // CIC 작전 지원 쪽(6-279): CIC 작전 테이블 동쪽 테두리의 도구 패널과 지도
+        TutShot("cicops", CicOpsShotPos, CicOpsShotLook, CicOpsShotFov, 300f);
         if (!File.Exists(TutorialPhotoPath("cover"))) { TutShot("cover", new Vector3(150f, 35f, -190f), new Vector3(10f, 15f, 0f), 32f, 20000f); }
         AssetDatabase.Refresh();
         Debug.Log($"[ACO] 튜토리얼 도면·표지를 {TutorialPhotoDir}에 찍었습니다. 표지(tut_cover.png)는 전투 장면 스크린샷으로 바꿔 넣어도 됩니다 — 바꾼 뒤 튜토리얼 프리팹을 다시 만드세요.");
@@ -785,6 +809,19 @@ public static partial class ACO_HUDBuilder
             Object.DestroyImmediate(tex);
             Object.DestroyImmediate(go);
         }
+    }
+
+    // CIC 작전 지원 사진 자리(테이블 가운데 (10.1, -249.35, -2), 도구 패널 동쪽 테두리 (11.3, -249.2, -2)) — 테이블을 옮기면 함께 고친다
+    private static readonly Vector3 CicOpsShotPos = new Vector3(12.2f, -248.62f, -1.25f);
+    private static readonly Vector3 CicOpsShotLook = new Vector3(10.65f, -249.38f, -2.2f);
+    private const float CicOpsShotFov = 58f;
+
+    /// tut_cicops.png만 찍는다(다른 사진은 그대로) — Setup Check [고치기]는 전부 다시 찍는다. 지도 지형 · 커서가 보이게 플레이 중(작전 중)에 찍어 둔 것이 있다(6-279).
+    public static void CaptureCicOpsPhoto()
+    {
+        EnsureFolder("Assets/ACO_Addon/Textures", "Tutorial");
+        TutShot("cicops", CicOpsShotPos, CicOpsShotLook, CicOpsShotFov, 300f);
+        AssetDatabase.Refresh();
     }
 
     private static void TutShot(string id, Vector3 pos, Vector3 look, float fov, float far, bool bakeSkinned = false)

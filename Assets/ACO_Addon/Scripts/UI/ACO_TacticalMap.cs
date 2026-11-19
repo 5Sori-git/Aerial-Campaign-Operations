@@ -57,6 +57,10 @@ namespace ACO
         public GameObject GroundMarker;
         public GameObject ObjectiveMarker;
         public GameObject FriendlyMarker;
+        [Tooltip("아군 호위 대상(VIP) — 초록 + 이름표 \"VIP\"(6-285). 없으면 FriendlyMarker")]
+        public GameObject VipMarker;
+        [Tooltip("아군 편대 풀(지원 호출 · CIC 편대 — 초록, 이름표 없음, 6-285). Bake가 넣는다")]
+        public ACO_SupportManager Support;
         public GameObject BaseMarker;
 
         private const int KIND_PLAYER = 0;
@@ -64,6 +68,7 @@ namespace ACO
         private const int KIND_GROUND = 2;
         private const int KIND_HVT = 3;
         private const int KIND_ESCORT = 4;
+        private const int KIND_WINGMAN = 5;
         private const int MAX_VERTICES = 65000;
 
         private ACO_HexTerrain _terrain;
@@ -105,13 +110,35 @@ namespace ACO
 
         void Start()
         {
+            EnsureScale();
+            BuildMarkers();
+        }
+
+        private void EnsureScale()
+        {
+            if (_scale > 0f) { return; }
             if (!MapRoot) { MapRoot = transform; }
             if (Generator) { _terrain = Generator.HexTerrain; }
             _center = _terrain != null ? _terrain.transform.position : (Generator != null ? Generator.transform.position : MapRoot.position);
             float worldRadius = _terrain != null ? _terrain.FieldRadius : FallbackWorldRadius;
             _scale = MapRadius / Mathf.Max(worldRadius, 1f);
             _seaLevel = _terrain != null ? _terrain.SeaLevel : 0f;
-            BuildMarkers();
+        }
+
+        // ───────────── CIC 도구가 쓰는 변환 (6-275) ─────────────
+
+        /// 지도 1m = 월드 몇 분의 1(축척).
+        public float GetScale() { EnsureScale(); return _scale; }
+
+        /// 월드 → MapRoot 기준 지도 자리(높이는 과장 포함).
+        public Vector3 WorldToMap(Vector3 world) { EnsureScale(); return ToMap(world); }
+
+        /// MapRoot 기준 지도 자리(x, z) → 월드(높이 = 해수면).
+        public Vector3 MapToWorld(Vector3 local)
+        {
+            EnsureScale();
+            float s = Mathf.Max(_scale, 0.0000001f);
+            return new Vector3(_center.x + local.x / s, _seaLevel, _center.z + local.z / s);
         }
 
         // ───────────── 마커 ─────────────
@@ -124,7 +151,8 @@ namespace ACO
             int ground = Generator != null && Generator.GroundUnits != null ? Generator.GroundUnits.Length : 0;
             int hvts = Generator != null && Generator.HighValueTargets != null ? Generator.HighValueTargets.Length : 0;
             int escorts = Generator != null && Generator.EscortUnits != null ? Generator.EscortUnits.Length : 0;
-            int total = players + fighters + ground + hvts + escorts;
+            int wingmen = Support != null && Support.Wingmen != null ? Support.Wingmen.Length : 0;
+            int total = players + fighters + ground + hvts + escorts + wingmen;
 
             _kind = new int[total];
             _index = new int[total];
@@ -156,7 +184,23 @@ namespace ACO
             }
             for (int i = 0; i < escorts; i++)
             {
-                if (Generator.EscortUnits[i]) { AddUnit(KIND_ESCORT, i, Generator.EscortUnits[i].transform, Generator.EscortUnits[i].Hostile ? EnemyAirMarker : FriendlyMarker); }
+                if (!Generator.EscortUnits[i]) { continue; }
+                bool hostile = Generator.EscortUnits[i].Hostile;
+                int before = _count;
+                AddUnit(KIND_ESCORT, i, Generator.EscortUnits[i].transform, hostile ? EnemyAirMarker : (VipMarker ? VipMarker : FriendlyMarker));
+                // 아군 호위 이름표 = HUD 마커 약어(6-294 — VIP · CVY · LCAC · CG · FFG · HEL · LHD). 약어가 비었으면 이름표를 숨긴다
+                if (!hostile && _count > before && _label[before] != null)
+                {
+                    string tag = Generator.EscortUnits[i].MarkerLabel;
+                    bool hasTag = !string.IsNullOrEmpty(tag);
+                    _label[before].text = hasTag ? tag : "";
+                    if (_labelT[before] != null) { _labelT[before].gameObject.SetActive(hasTag); }
+                }
+            }
+            // 아군 편대(6-285): 지원 호출 · CIC 편대 모두 — 초록, 이름표 없음(VIP 이름표는 아군 호위 대상만)
+            for (int i = 0; i < wingmen; i++)
+            {
+                if (Support.Wingmen[i]) { AddUnit(KIND_WINGMAN, i, Support.Wingmen[i].transform, FriendlyMarker); }
             }
 
             if (HomeBase && BaseMarker)
@@ -229,7 +273,7 @@ namespace ACO
                 return;
             }
 
-            bool air = _kind[k] == KIND_PLAYER || _kind[k] == KIND_FIGHTER || _kind[k] == KIND_ESCORT;
+            bool air = _kind[k] == KIND_PLAYER || _kind[k] == KIND_FIGHTER || _kind[k] == KIND_ESCORT || _kind[k] == KIND_WINGMAN;
             Place(_marker[k], t, air);
             if (!_shown[k])
             {
@@ -261,6 +305,12 @@ namespace ACO
                 // 보관 장소에 있는 기체는 숨긴다(출격했거나 누가 타고 있을 때만).
                 SaccEntity e = Flow.Aircraft[_index[k]];
                 return e && (e.Occupied || Vector3.Distance(e.transform.position, _home[k]) > 200f);
+            }
+            if (_kind[k] == KIND_WINGMAN)
+            {
+                // 떠 있는 동안(빠져나가는 중 포함)만 — 격추되면 바로 지운다
+                ACO_Wingman w = Support.Wingmen[_index[k]];
+                return w && w.gameObject.activeInHierarchy && w.IsActive() && !w.IsDead();
             }
             int cat = Category(_kind[k]);
             if (_kind[k] == KIND_GROUND && Generator.IsCityContactHidden(_index[k])) { return false; }   // 미확인 · 민간 도시 차량(6-270)

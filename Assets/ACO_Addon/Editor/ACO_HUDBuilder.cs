@@ -3667,9 +3667,23 @@ public static partial class ACO_HUDBuilder
         map.GroundMarker = MakeMapMarker(mapRoot.transform, "GroundMarker", new Vector3(0.01f, 0.008f, 0.01f), new Color(1f, 0.55f, 0.15f), false, true, null);
         map.ObjectiveMarker = MakeMapMarker(mapRoot.transform, "ObjectiveMarker", new Vector3(0.018f, 0.014f, 0.018f), new Color(1f, 0.85f, 0.2f), false, false, null);
         map.FriendlyMarker = MakeMapMarker(mapRoot.transform, "FriendlyMarker", airShape, new Color(0.3f, 1f, 0.45f), true, false, null);
+        EnsureMapVipMarker(map);
         map.BaseMarker = MakeMapMarker(mapRoot.transform, "BaseMarker", new Vector3(0.02f, 0.006f, 0.06f), new Color(0.35f, 0.7f, 1f), false, false, null);
         ACO_RadarBuilder.EnsureTacticalNorthMark(map);
         return root;
+    }
+
+    /// 작전 테이블의 아군 호위 대상(VIP) 마커 원본(6-285): FriendlyMarker와 같은 초록 + 이름표 "VIP". 이미 있으면 그대로. 바꿨으면 true.
+    public static bool EnsureMapVipMarker(ACO_TacticalMap map)
+    {
+        if (map == null || map.MapRoot == null || map.VipMarker != null) { return false; }
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        GameObject vip = MakeMapMarker(map.MapRoot, "VipMarker", new Vector3(0.012f, 0.004f, 0.03f), new Color(0.3f, 1f, 0.45f), true, false, font);
+        Transform label = vip.transform.Find("Label");
+        if (label != null) { label.GetComponent<TextMeshPro>().text = "VIP"; }
+        map.VipMarker = vip;
+        EditorUtility.SetDirty(map);
+        return true;
     }
 
     private static void MakeMapTable(Transform root, float r, float tableHeight, Shader unlit)

@@ -12,6 +12,8 @@ namespace ACO
     ///  - 부른 사람이 기체에 없으면(내림 · 격추 · 나감) 마지막 자리를 집결 지점으로 두고 AI가 주변에서 싸운다.
     ///  - 시간이 다 되면(또는 미션이 끝나면) 위로 빠져나가고 LeaveTime초 뒤 모든 화면에서 꺼진다.
     /// 격추: SaccTarget의 ExplodeOther에 이 스크립트를 넣어 Explode를 받는다(관리자가 무전 · 편대 정리).
+    /// CIC 지역 편대(6-275 — SetArea): 따라갈 기체 없이 구역 중심을 기준점으로 둔다. 구역 반경 안의 표적만 노리고(AI.AreaLimit),
+    /// 표적이 없으면 중심 둘레 AreaOrbitRadius를 선회하며, 중심에서 LeashDistance를 넘으면 돌아온다.
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class ACO_Wingman : UdonSharpBehaviour
     {
@@ -32,6 +34,14 @@ namespace ACO
         public float ReturnFraction = 0.6f;
         [Tooltip("이탈: 위로 빠지는 각(도)")]
         public float LeaveClimbAngle = 25f;
+        [Tooltip("CIC 지역 편대(6-275): 표적이 없을 때 구역 중심 둘레를 도는 반경(m) — 2026-11-18 1500 → 2500(구역 5km, 6-283)")]
+        public float AreaOrbitRadius = 2500f;
+        [Tooltip("CIC 지역 편대(6-283): 구역 중심에서 이 거리(m, 수평)를 넘으면 돌아온다(ReturnFraction 안까지). 지원 호출 편대는 LeashDistance")]
+        public float AreaLeashDistance = 6500f;
+        [Tooltip("CIC 지역 편대(6-283): 지역 편대 동안 AI 탐지 거리(m, 직선) — 선회 반경 + 구역 반경보다 조금 크게. 끝나면 원래 값으로")]
+        public float AreaDetectRange = 6500f;
+        [Tooltip("CIC 지역 편대(6-283): 지역 편대 동안 AI 표적 놓침 거리(m, 직선)")]
+        public float AreaLoseRange = 8000f;
 
         private bool _active;
         private bool _leaving;
@@ -47,8 +57,33 @@ namespace ACO
         private Vector3 _leaderVel;
         private bool _leaderSeen;
         private bool _returning;   // 너무 멀어져 돌아오는 중(LeashDistance 밖 → ReturnFraction 안까지)
+        private bool _area;        // CIC 지역 편대(6-275)
+        private Vector3 _areaCenter;   // 구역 중심(높이 = 선회 고도)
+        private float _savedHoldRadius = -1f;
+        private float _savedDetect = -1f;   // 지역 편대 동안 바꾼 AI 탐지 · 놓침 거리(끝나면 되돌린다)
+        private float _savedLose = -1f;
 
         public bool IsActive() { return _active; }
+        public bool IsArea() { return _area; }
+
+        /// 관리자(모든 화면): CIC 지역 편대로 만든다(Begin 바로 뒤). center.y = 선회 고도, radius = 표적 구역 반경(m).
+        public void SetArea(Vector3 center, float radius)
+        {
+            _area = true;
+            _areaCenter = center;
+            if (AI)
+            {
+                AI.AreaLimit = true;
+                AI.AreaCenter = center;
+                AI.AreaRadius = radius;
+                if (_savedHoldRadius < 0f) { _savedHoldRadius = AI.HoldRadius; }
+                AI.HoldRadius = AreaOrbitRadius;
+                if (_savedDetect < 0f) { _savedDetect = AI.DetectRange; _savedLose = AI.LoseTargetRange; }
+                AI.DetectRange = AreaDetectRange;
+                AI.LoseTargetRange = AreaLoseRange;
+                AI.SetMissionHold(center);
+            }
+        }
         public bool IsDead() { return _dead; }
         public int GetFlight() { return _flight; }
 
@@ -66,6 +101,7 @@ namespace ACO
             _dead = false;
             _leaderSeen = false;
             _returning = false;
+            ClearArea();
             gameObject.SetActive(true);
             // 부른 사람이 계산한다 — 체력 · 위치 · 표적 판정이 그 화면에서(점수도 부른 사람에게)
             if (caller && fresh && !Networking.IsOwner(gameObject)) { Networking.SetOwner(Networking.LocalPlayer, gameObject); }
@@ -100,8 +136,20 @@ namespace ACO
             if (!_active && !gameObject.activeSelf) { return; }
             _active = false;
             _leaving = false;
+            ClearArea();
             if (AI) { AI.SteerOverride = false; AI.HoldFire = false; AI.MissionDespawn(); }
             gameObject.SetActive(false);
+        }
+
+        private void ClearArea()
+        {
+            _area = false;
+            if (AI)
+            {
+                AI.AreaLimit = false;
+                if (_savedHoldRadius >= 0f) { AI.HoldRadius = _savedHoldRadius; }
+                if (_savedDetect >= 0f) { AI.DetectRange = _savedDetect; AI.LoseTargetRange = _savedLose; }
+            }
         }
 
         public float GetEndTime() { return _endTime; }
@@ -140,6 +188,8 @@ namespace ACO
                 AI.SteerOverride = true;
                 return;
             }
+
+            if (_area) { UpdateArea(); return; }
 
             Transform leader = LeaderTransform();
             if (leader != null)
@@ -181,6 +231,25 @@ namespace ACO
                 if (leader == null && _leaderSeen) { AI.SetMissionHold(_leaderPos); }   // 부른 사람이 없다 — 마지막 자리 주변에서 싸운다
                 AI.SteerOverride = false;
             }
+        }
+
+        /// CIC 지역 편대(오너): 구역 중심에서 LeashDistance 넘게 멀어지면 중심으로 돌아오고(ReturnFraction 안까지), 아니면 AI에 맡긴다
+        /// (표적이 없으면 AI가 집결 지점 = 구역 중심 둘레를 돈다).
+        private void UpdateArea()
+        {
+            Vector3 d = _areaCenter - transform.position;
+            float flatSq = d.x * d.x + d.z * d.z;
+            if (flatSq > AreaLeashDistance * AreaLeashDistance) { _returning = true; }
+            else if (_returning && flatSq < AreaLeashDistance * AreaLeashDistance * ReturnFraction * ReturnFraction) { _returning = false; }
+            if (_returning)
+            {
+                float len = d.magnitude;
+                AI.OverrideDirection = len > 1f ? d / len : transform.forward;
+                AI.OverrideSpeed = Flight.CruiseSpeed;
+                AI.SteerOverride = true;
+                return;
+            }
+            AI.SteerOverride = false;
         }
 
         /// 부른 사람이 지금 탄 기체(그 기체의 SUPPORT 다이얼 — 사람이 타 있을 때만).

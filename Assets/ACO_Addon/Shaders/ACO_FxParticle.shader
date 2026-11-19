@@ -52,16 +52,17 @@ Shader "ACO/FxParticle"
                 float2 uv : TEXCOORD0;
                 UNITY_FOG_COORDS(1)
                 float3 worldPos : TEXCOORD2;
+                float3 camPos : TEXCOORD3;   // 눈 카메라 자리 — 정점에서 구해 넘긴다(VR: 픽셀에서 눈 번호로 고르면 D3D11 컴파일러 내부 오류 X8000, 2026-11-18)
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
             /// 카메라에서 이 픽셀까지 체적 층을 지나고 남는 비율.
-            float VolumeKeep(float3 worldPos)
+            float VolumeKeep(float3 worldPos, float3 camPos)
             {
                 if (_UdonACOFogFade <= 0) { return 1; }
-                float3 ray = worldPos - _WorldSpaceCameraPos;
-                float low = min(_WorldSpaceCameraPos.y, worldPos.y);
-                float high = max(_WorldSpaceCameraPos.y, worldPos.y);
+                float3 ray = worldPos - camPos;
+                float low = min(camPos.y, worldPos.y);
+                float high = max(camPos.y, worldPos.y);
                 float overlap = max(min(high, _UdonACOFogTop) - max(low, _UdonACOFogBottom), 0);
                 float inside = length(ray) * overlap / max(high - low, 0.001);
                 return 1 - (1 - exp(-_UdonACOFogDensity * inside)) * _UdonACOFogFade;
@@ -75,6 +76,7 @@ Shader "ACO/FxParticle"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                o.camPos = _WorldSpaceCameraPos;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.color = v.color;
                 UNITY_TRANSFER_FOG(o, o.pos);
@@ -86,10 +88,10 @@ Shader "ACO/FxParticle"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 fixed4 c = tex2D(_MainTex, i.uv) * i.color;
                 c.rgb *= _Boost;
-                float keep = VolumeKeep(i.worldPos);
+                float keep = VolumeKeep(i.worldPos, i.camPos);
                 #if defined(FOG_LINEAR) || defined(FOG_EXP) || defined(FOG_EXP2)
                 {   // 아래 UNITY_APPLY_FOG_COLOR도 unityFogFactor를 선언한다 — 범위를 나눈다
-                    UNITY_CALC_FOG_FACTOR_RAW(length(i.worldPos - _WorldSpaceCameraPos));
+                    UNITY_CALC_FOG_FACTOR_RAW(length(i.worldPos - i.camPos));
                     keep *= saturate(unityFogFactor);
                 }
                 #endif

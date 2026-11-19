@@ -160,6 +160,13 @@ namespace ACO
         public Vector3 WingmenStartOffset = new Vector3(0f, 200f, -2500f);
         public float WingmenStartSpread = 80f;
 
+        [Header("CIC 지역 편대 (6-275) — CIC 콘솔이 부른다. 호출권 없음, 같은 풀")]
+        public float CicWingmenDuration = 60f;
+        [Tooltip("편대가 돌아가기 시작한 뒤 다시 부를 수 있을 때까지(초) — 화면마다 센다, 작전이 바뀌면 처음부터")]
+        public float CicWingmenCooldown = 40f;   // 2026-11-18 20 → 40(6-284 — "생각보다 세다")
+        [Tooltip("표적 구역 반경(m)")]
+        public float CicWingmenRadius = 5000f;   // 2026-11-18 3000 → 5000(6-283 — 편대 탐지 6.5km · 선회 2.5km와 함께)
+
         [Header("무전 (호출한 사람만, LINE_* 순서)")]
         [TextArea] public string[] LineTexts = new string[] {
             "Copy your mark. Bomber inbound.",
@@ -176,6 +183,12 @@ namespace ACO
             "Wingmen are bingo fuel. RTB." };
         public AudioClip[] LineClips = new AudioClip[12];
         public float LineMaxDelay = 4f;
+        [Header("CIC 편대 무전 (6-282 — 모두에게, 잡담 급: 0 호출 · 1 격추 · 2 복귀)")]
+        [TextArea] public string[] CicLineTexts = new string[] {
+            "Wingmen inbound to the marked area. Holding CAP.",
+            "Wingman down!",
+            "Wingmen bingo fuel. Leaving the area." };
+        public AudioClip[] CicLineClips = new AudioClip[3];
 
         public const int LINE_STRIKE_CALL = 0;
         public const int LINE_STRIKE_RELEASE = 1;
@@ -292,6 +305,8 @@ namespace ACO
             _wCaller = new int[wf];
             _wEnd = new float[wf];
             _wStart = new float[wf];
+            _wArea = new bool[wf];
+            _wCenter = new Vector3[wf];
             for (int i = 0; i < wf; i++) { _wSupport[i] = -1; _wCaller[i] = -1; }
             if (Wingmen != null) { for (int i = 0; i < Wingmen.Length; i++) { if (Wingmen[i]) { Wingmen[i].gameObject.SetActive(false); } } }
             int d = Drones != null ? Drones.Length : 0;
@@ -426,18 +441,154 @@ namespace ACO
         /// 동시 호출 경합에서 진 부른 사람 화면: 다른 빈 편대로 다시 부른다. 없으면 호출권을 돌려준다.
         private void RetryWingmen(int support, int exclude, float seconds)
         {
-            int f = -1;
+            int f = FreeFlightExcept(exclude);
+            if (f >= 0) { SendWingmenStart(f, support, seconds); return; }
+            if (Progress) { Progress.RefundCall(ACO_PlayerProgress.CALL_WINGMEN); }
+            ACO_DFUNC_Support sup = SupportAt(support);
+            if (sup != null) { sup.Warn("BUSY", "WINGMEN\nNO FLIGHT AVAILABLE"); }
+        }
+
+        private int FreeFlightExcept(int exclude)
+        {
             for (int i = 0; i < _wState.Length; i++)
             {
                 if (i == exclude || _wState[i] != W_IDLE) { continue; }
                 ACO_Wingman a = Wingmen[i * 2];
                 ACO_Wingman b = Wingmen[i * 2 + 1];
-                if (a != null && b != null && !a.IsActive() && !b.IsActive()) { f = i; break; }
+                if (a != null && b != null && !a.IsActive() && !b.IsActive()) { return i; }
             }
-            if (f >= 0) { SendWingmenStart(f, support, seconds); return; }
-            if (Progress) { Progress.RefundCall(ACO_PlayerProgress.CALL_WINGMEN); }
-            ACO_DFUNC_Support sup = SupportAt(support);
-            if (sup != null) { sup.Warn("BUSY", "WINGMEN\nNO FLIGHT AVAILABLE"); }
+            return -1;
+        }
+
+        // ───────────── CIC 지역 편대 (6-275) ─────────────
+
+        private bool[] _wArea;          // CIC 지역 편대인가(따라갈 기체 없음 — 구역 중심 기준)
+        private Vector3[] _wCenter;     // 구역 중심(높이 = 선회 고도)
+        private float _cicReadyAt;      // 이 화면 Time.time: CIC 편대가 돌아가기 시작한 뒤 쿨타임이 끝나는 시각
+        private int _cicMission;        // 그 쿨타임이 속한 작전(시작 시각) — 작전이 바뀌면 쿨타임 없음
+
+        /// CIC 콘솔(누른 사람 화면): 구역 center(높이 = 선회 고도)로 지역 편대를 부른다. pos · fwd = 나타나는 자리 · 방향. 부르면 true.
+        public bool CallWingmenArea(Vector3 center, Vector3 pos, Vector3 fwd)
+        {
+            Init();
+            if (!IsMissionRunning() || GetCicFlight() >= 0 || GetCicWingmenCooldown() > 0f || Networking.LocalPlayer == null) { return false; }
+            int f = FreeFlight();
+            if (f < 0) { return false; }
+            SendAreaStart(f, CicWingmenDuration, pos, fwd, center);   // 호출 무전은 받는 모든 화면이(NetWingmenAreaStart, 6-282)
+            return true;
+        }
+
+        private void SendAreaStart(int f, float seconds, Vector3 pos, Vector3 fwd, Vector3 center)
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[f * 2 + k];
+                if (w != null && !Networking.IsOwner(w.gameObject)) { Networking.SetOwner(Networking.LocalPlayer, w.gameObject); }
+            }
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetWingmenAreaStart), f, Networking.LocalPlayer.playerId, seconds, pos, fwd, center, true);
+        }
+
+        [NetworkCallable]
+        public void NetWingmenAreaStart(int flight, int callerId, float seconds, Vector3 pos, Vector3 fwd, Vector3 center, bool fresh)
+        {
+            Init();
+            if (flight < 0 || flight >= _wState.Length) { return; }
+            int local = Networking.LocalPlayer != null ? Networking.LocalPlayer.playerId : -1;
+            if (fresh)
+            {
+                // CIC 편대는 한 번에 하나: 다른 편대로 이미 떠 있으면(시작 3초 안 경합이면 번호가 작은 사람이 이긴다) 새 쪽을 버린다
+                int other = GetCicFlight();
+                if (other >= 0 && other != flight)
+                {
+                    bool recent = Time.time - _wStart[other] < 3f;
+                    if (!recent || callerId > _wCaller[other]) { return; }
+                    CancelFlight(other);
+                }
+                if (_wState[flight] != W_IDLE && _wCaller[flight] != callerId)
+                {
+                    bool contested = _wState[flight] == W_ACTIVE && Time.time - _wStart[flight] < 3f;
+                    if (!contested || callerId > _wCaller[flight])
+                    {
+                        if (local == callerId)
+                        {
+                            int g = FreeFlightExcept(flight);
+                            if (g >= 0) { SendAreaStart(g, seconds, pos, fwd, center); }
+                        }
+                        return;
+                    }
+                    if (local == _wCaller[flight]) { RetryDisplaced(flight); }
+                }
+            }
+            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            BeginFlight(flight, -1, callerId, seconds, pos, fwd, fresh);
+            _wArea[flight] = true;
+            _wCenter[flight] = center;
+            if (fresh) { SayCic(0); }   // 새 호출만 — 늦게 들어온 사람에게 다시 보내는 것(fresh false)은 말하지 않는다
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w != null && w.IsActive()) { w.SetArea(center, CicWingmenRadius); }
+            }
+        }
+
+        /// 경합에서 자리를 뺏긴 내 편대를 다른 빈 편대로 다시 부른다(CIC 편대면 지역 편대로).
+        private void RetryDisplaced(int flight)
+        {
+            float left = Mathf.Max(_wEnd[flight] - Time.time, 0f);
+            if (_wArea[flight])
+            {
+                int g = FreeFlightExcept(flight);
+                if (g < 0) { return; }
+                ACO_Wingman w = Wingmen[flight * 2];
+                Vector3 p = w != null ? w.transform.position : _wCenter[flight];
+                Vector3 f = w != null ? w.transform.forward : Vector3.forward;
+                SendAreaStart(g, left, p, f, _wCenter[flight]);
+                return;
+            }
+            RetryWingmen(_wSupport[flight], flight, left);
+        }
+
+        /// 시작 직후 경합에서 진 CIC 편대를 조용히 지운다(모든 화면이 같은 답을 낸다).
+        private void CancelFlight(int flight)
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w != null) { w.Finish(); }
+            }
+            _wState[flight] = W_IDLE;
+            _wSupport[flight] = -1;
+            _wArea[flight] = false;
+        }
+
+        /// 떠 있는(돌아가는 중 아닌) CIC 지역 편대 번호, 없으면 -1.
+        public int GetCicFlight()
+        {
+            Init();
+            if (_wArea == null) { return -1; }
+            for (int i = 0; i < _wState.Length; i++) { if (_wArea[i] && _wState[i] == W_ACTIVE) { return i; } }
+            return -1;
+        }
+
+        /// CIC 편대 구역 중심(떠 있을 때만 의미 있음).
+        public Vector3 GetCicCenter()
+        {
+            int f = GetCicFlight();
+            return f >= 0 ? _wCenter[f] : Vector3.zero;
+        }
+
+        /// CIC 편대 남은 시간(초), 없으면 0.
+        public float GetCicLeft()
+        {
+            int f = GetCicFlight();
+            return f >= 0 ? Mathf.Max(_wEnd[f] - Time.time, 0.01f) : 0f;
+        }
+
+        /// CIC 편대 쿨타임 남은 초(이 화면 기준). 작전이 바뀌었으면 0.
+        public float GetCicWingmenCooldown()
+        {
+            if (Mission == null || _cicMission != Mission.GetMissionStartMs()) { return 0f; }
+            return Mathf.Max(_cicReadyAt - Time.time, 0f);
         }
 
         /// 이 기체가 부른 편대가 떠 있으면 남은 시간(초), 아니면 0.
@@ -465,14 +616,21 @@ namespace ACO
                     if (local == callerId) { RetryWingmen(support, flight, seconds); }
                     return;
                 }
-                if (local == _wCaller[flight]) { RetryWingmen(_wSupport[flight], flight, Mathf.Max(_wEnd[flight] - Time.time, 0f)); }
+                if (local == _wCaller[flight]) { RetryDisplaced(flight); }
             }
+            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            BeginFlight(flight, support, callerId, seconds, pos, fwd, fresh);
+        }
+
+        /// 편대 상태를 켜고 두 기를 시작한다(모든 화면).
+        private void BeginFlight(int flight, int support, int callerId, float seconds, Vector3 pos, Vector3 fwd, bool fresh)
+        {
             _wState[flight] = W_ACTIVE;
             _wStart[flight] = Time.time;
             _wSupport[flight] = support;
             _wCaller[flight] = callerId;
             _wEnd[flight] = Time.time + Mathf.Max(seconds, 0f);
-            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            _wArea[flight] = false;
             Quaternion rot = Quaternion.LookRotation(fwd.normalized, Vector3.up);
             Vector3 right = rot * Vector3.right;
             for (int k = 0; k < 2; k++)
@@ -490,7 +648,8 @@ namespace ACO
         {
             Init();
             if (flight < 0 || flight >= _wState.Length || _wState[flight] == W_IDLE) { return; }
-            if (IsLocalCaller(flight)) { Say(LINE_WINGMEN_DOWN); }
+            if (_wArea[flight]) { SayCic(1); }   // CIC 편대는 모두에게(6-282)
+            else if (IsLocalCaller(flight)) { Say(LINE_WINGMEN_DOWN); }
             if (FlightAllDown(flight)) { EndFlight(flight, false); }
         }
 
@@ -505,7 +664,7 @@ namespace ACO
                 ACO_Wingman w = Wingmen[flight * 2 + k];
                 if (w != null && w.IsActive()) { any = true; }
             }
-            if (!any) { _wState[flight] = W_IDLE; _wSupport[flight] = -1; }
+            if (!any) { _wState[flight] = W_IDLE; _wSupport[flight] = -1; _wArea[flight] = false; }
         }
 
         private bool FlightAllDown(int flight)
@@ -527,6 +686,14 @@ namespace ACO
             {
                 ACO_Wingman w = Wingmen[flight * 2 + k];
                 if (w != null) { w.StartLeave(); }
+            }
+            if (_wArea[flight])
+            {
+                // CIC 편대: 개인 쿨타임은 없고, 모두가 같이 쓰는 CIC 쿨타임이 이 화면에서 시작한다
+                _cicReadyAt = Time.time + CicWingmenCooldown;
+                _cicMission = Mission != null ? Mission.GetMissionStartMs() : 0;
+                if (sayEnd) { SayCic(2); }   // 모두에게(6-282)
+                return;
             }
             if (IsLocalCaller(flight))
             {
@@ -729,6 +896,7 @@ namespace ACO
                 ACO_Wingman w = Wingmen[i * 2];
                 Vector3 p = w != null ? w.transform.position : Vector3.zero;
                 Vector3 f = w != null ? w.transform.forward : Vector3.forward;
+                if (_wArea[i]) { SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenAreaStart), i, _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, _wCenter[i], false); continue; }
                 SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenStart), i, _wSupport[i], _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, false);
             }
         }
@@ -1350,6 +1518,16 @@ namespace ACO
         {
             x = Mathf.Clamp01(x);
             return x * x * (3f - 2f * x);
+        }
+
+        /// CIC 편대 무전(모든 화면, 잡담 급 — 6-282).
+        private void SayCic(int line)
+        {
+            if (!Chatter) { return; }
+            string text = CicLineTexts != null && line < CicLineTexts.Length ? CicLineTexts[line] : "";
+            AudioClip clip = CicLineClips != null && line < CicLineClips.Length ? CicLineClips[line] : null;
+            if (text == "" && clip == null) { return; }
+            Chatter.SayControlLow(text, clip, LineMaxDelay);
         }
 
         private void Say(int line)

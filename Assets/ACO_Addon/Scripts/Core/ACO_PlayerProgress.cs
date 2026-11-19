@@ -142,6 +142,8 @@ namespace ACO
         [Range(0f, 1f)] public float MinimumRewardFraction = 0.1f;
         [Tooltip("켜면 이번 미션에 출격(조종석 탑승)한 적이 없으면 보상이 없다")]
         public bool RequireSortie = true;
+        [Tooltip("CIC 도구(6-275)만 쓰고 출격하지 않았으면 보상의 이 비율만 받는다")]
+        [Range(0f, 1f)] public float CicOnlyShare = 0.2f;
         [Tooltip("미션이 끝나고 보상을 계산하기까지 기다리는 시간(초) — 작전판이 마지막 격추를 넘길 시간")]
         public float RewardDelay = 2f;
         [Tooltip("처음 들어온 플레이어의 크레딧")]
@@ -219,6 +221,8 @@ namespace ACO
         private bool _inMission;
         private int _missionStart;
         private bool _sortied;
+        private bool _cicUsed;      // 이번 미션에 CIC 도구를 썼다(6-275)
+        private bool _lastCicOnly;
         private bool _piloting;
         private int _deaths;
         /// 자유 비행 모드(게임 진행이 넣는다): 내려도 기체 사양을 되돌리지 않는다.
@@ -626,6 +630,12 @@ namespace ACO
             if (on && _inMission && !_rewarded) { _sortied = true; }
         }
 
+        /// CIC 도구(웨이포인트 · 지역 편대 · 드론)를 썼다(ACO_CicConsole). 출격하지 않았어도 보상 일부를 받는다.
+        public void NoteCicUse()
+        {
+            if (_inMission && !_rewarded) { _cicUsed = true; }
+        }
+
         /// 조종 중인 기체가 폭발했다(격추·추락, ACO_VehicleUpgrades).
         public void ReportShotDown()
         {
@@ -684,10 +694,11 @@ namespace ACO
         /// 지금 미션이 성공으로 끝나면 받을 크레딧(표시용). 실제 보상은 GrantReward가 정한다.
         public int GetMissionRewardPreview()
         {
-            if (!_inMission || Manager == null || (RequireSortie && !_sortied)) { return 0; }
+            if (!_inMission || Manager == null || (RequireSortie && !_sortied && !_cicUsed)) { return 0; }
             int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
             int personal = Mathf.RoundToInt(Mathf.Max(_personalScore, 0) * PersonalShare);
-            return Mathf.RoundToInt((team + personal) * RewardFraction(true, _deaths));
+            float share = RequireSortie && !_sortied ? CicOnlyShare : 1f;
+            return Mathf.RoundToInt((team + personal) * RewardFraction(true, _deaths) * share);
         }
 
         void Update()
@@ -723,6 +734,7 @@ namespace ACO
                     _inMission = true;
                     _missionStart = start;
                     _sortied = _piloting;   // 미션 시작 때 이미 타고 있었으면 출격으로 친다
+                    _cicUsed = false;
                     _deaths = 0;
                     _personalScore = 0;
                     _missionKills = 0;
@@ -751,8 +763,10 @@ namespace ACO
             int team = Mathf.RoundToInt(Mathf.Max(Manager.GetTeamScore(), 0) * TeamShare);
             int personal = Mathf.RoundToInt(Mathf.Max(_personalScore, 0) * PersonalShare);
             float fraction = RewardFraction(success, _deaths);
+            bool cicOnly = RequireSortie && !_sortied && _cicUsed;   // 6-275: CIC만 썼으면 일부
+            if (cicOnly) { fraction *= CicOnlyShare; }
             int reward = Mathf.RoundToInt((team + personal) * fraction);
-            if (RequireSortie && !_sortied) { reward = 0; }
+            if (RequireSortie && !_sortied && !cicOnly) { reward = 0; }
 
             _hasLastReward = true;
             _lastMission = _missionStart;
@@ -761,7 +775,8 @@ namespace ACO
             _lastPersonalPart = personal;
             _lastFraction = fraction;
             _lastDeaths = _deaths;
-            _lastSortied = _sortied || !RequireSortie;
+            _lastSortied = _sortied || !RequireSortie || cicOnly;
+            _lastCicOnly = cicOnly;
 
             if (reward > _bestReward)
             {
@@ -777,7 +792,7 @@ namespace ACO
             if (_sortied) { UseConsumables(); }
             _version++;
             Debug.Log("[ACO] 미션 보상 " + reward + " CR (팀 " + team + " + 개인 " + personal + ") x" + fraction.ToString("0.00")
-                + ", 격추당함 " + _deaths + (success ? "" : ", 실패") + (_lastSortied ? "" : ", 출격 안 함"));
+                + ", 격추당함 " + _deaths + (success ? "" : ", 실패") + (_lastSortied ? "" : ", 출격 안 함") + (cicOnly ? ", CIC만" : ""));
         }
 
         /// 보정 비율: 실패 또는 MinimumRewardDeaths번 이상 격추 = 최소, 아니면 1 − DeathPenalty × 격추 횟수(최소 아래로는 안 내려감).
@@ -803,6 +818,7 @@ namespace ACO
                 .Replace("{1}", _lastTeamPart.ToString("N0")).Replace("{2}", _lastPersonalPart.ToString("N0"));
             if (_lastFraction < 0.999f) { s += " x" + Mathf.RoundToInt(_lastFraction * 100f) + "%"; }
             if (_lastDeaths > 0) { s += "  " + T("prog.reward.shotdown", "SHOT DOWN {0}").Replace("{0}", _lastDeaths.ToString()); }
+            if (_lastCicOnly) { s += "  " + T("prog.reward.ciconly", "CIC ONLY"); }
             return s;
         }
     }

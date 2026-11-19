@@ -549,6 +549,45 @@ def i_sup_wingmen(c):
     jet(c, 78, 68, 0.34, fill=True)
 
 
+def ellipse_pts(cx, cy, rx, ry, step=6.0):
+    return [(cx + rx * math.cos(math.radians(a)), cy + ry * math.sin(math.radians(a))) for a in range(0, 360, int(step))]
+
+
+def i_cic_waypoint(c):
+    # CIC 웨이포인트(6-275): 땅 위 점선 고리 + 가운데에서 솟은 기둥 + 위의 채운 마름모(HUD 목적지 표시)
+    pts = ellipse_pts(50, 80, 34, 10, 10.0)
+    for i in range(0, len(pts), 2):
+        seg(c, pts[i], pts[(i + 1) % len(pts)], 4.5)
+    fill_circle(c, 50, 80, 4)
+    seg(c, (50, 80), (50, 46), 5)
+    fill_poly(c, [(50, 10), (66, 28), (50, 46), (34, 28)])
+
+
+def i_cic_wingmen(c):
+    # CIC 지역 편대(6-275): 점선 구역 고리 + 그 안을 도는 채운 기체 둘
+    dashed_arc_to(c, 50, 52, 40, 0, 360, 9.0, 4.5)
+    jet(c, 36, 44, 0.30, fill=True)
+    jet(c, 64, 62, 0.30, fill=True)
+    seg(c, (47, 52), (53, 52), 3.5); seg(c, (50, 49), (50, 55), 3.5)
+
+
+def i_cic_drone(c):
+    # CIC 정찰 드론(6-275): 가운데 드론(위에서 본 모습) + 둘레를 도는 궤도 화살표
+    shape(c, GUARD_HALF, 50, 52, 0.46, fill=True)
+    arc(c, 50, 52, 40, 200, 500, 5)
+    a = math.radians(140)
+    head(c, (50 + 40 * math.cos(a), 52 + 40 * math.sin(a)), 140 + 90, 14.0, 28.0)
+
+
+def i_cic_cruise(c):
+    # CIC cruise missile salvo (6-276): three missiles flying up-right toward a target reticle
+    circle(c, 76, 26, 13, 5)
+    for a, b in (((76, 6), (76, 15)), ((76, 37), (76, 46)), ((56, 26), (65, 26)), ((87, 26), (96, 26))):
+        seg(c, a, b, 5)
+    for (x, y) in ((20, 52), (35, 67), (50, 82)):   # side by side, perpendicular to the flight direction
+        missile(c, x, y, -45, 38, 3.5, 9, 4, 6, fill=True)
+
+
 def i_sup_radio(c):
     # 지원(탭 · 로드아웃 지원 구획): 휴대 무전기 + 안테나 끝에서 퍼지는 전파
     rrect(c, 30, 40, 68, 94, 7)
@@ -872,6 +911,7 @@ ICONS = [
     ("lock", i_lock), ("credits", i_credits), ("cm_pod", i_cm_pod), ("tab_supply", i_tab_supply),
     ("sup_strike", i_sup_strike), ("sup_tanker", i_sup_tanker), ("sup_guardian", i_sup_guardian), ("sup_wingmen", i_sup_wingmen),
     ("sup_radio", i_sup_radio), ("free_flight", i_free_flight),
+    ("cic_waypoint", i_cic_waypoint), ("cic_wingmen", i_cic_wingmen), ("cic_drone", i_cic_drone), ("cic_cruise", i_cic_cruise),
     ("hangar", i_hangar), ("upgrade", i_upgrade), ("roster", i_roster), ("ready", i_ready), ("launch", i_launch),
     ("operation", i_operation), ("phases", i_phases), ("terrain", i_terrain), ("reroll", i_reroll), ("leave", i_leave),
     ("power", i_power), ("screen", i_screen), ("target", i_target), ("camera", i_camera), ("score", i_score),

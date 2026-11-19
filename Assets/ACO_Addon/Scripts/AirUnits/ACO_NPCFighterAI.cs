@@ -85,6 +85,10 @@ namespace ACO
         public LayerMask AirPriorityLayers = 1 << 29;
         [Tooltip("아군 편대(6-273): 도시 차량(시가지 정밀 타격 — 민간 · 적 모두)은 노리지 않는다(민간 오폭 감점 · 실패를 막는다)")]
         public bool SkipCityVehicles = false;
+        [Tooltip("CIC 지역 편대(6-275): 켜면 AreaCenter에서 수평 AreaRadius(m) 안의 표적만 노린다. 적 AI는 꺼 둔다")]
+        [System.NonSerialized] public bool AreaLimit = false;
+        [System.NonSerialized] public Vector3 AreaCenter;
+        [System.NonSerialized] public float AreaRadius = 3000f;
         public float DetectRange = 2500f;
         [Tooltip("이 거리를 넘어가면 타겟을 놓는다")]
         public float LoseTargetRange = 3500f;
@@ -1104,7 +1108,8 @@ namespace ACO
             {
                 bool stillValid = _target.gameObject.activeInHierarchy
                     && Vector3.Distance(myPos, _target.position) <= LoseTargetRange
-                    && !TargetDead(_targetIdx);
+                    && !TargetDead(_targetIdx)
+                    && InArea(_target.position, 1.2f);
                 // 대기 중이면 정원이 빈 다른 타겟이 있는지 다시 본다 — 플레이어가 여럿일 때 대기열이 한쪽에 고이지 않게.
                 // 우선순위가 더 높은 표적(호위 대상)이 탐지 거리에 들어오면 교전 중이어도 다시 고른다.
                 if (stillValid && _mode != MODE_WAIT && !HigherPriorityInRange(targets, myPos)) { return; }
@@ -1122,6 +1127,7 @@ namespace ACO
                 if (((1 << g.layer) & mask) == 0) { continue; }
                 float pri = PriorityOf(i, g);
                 if (_targetExcluded[i] || TargetDead(i)) { continue; }
+                if (!InArea(g.transform.position, 1f)) { continue; }
 
                 float d = Vector3.Distance(myPos, g.transform.position);
                 // 지금 기다리는 타겟은 탐지 거리 밖(놓침 거리 안)이어도 후보로 남긴다.
@@ -1154,6 +1160,7 @@ namespace ACO
                 _targetPriority[i] = escort != null ? Mathf.Max(escort.AttackPriority, 0f) : 0f;
                 if (AirTargetBonus > 0f && ((1 << g.layer) & AirPriorityLayers) != 0) { _targetPriority[i] += AirTargetBonus; }
                 if (SkipCityVehicles && g.GetComponentInParent<ACO_CityVehicle>() != null) { _targetExcluded[i] = true; }
+                if (g.GetComponentInParent<ACO_CicCruiseMissile>() != null) { _targetExcluded[i] = true; }   // CIC 순항미사일(6-276): 전투기는 쫓지 않는다(대공 미끼만)
                 _targetHealthRef[i] = g.GetComponentInParent<SaccTarget>();
             }
             return _targetPriority[i];
@@ -1168,6 +1175,16 @@ namespace ACO
             if (_targetHealthRef == null || i < 0 || i >= _targetHealthRef.Length) { return false; }
             SaccTarget h = _targetHealthRef[i];
             return h != null && h.Health <= 0f;
+        }
+
+        /// CIC 지역 편대(6-275): 구역 제한이 켜져 있으면 p가 구역 중심에서 수평 AreaRadius × scale 안인가. 꺼져 있으면 늘 참.
+        private bool InArea(Vector3 p, float scale)
+        {
+            if (!AreaLimit) { return true; }
+            float dx = p.x - AreaCenter.x;
+            float dz = p.z - AreaCenter.z;
+            float r = AreaRadius * scale;
+            return dx * dx + dz * dz <= r * r;
         }
 
         /// 아군 편대(6-273): 집결 지점을 옮긴다(표적이 없을 때 이 주변을 돈다 — 부른 사람이 없을 때 마지막 자리).
@@ -1190,7 +1207,7 @@ namespace ACO
                 if (!g || !g.activeInHierarchy || ((1 << g.layer) & mask) == 0) { continue; }
                 if ((g.transform.position - myPos).sqrMagnitude > rangeSq) { continue; }
                 float pri = PriorityOf(i, g);
-                if (_targetExcluded[i] || TargetDead(i)) { continue; }
+                if (_targetExcluded[i] || TargetDead(i) || !InArea(g.transform.position, 1f)) { continue; }
                 if (pri > current) { return true; }
             }
             return false;

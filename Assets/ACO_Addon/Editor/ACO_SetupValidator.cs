@@ -716,6 +716,12 @@ public partial class ACO_SetupValidator : EditorWindow
         }
         if (entities.Count == 0) { Add(g, WARN, "플레이어 기체(SAV)가 없습니다."); return; }
 
+        // CIC 도구(6-275): 콘솔(CIC 테이블 옆) + 정찰 드론
+        if (ACO_CicSetup.Missing())
+        {
+            Add(g, WARN, "CIC 도구(6-275 — 웨이포인트 · 지역 편대 · 정찰 드론 · 1인칭 고글)가 씬에 없거나 자리가 다릅니다 — [고치기]가 도구 패널을 전술 테이블 동쪽 테두리에, 고글 자리를 남쪽 동쪽 책상 모니터 위에, 정찰 드론을 씬 루트에 놓습니다(프리팹이 없으면 만든다). 뒤에 Bake.", null, ACO_CicSetup.Install);
+        }
+
         // 지원 호출(6-142): 씬에 관리자 하나(폭격기·벙커버스터·레이저·대폭발 풀 + 급유 드론 풀)
         ACO_SupportManager supportManager = FindOne<ACO_SupportManager>();
         if (supportManager == null)

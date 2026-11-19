@@ -324,11 +324,11 @@ public static class ACO_SpecialWeaponCatalog
         m.SkimTerminalDistance = 500f;
     }
 
-    /// ECM(전자전 포드): 미사일 대신 재밍. 10초 켜고 20초 재충전, 반경 5km(ACO_RadarContacts.EcmRange). 슬롯 하나, 탄 없음.
+    /// ECM(전자전 포드): 미사일 대신 재밍. 20초 켜고(2026-11-18 10 → 20, 6-281) 20초 재충전, 반경 5km(ACO_RadarContacts.EcmRange). 슬롯 하나, 탄 없음.
     private static void ApplyECM(ACO_DFUNC_Missile m)
     {
         m.EcmMode = true;
-        m.EcmDuration = 10f;
+        m.EcmDuration = ACO_PrefabTuning.EcmDuration;
         m.SlotReloadTime = 20f;
         m.SlotCount = 1;
         m.MaxAmmo = 1;

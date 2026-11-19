@@ -207,6 +207,7 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeTargetAnimators();
         BakeFxLayer();
         BakeSpectators();
+        BakeCic();
         BakeFlightHud();
         BakeDecals();
         BakeSafeLockTargets();

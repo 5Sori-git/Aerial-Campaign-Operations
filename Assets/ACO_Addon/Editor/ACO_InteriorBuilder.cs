@@ -190,6 +190,7 @@ public static class ACO_InteriorBuilder
     private const string TacticalMap = "ACO_TacticalMap";
     private const float TableTop = 0.652f;      // Int_PlotTable 유리판 윗면
     private const float TableMapRadius = 1.1f;
+    private const float TableExaggeration = 1.5f;   // 6-275: CIC 도구가 지도 바닥을 찍는다 — 산이 낮을수록 덜 어긋난다
     private const float TableMapLift = 0.003f;
     private const float TableActiveRadius = 6f;
     private const string HangarCopy = "ACO_Hangar_Briefing";    // 브리핑실의 격납고 복제 패널. 원본은 격납고에 그대로 있다
@@ -253,6 +254,7 @@ public static class ACO_InteriorBuilder
         ACO_TacticalMap component = map.GetComponent<ACO_TacticalMap>();
         Undo.RecordObject(component, "ACO fit panels");
         component.MapRadius = TableMapRadius;
+        component.VerticalExaggeration = TableExaggeration;
         component.ActiveRadius = TableActiveRadius;
         ACO_RadarBuilder.EnsureTacticalNorthMark(component);
         // 받침이 있던 예전 지도: 받침을 끄고 지도를 루트 높이로 내린다. 윗면은 모델 테이블이다

@@ -561,6 +561,11 @@ radio.supportmanager.09	가디언 드론 귀환한다.	Guardian drone returning 
 radio.supportmanager.10	아군 편대 진입. 귀관 편대에 합류한다.	Wingmen inbound. Forming up on you.	僚機編隊、進入。貴機に合流する。
 radio.supportmanager.11	아군기 격추됐다!	Wingman down!	僚機がやられた！
 radio.supportmanager.12	아군 편대 연료 한계. 귀환한다.	Wingmen are bingo fuel. RTB.	僚機編隊、燃料限界。帰投する。
+radio.supportmanager.13	아군 편대, 지정 구역 진입. 초계 비행에 들어간다.	Wingmen inbound to the marked area. Holding CAP.	僚機編隊、指定区域へ進入。上空警戒に入る。
+radio.supportmanager.14	아군 편대 연료 한계. 구역을 이탈한다.	Wingmen bingo fuel. Leaving the area.	僚機編隊、燃料限界。区域を離脱する。
+radio.cicconsole.01	데이터링크. 좌표 수신.	Datalink. Coordinates received.	データリンク。座標受信。
+radio.cicconsole.02	UAV, 지정 좌표로 이동 중.	UAV en route to your mark.	UAV、指定座標へ移動中。
+radio.cicstrike.01	아이 아이, 써! 순항미사일 발사!	Aye aye, sir! Cruise missiles away!	アイアイサー！巡航ミサイル発射！
 radio.phaseshade.01	적기 넷, 밀집 다이아몬드. 셰이드 비행대다... 너희 바로 앞에서 실속 기동을 한다. 꼬리에 오래 붙지 마라, 놈들은 어느 방향으로든 쏠 수 있다!	Four bandits, tight diamond. Shade squadron... They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!	敵機四、密集ダイヤモンド。シェイド飛行隊だ……目の前で失速機動をしてくるぞ。後ろに張り付くな、奴らはどの方向にも撃てる！
 radio.phaseshade.02	셰이드 비행대 전멸! 훌륭한 비행이었다, 전 항공기!	Shade squadron is wiped out! Outstanding flying, all aircraft!	シェイド飛行隊全滅！見事な飛行だ、全機！
 radio.borderless.01	아직 발 디딜 국경이 남아 있다면, 잡아 봐.	Catch me if you can still find a border to stand on.	まだ立つべき国境が残っているなら、捕まえてみろ。
@@ -803,3 +808,35 @@ radio.phasefleet.12	항모가 가라앉는다! 적 함대가 이탈하고 있다
 radio.phasefleet.13	기함을 잃었다... 전 부대, 철수하라.	The flagship is lost... All units, withdraw.	旗艦を失った……全部隊、撤退せよ。
 radio.phasedestroy.07	SAM 기지와 대공포 진지에 집중하라!\n적 대공망을 뚫고 길을 열어라!	Focus on the SAM sites and Tripple A installations!\nClear a path through their air defense network!	SAMサイトと対空砲陣地に集中しろ！\n敵防空網を突破し、道を開け！
 radio.phasedestroy.08	적 대공망 무력화! 훌륭했다, 회랑이 열렸다!	Enemy air defenses offline! Excellent work, the corridor is open!	敵防空網沈黙！見事だ、回廊が開いた！
+# CIC 도구 (6-275) — 도구 패널 · 고글 관전 패널 · 고글 NO SIGNAL
+cic.title	CIC 도구	CIC TOOLS	CICツール
+cic.status.noop	작전 중이 아닙니다	NO OPERATION	作戦中ではありません
+cic.status.tap	테이블 지도를 가리키고 트리거(클릭)로 찍으세요	POINT AT THE MAP AND PULL THE TRIGGER (CLICK)	テーブルの地図を指してトリガー(クリック)で指定
+cic.status.cursor	커서를 찍었습니다 — 도구를 고르세요	CURSOR SET - CHOOSE A TOOL	カーソル設定済み — ツールを選んでください
+cic.btn.wp	웨이포인트	WAYPOINT	ウェイポイント
+cic.btn.wm	아군 편대	WINGMEN	僚機編隊
+cic.btn.drone	정찰 UAV	RECON UAV	偵察UAV
+cic.help.wp	조종사 HUD에 30초	PILOT HUD 30s	パイロットHUDに30秒
+cic.help.wm	반경 5km · 60초	5km RADIUS · 60s	半径5km・60秒
+cic.help.drone	차량 식별 · 고글 관전	VEHICLE ID · GOGGLES	車両識別・ゴーグル観戦
+cic.ready	준비	READY	準備完了
+cic.cooldown	쿨타임 {0}초	COOLDOWN {0}s	クールタイム {0}秒
+cic.nocursor	커서 없음	NO CURSOR	カーソルなし
+cic.wp.shown	표시 중 {0}초	SHOWN {0}s	表示中 {0}秒
+cic.wm.onstation	작전 중 {0}초	ON STATION {0}s	展開中 {0}秒
+cic.btn.cm	순항미사일	CRUISE MSL	巡航ミサイル
+cic.help.cm	4발 · 쿨타임 40초	4 MISSILES · 40s	4発・40秒
+cic.cm.flight	비행 중 {0}초	IN FLIGHT {0}s	飛行中 {0}秒
+cic.cm.result	명중 {0} · 격추 {1}	HIT {0} · DOWN {1}	命中 {0}・撃墜 {1}
+cic.cm.tooclose	함대에 너무 가까움	TOO CLOSE TO FLEET	艦隊に近すぎます
+cic.lcd.cursor	커서 {0}km	CURSOR {0} km	カーソル {0}km
+cic.confirm.ok	확정	CONFIRM	確定
+cic.confirm.cancel	취소	CANCEL	キャンセル
+cic.confirm.wm	아군 2기 · 반경 5km · 60초	2 FIGHTERS · 5km · 60s	味方2機・半径5km・60秒
+cic.confirm.cm	4발 · 약 {0}초	4 MISSILES · ABOUT {0}s	4発・約{0}秒
+cic.confirm.dist	거리 {0}km	RANGE {0} km	距離 {0}km
+cic.view.title	고글 관전	GOGGLES VIEW	ゴーグル観戦
+cic.view.uav	UAV	UAV	UAV
+cic.nosignal	신호 없음	NO SIGNAL	信号なし
+prog.reward.ciconly	CIC만	CIC ONLY	CICのみ
+cic.reset	고글 회수	RESET GOGGLES	ゴーグル回収

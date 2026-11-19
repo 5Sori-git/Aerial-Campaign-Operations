@@ -504,11 +504,13 @@ public partial class ACO_SceneBaker
     {
         ACO_MissionGenerator generator = null;
         ACO_GameFlow flow = null;
+        ACO_SupportManager support = null;
         var maps = new List<ACO_TacticalMap>();
         foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
         {
             if (generator == null) { generator = root.GetComponentInChildren<ACO_MissionGenerator>(true); }
             if (flow == null) { flow = root.GetComponentInChildren<ACO_GameFlow>(true); }
+            if (support == null) { support = root.GetComponentInChildren<ACO_SupportManager>(true); }
             maps.AddRange(root.GetComponentsInChildren<ACO_TacticalMap>(true));
         }
         foreach (ACO_TacticalMap map in maps)
@@ -516,6 +518,7 @@ public partial class ACO_SceneBaker
             bool changed = false;
             if (map.Generator == null && generator != null) { map.Generator = generator; changed = true; }
             if (map.Flow == null && flow != null) { map.Flow = flow; changed = true; }
+            if (map.Support != support) { map.Support = support; changed = true; }   // 아군 편대 표시(6-285)
             if (changed) { MarkChanged(map); }
             if (map.HomeBase == null) { Debug.LogWarning($"[ACO] 작전 테이블 '{map.name}': HomeBase(항모)가 비어 있어 기지 표시가 없습니다.", map); }
         }

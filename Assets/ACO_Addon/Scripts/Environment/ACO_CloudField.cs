@@ -191,6 +191,7 @@ namespace ACO
             VRCPlayerApi lp = Networking.LocalPlayer;
             _hasHead = Utilities.IsValid(lp);
             if (_hasHead) { _head = lp.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position; }
+            _fogPos = _viewerOn ? _viewerPos : _head;
 
             if (InsideFog)
             {
@@ -269,7 +270,7 @@ namespace ACO
             _deckIn = 0f;
             _fogIn = 0f;
             if (!_hasHead) { return; }
-            float y = _head.y;
+            float y = _fogPos.y;
             if (_deckFade > 0f)
             {
                 // 체적 층은 불투명한 물체가 이미 흐려져 있어 전역 안개를 더 넓게 섞어도 된다(지날 때 튀지 않게)
@@ -368,6 +369,7 @@ namespace ACO
             if (!CloudVeil || !_veilMat) { return; }
             float t = _inside * _inside * (3f - 2f * _inside);
             float amount = Mathf.Max(t, _deckIn * DeckVeilStrength) * VeilStrength * (1f - _underwater);
+            if (_viewerOn) { amount = 0f; }   // 카메라 기준 안개(6-275): 물안개 막은 내 머리를 덮는 것이라 격실 안에서는 끈다
             if (amount == _veilApplied) { return; }
             _veilApplied = amount;
             bool on = amount > 0.001f;
@@ -377,6 +379,23 @@ namespace ACO
                 if (on && _hasHead) { CloudVeil.transform.position = _head; }
             }
             if (on) { _veilMat.SetFloat("_Amount", amount); }
+        }
+
+        // 카메라 기준 안개(6-275): 격실 안에서 고글 · 관전 화면을 보는 동안 구름 속 · 층 · 갑판 안개를 그 카메라 자리로 잰다(물속 안개는 넣지 않는다)
+        private bool _viewerOn;
+        private Vector3 _viewerPos;
+        private Vector3 _fogPos;   // 안개를 재는 자리(보통 내 머리)
+
+        /// 관전 카메라가 매 프레임 부른다: on이면 안개 기준을 pos로, 아니면 내 머리로.
+        public void SetFogViewer(bool on, Vector3 pos)
+        {
+            if (on != _viewerOn)
+            {
+                _viewerOn = on;
+                _checkTimer = 0f;   // 다음 Update에서 구름 속 정도를 바로 다시 잰다
+                _fogDirty = true;
+            }
+            _viewerPos = pos;
         }
 
         // 물속 안개(ACO_Underwater가 넣는다): 구름 속 안개 위에 섞는다(0 = 물 밖)
@@ -411,7 +430,7 @@ namespace ACO
             if (t > 0f) { density = Mathf.Lerp(density, InsideFogDensity, t); color = Color.Lerp(color, InsideFogColor, t); }
             // 번개 섬광: 안개(먼 곳·하늘 안개 돔)도 잠깐 밝게 — 물속은 받지 않는다
             if (_flash > 0f) { color = Color.Lerp(color, FlashFogColor, Mathf.Clamp01(_flash) * FlashFogAmount); }
-            if (_underwater > 0f)
+            if (_underwater > 0f && !_viewerOn)
             {
                 density = Mathf.Lerp(density, _underwaterDensity, _underwater);
                 color = Color.Lerp(color, _underwaterColor, _underwater);
@@ -473,7 +492,7 @@ namespace ACO
         private float InsideAmount()
         {
             if (!_hasHead || Clouds == null || CloudCoreCenters == null || CloudCoreExtents == null) { return 0f; }
-            Vector3 head = _head;
+            Vector3 head = _fogPos;
             if (_deckFade > 0.5f && head.y < DeckTop) { return 0f; }   // 이 높이의 뭉게구름은 숨겨져 있다(층 안은 층 안개가 맡는다)
             float best = 0f;
             int n = Mathf.Min(Clouds.Length, Mathf.Min(CloudCoreCenters.Length, CloudCoreExtents.Length));
