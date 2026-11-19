@@ -995,6 +995,20 @@ public static class ACO_PrefabTuning
         new Entry { Id = "tunnel-landmark-1", Text = "터널 랜드마크(6-266): Models/Tunnel/ACO_Tunnel.fbx로 Prefabs/ACO_Tunnel 프리팹을 만들고 씬 지형 장식(TunnelPrefab)에 넣습니다 — 같은 높이 3칸 일렬의 가운데 칸에 확률 0.6으로 터널 산(폭 50m x 높이 40m 관통 터널). 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "wingmen-note-1", Text = "아군 편대 상점 주의 문구에서 '시가지의 차량은 공격하지 않습니다'를 뺍니다(당연한 내용이라). 격납고 프리팹 · 씬 상점의 4번째 주의 문구가 예전 문장일 때만 바꿉니다", Apply = TuneWingmenNote },
+        new Entry { Id = "phase-names-1", Text = "페이즈 이름 · 문구 통일(6-300): ACES - Head&Tail → ACES - {ACE}, ACE SQUADRON → ACE SQUADRON - {BOSS}, SHADE SQUADRON → ACE SQUADRON - SHADE, TIME SENSITIVE 실패 INTERCEPT FAILED → MISSILE LAUNCHED, 무전 문구 오타(Tripple A · you broke · guys 마침표 · 공백 두 칸 · 둥근 따옴표). 씬 페이즈 모듈 — 이전 값일 때만. 번역표 영어 칸은 같이 고쳐 두었다. 뒤에 씬 저장", Apply = TunePhaseNames },
+        new Entry { Id = "table-terrain-holo-1", Text = "CIC 작전 테이블 지형을 홀로그램처럼(6-319): 지형 렌더러 재질 ACO_MapTerrain → ACO_MapTerrainHolo(반투명 80%, 렌더 큐 2450) — 윗면 육각형만 그리고(스크립트) 섬 밑 바다 격자가 비친다", Apply = ACO_HUDBuilder.TuneTableTerrainHolo },
+        new Entry { Id = "table-grid-sea-only-1", Text = "작전 테이블 격자를 바다 위에만(6-318): 격자 머티리얼(ACO_MapGrid) 깊이 판정 Always → LessEqual, 선 높이 1 → 0.5mm — 섬 · 벽 · 사람에 가려진다(옆방 벽 너머로 비치던 것)", Apply = ACO_RadarBuilder.TuneTableGridSeaOnly },
+        new Entry { Id = "cic-panel-over-grid-2", Text = "작전 테이블 격자 머티리얼(ACO_MapGrid) 렌더 큐 2600 → 2440(6-317) — CIC 패널 금속(2449, Standard 불투명이 허용하는 끝)보다 앞에 그린다. 지형 · 마커 뒤라 지형 위에 보이는 건 그대로", Apply = ACO_RadarBuilder.TuneTableGridQueue },
+        new Entry { Id = "cic-panel-over-grid-1", Text = "CIC 도구 패널이 작전 테이블 격자에 덮여 보이던 것(6-317): CIC 금속 머티리얼(ACO_Cic_Steel)의 렌더 큐 2000 → 2449 — 격자보다 뒤에 그려 패널이 격자를 가린다", Apply = ACO_HUDBuilder.TuneCicSteelQueue },
+        new Entry { Id = "cic-map-north-briefing-1", Text = "CIC 테이블 지도의 북쪽을 브리핑실 쪽(서쪽)으로 돌립니다(6-316): 지도 루트(MapRoot) 요 0 → 270° — 지도 · 마커 · 격자 · 북쪽 표시 · CIC 찍기가 같이 돈다. 도구 패널 쪽에 서면 북쪽이 위", Apply = ACO_InteriorBuilder.TuneCicMapNorth },
+        new Entry { Id = "slcm-kh35-1", Text = "잠수함 SLCM 탄체를 Kh-35(SSY 미사일 세트)로 바꿉니다(6-314): 잠수함 프리팹(NPC_Submarine)을 다시 만듭니다 — 순항미사일(토마호크 꼴) · LASM(하푼 꼴)과 구별, 엔진 불꽃 · 연기 · 표적 자리 그대로", Apply = () => ACO_PrefabBuilder.BuildSubmarine() },
+        new Entry { Id = "tunnel-lining-1", Text = "터널 안쪽 무늬(6-310): Tools/aco_tunnel_model.py로 다시 만든 FBX(안쪽 벽 · 천장 UV)로 터널 프리팹 다섯 개를 다시 만들고, 콘크리트에 라이닝 텍스처(12m마다 고리 줄눈 · 얼룩 · 물자국 · 벽 아래 때)를 입힙니다. 씬 연결 · 확률은 그대로", Apply = () => ACO_TunnelBuilder.BuildAll() },
+        new Entry { Id = "tunnel-smooth-1", Text = "터널 천장 부드럽게(6-309): Tools/aco_tunnel_model.py로 다시 만든 FBX(터널 안쪽 벽 · 아치 셰이드 스무스, 30도 넘게 꺾인 모서리는 날카롭게)로 터널 프리팹 다섯 개를 다시 만듭니다. 씬 연결 · 확률은 그대로", Apply = () => ACO_TunnelBuilder.BuildAll() },
+        new Entry { Id = "tunnel-lanes-1", Text = "터널 도로 차선(6-308): Tools/aco_tunnel_model.py로 다시 만든 FBX(도로 UV)로 터널 프리팹 다섯 개를 다시 만들고, 도로에 차선 텍스처(가운데 노란 겹선 · 방향마다 4차로 흰 점선 · 바깥 흰 실선)를 입힙니다. 씬 지형 장식의 연결 · 확률은 그대로", Apply = () => ACO_TunnelBuilder.BuildAll() },
+        new Entry { Id = "score-attack-x2-1", Text = "스코어 어택 2배(6-307): 목표 1500 → 3000점, 사냥터 지상 8 → 14대, 전투기 2 → 4기(씬 Phase_ScoreAttack — 이전 값일 때만). 뒤에 씬 저장", Apply = TuneScoreAttackX2 },
+        new Entry { Id = "city-marker-colors-2", Text = "도시 차량 표시 색(6-304 수정): 식별된 민간(CIV) = 아군과 같은 하늘색, 미확인(?) = 짙은 노랑. 머티리얼 ACO_MarkerCivilian · ACO_MarkerUnknown, ACO_HUD 프리팹의 글자 색(이전 값일 때만), 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneCityMarkerColors2 },
+        new Entry { Id = "civ-marker-blue-1", Text = "식별된 민간 차량 표시(CIV) 색 초록 → 파랑(6-304): 마커 테두리 머티리얼 ACO_MarkerCivilian, ACO_HUD 프리팹의 CIV 글자 색(이전 값일 때만), 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneCivMarkerBlue },
+        new Entry { Id = "amph-landing-tank-spread-1", Text = "상륙 지점 · 전차 산개(6-298): 씬 미션 생성기의 전차 간격 TankSpacing 40 → 150m(매복 · 해안 전차는 옆으로 산개 + 앞뒤 ±50m 엇갈림), 상륙 해안 찾기 시도 LandingCoastAttempts 12 → 30(이전 값일 때만). 뒤에 씬 저장", Apply = TuneAmphLandingTankSpread },
         new Entry { Id = "goggles-pilot-view-3", Text = "CIC 고글 조종사 시점을 기체 기준 자리로(6-290 추가): 조종사 머리 기준 → 기체 원점 기준 AircraftViewOffset(0, 4.66, 3.04 — 지금 자리 그대로). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView3 },
         new Entry { Id = "goggles-pilot-view-2", Text = "CIC 고글 조종사 시점 높이 1m 더(6-290 추가): 조종사 머리 기준 위 1.2 → 2.2m(뒤 1.4m 그대로). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView2 },
         new Entry { Id = "goggles-pilot-view-1", Text = "CIC 고글 조종사 시점 자리(6-290): 조종사 머리 기준 위 0.3 · 뒤 0.8m → 위 1.2 · 뒤 1.4m(좌석 등받이에 묻히던 것). 고글 자리 프리팹 ACO_CicGogglesStation의 두 고글, 씬의 덮어쓴 값은 지운다. 뒤에 씬 저장", Apply = TuneGogglesPilotView },
@@ -1528,6 +1542,164 @@ public static class ACO_PrefabTuning
     }
 
     public const float EcmDuration = 20f;
+
+    /// phase-names-1(6-300): 사용자 "미션 이름이랑 목표 대상 명칭 등 이상하거나 통일되지 않은 부분" → "1, 2, 3부터 해 줘".
+    public static void TunePhaseNames()
+    {
+        int n = 0;
+        foreach (ACO_PhaseModule m in FindInScene<ACO_PhaseModule>())
+        {
+            string name = m.PhaseName;
+            if (name == "ACES - Head&Tail") { name = "ACES - {ACE}"; }
+            else if (name == "ACE SQUADRON") { name = "ACE SQUADRON - {BOSS}"; }
+            else if (name == "SHADE SQUADRON") { name = "ACE SQUADRON - SHADE"; }
+            string fail = m.FailText == "INTERCEPT FAILED" ? "MISSILE LAUNCHED" : m.FailText;
+            string start = FixPhaseText(m.StartText);
+            string ok = FixPhaseText(m.SuccessText);
+            string fc = FixPhaseText(m.FailChatterText);
+            if (name == m.PhaseName && fail == m.FailText && start == m.StartText && ok == m.SuccessText && fc == m.FailChatterText) { continue; }
+            Undo.RecordObject(m, "ACO phase names");
+            m.PhaseName = name;
+            m.FailText = fail;
+            m.StartText = start;
+            m.SuccessText = ok;
+            m.FailChatterText = fc;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 페이즈 이름 · 문구 통일(6-300): 페이즈 모듈 {n}개를 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// 페이즈 무전 문구 오타 · 문장부호(6-300). 번역표 영어 칸도 같은 규칙으로 고친다(무전 자막은 영어 원문으로 번역을 찾는다).
+    public static string FixPhaseText(string s)
+    {
+        if (string.IsNullOrEmpty(s)) { return s; }
+        s = s.Replace("Tripple A", "Triple-A").Replace("! you broke", "! You broke").Replace("\u2019", "'");
+        while (s.Contains(" \n")) { s = s.Replace(" \n", "\n"); }
+        while (s.Contains("  ")) { s = s.Replace("  ", " "); }
+        if (s.EndsWith("Hell of a job, guys")) { s += "."; }
+        return s;
+    }
+
+    /// score-attack-x2-1(6-307): 사용자 "점수 벌기 임무의 점수 지금의 2배" → A안(목표와 사냥터를 같이 늘림).
+    public static void TuneScoreAttackX2()
+    {
+        int n = 0;
+        foreach (ACO_PhaseQuota q in FindInScene<ACO_PhaseQuota>())
+        {
+            bool changed = false;
+            Undo.RecordObject(q, "ACO score attack x2");
+            if (q.QuotaScore == 1500) { q.QuotaScore = 3000; changed = true; }
+            if (q.GroundUnits == 8) { q.GroundUnits = 14; changed = true; }
+            if (q.Fighters == 2) { q.Fighters = 4; changed = true; }
+            if (!changed) { continue; }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(q);
+            EditorUtility.SetDirty(q);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 스코어 어택 2배(6-307): 페이즈 모듈 {n}곳을 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// city-marker-colors-2(6-304 수정): 사용자 "아군 표시랑 똑같이 하늘색으로 해 주고 미확인은 조금 짙은 노랑색으로 해 줘".
+    public static void TuneCityMarkerColors2()
+    {
+        Color civNew = new Color(0.4f, 0.75f, 1f, 0.9f);
+        Color unkNew = new Color(0.9f, 0.72f, 0.1f, 0.9f);
+        Color[] civOld = { new Color(0.35f, 1f, 0.45f, 0.9f), new Color(0.35f, 0.5f, 1f, 0.9f) };
+        Color unkOld = new Color(0.75f, 0.75f, 0.75f, 0.9f);
+        Material civMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/ACO_Addon/Generated/ACO_MarkerCivilian.mat");
+        if (civMat != null) { civMat.color = ACO_HUDBuilder.CivilianBlue; EditorUtility.SetDirty(civMat); }
+        Material unkMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/ACO_Addon/Generated/ACO_MarkerUnknown.mat");
+        if (unkMat != null) { unkMat.color = ACO_HUDBuilder.UnknownYellow; EditorUtility.SetDirty(unkMat); }
+        const string path = "Assets/ACO_Addon/Prefabs/ACO_HUD.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_TargetMarkers m in root.GetComponentsInChildren<ACO_TargetMarkers>(true))
+                {
+                    if (System.Array.IndexOf(civOld, m.CivilianLabelColor) >= 0) { m.CivilianLabelColor = civNew; n++; }
+                    if (m.UnknownLabelColor == unkOld) { m.UnknownLabelColor = unkNew; n++; }
+                }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        int s = 0;
+        foreach (ACO_TargetMarkers m in FindInScene<ACO_TargetMarkers>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(m)) { Revert(m, "CivilianLabelColor", "UnknownLabelColor"); }
+            else
+            {
+                Undo.RecordObject(m, "ACO city marker colors");
+                if (System.Array.IndexOf(civOld, m.CivilianLabelColor) >= 0) { m.CivilianLabelColor = civNew; }
+                if (m.UnknownLabelColor == unkOld) { m.UnknownLabelColor = unkNew; }
+                EditorUtility.SetDirty(m);
+            }
+            s++;
+        }
+        AssetDatabase.SaveAssets();
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 도시 차량 표시 색(6-304): CIV 하늘색 · 미확인 짙은 노랑 — HUD 프리팹 값 {n}개, 씬 마커 {s}개. 씬을 저장하세요.");
+    }
+
+    /// civ-marker-blue-1(6-304): 사용자 "CIV 인식되었을 때 녹색 계열이 아니라 푸른색 계열로 해 줘".
+    public static void TuneCivMarkerBlue()
+    {
+        Color oldLabel = new Color(0.35f, 1f, 0.45f, 0.9f);
+        Color newLabel = new Color(0.35f, 0.5f, 1f, 0.9f);
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>("Assets/ACO_Addon/Generated/ACO_MarkerCivilian.mat");
+        if (mat != null) { mat.color = ACO_HUDBuilder.CivilianBlue; EditorUtility.SetDirty(mat); }
+        const string path = "Assets/ACO_Addon/Prefabs/ACO_HUD.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+        {
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                foreach (ACO_TargetMarkers m in root.GetComponentsInChildren<ACO_TargetMarkers>(true))
+                {
+                    if (m.CivilianLabelColor == oldLabel) { m.CivilianLabelColor = newLabel; n++; }
+                }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(root, path); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        int s = 0;
+        foreach (ACO_TargetMarkers m in FindInScene<ACO_TargetMarkers>())
+        {
+            if (PrefabUtility.IsPartOfPrefabInstance(m)) { Revert(m, "CivilianLabelColor"); }
+            else if (m.CivilianLabelColor == oldLabel) { Undo.RecordObject(m, "ACO civ blue"); m.CivilianLabelColor = newLabel; EditorUtility.SetDirty(m); }
+            s++;
+        }
+        AssetDatabase.SaveAssets();
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] CIV 표시 파랑(6-304): 머티리얼 {(mat != null ? 1 : 0)}개, HUD 프리팹 마커 {n}개, 씬 마커 {s}개. 씬을 저장하세요.");
+    }
+
+    /// amph-landing-tank-spread-1(6-298): 사용자 "150m로 하자, 너무 붙여 두니까 폭탄에 몰살당하더라고" + 상륙 정지점 마른 땅 확인으로 버리는 후보가 늘어 시도 수를 올린다.
+    public static void TuneAmphLandingTankSpread()
+    {
+        int n = 0;
+        foreach (ACO_MissionGenerator g in FindInScene<ACO_MissionGenerator>())
+        {
+            bool changed = false;
+            Undo.RecordObject(g, "ACO amphibious landing / tank spread");
+            if (Mathf.Approximately(g.TankSpacing, 40f)) { g.TankSpacing = 150f; changed = true; }
+            if (g.LandingCoastAttempts == 12) { g.LandingCoastAttempts = 30; changed = true; }
+            if (!changed) { continue; }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(g);
+            EditorUtility.SetDirty(g);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 전차 간격 150m · 상륙 해안 시도 30(6-298): 미션 생성기 {n}곳을 바꿨습니다. 씬을 저장하세요.");
+    }
 
     /// goggles-pilot-view-3(6-290 추가): 조종사 머리 기준 → 기체 기준(사용자 "조종사 머리 말고 기체에 상대적 위치로 하자, 이전 위치를 상대적 위치로 해줘").
     public static void TuneGogglesPilotView3() { SetGogglesPilotView(new Vector3(0f, 4.66f, 3.04f)); }

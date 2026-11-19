@@ -237,6 +237,33 @@ public static class ACO_InteriorBuilder
     }
 
     /// CIC 전술 테이블 지도. 씬에 없으면 받침 없이 만들어 유리판 위에 놓는다.
+    /// CIC 테이블 지도의 북쪽(MapRoot 로컬 +Z)이 가리키는 쪽(6-316, 사용자 "테이블 북쪽을 브리핑실 방향으로 돌려 줘"): 브리핑실은 CIC의 서쪽(내부 모델 −X) —
+    /// MapRoot를 테이블 기준 요 −90°(270°)로 돌린다. 도구 패널(테이블 동쪽)에 선 사람이 브리핑실 쪽을 보면 지도 북쪽이 위다.
+    /// 지도 · 마커 · 격자 · 북쪽 표시 · CIC 찍기는 모두 MapRoot 기준이라 같이 돈다. 테이블 루트(도구 패널 자리 기준)는 돌리지 않는다.
+    public const float CicMapYaw = 270f;
+
+    public static void FaceCicMapNorth(ACO_TacticalMap map)
+    {
+        if (map == null || map.MapRoot == null || map.MapRoot == map.transform) { return; }
+        Undo.RecordObject(map.MapRoot, "ACO map north");
+        map.MapRoot.localRotation = Quaternion.Euler(0f, CicMapYaw, 0f);
+        EditorUtility.SetDirty(map.MapRoot);
+    }
+
+    /// 프리팹 수치 cic-map-north-briefing-1: 씬의 CIC 테이블(함내 구역 안의 작전 테이블) 지도를 브리핑실 쪽 북쪽으로 — 아직 돌리지 않은(요 0) 것만.
+    public static void TuneCicMapNorth()
+    {
+        ACO_InteriorZone zone = UnityEngine.Object.FindObjectOfType<ACO_InteriorZone>(true);
+        foreach (ACO_TacticalMap m in UnityEngine.Object.FindObjectsOfType<ACO_TacticalMap>(true))
+        {
+            if (zone == null || zone.Boxes == null || !zone.Contains(m.transform.position)) { continue; }
+            if (m.MapRoot == null || Mathf.Abs(Mathf.DeltaAngle(m.MapRoot.localEulerAngles.y, 0f)) > 0.5f) { continue; }
+            FaceCicMapNorth(m);
+            Debug.Log("[ACO] CIC 테이블 지도의 북쪽을 브리핑실 쪽으로 돌렸습니다(6-316).", m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+    }
+
     private static string FitTacticalMap(Transform interior, List<Placement> tables)
     {
         if (tables.Count == 0) { return $"{TacticalMap}: 테이블이 레이아웃에 없어 건너뜀"; }
@@ -257,6 +284,8 @@ public static class ACO_InteriorBuilder
         component.VerticalExaggeration = TableExaggeration;
         component.ActiveRadius = TableActiveRadius;
         ACO_RadarBuilder.EnsureTacticalNorthMark(component);
+        ACO_RadarBuilder.EnsureTacticalGrid(component);   // 좌표 격자(6-301)
+        FaceCicMapNorth(component);                        // 지도 북쪽 = 브리핑실 쪽(6-316)
         // 받침이 있던 예전 지도: 받침을 끄고 지도를 루트 높이로 내린다. 윗면은 모델 테이블이다
         Transform table = map.Find("Table");
         if (table != null)

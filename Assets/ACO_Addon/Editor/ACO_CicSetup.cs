@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 using ACO;
 
 /// CIC 도구(6-275) 씬 설치 — Setup Check가 부른다. 프리팹이 없으면 만든다. 연결은 Bake.
-///  - 도구 패널(ACO_CicConsole): CIC 전술 테이블 동쪽(테이블 축 +X) 윗면 테두리, 바깥(+X)에 선 사람을 향한다.
+///  - 도구 패널(ACO_CicConsole): CIC 전술 테이블 동쪽(테이블 축 +X) 강철 테두리 위(받침이 테두리에 얹힌다 — 6-315), 바깥(+X)에 선 사람을 향한다.
 ///  - 고글 자리(ACO_CicGogglesStation): CIC 남쪽 벽 동쪽 책상의 첫 모니터(x 11.95) 화면을 덮는다, 방 쪽을 향한다(내부 모델 좌표 — ACO_Interior 기준).
 ///  - 정찰 드론(ACO_CicUav): 씬 루트에 하나(꺼진 채 — 콘솔이 켠다).
 /// 자리가 어긋난 도구 패널 · 고글 자리(예전 받침대 자리 등)는 다시 놓는다.
@@ -61,7 +61,7 @@ public static class ACO_CicSetup
         Vector3 east = t.rotation * Vector3.right;
         east.y = 0f;
         east = east.normalized;
-        pose = new Pose(t.position + east * ACO_HUDBuilder.CicRimDistance, Quaternion.LookRotation(east, Vector3.up));   // +Z = 테이블 바깥(사용자 쪽)
+        pose = new Pose(t.position + east * ACO_HUDBuilder.CicRimDistance - Vector3.up * ACO_HUDBuilder.CicRimDrop, Quaternion.LookRotation(east, Vector3.up));   // +Z = 테이블 바깥(사용자 쪽)
         return true;
     }
 

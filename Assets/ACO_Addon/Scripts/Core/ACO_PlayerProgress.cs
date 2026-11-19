@@ -136,6 +136,8 @@ namespace ACO
         public float PersonalShare = 1f;
         [Tooltip("격추당할 때마다 깎는 비율(총보상 기준)")]
         [Range(0f, 1f)] public float DeathPenalty = 0.45f;
+        [Tooltip("S 랭크(팀 무격추)로 클리어하면 보상에 더하는 비율(6-297)")]
+        public float RankSBonus = 0.2f;
         [Tooltip("이만큼 격추당하면 최소 보상만 받는다")]
         public int MinimumRewardDeaths = 2;
         [Tooltip("최소 보상 비율(미션 실패 또는 MinimumRewardDeaths번 이상 격추)")]
@@ -241,6 +243,7 @@ namespace ACO
         private int _lastTeamPart;
         private int _lastPersonalPart;
         private float _lastFraction;
+        private bool _lastRankS;
         private int _lastDeaths;
         private bool _lastSortied;
         private int _lastMission;
@@ -642,6 +645,7 @@ namespace ACO
             if (!_inMission || _rewarded || Manager == null || Manager.GetState() != ACO_MissionManager.STATE_RUNNING) { return; }
             _deaths++;
             _version++;
+            Manager.ReportPilotDown();   // 팀 격추 수 · 작전 기록판 손실 칸(6-297)
         }
 
         /// 조종석에서 내렸다(폭발로 내려진 경우는 빼고, ACO_VehicleUpgrades). 미션 중 안전지대 밖이면 격추로 센다.
@@ -767,6 +771,10 @@ namespace ACO
             if (cicOnly) { fraction *= CicOnlyShare; }
             int reward = Mathf.RoundToInt((team + personal) * fraction);
             if (RequireSortie && !_sortied && !cicOnly) { reward = 0; }
+            // S 랭크(팀 무격추) 보너스(6-297)
+            bool rankS = success && Manager.GetRank() == ACO_MissionManager.RANK_S;
+            if (rankS) { reward = Mathf.RoundToInt(reward * (1f + RankSBonus)); }
+            _lastRankS = rankS && reward > 0;
 
             _hasLastReward = true;
             _lastMission = _missionStart;
@@ -819,6 +827,7 @@ namespace ACO
             if (_lastFraction < 0.999f) { s += " x" + Mathf.RoundToInt(_lastFraction * 100f) + "%"; }
             if (_lastDeaths > 0) { s += "  " + T("prog.reward.shotdown", "SHOT DOWN {0}").Replace("{0}", _lastDeaths.ToString()); }
             if (_lastCicOnly) { s += "  " + T("prog.reward.ciconly", "CIC ONLY"); }
+            if (_lastRankS) { s += "  " + T("prog.reward.ranks", "RANK S +{0}%").Replace("{0}", Mathf.RoundToInt(RankSBonus * 100f).ToString()); }
             return s;
         }
     }

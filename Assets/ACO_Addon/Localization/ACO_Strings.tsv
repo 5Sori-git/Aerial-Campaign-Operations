@@ -13,6 +13,8 @@ set.cat.radar	레이더	RADAR	レーダー
 set.cat.crew	갑판 요원	DECK CREW	甲板要員
 set.cat.graphics	그래픽	GRAPHICS	グラフィック
 set.cat.language	LANGUAGE · 언어 · 言語	LANGUAGE · 언어 · 言語	LANGUAGE · 언어 · 言語
+set.cat.shade	HUD 그늘	HUD SHADE	HUDシェード
+set.cat.general	일반	GENERAL	一般
 set.row.leftright	좌우	LEFT / RIGHT	左右
 set.row.updown	상하	UP / DOWN	上下
 set.row.distance	거리	DISTANCE	距離
@@ -34,6 +36,8 @@ set.row.range	표시 거리	RANGE	表示範囲
 set.row.blip	점 크기	BLIP SIZE	点のサイズ
 set.row.cloud	구름 품질	CLOUD QUALITY	雲の品質
 set.row.language	언어	LANGUAGE	言語
+set.row.darkness	진하기	DARKNESS	濃さ
+set.row.pipper	건 피퍼 크기	GUN PIPPER SIZE	ガンパイパーサイズ
 set.reset	모두 초기화	RESET ALL	すべてリセット
 set.hint	자동으로 저장됩니다\n바꾸는 동안 HUD가 미리 보입니다	SAVED AUTOMATICALLY\nYOUR HUD PREVIEWS WHILE ADJUSTING	自動で保存されます\n調整中はHUDをプレビューします
 set.on	켜짐	ON	オン
@@ -49,6 +53,7 @@ set.color.3	흰색	WHITE	ホワイト
 set.color.4	주황	ORANGE	オレンジ
 set.color.5	분홍	PINK	ピンク
 set.lang.auto	자동	AUTO	自動
+set.shade.full	화면 전체	FULL SCREEN	画面全体
 # 로드아웃 패널 — 진행도 이름(prog.*: 강화 · 장비 · 지원 호출권, 키 끝 = 저장 ID), 상점(shop.*), 무장 목록(load.*), 무장 설명(wpn.<무장 ID> — 첫 줄 = 부제)
 prog.up.hull	기체 장갑	HULL ARMOR	機体装甲
 prog.updesc.hull	기체를 보강합니다. 더 많이 맞아도 버팁니다.	REINFORCED AIRFRAME. TAKES MORE HITS BEFORE GOING DOWN.	機体を補強し、より多くの被弾に耐えます。
@@ -157,6 +162,7 @@ prog.callnote.wingmen	작전 중에만 부를 수 있고, 격추될 수 있습�
 prog.reward.nosortie	보상 0 CR  (출격 안 함)	REWARD 0 CR  (NO SORTIE)	報酬 0 CR  (出撃なし)
 prog.reward.base	보상 +{0} CR  (팀 {1} + 나 {2})	REWARD +{0} CR  (TEAM {1} + YOU {2})	報酬 +{0} CR  (チーム {1} + 自分 {2})
 prog.reward.shotdown	격추당함 {0}	SHOT DOWN {0}	被撃墜 {0}
+prog.reward.ranks	S 랭크 +{0}%	RANK S +{0}%	Sランク +{0}%
 common.loadingsave	저장 데이터를 불러오는 중...	LOADING SAVE DATA...	セーブデータを読み込み中...
 common.loading	불러오는 중...	LOADING...	読み込み中...
 common.nocredits	크레딧이 부족합니다	NOT ENOUGH CREDITS	クレジットが足りません
@@ -268,6 +274,9 @@ flow.msg.respawning	기체 재배치 중 - 잠시 뒤 다시 시도하세요	AIR
 flow.msg.inuse	기체 사용 중	AIRCRAFT IN USE	機体使用中
 flow.msg.nodeck	{0}번 자리의 갑판 위치가 없습니다	NO DECK POINT FOR SLOT {0}	枠{0}の甲板位置がありません
 flow.msg.launchfailed	출격 실패 - 다시 시도하세요	LAUNCH FAILED - TRY AGAIN	出撃失敗 - もう一度お試しください
+# 버전 확인 (ACO_VersionGuard, 6-296)
+ver.checking	월드 버전 확인 중...	Checking the world version...	ワールドのバージョンを確認中...
+ver.mismatch	이 인스턴스는 다른(이전) 버전의 월드로 열렸습니다.\n새 인스턴스를 만들어 주세요.	This instance was opened with a different (older) version of the world.\nPlease create a new instance.	このインスタンスは別の（以前の）バージョンのワールドで開かれています。\n新しいインスタンスを作成してください。
 flow.btn.join	참가	JOIN	参加
 flow.btn.leave	나가기	LEAVE	離脱
 flow.btn.locked	잠김	LOCKED	ロック中
@@ -382,6 +391,7 @@ log.complete	미션 성공	MISSION COMPLETE	ミッション成功
 log.failed	미션 실패	MISSION FAILED	ミッション失敗
 log.debrief	디브리핑	DEBRIEFING	デブリーフィング
 log.rank	등급 {0}	RANK {0}	ランク {0}
+log.rankloss	등급 {0} (손실 {1})	RANK {0} (LOSSES {1})	ランク {0} (損失 {1})
 log.breakdown	(격추 {0} + 페이즈 {1} + 클리어 {2} + 시간 {3})	(KILLS {0} + PHASE {1} + CLEAR {2} + TIME {3})	（撃墜 {0} + フェーズ {1} + クリア {2} + タイム {3}）
 log.time	시간 {0}	TIME {0}	タイム {0}
 log.col	시간<pos=13%>격자<pos=27%>조종사<pos=62%>표적<pos=90%>점수	TIME<pos=13%>GRID<pos=27%>PILOT<pos=62%>TARGET<pos=90%>PTS	時間<pos=13%>グリッド<pos=27%>パイロット<pos=62%>目標<pos=90%>点
@@ -389,7 +399,7 @@ log.newer	^ 새 기록 {0}개  (최신으로)	^ {0} NEWER  (LATEST)	^ 新しい�
 log.earlier	v 이전 기록 {0}개	v {0} EARLIER	v 以前の記録 {0}件
 log.notkept	({0}개는 보관 안 됨)	({0} NOT KEPT)	（{0}件は未保存）
 log.nokills	아직 격추 없음	NO KILLS YET	まだ撃墜なし
-log.pilotcol	조종사<pos=58%>격추<pos=78%>점수	PILOT<pos=58%>KILLS<pos=78%>SCORE	パイロット<pos=58%>撃墜<pos=78%>スコア
+log.pilotcol	조종사<pos=50%>격추<pos=64%>손실<pos=80%>점수	PILOT<pos=50%>KILLS<pos=64%>DEATHS<pos=80%>SCORE	パイロット<pos=50%>撃墜<pos=64%>被撃墜<pos=80%>スコア
 log.phasecomplete	페이즈 {0} 완료	PHASE {0} COMPLETE	フェーズ{0} 完了
 log.phasefailed	페이즈 {0} 실패	PHASE {0} FAILED	フェーズ{0} 失敗
 log.ally	아군 유닛	ALLY UNIT	友軍ユニット
@@ -636,7 +646,7 @@ radio.chatter.42	전 항공기, 작전 개시. 건투를 빈다.	All aircraft, t
 radio.chatter.43	발진 허가 확인. 캐터펄트 사출 허가.	Launch authorization confirmed. Clear for cat-launch.	発艦許可確認。カタパルト射出を許可する。
 radio.chatter.44	갑판 요원의 유도에 따라 발진 절차를 시작하라.	Follow the deck crew's guidance and initiate launch procedures.	甲板員の誘導に従い、発艦手順を開始せよ。
 radio.phasedestroy.01	다수의 적기가 작전 구역에 진입! 구역을 소탕하고 제공권을 확보하라!	Multiple bandits entering the AO! Sweep the area and establish air control!	複数の敵機が作戦空域に侵入！空域を掃討し、制空権を確保せよ！
-radio.phasedestroy.02	적 공세 격퇴! 전선을 지켜 내고 당분간 공역을 확보했다.	Enemy wave repelled! We’ve held the line and secured the airspace for now.	敵の波状攻撃を撃退！戦線を守り、ひとまず空域を確保した。
+radio.phasedestroy.02	적 공세 격퇴! 전선을 지켜 내고 당분간 공역을 확보했다.	Enemy wave repelled! We've held the line and secured the airspace for now.	敵の波状攻撃を撃退！戦線を守り、ひとまず空域を確保した。
 radio.twins.01	헤즈 앤 테일즈, 현장 도착. 너희가 어느 면으로 떨어질지 볼까.	Heads and Tails, on station. Let's see which side you land on.	ヘッズ・アンド・テイルズ、配置についた。お前たちがどちらの面に落ちるか見せてもらおう。
 radio.twins.02	한 명당 한 번씩 던져 주지. 앞면이면 내가 이긴다.	One toss for each of you. Heads, I win.	一人につき一投だ。表なら、私の勝ち。
 radio.twins.03	동전엔 두 면이 있지. 넌 틀린 쪽을 골랐다.	Every coin has two faces. You picked the wrong one.	コインには二つの面がある。お前は外れを選んだ。
@@ -650,7 +660,7 @@ radio.phaseamphibious.02	상륙정이 해안에 닿았다. 병력이 상륙한�
 radio.phaseamphibious.03	상륙정 전멸. 상륙 작전 실패.	All landing craft are down. The assault has failed.	上陸艇全滅。上陸作戦は失敗した。
 radio.phaseamphibious.04	적 증원 접근 중! 상륙정을 엄호하라!	Enemy reinforcements inbound! Cover the landing craft!	敵増援、接近中！上陸艇を援護せよ！
 radio.phasedestroy.03	레이더에 고위협 신호 탐지. 적 에이스 비행대다. 정신 바짝 차려라!	High-threat signature detected on radar. It's an enemy ace squadron. Stay sharp out there!	レーダーに高脅威反応。敵エース部隊だ。気を引き締めろ！
-radio.phasedestroy.04	적 에이스 부대 전기 격추 확인! 적의 사기를 꺾었다. 훌륭했다!	Confirming splash on the entire enemy ace unit! you broke the enemy's spirit. Outstanding work!	敵エース部隊の全機撃墜を確認！敵の士気を砕いた。見事だ！
+radio.phasedestroy.04	적 에이스 부대 전기 격추 확인! 적의 사기를 꺾었다. 훌륭했다!	Confirming splash on the entire enemy ace unit! You broke the enemy's spirit. Outstanding work!	敵エース部隊の全機撃墜を確認！敵の士気を砕いた。見事だ！
 radio.phaseluna.01	도시에 불이 켜졌어. 이제 하늘이 떨어지기만 하면 돼.	The city is lit. All that is left is for the sky to fall.	街に灯がともった。あとは空が落ちるだけ。
 radio.phaseluna.02	작은 달들아, 떠올라. 저것들을 내게서 떼어 놔.	Little moons, rise. Keep them away from me.	小さな月たち、昇りなさい。あの子たちを私に近づけないで。
 radio.phaseluna.03	요격 드론을 띄웠다! 주변 미사일을 격추할 거다. 드론부터 잡거나, 한꺼번에 퍼부어라!	She has launched interceptor drones! They will shoot down missiles near her. Kill the drones first, or fire everything at once!	迎撃ドローンを放った！周囲のミサイルを撃ち落とすぞ。先にドローンを落とすか、一斉に撃ち込め！
@@ -689,8 +699,8 @@ radio.phasefortress.17	말도 안 돼... 코어가... 이렇게 죽을 순 없�
 radio.phasefortress.18	코어 파괴! 추락한다!	Core destroyed! It is going down!	コア破壊！墜ちていくぞ！
 radio.phasefortress.19	추락 확인. 요새는 사라졌다.	Impact confirmed. The fortress is gone.	墜落を確認。要塞は消滅した。
 radio.phasefortress.20	요새가 도시에 추락했다... 우리가 너무 늦었다.	The fortress has hit the city... We were too late.	要塞が街に墜ちた……間に合わなかった。
-radio.phasefortress.21	열권에서 거대한 반응이 하강 중! 식별 중... 확인,\n코드네임 아크엔젤! 거대 비행 요새다—먼저 대공 체계를 무력화하라!	A massive contact is descending from the thermosphere! Identifying... Confirmed, \ncode name Archangel! It's a giant flying fortress—neutralize its air defense system first!	熱圏から巨大な反応が降下中！識別中……確認、\nコードネーム・アークエンジェル！巨大空中要塞だ、まず防空システムを無力化しろ！
-radio.phasefortress.22	도시를 지켜 냈다. 끝내주는 솜씨였다, 다들.	We saved the city. Hell of a job, guys	街を守り抜いた。最高の仕事だったぞ、みんな。
+radio.phasefortress.21	열권에서 거대한 반응이 하강 중! 식별 중... 확인,\n코드네임 아크엔젤! 거대 비행 요새다—먼저 대공 체계를 무력화하라!	A massive contact is descending from the thermosphere! Identifying... Confirmed,\ncode name Archangel! It's a giant flying fortress—neutralize its air defense system first!	熱圏から巨大な反応が降下中！識別中……確認、\nコードネーム・アークエンジェル！巨大空中要塞だ、まず防空システムを無力化しろ！
+radio.phasefortress.22	도시를 지켜 냈다. 끝내주는 솜씨였다, 다들.	We saved the city. Hell of a job, guys.	街を守り抜いた。最高の仕事だったぞ、みんな。
 radio.phasefortress.23	도시를 잃었다. 희생자가 엄청날 거다. 전 부대, 후퇴하라.	The city is lost. The body count must be catastrophic. All units, retreat	街は失われた。犠牲者は計り知れない。全部隊、後退せよ。
 radio.phaseescort.01	전 편대, 수송기 주위에 방어 대형을 갖춰라! 고가치 자산에 적을 접근시키지 마라!	All flights, take up defense formation around the transport! Keep all hostiles away from the high-value asset!	全編隊、輸送機の周囲に防御陣形を取れ！高価値目標に敵を近づけるな！
 radio.phaseescort.02	수송기가 목적지에 무사히 도착했다! 자산 피해 없음. 훌륭했다!	Transport has safely reached destination! Zero casualties on the asset. Outstanding work!	輸送機が無事目的地に到着！被害ゼロ。見事だ！
@@ -722,7 +732,7 @@ radio.twins.14	우리 형을 떨어뜨렸어?! 동전 던지기는 끝이야... 
 radio.twins.15	골라 봐, 조종사들!	Call it, pilots!	さあ選びな、パイロットども！
 radio.twins.16	오, 반짝반짝! 네 미사일은 저게 더 좋은가 봐!	Ooh, shiny! Your missile likes those better!	おっ、キラキラ！君のミサイルはそっちがお好みみたいだね！
 radio.phasequota.01	작전 구역 전체를 소탕하라. 보이는 적은 모두 파괴하라!	Clear the entire operation area. Destroy every hostile element in sight!	作戦区域全体を掃討せよ。視界に入る敵はすべて破壊しろ！
-radio.phasequota.02	목표 할당량 초과 달성! 적 방어를 완전히 무너뜨렸다.	Target quotas exceeded! You’ve completely crushed their defenses.	目標ノルマ超過達成！敵の防衛を完全に粉砕した。
+radio.phasequota.02	목표 할당량 초과 달성! 적 방어를 완전히 무너뜨렸다.	Target quotas exceeded! You've completely crushed their defenses.	目標ノルマ超過達成！敵の防衛を完全に粉砕した。
 radio.phaselandship.01	전 포대, 사격 개시. 도시까지 길을 갈아엎어라.	All batteries, open fire. Grind a path to the city.	全砲台、撃ち方始め。街まで道を切り拓け。
 radio.phaselandship.02	장갑판 파괴! 뒤쪽 궤도가 드러났다!	Armor plate down! The track behind it is exposed!	装甲板撃破！その奥の履帯が露出した！
 radio.phaselandship.03	궤도 절반을 잃었다! 계속 전진, 남은 궤도에 전력을 몰아라!	Half our tracks are gone! Keep moving, full power to the rest!	履帯の半分を失った！前進を続けろ、残りに全出力を回せ！
@@ -789,7 +799,7 @@ radio.phaseintercept.03	도시가 폭격당했다... 임무 실패. 전 부대, 
 radio.phasedestroy.05	전 편대, 강화 구조물을 우선 공격하라. 주목표를 무력화하라!	All flights, prioritize the hardened structures. Neutralize the primary target!	全編隊、強化構造物を優先せよ。主目標を無力化しろ！
 radio.phasedestroy.06	주목표 전부 파괴. 위협 제거. 모두 훌륭했다.	All primary targets destroyed. Threat eliminated. Excellent work out there, everyone.	主目標をすべて破壊。脅威排除。皆、見事だった。
 radio.phaseconvoy.01	호송대가 적 지역을 통과하고 있다. 움직임을 주시하며 길을 열어라!	The convoy is moving through hostile territory. Keep an eye on their movement and clear the road!	輸送隊が敵地を通過中だ。動きを見守り、道を切り拓け！
-radio.phaseconvoy.02	호송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete,  well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
+radio.phaseconvoy.02	호송대가 방어선 안으로 무사히 들어왔다! 호위 임무 완료, 다들 잘했다!	The convoy is safely inside the defense perimeter! Escort mission complete, well done team!	輸送隊が無事防衛線内に入った！護衛任務完了、よくやった！
 radio.phaseconvoy.03	호송대를 잃었다. 임무 실패. 기지로 귀환하라.	The convoy is gone. Mission failed. Return to base.	輸送隊が全滅した。任務失敗。帰投せよ。
 radio.phaseconvoy.04	적 증원 접근 중! 호송대를 엄호하라!	Enemy reinforcements inbound! Cover the convoy!	敵増援、接近中！輸送隊を援護せよ！
 radio.phaseconvoy.05	적 증원 접근 중! 호송대를 끝까지 지켜라!	Enemy reinforcements inbound! Get the convoy home!	敵増援、接近中！輸送隊を最後まで守り抜け！
@@ -806,7 +816,7 @@ radio.phasefleet.10	항모가 불타고 있다! 끝장내라!	The carrier is bur
 radio.phasefleet.11	전방에 적 항모 전단. 아군 함대가 포격 거리로 접근 중이다. 함대를 지원해 항모를 격침하라!	Enemy carrier group ahead. Our fleet is closing to gun range. Support them and sink that carrier!	前方に敵空母打撃群。味方艦隊が砲撃距離へ接近中。艦隊を支援し、空母を沈めろ！
 radio.phasefleet.12	항모가 가라앉는다! 적 함대가 이탈하고 있다!	The carrier is going down! The enemy fleet is breaking off!	空母が沈んでいく！敵艦隊が離脱していく！
 radio.phasefleet.13	기함을 잃었다... 전 부대, 철수하라.	The flagship is lost... All units, withdraw.	旗艦を失った……全部隊、撤退せよ。
-radio.phasedestroy.07	SAM 기지와 대공포 진지에 집중하라!\n적 대공망을 뚫고 길을 열어라!	Focus on the SAM sites and Tripple A installations!\nClear a path through their air defense network!	SAMサイトと対空砲陣地に集中しろ！\n敵防空網を突破し、道を開け！
+radio.phasedestroy.07	SAM 기지와 대공포 진지에 집중하라!\n적 대공망을 뚫고 길을 열어라!	Focus on the SAM sites and Triple-A installations!\nClear a path through their air defense network!	SAMサイトと対空砲陣地に集中しろ！\n敵防空網を突破し、道を開け！
 radio.phasedestroy.08	적 대공망 무력화! 훌륭했다, 회랑이 열렸다!	Enemy air defenses offline! Excellent work, the corridor is open!	敵防空網沈黙！見事だ、回廊が開いた！
 # CIC 도구 (6-275) — 도구 패널 · 고글 관전 패널 · 고글 NO SIGNAL
 cic.title	CIC 도구	CIC TOOLS	CICツール

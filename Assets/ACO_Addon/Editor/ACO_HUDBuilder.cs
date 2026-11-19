@@ -2232,6 +2232,29 @@ public static partial class ACO_HUDBuilder
 
         hud.Root = root;
         hud.Canvas = canvas;
+        // HUD 그늘(6-302): 선 · 글자 뒤(렌더 큐 3990), 깊이 무시. 메시는 스크립트가 크기별로 만든다. 진하기 0이면 꺼 둔다
+        {
+            Shader radar = Shader.Find("ACO/RadarVertexColor");
+            string shadePath = $"{GeneratedDir}/ACO_FlightHudShade.mat";
+            Material shadeMat = AssetDatabase.LoadAssetAtPath<Material>(shadePath);
+            if (shadeMat == null && radar != null)
+            {
+                shadeMat = new Material(radar) { name = "ACO_FlightHudShade" };
+                shadeMat.SetColor("_Color", new Color(0f, 0.02f, 0.03f, 0.7f));
+                shadeMat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.Always);
+                shadeMat.renderQueue = 3990;
+                shadeMat = SaveAsset(shadeMat, shadePath);
+            }
+            var shade = new GameObject("Shade");
+            shade.transform.SetParent(canvas, false);
+            shade.transform.localPosition = new Vector3(0.4f, -0.6f, 0.5f);
+            hud.ShadeFilter = shade.AddComponent<MeshFilter>();
+            hud.ShadeRenderer = shade.AddComponent<MeshRenderer>();
+            hud.ShadeRenderer.sharedMaterial = shadeMat;
+            hud.ShadeRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            hud.ShadeRenderer.receiveShadows = false;
+            shade.SetActive(false);
+        }
         hud.LineRenderers = lines.ToArray();
         hud.AllTexts = texts.ToArray();
         foreach (Transform t in prefabRoot.GetComponentsInChildren<Transform>(true)) { t.gameObject.layer = 5; }
@@ -3250,42 +3273,46 @@ public static partial class ACO_HUDBuilder
     }
 
     // 제목 · 줄 이름은 번역 표(Localization/ACO_Strings.tsv)의 키(6-166) — 라벨 오브젝트 이름 = 키, 기본 글자 = 영어. 언어는 번역 장치가 바꾼다.
+    // 6-303 종류별: 왼쪽 = 비행 HUD · 조준, 가운데 = 머리를 따라오는 패널(+ RESET), 오른쪽 = 레이더 · 경보 · 일반 · 언어
     private static readonly HudCategory[] HudCategories =
     {
-        new HudCategory(0, "set.cat.score",
-            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE, ACO_HudSettings.ITEM_HUD_FOLLOW },
-            new[] { "set.row.leftright", "set.row.updown", "set.row.distance", "set.row.size", "set.row.follow" }),
         new HudCategory(0, "set.cat.flighthud",
-            new[] { ACO_HudSettings.ITEM_FLIGHT_HUD, ACO_HudSettings.ITEM_FLIGHT_HUD_SIZE, ACO_HudSettings.ITEM_FLIGHT_HUD_BRIGHT, ACO_HudSettings.ITEM_DISTANCE_UNIT },
-            new[] { "set.row.show", "set.row.size", "set.row.brightness", "set.row.unit" }),
+            new[] { ACO_HudSettings.ITEM_FLIGHT_HUD, ACO_HudSettings.ITEM_FLIGHT_HUD_SIZE, ACO_HudSettings.ITEM_FLIGHT_HUD_BRIGHT, ACO_HudSettings.ITEM_PIPPER_SIZE },
+            new[] { "set.row.show", "set.row.size", "set.row.brightness", "set.row.pipper" }),
+        new HudCategory(0, "set.cat.shade",
+            new[] { ACO_HudSettings.ITEM_HUD_SHADE, ACO_HudSettings.ITEM_HUD_SHADE_SIZE },
+            new[] { "set.row.darkness", "set.row.size" }),
         new HudCategory(0, "set.cat.color",
             new[] { ACO_HudSettings.ITEM_HUD_COLOR, ACO_HudSettings.ITEM_TEXT_SHADOW },
             new[] { "set.row.color", "set.row.shadow" }),
-        new HudCategory(0, "set.cat.result",
+        new HudCategory(0, "set.cat.crosshair",
+            new[] { ACO_HudSettings.ITEM_CROSSHAIR, ACO_HudSettings.ITEM_CROSSHAIR_SIZE, ACO_HudSettings.ITEM_CROSSHAIR_DISTANCE },
+            new[] { "set.row.show", "set.row.size", "set.row.chdistance" }),
+        new HudCategory(0, "set.cat.markers",
+            new[] { ACO_HudSettings.ITEM_MARKER_SIZE, ACO_HudSettings.ITEM_INFO_ANGLE },
+            new[] { "set.row.framesize", "set.row.infoangle" }),
+        new HudCategory(1, "set.cat.score",
+            new[] { ACO_HudSettings.ITEM_PANEL_X, ACO_HudSettings.ITEM_PANEL_Y, ACO_HudSettings.ITEM_PANEL_DISTANCE, ACO_HudSettings.ITEM_PANEL_SCALE, ACO_HudSettings.ITEM_HUD_FOLLOW },
+            new[] { "set.row.leftright", "set.row.updown", "set.row.distance", "set.row.size", "set.row.follow" }),
+        new HudCategory(1, "set.cat.result",
             new[] { ACO_HudSettings.ITEM_RESULT_X, ACO_HudSettings.ITEM_RESULT_Y, ACO_HudSettings.ITEM_RESULT_SCALE },
             new[] { "set.row.leftright", "set.row.updown", "set.row.size" }),
         new HudCategory(1, "set.cat.subtitle",
             new[] { ACO_HudSettings.ITEM_CHATTER_X, ACO_HudSettings.ITEM_CHATTER_Y, ACO_HudSettings.ITEM_CHATTER_SCALE },
             new[] { "set.row.leftright", "set.row.updown", "set.row.size" }),
-        new HudCategory(1, "set.cat.markers",
-            new[] { ACO_HudSettings.ITEM_MARKER_SIZE, ACO_HudSettings.ITEM_INFO_ANGLE },
-            new[] { "set.row.framesize", "set.row.infoangle" }),
-        new HudCategory(2, "set.cat.crosshair",
-            new[] { ACO_HudSettings.ITEM_CROSSHAIR, ACO_HudSettings.ITEM_CROSSHAIR_SIZE, ACO_HudSettings.ITEM_CROSSHAIR_DISTANCE },
-            new[] { "set.row.show", "set.row.size", "set.row.chdistance" }),
+        new HudCategory(2, "set.cat.radar",
+            new[] { ACO_HudSettings.ITEM_RADAR, ACO_HudSettings.ITEM_RADAR_SIZE, ACO_HudSettings.ITEM_RADAR_X, ACO_HudSettings.ITEM_RADAR_Y, ACO_HudSettings.ITEM_RADAR_ALPHA, ACO_HudSettings.ITEM_RADAR_RANGE, ACO_HudSettings.ITEM_RADAR_BLIP },
+            new[] { "set.row.show", "set.row.size", "set.row.leftright", "set.row.updown", "set.row.opacity", "set.row.range", "set.row.blip" }),
         new HudCategory(2, "set.cat.rwr",
             new[] { ACO_HudSettings.ITEM_RWR, ACO_HudSettings.ITEM_RWR_SIZE, ACO_HudSettings.ITEM_RWR_MISSILE_SIZE, ACO_HudSettings.ITEM_RWR_LOCK_SIZE },
             new[] { "set.row.show", "set.row.ringsize", "set.row.missilemark", "set.row.lockarc" }),
-        new HudCategory(1, "set.cat.radar",
-            new[] { ACO_HudSettings.ITEM_RADAR, ACO_HudSettings.ITEM_RADAR_SIZE, ACO_HudSettings.ITEM_RADAR_X, ACO_HudSettings.ITEM_RADAR_Y, ACO_HudSettings.ITEM_RADAR_ALPHA, ACO_HudSettings.ITEM_RADAR_RANGE, ACO_HudSettings.ITEM_RADAR_BLIP },
-            new[] { "set.row.show", "set.row.size", "set.row.leftright", "set.row.updown", "set.row.opacity", "set.row.range", "set.row.blip" }),
-        DeckCrewCategory,
-        GraphicsCategory,
+        // 일반(6-303): 거리 단위 · 갑판 요원(예전 분류 제목 키를 줄 이름으로) · 구름 품질
+        new HudCategory(2, "set.cat.general",
+            new[] { ACO_HudSettings.ITEM_DISTANCE_UNIT, ACO_HudSettings.ITEM_DECK_CREW, ACO_HudSettings.ITEM_CLOUD_QUALITY },
+            new[] { "set.row.unit", "set.cat.crew", "set.row.cloud" }),
         LanguageCategory,
     };
 
-    private static HudCategory DeckCrewCategory => new HudCategory(2, "set.cat.crew", new[] { ACO_HudSettings.ITEM_DECK_CREW }, new[] { "set.row.show" });
-    private static HudCategory GraphicsCategory => new HudCategory(2, "set.cat.graphics", new[] { ACO_HudSettings.ITEM_CLOUD_QUALITY }, new[] { "set.row.cloud" });
     private static HudCategory LanguageCategory => new HudCategory(2, "set.cat.language", new[] { ACO_HudSettings.ITEM_LANGUAGE }, new[] { "set.row.language" });
 
     private const float HudColWidth = 860f;
@@ -3603,8 +3630,8 @@ public static partial class ACO_HUDBuilder
     }
     private static readonly Color WaypointBlue = new Color(0.55f, 0.8f, 1f, 0.45f);
     private static readonly Color DestinationCyan = new Color(0.4f, 0.9f, 1f, 0.85f);
-    private static readonly Color UnknownGrey = new Color(0.75f, 0.75f, 0.75f, 0.7f);
-    private static readonly Color CivilianGreen = new Color(0.35f, 1f, 0.45f, 0.7f);
+    public static readonly Color UnknownYellow = new Color(0.9f, 0.72f, 0.1f, 0.7f);   // 6-304 회색 → 짙은 노랑
+    public static readonly Color CivilianBlue = new Color(0.4f, 0.75f, 1f, 0.7f);    // 6-304 초록 → 아군과 같은 하늘색
 
     /// Bake용: 표적 마커의 빈 아군/경유점/목적지 머티리얼을 채운다(예전 HUD 프리팹에는 이 칸이 없었다). 바꿨으면 true.
     public static bool FillMarkerMaterials(ACO_TargetMarkers markers)
@@ -3616,9 +3643,9 @@ public static partial class ACO_HUDBuilder
         if (markers.FriendlyMaterial == null) { markers.FriendlyMaterial = LoadOrSaveMaterial(markerShader, FriendlyBlue, "ACO_MarkerFriendly"); }
         if (markers.WaypointMaterial == null) { markers.WaypointMaterial = LoadOrSaveMaterial(markerShader, WaypointBlue, "ACO_MarkerWaypoint"); }
         if (markers.DestinationMaterial == null) { markers.DestinationMaterial = LoadOrSaveMaterial(markerShader, DestinationCyan, "ACO_MarkerDestination"); }
-        // 시가지 정밀 타격(6-270): 미확인 회색 · 민간 초록
-        if (markers.UnknownMaterial == null) { markers.UnknownMaterial = LoadOrSaveMaterial(markerShader, UnknownGrey, "ACO_MarkerUnknown"); }
-        if (markers.CivilianMaterial == null) { markers.CivilianMaterial = LoadOrSaveMaterial(markerShader, CivilianGreen, "ACO_MarkerCivilian"); }
+        // 시가지 정밀 타격(6-270): 미확인 짙은 노랑 · 민간 하늘색(6-304)
+        if (markers.UnknownMaterial == null) { markers.UnknownMaterial = LoadOrSaveMaterial(markerShader, UnknownYellow, "ACO_MarkerUnknown"); }
+        if (markers.CivilianMaterial == null) { markers.CivilianMaterial = LoadOrSaveMaterial(markerShader, CivilianBlue, "ACO_MarkerCivilian"); }
         return true;
     }
 
@@ -3656,7 +3683,7 @@ public static partial class ACO_HUDBuilder
         terrain.transform.SetParent(mapRoot.transform, false);
         MeshFilter terrainFilter = terrain.AddComponent<MeshFilter>();
         MeshRenderer terrainRenderer = terrain.AddComponent<MeshRenderer>();
-        terrainRenderer.sharedMaterial = LoadOrSaveMaterial(Shader.Find("ACO/MapVertexColor"), Color.white, "ACO_MapTerrain");
+        terrainRenderer.sharedMaterial = TableTerrainHoloMaterial();   // 6-319: 윗면 육각형만 · 반투명(홀로그램)
         terrainRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         Vector3 airShape = new Vector3(0.012f, 0.004f, 0.03f);
@@ -3670,6 +3697,7 @@ public static partial class ACO_HUDBuilder
         EnsureMapVipMarker(map);
         map.BaseMarker = MakeMapMarker(mapRoot.transform, "BaseMarker", new Vector3(0.02f, 0.006f, 0.06f), new Color(0.35f, 0.7f, 1f), false, false, null);
         ACO_RadarBuilder.EnsureTacticalNorthMark(map);
+        ACO_RadarBuilder.EnsureTacticalGrid(map);   // 좌표 격자(6-301)
         return root;
     }
 
@@ -3915,6 +3943,39 @@ public static partial class ACO_HUDBuilder
         r.shadowCastingMode = ShadowCastingMode.Off;
         r.receiveShadows = false;
         return ps;
+    }
+
+    /// 작전 테이블 지형 홀로그램 재질(6-319, 사용자 "홀로그램 같아서 꽤 괜찮은데? 80%로 가자"): 정점 색 × 흰색 알파 0.8, 조명 없음, 깊이 쓰기 없음,
+    /// 깊이 판정 LessEqual(벽 · 패널에 가려진다), 렌더 큐 2450 — 바다 격자(2440) 뒤라 섬 밑 격자가 비치고, CIC 패널 금속(2449)에 가려진다.
+    public const float TableTerrainAlpha = 0.8f;
+    public const int TableTerrainQueue = 2450;
+
+    public static Material TableTerrainHoloMaterial()
+    {
+        const string name = "ACO_MapTerrainHolo";
+        Material existing = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/{name}.mat");
+        if (existing != null) { return existing; }
+        var mat = new Material(Shader.Find("ACO/RadarVertexColor")) { name = name };
+        mat.SetColor("_Color", new Color(1f, 1f, 1f, TableTerrainAlpha));
+        mat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.LessEqual);
+        mat.renderQueue = TableTerrainQueue;
+        return SaveAsset(mat, $"{GeneratedDir}/{name}.mat");
+    }
+
+    /// 프리팹 수치 table-terrain-holo-1: 씬 작전 테이블 지형 렌더러를 홀로그램 재질로(예전 ACO_MapTerrain일 때만). 윗면만 그리기는 스크립트 기본값(TerrainSides 끔).
+    public static void TuneTableTerrainHolo()
+    {
+        Material holo = TableTerrainHoloMaterial();
+        foreach (ACO_TacticalMap map in Object.FindObjectsOfType<ACO_TacticalMap>(true))
+        {
+            if (map.TerrainFilter == null) { continue; }
+            MeshRenderer r = map.TerrainFilter.GetComponent<MeshRenderer>();
+            if (r == null || r.sharedMaterial == null || r.sharedMaterial.name != "ACO_MapTerrain") { continue; }
+            Undo.RecordObject(r, "ACO table terrain");
+            r.sharedMaterial = holo;
+            EditorUtility.SetDirty(r);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
     }
 
     private static Material LoadOrSaveMaterial(Shader shader, Color color, string name)

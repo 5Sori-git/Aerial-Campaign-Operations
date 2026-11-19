@@ -50,6 +50,24 @@ namespace ACO
             new Color(0.82f, 0.76f, 0.52f), new Color(0.33f, 0.56f, 0.28f), new Color(0.48f, 0.44f, 0.40f), new Color(0.94f, 0.95f, 0.97f) };
         [Tooltip("옆면 밝기(윗면 색에 곱한다)")]
         [Range(0f, 1f)] public float SideShade = 0.55f;
+        [Tooltip("기둥 옆면도 그린다. 끄면 윗면 육각형만 — 반투명 재질(ACO_MapTerrainHolo)과 함께 홀로그램처럼, 아래 바다 격자가 비친다(6-319)")]
+        public bool TerrainSides = false;
+
+        [Header("격자 (6-301 — 작전 기록판 좌표와 같은 격자)")]
+        [Tooltip("격자 정의(작전 기록판) — Bake가 넣는다. 비우면 격자를 그리지 않는다")]
+        public ACO_MissionLog GridLog;
+        [Tooltip("격자 선 메시(해수면, 항상 지형 위에 그린다 — ZTest Always) — 스크립트가 만든다")]
+        public MeshFilter GridFilter;
+        [Tooltip("격자 이름표 — 네 묶음(북쪽 열 · 남쪽 열 · 서쪽 행 · 동쪽 행). 보는 사람 쪽으로 돈다. Setup Check가 만든다")]
+        public Transform[] GridLabels;
+        [Tooltip("격자 선 굵기(m)")]
+        public float GridLineWidth = 0.003f;
+        [Tooltip("이름표와 격자 테두리 사이(m)")]
+        public float GridLabelGap = 0.05f;
+        [Tooltip("이름표 높이(m, 테이블 위)")]
+        public float GridLabelHeight = 0.03f;
+        [Tooltip("격자를 이 원(MapRadius 배율) 안으로 자른다 — 둥근 테이블 바다 밖(테두리)으로 선이 나가지 않게. 이름표는 이 원 둘레")]
+        public float GridClip = 0.97f;
 
         [Header("마커 원본 (꺼 둔 자식, 프리팹 빌더가 만든다)")]
         public GameObject PlayerMarker;
@@ -107,6 +125,7 @@ namespace ACO
         private bool[] _shown;
         private Vector3[] _home;   // 참가자 기체의 보관 위치(여기 있으면 숨긴다)
         private Transform _base;
+        private bool _gridBuilt;
 
         void Start()
         {
@@ -257,6 +276,7 @@ namespace ACO
             Vector3 head = me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
             for (int k = 0; k < _count; k++) { UpdateMarker(k, head); }
             if (_base) { Place(_base, HomeBase, true); }
+            if (!_gridBuilt && GridFilter && GridLog) { BuildGrid(); }
         }
 
         private void UpdateMarker(int k, Vector3 head)
@@ -347,6 +367,99 @@ namespace ACO
             return new Vector3(d.x * _scale, Mathf.Max(world.y - _seaLevel, 0f) * _scale * VerticalExaggeration, d.z * _scale);
         }
 
+        // ───────────── 격자 (6-301) ─────────────
+
+        /// 작전 기록판 격자(열 A~ 서→동, 행 1~ 북→남)를 해수면 높이 선 메시로 한 번 만들고 이름표를 네 변에 놓는다.
+        private void BuildGrid()
+        {
+            _gridBuilt = true;
+            EnsureScale();
+            Vector2 min = GridLog.GetGridMin();
+            Vector2 max = GridLog.GetGridMax();
+            int n = GridLog.GetGridDivisions();
+            float x0 = (min.x - _center.x) * _scale;
+            float x1 = (max.x - _center.x) * _scale;
+            float z0 = (min.y - _center.z) * _scale;
+            float z1 = (max.y - _center.z) * _scale;
+            int lines = (n + 1) * 2;
+            Vector3[] v = new Vector3[lines * 4];
+            Color[] c = new Color[lines * 4];
+            int[] t = new int[lines * 6];
+            float w = GridLineWidth * 0.5f;
+            float rr = MapRadius * GridClip;
+            rr *= rr;
+            for (int i = 0; i <= n; i++)
+            {
+                float f = i / (float)n;
+                float x = Mathf.Lerp(x0, x1, f);
+                float z = Mathf.Lerp(z0, z1, f);
+                // 둥근 테이블 안으로 자른다(원 밖이면 길이 0)
+                float zr = Mathf.Sqrt(Mathf.Max(rr - x * x, 0f));
+                float xr = Mathf.Sqrt(Mathf.Max(rr - z * z, 0f));
+                GridQuad(v, t, i * 2, x - w, Mathf.Max(z0, -zr), x + w, Mathf.Min(z1, zr));
+                GridQuad(v, t, i * 2 + 1, Mathf.Max(x0, -xr), z - w, Mathf.Min(x1, xr), z + w);
+            }
+            for (int i = 0; i < c.Length; i++) { c[i] = Color.white; }
+            Mesh mesh = GridFilter.sharedMesh;
+            if (!mesh)
+            {
+                mesh = new Mesh();
+                GridFilter.sharedMesh = mesh;
+            }
+            else { mesh.Clear(); }
+            mesh.vertices = v;
+            mesh.colors = c;
+            mesh.triangles = t;
+            mesh.RecalculateBounds();
+
+            if (GridLabels == null) { return; }
+            int q = GridLabels.Length / 4;
+            float cw = (x1 - x0) / n;
+            float ch = (z1 - z0) / n;
+            for (int k = 0; k < GridLabels.Length; k++)
+            {
+                Transform l = GridLabels[k];
+                if (!l) { continue; }
+                int side = q > 0 ? k / q : 0;
+                int idx = q > 0 ? k % q : k;
+                bool on = side < 4 && idx < n;
+                if (l.gameObject.activeSelf != on) { l.gameObject.SetActive(on); }
+                if (!on) { continue; }
+                Vector3 p;
+                bool col = side < 2;
+                // 이름표는 격자 끝(둥근 테이블이면 원 둘레) 바로 바깥
+                float cx = x0 + (idx + 0.5f) * cw;
+                float rz = z1 - (idx + 0.5f) * ch;
+                // 네 모서리에서 첫 · 끝 열(A · J)과 첫 · 끝 행(1 · 10) 이름표가 원 둘레의 같은 자리에 겹친다 — 안쪽으로 조금씩 민다
+                if (idx == 0) { cx += cw * 0.3f; rz -= ch * 0.3f; }
+                else if (idx == n - 1) { cx -= cw * 0.3f; rz += ch * 0.3f; }
+                float edgeZ = Mathf.Sqrt(Mathf.Max(rr - cx * cx, 0f));
+                float edgeX = Mathf.Sqrt(Mathf.Max(rr - rz * rz, 0f));
+                if (side == 0) { p = new Vector3(cx, GridLabelHeight, Mathf.Min(z1, edgeZ) + GridLabelGap); }         // 북쪽 열
+                else if (side == 1) { p = new Vector3(cx, GridLabelHeight, Mathf.Max(z0, -edgeZ) - GridLabelGap); }   // 남쪽 열
+                else if (side == 2) { p = new Vector3(Mathf.Max(x0, -edgeX) - GridLabelGap, GridLabelHeight, rz); }   // 서쪽 행(1 = 북)
+                else { p = new Vector3(Mathf.Min(x1, edgeX) + GridLabelGap, GridLabelHeight, rz); }                   // 동쪽 행
+                l.localPosition = p;
+                // 6-316: 테이블 면에 눕혀 고정, 모두 지도 북쪽이 위(남쪽 — CIC 테이블은 도구 패널 쪽 — 에 선 사람이 바로 읽는다). 예전엔 보는 사람 쪽으로 돌았다
+                l.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                TextMeshPro tmp = l.GetComponent<TextMeshPro>();
+                if (tmp) { tmp.text = col ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ".Substring(idx, 1) : (idx + 1).ToString(); }
+            }
+        }
+
+        private void GridQuad(Vector3[] v, int[] t, int q, float ax, float az, float bx, float bz)
+        {
+            int vi = q * 4;
+            int ti = q * 6;
+            // 위에서 볼 때 앞면(셰이더는 Cull Off라 방향은 상관없다)
+            v[vi] = new Vector3(ax, 0f, az);
+            v[vi + 1] = new Vector3(ax, 0f, bz);
+            v[vi + 2] = new Vector3(bx, 0f, bz);
+            v[vi + 3] = new Vector3(bx, 0f, az);
+            t[ti] = vi; t[ti + 1] = vi + 1; t[ti + 2] = vi + 2;
+            t[ti + 3] = vi; t[ti + 4] = vi + 2; t[ti + 5] = vi + 3;
+        }
+
         // ───────────── 지형 메시 (프레임마다 나눠 만든다) ─────────────
 
         /// 새 지형으로 다시 만들기 시작한다: 땅 칸 수를 세고 배열을 잡는다. 칸 채우기는 BuildStep이 프레임마다 CellsPerFrame칸씩.
@@ -362,11 +475,13 @@ namespace ACO
 
             int land = 0;
             for (int i = 0; i < _cellN; i++) { if (_cellHs[i] >= _seaLevel) { land++; } }
-            _landCap = Mathf.Min(land, MAX_VERTICES / 12);
+            // 칸마다 윗면 꼭짓점 6(+ 옆면을 그리면 해수면 꼭짓점 6), 윗면 삼각형 4(+ 옆면 12)
+            int perV = TerrainSides ? 12 : 6;
+            _landCap = Mathf.Min(land, MAX_VERTICES / perV);
 
-            _meshV = new Vector3[_landCap * 12];
-            _meshC = new Color[_landCap * 12];
-            _meshT = new int[_landCap * 48];
+            _meshV = new Vector3[_landCap * perV];
+            _meshC = new Color[_landCap * perV];
+            _meshT = new int[_landCap * (TerrainSides ? 48 : 12)];
 
             // 뾰족한 꼭짓점이 ±Z를 향하는 육각형(지형 격자와 같다): 꼭짓점 각도 30° + 60°k.
             float r = _terrain.HexRadius * _scale;
@@ -405,8 +520,11 @@ namespace ACO
                 {
                     _meshV[vi + k] = new Vector3(px + _cornerX[k], py, pz + _cornerZ[k]);
                     _meshC[vi + k] = top;
-                    _meshV[vi + 6 + k] = new Vector3(px + _cornerX[k], 0f, pz + _cornerZ[k]);
-                    _meshC[vi + 6 + k] = side;
+                    if (TerrainSides)
+                    {
+                        _meshV[vi + 6 + k] = new Vector3(px + _cornerX[k], 0f, pz + _cornerZ[k]);
+                        _meshC[vi + 6 + k] = side;
+                    }
                 }
                 int ti = _buildT;
                 for (int k = 1; k < 5; k++)
@@ -415,7 +533,7 @@ namespace ACO
                     _meshT[ti++] = vi + k + 1;
                     _meshT[ti++] = vi + k;
                 }
-                for (int k = 0; k < 6; k++)
+                for (int k = 0; k < 6 && TerrainSides; k++)
                 {
                     int a = k;
                     int b = (k + 1) % 6;
@@ -426,7 +544,7 @@ namespace ACO
                     _meshT[ti++] = vi + 6 + b;
                     _meshT[ti++] = vi + 6 + a;
                 }
-                _buildV += 12;
+                _buildV += TerrainSides ? 12 : 6;
                 _buildT = ti;
             }
             if (_buildCell < _cellN && _buildPlaced < _landCap) { return; }

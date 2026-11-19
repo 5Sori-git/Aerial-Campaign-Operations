@@ -642,6 +642,10 @@ public partial class ACO_SetupValidator : EditorWindow
         {
             Add(g, WARN, "작전 테이블에 북쪽 표시가 없습니다.", map, () => ACO_RadarBuilder.EnsureTacticalNorthMark(map));
         }
+        if (map != null && map.MapRoot != null && (map.GridFilter == null || map.GridLabels == null || map.GridLabels.Length == 0))
+        {
+            Add(g, WARN, "작전 테이블에 좌표 격자가 없습니다(6-301 — 작전 기록판 좌표와 같은 격자). [고치기] 뒤 Bake.", map, () => ACO_RadarBuilder.EnsureTacticalGrid(map));
+        }
 
         // 크레딧 · 업데이트 노트는 같은 스크립트라 언어별 파일 유무로 가른다(6-251)
         bool hasCredits = false;
@@ -692,6 +696,17 @@ public partial class ACO_SetupValidator : EditorWindow
             && ((tutorial.transform.position - tutPos).sqrMagnitude > 0.0004f || Quaternion.Angle(tutorial.transform.rotation, tutRot) > 1f))
         {
             Add(g, WARN, "튜토리얼이 브리핑 판(작전 콘솔) 자리에 있지 않습니다 — 6-164에서 책장에서 판으로 옮겼습니다. [고치기] = 판 자리로 옮기기.", tutorial, MoveTutorialToBoard);
+        }
+
+        ACO_VersionGuard versionGuard = FindOne<ACO_VersionGuard>();
+        if (versionGuard == null)
+        {
+            Add(g, WARN, "버전 확인(6-296 — 이전 버전 인스턴스에 들어오면 작전판 위에 알림)이 없습니다. [고치기] = 작전판 자리에 놓기.", null, PlaceVersionGuard);
+        }
+        else if (TutorialBoardAnchor(out Vector3 verPos, out Quaternion verRot)
+            && ((versionGuard.transform.position - verPos).sqrMagnitude > 0.0004f || Quaternion.Angle(versionGuard.transform.rotation, verRot) > 1f))
+        {
+            Add(g, WARN, "버전 확인 알림이 작전판 자리에 있지 않습니다. [고치기] = 판 자리로 옮기기.", versionGuard, PlaceVersionGuard);
         }
 
         ACO_HudSettings hudSettings = FindOne<ACO_HudSettings>();
@@ -959,6 +974,29 @@ public partial class ACO_SetupValidator : EditorWindow
             }
         }
         return false;
+    }
+
+    /// 버전 확인(6-296)을 작전판 자리에 놓는다(없으면 프리팹을 만든다). 이미 있으면 그 자리로 옮긴다.
+    private static void PlaceVersionGuard()
+    {
+        ACO_VersionGuard existing = FindOne<ACO_VersionGuard>();
+        GameObject go;
+        if (existing != null) { go = existing.gameObject; Undo.RecordObject(go.transform, "ACO move version guard"); }
+        else
+        {
+            string path = $"{PrefabDir}/{ACO_HUDBuilder.VersionGuardPrefabName}.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreateVersionGuardPrefab(); }
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) { Debug.LogError($"[ACO] 프리팹을 만들지 못했습니다: {path}"); return; }
+            GameObject board = GameObject.Find("BOARD==============");
+            go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, board != null ? board.transform : null);
+            Undo.RegisterCreatedObjectUndo(go, "ACO place version guard");
+        }
+        bool found = TutorialBoardAnchor(out Vector3 pos, out Quaternion rot);
+        if (found) { go.transform.SetPositionAndRotation(pos, rot); }
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Selection.activeGameObject = go;
+        Debug.Log(found ? "[ACO] 버전 확인 알림을 작전판(작전 콘솔) 자리에 놓았습니다. Bake 하세요." : "[ACO] 작전 콘솔(ACO_MissionConsole)을 찾지 못해 버전 확인 알림을 원점에 놓았습니다 — 판 화면 가운데로 옮기세요(+Z = 방 쪽).", go);
     }
 
     /// 튜토리얼을 브리핑 판 자리에 놓는다(없으면 프리팹을 만든다).

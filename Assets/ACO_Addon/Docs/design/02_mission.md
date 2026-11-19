@@ -55,7 +55,7 @@
 |---|---|---|---|
 | STRIKE 타격 | 고가치 표적 `StrikeTargets`(2)개 | `OBJ_HVT` — 표적 + 방공 호위 링(링은 목표 아님) | 표적 전부 파괴 |
 | SEAD 방공망 제압 | 방공 시설 `SeadUnitsBase + PerPhase·(n−1)`대 | `OBJ_SITE` — 한 지점 둘레 링(반경 `DefenseRadius × SiteRadiusScale`) | 시설 전부 파괴 |
-| SCORE ATTACK 점수 할당량 | 이 페이즈에서 `QuotaScore × 배율` 획득 | `OBJ_HUNT` 사냥터(지상 `QuotaGround`) + `OBJ_FLIGHT`(`QuotaFighters`) | 페이즈 점수 ≥ 할당량(대상 자유) |
+| SCORE ATTACK 점수 할당량 | 이 페이즈에서 `QuotaScore × 배율` 획득(바뀜(6-307): 기본 3,000 · 지상 14 · 전투기 4) | `OBJ_HUNT` 사냥터(지상 `QuotaGround`) + `OBJ_FLIGHT`(`QuotaFighters`) | 페이즈 점수 ≥ 할당량(대상 자유) |
 | TIME SENSITIVE 시한 표적 | 표적 `TstCount`(3)개가 하나씩 등장 | `OBJ_GROUND` 1대씩, 플레이어 `TstDistanceMin~Max`(5~12km) | 표적마다 처음 보인 순간부터 `TstTimeLimit`(90초), 못 잡으면 도주(철수). `TstInterval`(8초) 뒤 다음. 다 지나가면 종료 — 잡은 수 × `TstBonus`. **하나라도 도주하면 그 즉시 미션 실패**(`FAIL_TARGET_ESCAPED` → HUD "TIME-SENSITIVE TARGET ESCAPED", 디브리핑 "(TARGET ESCAPED)"). 배치 실패로 건너뛴 표적은 놓친 것으로 치지 않는다 |
 | AIR SUPERIORITY 제공권 | 적 편대 `AirFightersBase + PerPhase·(n−1)`기 | `OBJ_FLIGHT` — 플레이어 쪽으로 진입, 숙련도 무작위 | 전부 격추 |
 | ACE SQUADRON 보스 | 이름 붙은 에이스 `BossFighters`(4)기(`BossNames` 무작위) | `OBJ_FLIGHT` 숙련도 에이스 고정, 4기 편대 | 전부 격추 |
@@ -84,7 +84,7 @@
   - **페이즈 클리어 보너스** `PhaseClearBonus`(500) × 배율. 시한 표적은 잡은 수 × `TstBonus`(300) × 배율(+ 하나도 놓치지 않으면 클리어 보너스).
   - **중복 방지**: 유닛마다 "살아 있는 걸 본 배치 번호"/"점수를 준 배치 번호" — 같은 배치 번호에서 살아 있다가 파괴됐을 때 한 번만.
 - **미션 클리어 보너스**: `ClearBonus`(1000) + 남은 시간 1초당 `TimeBonusPerSecond`(5).
-- **랭크**: 기준 = `RankSPerPhase`(2500)/`RankAPerPhase`(1600)/`RankBPerPhase`(800) × 고른 페이즈들의 배율 합(3페이즈면 ×3.75 → S 9375). 이상이면 S/A/B, 그 아래 C, 실패 F — 페이즈 수가 달라도 같은 기준으로 공평하게.
+- **랭크**: 기준 = `RankSPerPhase`(2500)/`RankAPerPhase`(1600)/`RankBPerPhase`(800) × 고른 페이즈들의 배율 합(3페이즈면 ×3.75 → S 9375). 이상이면 S/A/B, 그 아래 C, 실패 F — 페이즈 수가 달라도 같은 기준으로 공평하게. 바뀜(6-297): 점수 기준은 지웠다 — 랭크는 팀 격추 수(0 S · 2 이하 A · 4 이하 B · 그 위 C).
 - 조회: `GetTeamScore`, `GetFighterKills/GetGroundKills`, `GetClearBonus/GetTimeBonus/GetPhaseBonusTotal`, `GetRankLetter`, `GetRemainingSeconds/GetElapsedSeconds/GetTimeLimitMs`, `GetKillScore(카테고리, i)`(배율 포함, 작전판이 쓴다).
 
 ### 6-15. 게임 진행 — 참가 명단 / 출격 준비 / 일제 출격 ✅ (`ACO_GameFlow`, `ACO_FlowButton`, `ACO_Teleporter`, `ACO → Create Game Flow`)
@@ -141,7 +141,7 @@
   - 모든 클라이언트: `GetName`/`GetDescription`/`GetProgressText`(HUD 페이즈 줄)/`GetLocation`(배너)/`GetFailText`(배너·작전판 — `GetPhaseFailText`, 미션 실패 사유 `FAIL_MODULE`)/`GetClearBonus`, 무전 대사(모듈 인스펙터 Start/Success/Fail 텍스트·음성, 비면 무전 기본 대사). 동기화된 값(관리자 진행 값, 생성기 배치)만 읽는다.
   - 오너가 바뀌면 모듈 지역 상태는 처음부터 다시 본다(콘보이와 같은 '배치 직후 체력 0은 기다림' 규칙).
 - **상륙전 — 초수평선 상륙**(`ACO_PhaseAmphibious`, 메뉴 `ACO → Missions → Add Amphibious Assault Phase`, 기본 `MinPhase` 2, 보너스 1500 × LCAC 생존 비율):
-  - **상륙 지점**(`ACO_MissionGenerator.BuildAmphibiousRoute`) — 항구가 아니어도 된다. 순위: **1) 항구**(`MaxPlacementAttempts`번) → **2) 도시 근처 해안**(도시 둘레 `CityCoastRadius` 3km 안, `LandingCoastAttempts` 12번) → **3) 아무 해변**(지도 아무 곳에서 `AnyCoastRadius` 4km 안, 12번). 2·3순위 해안선 찾기: 무작위 방향으로 100m씩 걸어가며 땅 ↔ 바다가 바뀌는 곳(그 앞 `LandingStandoff`까지 바다여야 — 작은 만·호수 제외, 방향 4번). **절벽 아님**(`IsGentleBeach` — 항구는 보지 않는다): 해안선에서 바다 쪽 100m → 육지 쪽 `LcacBeachInland` + 60m를 20m마다, 지면이 해수면 위 `BeachMaxHeight`(25m) 이하이고 이웃 점 사이 경사 `BeachMaxGrade`(30°) 이하. 그 뒤는 항구와 같다(바다 쪽 방향 → 항로, 해안 방어는 상륙 지점 뒤). 배너 이름: 항구·도시는 그 이름, 해변은 3km 안의 가장 가까운 자리(없으면 이름 없음). 공격기는 상륙 지점(`GetLastLandingPoint`) 쪽에서 들어온다.
+  - **상륙 지점**(`ACO_MissionGenerator.BuildAmphibiousRoute`) — 항구가 아니어도 된다. 순위: **1) 항구**(`MaxPlacementAttempts`번) → **2) 도시 근처 해안**(도시 둘레 `CityCoastRadius` 3km 안, `LandingCoastAttempts` 12번) → **3) 아무 해변**(지도 아무 곳에서 `AnyCoastRadius` 4km 안, 12번). 2·3순위 해안선 찾기: 무작위 방향으로 100m씩 걸어가며 땅 ↔ 바다가 바뀌는 곳(그 앞 `LandingStandoff`까지 바다여야 — 작은 만·호수 제외, 방향 4번). **절벽 아님**(`IsGentleBeach` — 항구는 보지 않는다): 해안선에서 바다 쪽 100m → 육지 쪽 `LcacBeachInland` + 60m를 20m마다, 지면이 해수면 위 `BeachMaxHeight`(25m) 이하이고 이웃 점 사이 경사 `BeachMaxGrade`(30°) 이하. 그 뒤는 항구와 같다(바다 쪽 방향 → 항로, 해안 방어는 상륙 지점 뒤). 배너 이름: 항구·도시는 그 이름, 해변은 3km 안의 가장 가까운 자리(없으면 이름 없음). 공격기는 상륙 지점(`GetLastLandingPoint`) 쪽에서 들어온다. 바뀜(6-298): 모든 순위에서 LCAC 정지점이 마른 땅이어야 한다(얕은 바다 · 공역 경계를 해안으로 잡던 것).
   - 부대(생성기 유닛 풀의 아군 호위 대상, 이동 방식 × 역할로 고른다 — 프리팹 생성 창 "상륙전 부대"):
     - 강습상륙함 `NPC_AssaultShip`(해상, `ROLE_MOTHERSHIP`, 무장 없음) `AssaultShips`(1) — 상륙 지점에서 `RouteLength`(10km) 떨어진 후방 바다(LCAC 항로 출발점)에 와서 대기.
     - 호위함 `NPC_GuardShip`(해상, `ROLE_GUARD`, 함포 1 — 적 항공기·적 지상 / 대공포 2 — 적 항공기) `GuardShips`(2) — 상륙함 좌우 `AmphibiousGuardLateral`(450m)에서 대기하며 지원.
@@ -149,7 +149,7 @@
     - 아군 공격헬기 `NPC_FriendlyGunship`(공중, `ROLE_GUARD`, 55m/s — LCAC보다 먼저 닿는다, 턱 밑 기관포 — 적 지상·적 항공기, 플레어, 락온 마커 아군 항공기 25 — 적 방공·전투기가 노린다) `AttackHelicopters`(2) — LCAC 항로를 해수면/지면 위 `HeliAltitude`(90m)로 날아가 해안 안쪽 `HeliHoverInland`(700m) 상공에 멈춰 싸운다.
     - 모두 행렬 앞선 거리 0, 대형은 옆 거리로만(앞선 거리가 섞이면 정지 거리가 어긋난다). 기존 호위·지상 호위·요격은 `ROLE_VIP`만 고르고, 공기부양은 상륙전만 쓴다. 무전 피격/격추 대사는 `ROLE_VIP`만.
   - 항로: 지형 장식의 **항구**(`SITE_PORT` — 도시가 바다에 닿을 때)를 골라, 16방향 중 바다가 `LandingApproachCheck`(3km) 넘게 이어지는 방향을 '바다 쪽'으로 잡고 항구 앞 `LandingStandoff`(800m)까지 바다 항로를 거꾸로 만든 뒤(바다 쪽 반대 ±35°, 마지막 구간 곧게, 경유점·곡선 모두 바다) 해변 한 점을 더한다. 경유점 = 바다 `EscortRoutePoints`(최대 5) + 해변 1.
-  - 해안 방어(목표 아님): 항구 뒤 방공 시설 링, 해안 전차(내륙 1.5km → 해안선 250m), 곡사포(상륙 지점 뒤 1.2~2.5km, 좌우로는 `ShoreSpread`의 60% 안 — LCAC가 앞바다부터 사거리에 들어온다. 처음엔 2~3.5km였는데 LCAC가 사거리에 잘 안 들어와 당겼다(Bake가 예전 기본값만 바꾼다). 자리가 안 나면 시도마다 조금씩 더 해안 쪽으로(최대 40%) — 멀리 밀려나지 않는다. 상륙함 대기 자리 10km는 사거리 밖), 적 헬리콥터(내륙 4km → 앞바다 상공), 항로 가운데 옆 2.5~4.5km 바다에 적 함대. 수는 모듈 인스펙터(Base + PerPhase × 페이즈 번호, 각 최대 15).
+  - 해안 방어(목표 아님): 항구 뒤 방공 시설 링, 해안 전차(내륙 1.5km → 해안선 250m — 바뀜(6-298): 대 간격 150m + 앞뒤 ±50m), 곡사포(상륙 지점 뒤 1.2~2.5km, 좌우로는 `ShoreSpread`의 60% 안 — LCAC가 앞바다부터 사거리에 들어온다. 처음엔 2~3.5km였는데 LCAC가 사거리에 잘 안 들어와 당겼다(Bake가 예전 기본값만 바꾼다). 자리가 안 나면 시도마다 조금씩 더 해안 쪽으로(최대 40%) — 멀리 밀려나지 않는다. 상륙함 대기 자리 10km는 사거리 밖), 적 헬리콥터(내륙 4km → 앞바다 상공), 항로 가운데 옆 2.5~4.5km 바다에 적 함대. 수는 모듈 인스펙터(Base + PerPhase × 페이즈 번호, 각 최대 15).
   - 성공: 살아 있는 LCAC가 모두 해변에 정지. 실패: LCAC 전부 격파 → 미션 실패("LANDING CRAFT LOST"). 상륙함·호위함·공격헬기는 잃어도 된다. HUD `LCAC 살아 있는/전체  남은 거리`, 배너 "LANDING: 항구·도시·가까운 자리 이름". 성공 뒤 `EscortLingerTime` 지나 부대를 거둔다.
   - 생성기 API: `CanBuildAmphibiousRoute(길이, seed)` / `RequestDeployAmphibious(tag, 길이, units, defense, seed)` — 수는 4비트씩(units = LCAC | 상륙함 << 4 | 호위함 << 8 | 공격헬기 << 12, defense = 방공 | 전차 << 4 | 곡사포 << 8 | 적 헬리콥터 << 12 | 함대 << 16).
 
@@ -323,7 +323,7 @@
 - **점수 · 실패**: 적 차량 +600(페이즈 배율), 민간 차량 −1000(`CivilianScore` — 배율 없음, 팀 점수 + 파괴한 사람 개인 점수 · 격파 수에 안 들어감, 작전 기록 빨간 `CIVILIAN -1000`, 격추 무전 없음). 민간 `CivilianFailCount`(3)대째 = 미션 실패("TOO MANY CIVILIAN CASUALTIES"). 적을 모두 부수면 성공. 개인 보상은 0 아래로 내려가지 않는다(기존).
 - **무전**(관제): 시작 · 첫 적 식별 · 민간 피격 · 2대째 마지막 경고 · 적 격파(마지막은 성공 대사) · 성공 · 실패. 늦게 들어온 사람은 지난 대사를 듣지 않는다. 번역 `radio.phaseprecision.01~07`. 음성 `Audio/AWACSVoiceLines/Precision/`(AWACS eleven_v4, 7줄 — `aco_voice_lines.json` precision_*), 모듈 연결은 `ACO_VoiceLines.ApplyPhase`(모듈을 만들 때 · Setup Check 음성 항목).
 - **풀 · 설정**: 도시 차량 `NPC_CityVehicle` 20대(지상 풀 — 일반 배치 · 증원에서 뺀다, Setup Check가 넣는다), 모듈 `Phase_Precision`(MinPhase 2, Setup Check 보스 모듈 목록에서 만든다). 모델 `Tools/aco_city_vehicle_model.py`(민간 승용차 4색 · 밴 3색 · 버스 2색, 군용 지휘 · 통신 차량 — 204~364 삼각형, 256px 색 칸 텍스처 하나).
-- 표적 마커: 새 종류 미확인(회색 ?) · 민간(초록 CIV) — 목표처럼 멀리서도 보인다. 재질은 Bake(`FillMarkerMaterials`)가 만든다.
+- 표적 마커: 새 종류 미확인(회색 ?) · 민간(초록 CIV — 바뀜(6-304 · 6-305): 민간 하늘색 · 미확인 짙은 노랑, ? · CIV 글자는 숨기고 목표만 TGT) — 목표처럼 멀리서도 보인다. 재질은 Bake(`FillMarkerMaterials`)가 만든다.
 - **검토 수정(같은 날 — 사용자 "예외상황이나 버그나 동기화오류등이 발생하는지 전체적으로 확인해줘")**:
   - 파괴 수(실패 판정 · 진행 줄 · 무전)는 관리자 집계와 같은 규칙 — 체력 0이고 이번 배치에서 살아 있는 걸 봤거나 배치 후 `ObjectiveSettleTime`이 지난 것만. 지난 페이즈에 부서진 차를 다시 쓸 때 체력이 차기 전 몇 프레임을 민간 파괴로 세어 바로 실패하던 것.
   - 페이즈가 끝나면(성공 · 실패 · 교체 — 모듈 `End`) 민간 태그 차량을 거둔다. 남겨 두면 다음 페이즈에 맞혀도 감점이고, 같은 페이즈 번호의 시한 표적 태그(`MakePhaseTag(1+k)`)와 겹쳤다. 무전 · 진행 줄은 페이즈가 진행 중일 때만.
@@ -355,3 +355,57 @@
 - **지형 터널 정보**: 놓은 터널마다 가운데 · 방위(곡선 휨 쪽 포함) · 반길이(칸 수 × 346.4 − 20m) · 휨 폭(2칸 50 · 3칸 130m — `TunnelCurve2C/3C`, 모델과 같아야 한다) · 자리를 기록 — `TunnelPoint(k, z, 옆, 위)` · `TunnelForward`.
 - **무전**(관제): 시작 · 출격(새 음성 `Tunnel/`), 발사 · 지상 격파 · 요격 · 성공 · 실패는 시한 표적과 같은 문장 · 음성(`TEL/`). 번역 `radio.phasetunnel.01 · 02`. 진행 줄: `TEL 1/3  NEXT 0:42` → 나와 있으면 `LAUNCH 0:07`, 날고 있으면 `INTERCEPT 0:45`(빨강).
 - **설정**: 모듈 `Phase_Tunnel`(Setup Check 보스 모듈 목록에서 만든다), TEL 풀은 시한 표적과 같이 3대. Bake가 TEL에 지형(`Features`)을 넣는다.
+
+### 6-297. 랭크 = 팀 격추 수 · S 랭크 보상 20% · 작전 기록판 손실 칸 (`ACO_MissionManager`, `ACO_PlayerProgress`, `ACO_MissionLog`)
+- **사용자 결정(2026-11-19)**: "랭크 시스템 손 좀 봐야 할 것 같은데 제안 좀" → 안 3(팀 랭크) → "팀 전체 랭크로 가고, 팀 격추 수로 세자. 한 번도 격추 안 되면 S" → 고정 구간 → "점수는 빼 줘, 관련 코드도 삭제해 주고, S 랭크는 20% 보너스" + "작전판 킬 수 옆에 데스 수도 적어 줘".
+- **랭크(팀 전체, 모두 같음)**: 미션 중 참가 조종사가 격추당한 횟수의 합(팀 격추 수)만 본다 — 0 = S, `RankAMaxDeaths`(2) 이하 = A, `RankBMaxDeaths`(4) 이하 = B, 그 위 = C, 실패 = F. 점수 기준(예전 `RankS/A/BPerPhase` · 페이즈 배율 합)과 그 계산은 지웠다 — 점수는 표시 · 보상에만 쓴다.
+- **팀 격추 수**(`_teamDeaths`, 동기화): 격추 기준은 보상 감액과 같다(`ACO_PlayerProgress.ReportShotDown` — 내 기체 폭발, 미션 중 안전지대 밖에서 내림, 미션 진행 중만). 그때 `ACO_MissionManager.ReportPilotDown` → 모두에게 `NetPilotDown(playerId)`: 오너는 `_teamDeaths`를 올려 보내고(미션 시작 때 0), 모든 화면의 작전 기록판은 그 조종사 줄 손실을 올린다. 오너가 바뀌어도 동기화 값이라 이어서 센다.
+- **S 랭크 보상**: 성공 + S면 보상에 `RankSBonus`(20%)를 더한다(`GrantReward` — CIC만 쓴 사람도 받은 보상에 곱함). 보상 요약에 "S 랭크 +20%"(`prog.reward.ranks`).
+- **작전 기록판**: 조종사 목록 칸 조종사 · 격추 · 손실 · 점수(`log.pilotcol`). 격추 없이 격추만 당한 조종사도 줄이 생긴다. 디브리핑 머리줄 "등급 A (손실 2)"(`log.rankloss`). 늦게 들어온 사람의 판에는 그 전 손실이 없다(킬 기록과 같음).
+
+| 경우 | 처리 |
+|---|---|
+| 무격추 클리어 | S, 보상 +20% |
+| 팀 격추 1~2 / 3~4 / 5 이상 | A / B / C |
+| 미션 실패 | F(보너스 없음) |
+| 클리어 뒤 귀환 중 · 자유 비행 격추 | 세지 않음 |
+| 미션 중 오너 이탈 | 팀 격추 수 유지(동기화) |
+| 알림 유실(드묾) | 한 번 덜 셀 수 있음 |
+
+- **ClientSim 확인**: 작전 시작 뒤 격추 2회 보고 → 팀 격추 수 2, 작전 기록판 "1. [1] Local Play 0 2 0"(격추 0 · 손실 2 · 점수 0). 랭크 · 보너스는 미션을 끝내야 해서 VR · 실제 플레이로 확인(7-351).
+
+### 6-298. 상륙 지점 마른 땅 확인 · 호위 대체 도착점 육지 · 전차 조 산개 (`ACO_MissionGenerator`)
+- **사용자 보고(2026-11-19)**: "상륙 지점이 공역 끄트머리 바다 위로 나왔었어. 상륙정이 육지가 아닌, 근처에 육지가 없는 곳에서 멈추고 임무 성공 판정이 났어" · "호위는 도착점 30번 안에 안 되면 공역 안 육지로 해 줘" · "경계 밖이랑 마른 땅만 체크해도 되지 않을까?" · 전차 "150m로 하자, 너무 붙여 두니까 폭탄에 몰살당하더라고".
+- **원인(상륙)**: 해안 찾기(`FindCoastNear`, 2 · 3순위)는 `IsSeaAt`이 아닌 곳을 땅으로 본다. 그런데 `IsSeaAt`은 해저가 `MinSeaDepth`(15m)보다 얕은 바다(물에 잠긴 육각 기둥, 해저 −3~−12m)와 NPC 경계 밖도 '바다 아님'으로 돌려준다. 그 경계가 해안선으로 잡히고, 절벽 검사(`IsGentleBeach`)는 수면 아래 지면을 해수면 높이로 보아 평지로 통과 → LCAC 정지점이 물 위, 도착하면 상륙 성공. 지도 하나에서 3순위 해안 201곳 중 164곳이 물 위였다(항구 1순위는 정지점이 모두 육지).
+- **마른 땅**(`IsDryLandAt`): 공역(NpcField) 안 + 물 레이어가 아닌 지면에 맞음 + 높이 해수면 + 1m 이상.
+- **상륙 지점**: 모든 순위에서 LCAC 정지점(해안선에서 `LcacBeachInland` 안쪽)이 마른 땅이어야 한다 — 아니면 그 후보를 버린다. 해안 찾기 자체는 그대로. 버리는 후보가 늘어 `LandingCoastAttempts` 12 → 30. 모두 실패하면 지금처럼 다른 페이즈.
+- **호위 대체 도착점**: 도착점 시도(사이트 근처)가 모두 안 되면 공역 안 무작위 점 — 공중 · 지상 호위는 마른 땅만(해상 호위는 바다에서 끝나야 하므로 그대로).
+- **전차 조 산개**: `TankSpacing` 40 → 150m. 매복조 · 상륙 해안 전차는 진행 방향 옆으로 (m − 가운데) × 150m + 앞뒤 ±`TankStagger`(50m) 무작위 — 대마다 출발 · 정지점이 마른 땅이고 길이 열려 있어야 한다(`TankSlot`). 안 되면 간격 1/2 → 1/4, 그래도 안 되면 옆 40m(예전 방식). 순찰 소대는 같은 고리를 150m 간격으로. 곡사포 · 헬기는 그대로.
+- 씬 값: Tuning `amph-landing-tank-spread-1`(TankSpacing 40 → 150, LandingCoastAttempts 12 → 30 — 이전 값일 때만).
+
+| 경우 | 처리 |
+|---|---|
+| 정지점이 얕은 바다 · 공역 밖 | 그 후보 버림 → 다음 후보 |
+| 항구 | 지금처럼(정지점이 원래 육지, 높이 8~13m) |
+| 상륙 후보 모두 실패 | 다른 페이즈(기존 사전 확인) |
+| 공중 · 지상 호위 대체 도착점이 얕은 바다 | 다시 뽑음 |
+| 산개 자리가 물 · 막힌 길 | 간격 1/2 → 1/4 → 40m |
+| 조원 1대 | 가운데(엇갈림 없음) |
+
+- **ClientSim 확인**: 상륙 항로 사전 확인 200회(정상) · 200회(자리 없음 = 3순위만) — 성공 198 · 195, LCAC 정지점이 물 위인 경우 0(최저 높이 1.0m). 전차 3대 조 5곳 — 정지점 간격 150~175m(앞뒤 엇갈림), 자리가 없던 1곳은 40m.
+
+### 6-300. 페이즈 이름 · 목표 문구 통일 (`ACO_PhaseDestroy` · `ACO_PhaseEscort` · `ACO_PhaseConvoy` · `ACO_PhaseIntercept` · `ACO_PhaseTunnel` · `ACO_PhaseTimeSensitive` · `ACO_PhaseLandShip`)
+- **사용자 요청(2026-11-19)**: "미션 이름이랑 목표 대상 명칭 등 이상하거나 통일되지 않은 부분 있어?" → 점검 결과 1(표기 불일치) · 2(빈 목표 설명) · 3(오타) → "1, 2, 3부터 해 줘". 4(이름 · 목표 · 실패 배너 번역)는 나중.
+- **이름**: 에이스 형식 통일 — 혼자 `ACE - X`, 둘 `ACES - {ACE}`(→ ACES - HEADS & TAILS, 예전 `ACES - Head&Tail`), 편대 `ACE SQUADRON - X`: SHADE(예전 `SHADE SQUADRON`), 에이스 편대는 `ACE SQUADRON - {BOSS}`(이번 편대 이름 — VIPER · SPECTRE …, `ACO_PhaseDestroy.GetName`이 바꾼다. 예전엔 이름만 `ACE SQUADRON`이라 어느 편대인지 몰랐다).
+- **실패 배너**: TIME SENSITIVE `INTERCEPT FAILED` → `MISSILE LAUNCHED`(TUNNEL HIDEOUT과 같은 상황 · 같은 무전).
+- **목표 문구**: 미사일 발사대는 둘 다 `MISSILE LAUNCHERS`(TIME SENSITIVE의 BALLISTIC 뺌, TUNNEL은 "HIT THEM ON THE GROUND OR INTERCEPT THE MISSILE"로 같은 꼴 — 무전의 TELs는 그대로). 육상 전함 마지막 단계 `DESTROY THE REACTOR CORE BEFORE IT REACHES THE CITY`(무전 reactor · HUD 진행 CORE 잇기).
+- **빈 목표 설명 채움**(페이즈 시작 배너 목표 줄): ESCORT `PROTECT THE VIP UNTIL IT REACHES ITS DESTINATION`(실패 VIP LOST · HUD 태그 VIP와 맞춤 — 호위 대상이 공중 · 지상 · 해상이라 transport라 하지 않는다), CONVOY `PROTECT THE CONVOY UNTIL IT REACHES ITS DESTINATION`, INTERCEPT `SHOOT DOWN THE BOMBERS BEFORE THEY REACH THE CITY`. 인스펙터 Description이 있으면 그것.
+- **무전 문구 오타**(인스펙터 + 번역표 영어 칸 — 자막은 영어 원문으로 번역을 찾는다): `Tripple A` → `Triple-A`, `! you broke` → `! You broke`, `Hell of a job, guys` 마침표, 공백 두 칸 · 줄바꿈 앞 공백, 둥근 따옴표 ’ → '. 음성 파일은 그대로(낱말은 같다).
+- 씬 값: Tuning `phase-names-1`(이전 값일 때만). 생성기 기본값(`ACO_PhaseModuleSetup`)도 새 이름.
+- **확인**: 씬 페이즈 무전 문구 58줄이 모두 번역표 영어 칸과 같다. 이름 · 목표 · 실패 문구 출력 확인(위 값).
+
+### 6-307. 스코어 어택 2배 (`ACO_PhaseQuota`)
+- **사용자 요청(2026-11-19)**: "점수 벌기 임무의 점수 지금의 2배 정도 할까 하는데" → 분석(목표만 올리면 사냥터 병력 약 1,600~2,400점으로 모자람) → A안 "목표와 사냥터를 같이".
+- 목표 1,500 → 3,000점(× 페이즈 배율 — 격추 점수도 같은 배율), 사냥터 지상 8 → 14대, 전투기 2 → 4기. 사냥터 밀도는 지금과 비슷하고 길이 · 전투가 약 두 배. 클리어 보너스(3,000)는 그대로.
+- 풀이 모자라면(정적 지상 30대를 배경 병력 · 다른 목표와 나눠 씀) 있는 만큼만 놓이고, 나머지는 증원 · 배경 병력을 잡아 채운다(무엇을 잡아도 점수).
+- 씬 값: Tuning `score-attack-x2-1`(이전 값일 때만). 스크립트 기본값도 같다.

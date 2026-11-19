@@ -154,8 +154,10 @@ namespace ACO
         public int TankGroupSize = 3;
         [Tooltip("순찰 고리 반경(m)")]
         public float TankPatrolRadius = 700f;
-        [Tooltip("같은 항로를 가는 전차 사이 간격(m)")]
-        public float TankSpacing = 40f;
+        [Tooltip("전차 조원 사이 간격(m) — 순찰은 같은 고리를 이 간격으로, 매복 · 해안 전차는 옆으로 이 간격씩 산개(6-298 — 폭탄 하나에 몰살되지 않게)")]
+        public float TankSpacing = 150f;
+        [Tooltip("매복 · 해안 전차 조원의 앞뒤 엇갈림(m, ±) — 일렬이 되지 않게(6-298)")]
+        public float TankStagger = 50f;
         [Tooltip("매복 지점: 호위 항로에서 옆으로 이 거리(m) 범위")]
         public float AmbushDistanceMin = 400f;
         public float AmbushDistanceMax = 900f;
@@ -191,8 +193,8 @@ namespace ACO
         public float CityCoastRadius = 3000f;
         [Tooltip("상륙 지점 3순위: 지도 아무 곳에서 이 거리(m) 안의 해안")]
         public float AnyCoastRadius = 4000f;
-        [Tooltip("2·3순위 해안 찾기 시도 수(각각)")]
-        public int LandingCoastAttempts = 12;
+        [Tooltip("2·3순위 해안 찾기 시도 수(각각) — 정지점이 마른 땅이 아닌 후보는 버리므로 넉넉히(6-298)")]
+        public int LandingCoastAttempts = 30;
         [Tooltip("절벽이 아닌 해변: 해안선 둘레 지면이 해수면 위 이 높이(m) 이하")]
         public float BeachMaxHeight = 25f;
         [Tooltip("절벽이 아닌 해변: 20m 간격 이웃 점 사이 경사(도) 이하")]
@@ -1753,11 +1755,15 @@ namespace ACO
                 int size = Mathf.Min(Mathf.Max(groupSize, 1), candCount - next);
                 for (int m = 0; m < size; m++)
                 {
-                    // 매복조는 끝점에서 멈추므로, 앞선 거리를 주면 끝에서 겹치지 않게 출발점을 조금씩 옆으로 민다.
-                    Vector3 shift = dir.normalized * ((m - (size - 1) * 0.5f) * spacing);
                     Vector3[] own = new Vector3[2];
-                    own[0] = pts[0] + shift;
-                    own[1] = pts[1] + shift;
+                    if (!heli && !gun) { TankSlot(pts, own, m, size); }   // 전차: 옆으로 산개 + 앞뒤 엇갈림(6-298)
+                    else
+                    {
+                        // 매복조는 끝점에서 멈추므로, 앞선 거리를 주면 끝에서 겹치지 않게 출발점을 조금씩 옆으로 민다.
+                        Vector3 shift = dir.normalized * ((m - (size - 1) * 0.5f) * spacing);
+                        own[0] = pts[0] + shift;
+                        own[1] = pts[1] + shift;
+                    }
                     MarkMobile(cands[next], own, 2, false, 0f, now);
                     next++;
                     placed++;
@@ -1801,6 +1807,19 @@ namespace ACO
             }
             _sampleY = SeaLevel;
             return true;
+        }
+
+        /// 마른 땅인지(6-298): 공역 안이고, 물 레이어가 아닌 지면에 맞고, 높이가 해수면 + 1m 이상. 얕은 바다(해저가 수면 아래) · 경계 밖은 아니다.
+        /// (IsSeaAt의 반대가 아니다 — IsSeaAt은 깊이 MinSeaDepth 미만의 얕은 바다와 경계 밖을 '바다 아님'으로 본다)
+        private bool IsDryLandAt(float x, float z)
+        {
+            if (!InNpcField(x, z)) { return false; }
+            int ground = GroundLayers;
+            int sea = SeaSurfaceLayers;
+            RaycastHit hit;
+            if (!Physics.Raycast(new Vector3(x, RaycastHeight, z), Vector3.down, out hit, RaycastDistance, ground | sea, QueryTriggerInteraction.Ignore)) { return false; }
+            if (((1 << hit.collider.gameObject.layer) & sea) != 0) { return false; }
+            return hit.point.y >= SeaLevel + 1f;
         }
 
         private bool IsSeaAt(float x, float z)
@@ -2497,6 +2516,9 @@ namespace ACO
             if (!FindSeaDirection(shore)) { return false; }
             Vector3 seaDir = _seaDirFound;
             if (checkBeach && !IsGentleBeach(shore, seaDir)) { return false; }
+            // LCAC 정지점(해변 점)이 마른 땅이어야 한다(6-298 — 얕은 바다 · 공역 경계가 해안으로 잡혀 LCAC가 물 위에서 멈추고 성공 판정이 났다)
+            Vector3 beachPt = shore - seaDir * LcacBeachInland;
+            if (!IsDryLandAt(beachPt.x, beachPt.z)) { return false; }
             Vector3 end = shore + seaDir * LandingStandoff;
             end.y = SeaLevel;
             if (!InArea(end) || !IsSeaAt(end.x, end.z)) { return false; }
@@ -2634,6 +2656,38 @@ namespace ACO
             return placed;
         }
 
+        private const float TankMinSpacing = 40f;   // 산개 자리가 모두 막혔을 때(예전 간격, 확인 없이)
+
+        /// 전차 조원 m(n대 중)의 출발 · 정지점(6-298 — 폭탄 하나에 몰살되지 않게): 진행 방향(pts[0] → pts[1])의 옆으로 (m − 가운데) × TankSpacing,
+        /// 앞뒤로 ±TankStagger 무작위. 옮긴 두 점이 마른 땅이고 그 사이 길이 열려 있어야 한다 — 아니면 간격 1/2 → 1/4, 그래도 안 되면 옆으로 TankMinSpacing(예전 방식).
+        private void TankSlot(Vector3[] pts, Vector3[] own, int m, int n)
+        {
+            Vector3 move = pts[1] - pts[0];
+            move.y = 0f;
+            Vector3 fwd = move.sqrMagnitude > 1f ? move.normalized : Vector3.forward;
+            Vector3 lat = new Vector3(-fwd.z, 0f, fwd.x);
+            float slot = m - (n - 1) * 0.5f;
+            float depth = n > 1 ? Random.Range(-TankStagger, TankStagger) : 0f;
+            for (int t = 0; t < 3; t++)
+            {
+                float scale = t == 0 ? 1f : (t == 1 ? 0.5f : 0.25f);
+                Vector3 shift = lat * (slot * TankSpacing * scale) + fwd * (depth * scale);
+                Vector3 a = pts[0] + shift;
+                Vector3 b = pts[1] + shift;
+                if (!SampleDryGround(a.x, a.z)) { continue; }
+                a.y = _sampleY;
+                if (!SampleDryGround(b.x, b.z)) { continue; }
+                b.y = _sampleY;
+                if (!PathClear(a, b)) { continue; }
+                own[0] = a;
+                own[1] = b;
+                return;
+            }
+            Vector3 s = lat * (slot * TankMinSpacing);
+            own[0] = pts[0] + s;
+            own[1] = pts[1] + s;
+        }
+
         /// 이동 유닛(kind) groups조를 해안에: 전차 = 내륙에서 해안선 근처까지 와서 멈춤, 곡사포 = 내륙 사격 위치로 짧게, 헬리콥터 = 내륙에서 상륙 지점 앞바다 상공까지.
         private int PlaceShoreMobiles(int kind, int groups, int now)
         {
@@ -2687,10 +2741,14 @@ namespace ACO
                 int n = Mathf.Min(Mathf.Max(size, 1), candCount - next);
                 for (int m = 0; m < n; m++)
                 {
-                    Vector3 shift = side * ((m - (n - 1) * 0.5f) * spacing);
                     Vector3[] own = new Vector3[2];
-                    own[0] = pts[0] + shift;
-                    own[1] = pts[1] + shift;
+                    if (!heli && !gun) { TankSlot(pts, own, m, n); }   // 전차: 옆으로 산개 + 앞뒤 엇갈림(6-298)
+                    else
+                    {
+                        Vector3 shift = side * ((m - (n - 1) * 0.5f) * spacing);
+                        own[0] = pts[0] + shift;
+                        own[1] = pts[1] + shift;
+                    }
                     MarkMobile(cands[next], own, 2, false, 0f, now);
                     next++;
                     placed++;
@@ -2799,6 +2857,8 @@ namespace ACO
                 else
                 {
                     end = new Vector3(Random.Range(AreaMin.x + margin, AreaMax.x - margin), 0f, Random.Range(AreaMin.y + margin, AreaMax.y - margin));
+                    // 대체 도착점은 공역 안 육지(6-298 — 공중 호위가 맵 끝 바다로 가던 것). 해상 항로는 바다에서 끝나야 하므로 그대로
+                    if (moveMode != ACO_EscortUnit.MOVE_SEA && !IsDryLandAt(end.x, end.z)) { continue; }
                     heading = Random.Range(0f, Mathf.PI * 2f);
                 }
                 Vector3 dir = new Vector3(Mathf.Cos(heading), 0f, Mathf.Sin(heading));

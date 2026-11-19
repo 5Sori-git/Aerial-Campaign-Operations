@@ -28,6 +28,8 @@ namespace ACO
         [Tooltip("적 대공이 겨누는 자리(AAMTarget — 나는 동안만 켠다)")]
         public GameObject AimPoint;
         public AudioSource FlySound;
+        [Tooltip("발사음(6-312 — VLS 발사 소리, 탄체 Model 아래, 미사일을 따라간다). 발사 순간에만 한 번 — 늦게 들어와 날던 미사일에선 안 난다")]
+        public AudioSource LaunchAudio;
         [Tooltip("미끼 세기(m): 적 대공포 · SAM이 이 미사일을 이만큼 더 가깝다고 쳐서 조종사보다 먼저 노린다(6-276)")]
         public float DecoyPriority = 1000f;
 
@@ -184,6 +186,7 @@ namespace ACO
             if (!_launchShown)
             {
                 _launchShown = true;
+                if (LaunchAudio) { LaunchAudio.Play(); }
                 if (Strike != null) { Strike.PlayLaunch(_from); }
             }
             Vector3 p = PositionAt(t);

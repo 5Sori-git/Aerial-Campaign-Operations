@@ -307,7 +307,7 @@ namespace ACO
         public override string GetDescription()
         {
             if (Description.Length > 0) { return Description; }
-            return "STOP " + TargetCount() + " BALLISTIC MISSILE LAUNCHERS - HIT THEM ON THE GROUND OR INTERCEPT THE MISSILE";
+            return "STOP " + TargetCount() + " MISSILE LAUNCHERS - HIT THEM ON THE GROUND OR INTERCEPT THE MISSILE";
         }
     }
 }

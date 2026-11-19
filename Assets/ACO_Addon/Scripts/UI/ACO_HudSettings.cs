@@ -49,7 +49,10 @@ namespace ACO
         public const int ITEM_HUD_COLOR = 33;   // HUD 색 프리셋 번호(HudColors)
         public const int ITEM_TEXT_SHADOW = 34; // HUD 글자 그림자 켜기/끄기
         public const int ITEM_LANGUAGE = 35;    // 언어(6-166): 0 AUTO(VRChat 언어), 1 한국어, 2 영어, 3 일본어 — ACO_Localization.SET_*
-        public const int ITEM_COUNT = 36;
+        public const int ITEM_HUD_SHADE = 36;       // HUD 그늘 진하기(6-302): 0 = 끔, 0.1 단위 ~0.9
+        public const int ITEM_HUD_SHADE_SIZE = 37;  // HUD 그늘 크기(6-302): 0 S · 1 L · 2 XL · 3 화면 전체
+        public const int ITEM_PIPPER_SIZE = 38;     // 건 피퍼 크기 배율(6-303): x0.2~x2.0
+        public const int ITEM_COUNT = 39;
 
         private const string KEY_PREFIX = "aco_hud_";
         // 배율 항목의 기본값(6-239) — 프리팹 크기(×1.0) 대비. 저장값도 같은 기준이라 기본값을 바꿔도 저장된 설정은 그대로 보인다
@@ -62,7 +65,7 @@ namespace ACO
         private string[] _keys = new string[] {
             "panel_x", "panel_y", "panel_distance", "panel_scale", "marker_size", "info_angle", "crosshair", "crosshair_size", "rwr", "rwr_size",
             "result_x", "result_y", "result_scale", "crosshair_distance", "chatter_x", "chatter_y", "chatter_scale", "rwr_missile_size", "rwr_lock_size",
-            "radar", "radar_size", "radar_x", "radar_y", "radar_alpha", "hud_follow", "radar_range", "radar_blip", "flight_hud", "flight_hud_size", "flight_hud_bright", "distance_unit", "deck_crew", "cloud_quality", "hud_color", "text_shadow", "language" };
+            "radar", "radar_size", "radar_x", "radar_y", "radar_alpha", "hud_follow", "radar_range", "radar_blip", "flight_hud", "flight_hud_size", "flight_hud_bright", "distance_unit", "deck_crew", "cloud_quality", "hud_color", "text_shadow", "language", "hud_shade", "hud_shade_size", "pipper_size" };
 
         [Header("참조 (빌드 시 ACO_SceneBaker가 넣는다)")]
         public ACO_ScoreHUD ScoreHUD;
@@ -85,15 +88,15 @@ namespace ACO
             "MARKER FRAME SIZE", "INFO VIEW ANGLE", "CROSSHAIR", "CROSSHAIR SIZE", "RWR", "RWR RING SIZE",
             "RESULT LEFT / RIGHT", "RESULT UP / DOWN", "RESULT SIZE", "CROSSHAIR / RWR DISTANCE",
             "SUBTITLE LEFT / RIGHT", "SUBTITLE UP / DOWN", "SUBTITLE SIZE", "RWR MISSILE MARK SIZE", "RWR LOCK ARC SIZE",
-            "RADAR", "RADAR SIZE", "RADAR LEFT / RIGHT", "RADAR UP / DOWN", "RADAR OPACITY", "HUD FOLLOW DELAY", "RADAR RANGE", "RADAR BLIP SIZE", "FLIGHT HUD", "FLIGHT HUD SIZE", "FLIGHT HUD BRIGHTNESS", "DISTANCE UNIT", "DECK CREW", "CLOUD QUALITY", "HUD COLOR", "TEXT SHADOW", "LANGUAGE" };
+            "RADAR", "RADAR SIZE", "RADAR LEFT / RIGHT", "RADAR UP / DOWN", "RADAR OPACITY", "HUD FOLLOW DELAY", "RADAR RANGE", "RADAR BLIP SIZE", "FLIGHT HUD", "FLIGHT HUD SIZE", "FLIGHT HUD BRIGHTNESS", "DISTANCE UNIT", "DECK CREW", "CLOUD QUALITY", "HUD COLOR", "TEXT SHADOW", "LANGUAGE", "HUD SHADE", "HUD SHADE SIZE", "GUN PIPPER SIZE" };
         [Tooltip("−/+ 한 번에 바뀌는 양(위치 m, 크기 배율, 각도 도). 크로스헤어·RWR·레이더는 켜기/끄기, 따라오는 지연은 초. 패널 거리·크로스헤어 거리는 현재 거리의 DistanceStepRatio와 이 값 중 큰 쪽")]
-        public float[] Steps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
-        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f };
-        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f };
+        public float[] Steps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f };
+        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f };
+        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f };
         // 예전 프리팹(항목이 적은 배열)을 위한 코드 기본값 — 인스펙터 배열이 짧으면 이 값을 쓴다.
-        private float[] _fbSteps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f };
-        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f };
-        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f };
+        private float[] _fbSteps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f };
+        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f };
+        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f };
 
         [Header("HUD 색 (ITEM_HUD_COLOR — 프리셋 번호, 0 = 순녹색)")]
         [Tooltip("비행 HUD·적 마커(테두리·정보 글자)·조준 고리·RWR·HUD 레이더 색. 목표 빨강·아군 파랑·체력 막대는 그대로")]
@@ -170,6 +173,9 @@ namespace ACO
             _defaults[ITEM_HUD_COLOR] = 0f;
             _defaults[ITEM_TEXT_SHADOW] = 1f;
             _defaults[ITEM_LANGUAGE] = 0f;   // AUTO
+            _defaults[ITEM_HUD_SHADE] = FlightHud != null ? FlightHud.ShadeStrength : 0f;   // 기본 끔
+            _defaults[ITEM_HUD_SHADE_SIZE] = FlightHud != null ? FlightHud.ShadeSize : 2f;  // 기본 XL
+            _defaults[ITEM_PIPPER_SIZE] = FlightHud != null ? FlightHud.PipperScale : 1f;
             // 글자 그림자 진하기(재질 값 — 끄면 0, 켜면 이 값)
             int ns = TextShadowMaterials != null ? TextShadowMaterials.Length : 0;
             _shadowAlpha = new float[ns];
@@ -228,7 +234,7 @@ namespace ACO
             }
             Apply();
             Save(item);
-            Preview();
+            PreviewFor(item);
             return !Mathf.Approximately(before, _values[item]);
         }
 
@@ -241,7 +247,7 @@ namespace ACO
                 Save(i);
             }
             Apply();
-            Preview();
+            PreviewFor(-1);
         }
 
         // ───────────── 적용 ─────────────
@@ -298,6 +304,9 @@ namespace ACO
                 FlightHud.ShowHud = _values[ITEM_FLIGHT_HUD] > 0.5f;
                 FlightHud.Scale = _values[ITEM_FLIGHT_HUD_SIZE];
                 FlightHud.Brightness = _values[ITEM_FLIGHT_HUD_BRIGHT];
+                FlightHud.ShadeStrength = Mathf.Round(_values[ITEM_HUD_SHADE] * 10f) / 10f;   // 6-302
+                FlightHud.ShadeSize = Mathf.RoundToInt(_values[ITEM_HUD_SHADE_SIZE]);
+                FlightHud.PipperScale = Mathf.Round(_values[ITEM_PIPPER_SIZE] * 10f) / 10f;   // 6-303
             }
             if (Units) { Units.NauticalMiles = _values[ITEM_DISTANCE_UNIT] > 0.5f; }
             // HUD 색: 비행 HUD·적 마커·조준 고리·RWR·HUD 레이더
@@ -347,6 +356,28 @@ namespace ACO
             int k = Mathf.RoundToInt(_values[ITEM_HUD_COLOR]);
             if (HudColors == null || HudColors.Length == 0) { return new Color(0f, 1f, 0f); }
             return HudColors[Mathf.Clamp(k, 0, HudColors.Length - 1)];
+        }
+
+        /// 조절한 항목에 해당하는 HUD만 미리보기(6-306 — 비행 HUD를 조절할 때 크로스헤어가 가운데에 같이 떠서 겹쳤다).
+        /// 비행 HUD · 그늘 · 건 피퍼 = 비행 HUD만(크로스헤어 미리보기는 끈다), 크로스헤어 · 표적 마커 = 크로스헤어 · 마커(+ RWR — 같은 거리)만(비행 HUD 미리보기는 끈다), 그 밖(-1 = RESET) = 전부.
+        private void PreviewFor(int item)
+        {
+            bool flight = item == ITEM_FLIGHT_HUD || item == ITEM_FLIGHT_HUD_SIZE || item == ITEM_FLIGHT_HUD_BRIGHT || item == ITEM_PIPPER_SIZE || item == ITEM_HUD_SHADE || item == ITEM_HUD_SHADE_SIZE;
+            bool aim = item == ITEM_CROSSHAIR || item == ITEM_CROSSHAIR_SIZE || item == ITEM_CROSSHAIR_DISTANCE || item == ITEM_MARKER_SIZE || item == ITEM_INFO_ANGLE;
+            if (flight)
+            {
+                if (FlightHud) { FlightHud.Preview(PreviewTime); }
+                if (Markers) { Markers.Preview(0f); }
+                return;
+            }
+            if (aim)
+            {
+                if (Markers) { Markers.Preview(PreviewTime); }
+                if (Rwr) { Rwr.Preview(PreviewTime); }
+                if (FlightHud) { FlightHud.Preview(0f); }
+                return;
+            }
+            Preview();
         }
 
         private void Preview()
@@ -410,7 +441,7 @@ namespace ACO
             if (i == ITEM_PANEL_DISTANCE) { return v.ToString("0.00") + " m"; }
             if (i == ITEM_CROSSHAIR_DISTANCE) { return v.ToString(v < 10f ? "0.00" : "0.0") + " m"; }
             if (i == ITEM_PANEL_SCALE || i == ITEM_RWR_SIZE || i == ITEM_RESULT_SCALE || i == ITEM_CHATTER_SCALE
-                || i == ITEM_RWR_MISSILE_SIZE || i == ITEM_RWR_LOCK_SIZE || i == ITEM_RADAR_SIZE || i == ITEM_RADAR_BLIP) { return "x" + v.ToString("0.0"); }
+                || i == ITEM_RWR_MISSILE_SIZE || i == ITEM_RWR_LOCK_SIZE || i == ITEM_RADAR_SIZE || i == ITEM_RADAR_BLIP || i == ITEM_PIPPER_SIZE) { return "x" + v.ToString("0.0"); }
             if (i == ITEM_RADAR_RANGE) { return (v * 0.001f).ToString("0") + " km"; }
             if (i == ITEM_CROSSHAIR || i == ITEM_RWR || i == ITEM_RADAR || i == ITEM_FLIGHT_HUD || i == ITEM_DECK_CREW || i == ITEM_TEXT_SHADOW) { return v > 0.5f ? T("set.on", "ON") : T("set.off", "OFF"); }
             if (i == ITEM_DISTANCE_UNIT) { return v > 0.5f ? "NM" : "M / KM"; }
@@ -432,6 +463,15 @@ namespace ACO
             }
             if (i == ITEM_FLIGHT_HUD_SIZE) { return "x" + v.ToString("0.0"); }
             if (i == ITEM_FLIGHT_HUD_BRIGHT) { return Mathf.RoundToInt(v * 100f) + "%"; }
+            if (i == ITEM_HUD_SHADE) { return v < 0.05f ? T("set.off", "OFF") : Mathf.RoundToInt(v * 100f) + "%"; }
+            if (i == ITEM_HUD_SHADE_SIZE)
+            {
+                int k = Mathf.RoundToInt(v);
+                if (k <= 0) { return "S"; }
+                if (k == 1) { return "L"; }
+                if (k == 2) { return "XL"; }
+                return T("set.shade.full", "FULL SCREEN");
+            }
             if (i == ITEM_RADAR_ALPHA) { return Mathf.RoundToInt(v * 100f) + "%"; }
             if (i == ITEM_HUD_FOLLOW) { return v < 0.005f ? T("set.off", "OFF") : (Loc != null ? Loc.Get1("set.unit.sec", v.ToString("0.00")) : v.ToString("0.00") + " S"); }
             return Loc != null ? Loc.Get1("set.unit.deg", v.ToString("0.0#")) : v.ToString("0.0#") + " DEG";

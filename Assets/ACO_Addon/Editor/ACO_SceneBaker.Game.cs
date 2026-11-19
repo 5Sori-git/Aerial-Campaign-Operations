@@ -23,6 +23,7 @@ public partial class ACO_SceneBaker
             {
                 ACO_PhaseModule[] modules = manager.GetComponentsInChildren<ACO_PhaseModule>(true);
                 manager.Modules = modules;
+                manager.Logs = Object.FindObjectsOfType<ACO_MissionLog>(true);   // 손실 칸(6-297)
                 MarkChanged(manager);
                 foreach (ACO_PhaseModule m in modules)
                 {

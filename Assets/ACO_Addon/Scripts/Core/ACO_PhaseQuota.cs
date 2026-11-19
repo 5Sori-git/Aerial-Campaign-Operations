@@ -11,11 +11,11 @@ namespace ACO
     {
         [Header("점수 할당량")]
         [Tooltip("얻어야 하는 점수(페이즈 배율을 곱한다 — 격추 점수도 같은 배율이라 필요한 격추 수는 같다)")]
-        public int QuotaScore = 1500;
+        public int QuotaScore = 3000;   // 6-307: 1500 → 3000(사냥터도 같이 늘려 밀도 유지)
         [Tooltip("사냥터 지상 유닛 수")]
-        public int GroundUnits = 8;
+        public int GroundUnits = 14;    // 6-307: 8 → 14
         [Tooltip("사냥터로 오는 전투기 수")]
-        public int Fighters = 2;
+        public int Fighters = 4;        // 6-307: 2 → 4
 
         private bool _planHasPoint;
         private Vector3 _planPoint;

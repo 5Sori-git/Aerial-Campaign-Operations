@@ -35,6 +35,9 @@ PORTAL_RAMP = 45.0        # 평평한 변에서 절벽이 다 서는 거리
 FRAME_T = 4.0             # 포털 두께(아치 둘레)
 FRAME_Z1 = HALF_LEN - 12.0          # 포털 앞(입구 쪽 |z|)
 FRAME_Z0 = FRAME_Z1 - 14.0          # 포털 뒤
+ROAD_W = BORE_W - 0.2     # 도로 폭(벽까지)
+LANE_PERIOD = 20.0        # 도로 텍스처 한 장의 길이(m) — 차선 점선 10m + 빈칸 10m(6-308)
+RING = 12.0               # 라이닝 이음매 간격(m) — 터널 안쪽 텍스처 한 장의 길이(6-310)
 ROWS = 72                 # 길이 방향 격자
 COLS = 18                 # 폭 방향 격자
 
@@ -260,6 +263,55 @@ def to_unity_export(ob):
     ob.data.update()
 
 
+def smooth_bore(ob):
+    """터널 안쪽 면(벽 · 아치 천장)은 부드럽게(6-309 — 아치 16조각이 각져 보였다), 포털 테두리는 각지게.
+    30도보다 꺾인 모서리는 날카롭게 둔다(벽 아래 · 포털 모서리). Unity 좌표일 때(내보내기 변환 전) 부른다."""
+    me = ob.data
+    for poly in me.polygons:
+        poly.use_smooth = in_bore(tuple(poly.center))
+    me.set_sharp_from_angle(angle=math.radians(30.0))
+
+
+def bore_perimeter():
+    return 2.0 * WALL_H + math.pi * BORE_W * 0.5
+
+
+def concrete_uv(ob):
+    """터널 안쪽(벽 · 아치) UV(6-310 — 라이닝 이음매 · 얼룩은 텍스처에): u = 왼쪽 벽 아래에서 둘레를 따라 잰 거리 / 둘레(0 ~ 1 = 왼쪽 벽 아래 → 천장 → 오른쪽 벽 아래),
+    v = z / RING(12m마다 이음매 — 텍스처 v 0 · 1 경계). 곡선형도 중심선 기준. 포털 테두리는 정면 투영(u = x, v = 0.15 ~ 0.85 — 이음매 줄이 안 닿게).
+    Unity 좌표일 때(내보내기 변환 전) 부른다."""
+    me = ob.data
+    uv = me.uv_layers.new(name="UVMap")
+    r = BORE_W * 0.5
+    per = bore_perimeter()
+    for poly in me.polygons:
+        inside = in_bore(tuple(poly.center))
+        for li in poly.loop_indices:
+            x, y, z = me.vertices[me.loops[li].vertex_index].co
+            lat = (x - center_x(z)) / math.sqrt(1.0 + center_slope(z) ** 2)
+            if inside:
+                if y <= WALL_H:
+                    s = max(y, 0.0) if lat < 0.0 else WALL_H + math.pi * r + (WALL_H - max(y, 0.0))
+                else:
+                    th = math.atan2(y - WALL_H, lat)   # 왼쪽 π → 오른쪽 0
+                    th = min(max(th, 0.0), math.pi)
+                    s = WALL_H + r * (math.pi - th)
+                uv.data[li].uv = (s / per, z / RING)
+            else:
+                uv.data[li].uv = (lat / (BORE_W + 2.0 * FRAME_T) + 0.5, 0.15 + 0.7 * min(max(y / (BORE_H + FRAME_T), 0.0), 1.0))
+
+
+def road_uv(ob):
+    """도로 UV(6-308 — 차선은 텍스처에 그린다): u = 중심선에서의 가로 거리 / 도로 폭 + 0.5(0 ~ 1 = 왼쪽 벽 ~ 오른쪽 벽),
+    v = z / LANE_PERIOD(길이 방향 반복). 곡선형도 중심선 기준이라 차선이 터널을 따라 휜다. Unity 좌표일 때(내보내기 변환 전) 부른다."""
+    me = ob.data
+    uv = me.uv_layers.new(name="UVMap")
+    for loop in me.loops:
+        x, y, z = me.vertices[loop.vertex_index].co
+        lat = (x - center_x(z)) / math.sqrt(1.0 + center_slope(z) ** 2)
+        uv.data[loop.index].uv = (lat / ROAD_W + 0.5, z / LANE_PERIOD)
+
+
 def tris(ob):
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
@@ -317,9 +369,12 @@ def build(NAME):
         concrete_bm.from_mesh(ob.data)
         bpy.data.objects.remove(ob, do_unlink=True)
     concrete = to_object(concrete_bm, NAME + "__concrete")
+    smooth_bore(concrete)   # 천장 아치 부드럽게(6-309)
+    concrete_uv(concrete)   # 라이닝 이음매 텍스처(6-310)
 
     # 바닥 도로(칸 윗면 위 얇은 판 — 충돌 없음)
-    road = to_object(sweep(rect(-BORE_W * 0.5 + 0.1, BORE_W * 0.5 - 0.1, 0.02, 0.25), -FRAME_Z1, FRAME_Z1, steps(-FRAME_Z1, FRAME_Z1)), NAME + "__asphalt")   # 벽까지
+    road = to_object(sweep(rect(-ROAD_W * 0.5, ROAD_W * 0.5, 0.02, 0.25), -FRAME_Z1, FRAME_Z1, steps(-FRAME_Z1, FRAME_Z1)), NAME + "__asphalt")   # 벽까지
+    road_uv(road)   # 차선 텍스처(6-308)
 
     # 유도등: 양쪽 벽 아래 띠 + 천장 가운데 점선(중심선을 따라)
     glow_bm = bmesh.new()

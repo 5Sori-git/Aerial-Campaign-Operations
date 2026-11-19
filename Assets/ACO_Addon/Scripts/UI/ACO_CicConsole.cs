@@ -8,8 +8,9 @@ using VRC.Udon.Common;
 namespace ACO
 {
     /// CIC 도구(6-275) — 항모 CIC 전술 테이블에서 지도를 찍고 패널 버튼으로 쓴다. 누구나 쓸 수 있고 미션 중에만 작동한다.
-    ///  - 찍기(로컬): 테이블 근처(TouchRange)에서 VR은 손, 데스크톱은 시선으로 지도 바닥(MapRoot 높이 평면)을 가리키면 선이 보이고,
-    ///    트리거(데스크톱 클릭)로 찍으면 그 자리에 빛기둥 커서가 선다. 공역 밖은 안쪽으로 당긴다.
+    ///  - 찍기(로컬, 6-326): 테이블 근처(TouchRange)에서 VRChat UI 레이저(VR 손 · 데스크톱 시선)로 지도를 누르면 그 자리에 빛기둥 커서가 선다.
+    ///    지도 바닥(MapRoot 높이)에 보이지 않는 UI 판(TouchCanvas)을 깔고 가로 슬라이더를 세로로 쌓았다 — 누른 줄 = 세로, 값 = 가로.
+    ///    도구 패널과 같은 레이저라 패널을 누르면 지도는 찍히지 않는다. 공역 밖은 안쪽으로 당긴다.
     ///  - WAYPOINT: 커서 자리를 모든 조종사 HUD에 WaypointTime초 띄운다(쿨타임 WaypointCooldown, 한 번에 하나 — 새로 누르면 옮겨진다).
     ///  - WINGMEN: 커서 자리를 구역 중심으로 CIC 지역 편대를 부른다(ACO_SupportManager.CallWingmenArea — 60초, 쿨타임 20초, 누른 사람이 계산 · 점수).
     ///  - DRONE: 정찰 드론(하나, 공유)을 커서 자리로 보낸다(이동 쿨타임 DroneMoveCooldown). 격추되지 않는다. 그 자리 지형 + DroneAltitude에서
@@ -47,7 +48,12 @@ namespace ACO
 
         [Header("테이블 표시 (프리팹 빌더 — 시작할 때 MapRoot 아래로 옮긴다)")]
         public Transform Cursor;
-        public LineRenderer AimLine;
+        [Tooltip("지도 찍기 UI 판(6-326) — 시작할 때 MapRoot 바닥에 눕힌다. 보이지 않는다")]
+        public RectTransform TouchCanvas;
+        [Tooltip("TouchCanvas의 가로 슬라이더 줄(아래 → 위). 누른 줄 = 세로 자리, 값 = 가로 자리")]
+        public Slider[] TouchRows;
+        [Tooltip("TouchCanvas 높이(MapRoot 위, m) — 바다 판(−2mm)보다 위, 가장 낮은 땅(1mm)보다 아래")]
+        public float TouchLift = 0.0005f;
         public Transform WaypointMark;
         public Transform AreaMark;
         public Transform DroneMark;
@@ -74,10 +80,6 @@ namespace ACO
         public Image WingmenLed;
         public Image DroneLed;
         public Image CruiseLed;
-        [Tooltip("도구 패널 판(프리팹 빌더). 시선 · 손 레이저가 이 판에 먼저 닿으면 지도를 찍지 않는다 — 패널 버튼 누름이 커서를 옮기지 않게(6-278)")]
-        public RectTransform ToolPanel;
-        [Tooltip("ToolPanel 판정 여유(m, 판 둘레 — 틀 · 뒤판까지)")]
-        public float ToolPanelMargin = 0.012f;
         [Tooltip("LCD 머리 오른쪽: 항모에서 커서까지 거리")]
         public TextMeshProUGUI CursorText;
         public Color LedOffColor = new Color(0.22f, 0.2f, 0.16f, 1f);
@@ -145,9 +147,7 @@ namespace ACO
         private Vector3 _cursorLocal;   // MapRoot 기준(y = 0)
         private Vector3 _cursorWorld;   // 월드(높이 = 지면)
         private int _cursorMission;
-        private bool _hover;
-        private Vector3 _hoverLocal;
-        private int _hand;              // 마지막으로 찍은 손(0 오른손, 1 왼손)
+        private float _touchSoundAt = -10f;
         private float _textTimer;
         private float _beamUntil = -1f;
         private bool _droneOn;
@@ -175,7 +175,7 @@ namespace ACO
                     for (int i = 0; i < CruiseMarks.Length; i++) { if (CruiseMarks[i]) { CruiseMarks[i].SetParent(root, false); CruiseMarks[i].gameObject.SetActive(false); } }
                 }
             }
-            if (AimLine) { AimLine.enabled = false; }
+            PlaceTouchCanvas();
             if (Drone) { Drone.gameObject.SetActive(false); }
             if (WorldBeam) { WorldBeam.gameObject.SetActive(false); }
             if (ConfirmPopup) { ConfirmPopup.SetActive(false); }
@@ -372,7 +372,6 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!Utilities.IsValid(me) || Map == null || Map.MapRoot == null) { return; }
             bool near = Vector3.Distance(me.GetPosition(), Map.MapRoot.position) <= TouchRange;
-            UpdateAim(me, near);
             if (_hasCursor && _cursorMission != CurrentMission()) { ClearCursor(); }   // 작전이 끝나면 커서도 없다
             // 확정 팝업: 시간이 지나거나 작전이 끝나거나 테이블에서 멀어지면 닫는다(취소)
             if (_pending != PENDING_NONE && (!IsRunning() || !near || Time.time - _pendingAt > ConfirmTimeout)) { CloseConfirm(); }
@@ -396,84 +395,58 @@ namespace ACO
 
         // ───────────── 찍기 (로컬) ─────────────
 
-        private void UpdateAim(VRCPlayerApi me, bool near)
+        /// 찍기 UI 판을 MapRoot 바닥에 눕힌다: 판 +Y = 지도 +Z(북), 판 +X = 지도 +X, 앞(+Z)은 아래 — 위에서 누르는 레이저에 앞면.
+        /// 크기 = 지도 지름 × 1.1(공역 밖 여유 — 예전 손 레이와 같다). 판 1단위 = MapRoot 1mm.
+        private void PlaceTouchCanvas()
         {
-            _hover = false;
-            if (near && IsRunning())
+            if (TouchCanvas == null || Map == null || Map.MapRoot == null) { return; }
+            TouchCanvas.SetParent(Map.MapRoot, false);
+            TouchCanvas.localPosition = new Vector3(0f, TouchLift, 0f);
+            TouchCanvas.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            TouchCanvas.localScale = Vector3.one * 0.001f;
+            float w = Map.MapRadius * 2.2f * 1000f;
+            TouchCanvas.sizeDelta = new Vector2(w, w);
+            BoxCollider col = TouchCanvas.GetComponent<BoxCollider>();
+            if (col) { col.center = Vector3.zero; col.size = new Vector3(w, w, 1f); }
+            ResetTouchRows();
+        }
+
+        private void ResetTouchRows()
+        {
+            if (TouchRows == null) { return; }
+            for (int i = 0; i < TouchRows.Length; i++)
             {
-                Vector3 origin;
-                Vector3 dir;
-                if (me.IsUserInVR())
-                {
-                    VRCPlayerApi.TrackingData hand = me.GetTrackingData(_hand == 1 ? VRCPlayerApi.TrackingDataType.LeftHand : VRCPlayerApi.TrackingDataType.RightHand);
-                    origin = hand.position;
-                    // VRChat 손 추적 회전의 앞(+Z)은 엄지(위) 쪽이다 — SaccFlight 손 조준(DFUNC_Laser · EXT_HandTurret)과 같이 Y축 60°를 돌려 검지 쪽으로(6-290, 사용자 "포인터가 검지가 아니라 엄지 방향")
-                    dir = (hand.rotation * Quaternion.Euler(0f, 60f, 0f)) * Vector3.forward;
-                }
-                else
-                {
-                    VRCPlayerApi.TrackingData head = me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
-                    origin = head.position;
-                    dir = head.rotation * Vector3.forward;
-                }
-                Transform root = Map.MapRoot;
-                Vector3 lo = root.InverseTransformPoint(origin);
-                Vector3 ld = root.InverseTransformDirection(dir);
-                if (ld.y < -0.0001f && lo.y > 0f)
-                {
-                    float k = -lo.y / ld.y;
-                    Vector3 hit = lo + ld * k;
-                    hit.y = 0f;
-                    float rr = Map.MapRadius;
-                    if (hit.x * hit.x + hit.z * hit.z <= rr * rr * 1.21f && !PanelBlocks(origin, dir, root.TransformPoint(hit)))
-                    {
-                        _hover = true;
-                        _hoverLocal = hit;
-                        if (AimLine && me.IsUserInVR())
-                        {
-                            AimLine.enabled = true;
-                            AimLine.SetPosition(0, origin);
-                            AimLine.SetPosition(1, root.TransformPoint(hit));
-                        }
-                    }
-                }
+                if (TouchRows[i]) { TouchRows[i].SetValueWithoutNotify(TouchRows[i].minValue); }
             }
-            if (!_hover && AimLine && AimLine.enabled) { AimLine.enabled = false; }
         }
 
-        /// origin → mapHit(월드) 사이에서 선이 도구 패널 판(팝업 포함 — 같은 판 위)에 먼저 닿으면 true.
-        /// 패널 키 · 확정 버튼을 누르는 트리거가 그 뒤 지도에 커서를 찍지 않게 한다(6-278).
-        private bool PanelBlocks(Vector3 origin, Vector3 dir, Vector3 mapHit)
+        /// 찍기 UI 판의 슬라이더가 움직였다(레이저로 누름 · 끎 — 슬라이더 onValueChanged). 값이 바뀐 줄을 찾아 커서를 찍고, 줄을 다시 맨 끝(최솟값)으로 — 같은 자리를 또 눌러도 바뀐다.
+        public void TableTouch()
         {
-            if (ToolPanel == null || !ToolPanel.gameObject.activeInHierarchy) { return false; }
-            Vector3 n = ToolPanel.forward;
-            float dn = Vector3.Dot(dir, n);
-            if (Mathf.Abs(dn) < 0.0001f) { return false; }
-            float k = Vector3.Dot(ToolPanel.position - origin, n) / dn;
-            if (k <= 0f || k * k >= (mapHit - origin).sqrMagnitude / Mathf.Max(dir.sqrMagnitude, 0.0001f)) { return false; }
-            Vector3 p = origin + dir * k;
-            Vector3 local = ToolPanel.InverseTransformPoint(p);
-            Rect r = ToolPanel.rect;
-            Vector3 s = ToolPanel.lossyScale;
-            float mx = s.x > 0.000001f ? ToolPanelMargin / s.x : 0f;
-            float my = s.y > 0.000001f ? ToolPanelMargin / s.y : 0f;
-            return local.x >= r.xMin - mx && local.x <= r.xMax + mx && local.y >= r.yMin - my && local.y <= r.yMax + my;
-        }
-
-        public override void InputUse(bool value, UdonInputEventArgs args)
-        {
-            if (!value) { return; }
+            if (TouchRows == null) { return; }
+            int n = TouchRows.Length;
+            int row = -1;
+            float v = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                Slider s = TouchRows[i];
+                if (!s || s.value <= s.minValue + 0.00001f) { continue; }
+                if (row < 0) { row = i; v = Mathf.InverseLerp(s.minValue, s.maxValue, s.value); }
+                s.SetValueWithoutNotify(s.minValue);
+            }
+            if (row < 0) { return; }
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!Utilities.IsValid(me) || Map == null || Map.MapRoot == null || !IsRunning()) { return; }
             if (Vector3.Distance(me.GetPosition(), Map.MapRoot.position) > TouchRange) { return; }
-            int hand = args.handType == HandType.LEFT ? 1 : 0;
-            // 물건을 든 손의 트리거(데스크톱은 클릭)는 그 물건 것이다(고글 등)
-            if (me.GetPickupInHand(hand == 1 ? VRC_Pickup.PickupHand.Left : VRC_Pickup.PickupHand.Right) != null) { return; }
+            // 데스크톱은 든 물건(고글 등)이 클릭을 쓴다
             if (!me.IsUserInVR() && me.GetPickupInHand(VRC_Pickup.PickupHand.Right) != null) { return; }
-            if (me.IsUserInVR() && hand != _hand) { _hand = hand; UpdateAim(me, true); }   // 다른 손으로 눌렀으면 그 손 기준으로 다시 잰다
-            if (!_hover) { return; }
-            SetCursor(_hoverLocal);
-            if (Sound) { Sound.PlayAt(ACO_UiSound.KIND_CLICK, Map.MapRoot.TransformPoint(_hoverLocal)); }
+            float rr = Map.MapRadius;
+            float w = rr * 2.2f;
+            Vector3 local = new Vector3((v - 0.5f) * w, 0f, ((row + 0.5f) / n - 0.5f) * w);
+            if (local.x * local.x + local.z * local.z > rr * rr * 1.21f) { return; }   // 판 네 귀퉁이(공역 원 밖 여유보다 먼 곳)
+            SetCursor(local);
+            // 끌면 계속 옮겨진다 — 소리는 0.15초에 한 번
+            if (Sound && Time.time - _touchSoundAt > 0.15f) { _touchSoundAt = Time.time; Sound.PlayAt(ACO_UiSound.KIND_CLICK, Map.MapRoot.TransformPoint(local)); }
         }
 
         private void SetCursor(Vector3 local)

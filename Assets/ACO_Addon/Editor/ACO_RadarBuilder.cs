@@ -3,6 +3,7 @@ using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using TMPro;
 using SaccFlightAndVehicles;
 using ACO;
 
@@ -148,10 +149,138 @@ public static class ACO_RadarBuilder
         face.transform.SetParent(root.transform, false);
         face.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
         BuildMapScreen(face.transform, map, shader);
+        BuildPlanGrid(map, shader);
         ACO_SyncModeFixer.FixHierarchy(root, false);
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, $"Assets/ACO_Addon/Prefabs/{PlanMapName}.prefab");
         ACO_PrefabBuilder.DestroyAfterSetup(root);
+        ACO_PrefabVersions.Stamp(PlanMapName);
         return prefab;
+    }
+
+    // ───────────── 좌표 격자 (6-301) ─────────────
+
+    public const string GridName = "Grid";
+    public const string GridLabelsName = "GridLabels";
+    private const string GridFontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
+    private static readonly Color GridLabelColor = new Color(0.8f, 0.92f, 1f, 0.9f);
+
+    /// 평면 지도 격자: 선(지형 위 · 공역 고리 아래, 렌더 큐 3003)과 이름표 20개(열 10 · 행 10 — 스크립트가 글자 · 자리를 정한다).
+    /// 이름표 머티리얼은 글꼴 머티리얼 사본(렌더 큐 3005 — 바다 3001보다 뒤에 그려야 보인다).
+    private static void BuildPlanGrid(ACO_CockpitMap map, Shader shader)
+    {
+        Transform screen = map.Screen.transform;
+        MeshRenderer grid = MakeRenderer(screen, GridName, null,
+            LoadOrSaveMaterial(shader, new Color(0.8f, 0.9f, 1f, 0.35f), "ACO_RadarMapGrid", 3003, CompareFunction.LessEqual));
+        map.GridFilter = grid.GetComponent<MeshFilter>();
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(GridFontPath);
+        Material labelMat = null;
+        if (font != null)
+        {
+            string path = $"{GeneratedDir}/ACO_RadarMapGridLabel.mat";
+            labelMat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (labelMat == null)
+            {
+                labelMat = new Material(font.material) { name = "ACO_RadarMapGridLabel" };
+                labelMat.renderQueue = 3005;
+                AssetDatabase.CreateAsset(labelMat, path);
+            }
+        }
+        // TextMeshPro는 꺼진 오브젝트 아래에서 만들면 Awake 전이라 글꼴을 넣을 때 멈춘다 — 화면을 잠깐 켠다
+        bool wasActive = screen.gameObject.activeSelf;
+        screen.gameObject.SetActive(true);
+        map.GridLabels = MakeGridLabels(screen, 20, 0.25f, font, labelMat, false);
+        screen.gameObject.SetActive(wasActive);
+    }
+
+    /// 작전 테이블 격자 렌더 큐(6-317): 2600 → 2440. 지형 · 바다 · 마커(2000) 뒤, CIC 도구 패널 금속(2449 — Standard 불투명이 허용하는 끝) 앞.
+    /// 패널을 격자보다 뒤에 그려야 깊이 검사 없는 격자가 패널을 뚫고 보이지 않는다(Standard 불투명은 2449를 넘기면 머티리얼을 볼 때 2000으로 되돌린다).
+    public const int TableGridQueue = 2440;
+
+    /// 프리팹 수치 cic-panel-over-grid-2: 이미 만든 ACO_MapGrid 머티리얼 큐를 TableGridQueue로.
+    public static void TuneTableGridQueue()
+    {
+        Material grid = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_MapGrid.mat");
+        if (grid == null || grid.renderQueue == TableGridQueue) { return; }
+        grid.renderQueue = TableGridQueue;
+        EditorUtility.SetDirty(grid);
+        AssetDatabase.SaveAssets();
+    }
+
+    /// 작전 테이블 격자 깊이 판정(6-318, 사용자 "그냥 격자만 깔고 지형 위에는 깔지 말자"): Always → LessEqual. 바다 위에만 보이고 섬(지형) · 벽 · 사람 · 손에 가려진다
+    /// (Always였을 땐 옆방 벽 너머 · 아바타 위로 비쳤다). 선 높이 TableGridLift(0.5mm) — 바다 판(−2mm)보다 위, 가장 낮은 땅 윗면(1mm)보다 아래.
+    public const CompareFunction TableGridZTest = CompareFunction.LessEqual;
+    public const float TableGridLift = 0.0005f;
+
+    /// 프리팹 수치 table-grid-sea-only-1: 이미 만든 ACO_MapGrid 머티리얼 깊이 판정 → LessEqual, 씬 작전 테이블 격자 선 높이 1mm → 0.5mm.
+    public static void TuneTableGridSeaOnly()
+    {
+        Material grid = AssetDatabase.LoadAssetAtPath<Material>($"{GeneratedDir}/ACO_MapGrid.mat");
+        if (grid != null && Mathf.RoundToInt(grid.GetFloat("_ZTest")) != (int)TableGridZTest)
+        {
+            grid.SetFloat("_ZTest", (float)TableGridZTest);
+            EditorUtility.SetDirty(grid);
+            AssetDatabase.SaveAssets();
+        }
+        foreach (ACO_TacticalMap map in Object.FindObjectsOfType<ACO_TacticalMap>(true))
+        {
+            if (map.GridFilter == null || map.GridFilter.transform.parent != map.MapRoot) { continue; }
+            Transform t = map.GridFilter.transform;
+            if (Mathf.Abs(t.localPosition.y - TableGridLift) < 0.00001f) { continue; }
+            Undo.RecordObject(t, "ACO tactical grid");
+            t.localPosition = Vector3.up * TableGridLift;
+            EditorUtility.SetDirty(t);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+    }
+
+    /// 작전 테이블 격자(6-301): MapRoot 아래 선(해수면 + 0.5mm, 깊이 판정 LessEqual — 바다 위에만, 지형 · 벽에 가려진다(6-318), 렌더 큐 TableGridQueue)과
+    /// 이름표 40개(북 · 남 열, 서 · 동 행 — 스크립트가 자리 · 글자 · 방향을 정한다). 이미 있으면 그대로. 만들었으면 true.
+    public static bool EnsureTacticalGrid(ACO_TacticalMap map)
+    {
+        if (map == null || map.MapRoot == null) { return false; }
+        if (map.GridFilter != null && map.GridLabels != null && map.GridLabels.Length > 0) { return false; }
+        Shader shader = Shader.Find("ACO/RadarVertexColor");
+        if (shader == null) { return false; }
+        EnsureGenerated();
+        Undo.RecordObject(map, "ACO tactical grid");
+        Transform old = map.MapRoot.Find(GridName);
+        if (old != null) { Undo.DestroyObjectImmediate(old.gameObject); }
+        Transform oldLabels = map.MapRoot.Find(GridLabelsName);
+        if (oldLabels != null) { Undo.DestroyObjectImmediate(oldLabels.gameObject); }
+        MeshRenderer grid = MakeRenderer(map.MapRoot, GridName, null,
+            LoadOrSaveMaterial(shader, new Color(0.85f, 0.95f, 1f, 0.35f), "ACO_MapGrid", TableGridQueue, TableGridZTest));
+        grid.transform.localPosition = Vector3.up * TableGridLift;
+        Undo.RegisterCreatedObjectUndo(grid.gameObject, "ACO tactical grid");
+        TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(GridFontPath);
+        map.GridFilter = grid.GetComponent<MeshFilter>();
+        map.GridLabels = MakeGridLabels(map.MapRoot, 40, 0.4f, font, null, true);
+        if (map.GridLabels.Length > 0) { Undo.RegisterCreatedObjectUndo(map.GridLabels[0].parent.gameObject, "ACO tactical grid"); }
+        EditorUtility.SetDirty(map);
+        return true;
+    }
+
+    private static Transform[] MakeGridLabels(Transform parent, int count, float fontSize, TMP_FontAsset font, Material mat, bool table)
+    {
+        var holder = new GameObject(GridLabelsName);
+        holder.transform.SetParent(parent, false);
+        var labels = new Transform[count];
+        float scale = fontSize / 0.25f;
+        for (int i = 0; i < count; i++)
+        {
+            var go = new GameObject("L" + i, typeof(RectTransform));
+            go.transform.SetParent(holder.transform, false);
+            TextMeshPro t = go.AddComponent<TextMeshPro>();
+            if (font != null) { t.font = font; }
+            if (mat != null) { t.fontSharedMaterial = mat; }
+            t.fontSize = fontSize;
+            t.alignment = TextAlignmentOptions.Center;
+            t.enableWordWrapping = false;
+            t.color = GridLabelColor;
+            t.rectTransform.sizeDelta = new Vector2(0.08f, 0.04f) * scale;
+            t.text = "";
+            labels[i] = go.transform;
+        }
+        return labels;
     }
 
     /// 지도 화면(바다, 지형, 공역 고리, 점)을 만들어 지도에 잇는다.

@@ -4,6 +4,8 @@
 
 ## 0. 구현 현황
 
+> 2026-11-19 기준. 자세한 내용은 각 절(6-NNN) — 표는 큰 줄기만 적는다.
+
 | 기능 | 상태 | 파일 |
 |---|---|---|
 | NPC 전투기 비행 모델 (뱅크-투-턴, 월드축 분리 제어, 지형 회피) | ✅ | `ACO_NPCFlightController` |
@@ -13,26 +15,36 @@
 | 미사일 런처 (락온·피락온 경고·탄약/재장전, SAV 미사일 호환) | ✅ | `ACO_MissileLauncher` |
 | 자체 미사일 (직접 추적, 대응책, 접근 경고, 피격자 판정) | ✅ | `ACO_Missile` |
 | NPC 기총 (시각 전용 파티클 + 타겟 오너의 조준 체류 판정) | ✅ | `ACO_NPCGun` |
-| 격추/부활 (체력은 SaccTarget, 명시적 `Respawn()`) | ✅ | AI/SAM |
-| 프리팹 생성, 주변 NPC 목록 빌드 시 베이크 | ✅ | `ACO_PrefabBuilder`, `ACO_SceneBaker` |
+| 격추/부활 (체력은 SaccTarget, 명시적 `Respawn()`), 격추는 오너 기준 | ✅ | AI/SAM |
+| 프리팹 생성, 주변 NPC 목록 빌드 시 베이크 | ✅ | `ACO_PrefabBuilder`, `ACO_SceneBaker` (6-94) |
 | CombatDirector — 공격 정원·대기 선회·교대·자기 방어 | ✅ | `ACO_CombatDirector`, AI |
-| CombatDirector — LOD, 오너십 분산 | ⏳ | — |
-| 미션 생성기 (풀 숨김 → 미션 시작 일괄 배치, 증원, 전투기 임무 엄호/CAP) | ✅ | `ACO_MissionGenerator` |
+| CombatDirector — LOD, 오너십 분산 | ⏳ | — (8절) |
+| 미션 생성기 (풀 숨김 → 미션 시작 일괄 배치, 증원, 전투기 임무 엄호/CAP, NPC 작전 지역 25km) | ✅ | `ACO_MissionGenerator` |
 | 고가치 표적 (공장/벙커, 방공 호위 링) | ✅ | `ACO_StaticTarget` |
-| 미션 진행 — 페이즈 1~5개(타격/방공망 제압/점수 할당량/시한 표적/제공권/보스/호위/지상 호위, 무작위·연속 중복 없음), 웨이브, 이벤트 | ✅ | `ACO_MissionManager` |
-| 호위 대상(아군 수송기/콘보이 — 서버 시간 항로, 적 우선 공격, 이동 방식 공중/해상/지상, 행렬) | ✅ | `ACO_EscortUnit` (해상 호위 페이즈는 ⏳) |
-| 전차(지상 항로 순찰/매복, 아군 지상 표적 포격) | ✅ | `ACO_MobileUnit` + `ACO_AAGunSite`(포탑) |
-| 육각 기둥 지형(씨앗 생성, 미션마다 새 지형, 경사 치마로 차량 통행) | ✅ | `ACO_HexTerrain` + `ACO_HexColumn` |
-| 작전 콘솔(페이즈 수 선택 버튼) | ✅ | `ACO_MissionStartButton` |
+| 미션 진행 — 페이즈 모듈(6-32: 타격 · SEAD · 제공권 · 스코어 어택 · 시한 표적 · 호위 · 콘보이 · 요격 · 상륙전 · 함대전 · 정밀 타격 · 터널 · 보스), 웨이브, 이벤트 | ✅ | `ACO_MissionManager`, `ACO_Phase*` |
+| 호위 대상(아군 수송기/콘보이/LCAC — 서버 시간 항로, 적 우선 공격, 이동 방식 공중/해상/지상/공기부양, 행렬) | ✅ | `ACO_EscortUnit` (해상은 상륙전 LCAC · 함대전) |
+| 전차 · 헬리콥터 · 곡사포(지상 항로 순찰/매복, 아군 지상 표적 포격) | ✅ | `ACO_MobileUnit` + `ACO_AAGunSite` / `ACO_ArtilleryGun` |
+| 공격기 (지상·해상 호위 전용 적기) | ✅ | `NPC_Attacker` (6-43) |
+| 육각 기둥 지형(씨앗 생성, 미션마다 새 지형, 경사 치마로 차량 통행) + 지형 장식(도시 · 마을 · 터널 · 항구 등) | ✅ | `ACO_HexTerrain` + `ACO_HexColumn`, `ACO_TerrainFeatures` |
+| 게임 진행 — 참가 명단 · READY · 일제 출격 · 과반 자동 시작 | ✅ | `ACO_GameFlow` (6-15, 6-89) |
 | 전투기 숙련도 (신병/베테랑/에이스, 편대 단위) | ✅ | 생성기 + AI |
-| 팀 공통 점수(페이즈 배율), 제한 시간 실패, 결과 랭크 | ✅ | `ACO_MissionManager` |
+| 팀 공통 점수(페이즈 배율), 제한 시간 실패, 결과 랭크(팀 격추 수 — 6-297) | ✅ | `ACO_MissionManager` |
 | 점수 HUD(머리 고정), 표적 마커(사각형/육각형, TGT, 시선 정보) | ✅ | `ACO_ScoreHUD`, `ACO_TargetMarkers` |
 | 작전판(격추 기록 + 디브리핑, 로컬) | ✅ | `ACO_MissionLog` |
-| 무전 음성 | ⏳ | — |
+| 무전 채터 — 자막 + 음성(ElevenLabs로 만든 클립, 한 · 영 · 일 자막) | ✅ | `ACO_Chatter` (6-19, 6-175) |
 | 대공포 (포탑 리드 조준, 급기동 회피 가능, NPC 기총 판정 재사용) | ✅ | `ACO_AAGunSite` |
 | 지상 유닛 원거리 잠재우기 (조종 중인 플레이어 기체 기준) | ✅ | `ACO_SAMSite`, `ACO_AAGunSite` |
-| 부위 파괴형 함선 — 전함(고가치 표적)/구축함(일반, 함대·호위), 순항, 격침 연출 필드 | ✅ | `ACO_Warship` + SAM/대공포 부위 |
-| CIWS 미사일 요격 | ⏳ 보류 | 설계만(8절) |
+| 부위 파괴형 함선 — 전함/구축함/항모/기함, 순항, 격침 연출 | ✅ | `ACO_Warship` + SAM/대공포 부위 |
+| CIWS 미사일 요격 (구역 방어, 시간 방식, LASM 면역) | ✅ | `ACO_AAGunSite`, `ACO_Missile` (6-40, 6-186) |
+| 보스 — 공중 요새 · 육상전함 · 잠수함 · 에이스(형제 · 레이저 · SHADE · LUNA · MR. S) | ✅ | `03_bosses.md` |
+| 재화 · 강화 · 특수무장 · 상점 · 지원 호출(벙커버스터 · 급유 드론 · 가디언 드론 · 아군 편대) | ✅ | `ACO_PlayerProgress`, `ACO_VehicleUpgrades`, `ACO_Shop`, `ACO_SupportManager` (6-14, 6-22, 6-142, 6-143, 6-273) |
+| CIC 도구 — 작전 테이블 웨이포인트 · 지역 편대 · 정찰 UAV · 고글 · 순항미사일 | ✅ | `ACO_Cic*` (6-275 ~ 6-293) |
+| 비행 HUD(SAV HUD 대체) · HUD 설정 · 레이더 · RWR · 작전 테이블 | ✅ | `ACO_FlightHud`, `ACO_HudSettings`, `ACO_HudRadar`, `ACO_RWR`, `ACO_TacticalMap` (6-51, 6-17, 6-30, 6-20, 6-16) |
+| 날씨 · 구름 · 비 · 낙뢰 · 물 연출 · BGM | ✅ | `ACO_Weather`, `ACO_CloudField`, `ACO_Rain`, `ACO_Lightning`, `ACO_WaterFx`, `ACO_Bgm` |
+| 번역(한 · 영 · 일, VRChat 언어 따름) | ✅ | `ACO_Localization`, `Localization/ACO_Strings.tsv` (6-166) |
+| 관전 · 데칼 · 라운델 · TAC 네임 · 튜토리얼 · 크레딧 / 업데이트 노트 | ✅ | `ACO_SpectatorCam`, `ACO_DecalStudio`, `ACO_TacName`, `ACO_TutorialPopup`, `ACO_CreditBoard` |
+| 항모 함내 격실 · 캐터펄트 갑판 요원 | ✅ | `ACO_InteriorBuilder`, `ACO_CatapultCrew` (`07_interior.md`) |
+| 이전 버전 인스턴스 알림 | ✅ | `ACO_VersionGuard` (6-296) |
 
 ---
 
@@ -153,96 +165,129 @@ NPC 구성 규칙:
 
 ## 3. 파일 구조 (실제)
 
+> 2026-11-19에 폴더를 다시 훑어 고쳤다. 스크립트마다 자세한 동작은 각 절(6-NNN)과 스크립트 머리 주석에 있다.
+
 ```
 Assets/ACO_Addon/
-  Docs/DESIGN.md                   본 문서
+  Docs/DESIGN.md                   설계 목차 · 작성 규칙 (분야별 절은 Docs/design/*.md)
+  Docs/TEST_CHECKLIST.md           아직 테스트하지 않은 항목(7-NNN)
   Scripts/
-    Core/
-      ACO_CombatDirector.cs        전장 지휘: 타겟당 공격 정원, 대기 순서, 교대. 동기화·Update 없음
-      ACO_MissionGenerator.cs      미션 생성: 오너가 풀 유닛을 무작위 배치(지상/바다/공역 밖), 페이즈 목표 배치·태그, 함대, 결과 배열만 동기화
-      ACO_HexTerrain.cs            육각 기둥 지형: 씨앗 노이즈(정수 해시) 높이 → 기둥 배치(런타임 Instantiate 1회 후 재사용, 프레임 분할)
-      ACO_MissionManager.cs        미션 진행: 페이즈 1~5개(페이즈 모듈 중 무작위), 증원 웨이브(페이즈 시작/교착), 팀 점수·랭크, 이벤트 방송
-      ACO_PhaseModule.cs           페이즈 모듈 기반(추상): 고르기·시작·판정·종료·표시·대사 — 관리자 자식에 두면 Bake가 목록에 넣는다(6-32~6-38)
-      ACO_PhaseDestroy.cs 외        페이즈 모듈: Destroy(타격·SEAD·제공권·보스), Quota, TimeSensitive, Escort, Convoy, Intercept, Amphibious, Twins(보너스)
+    Core/                          진행 · 생성 · 공통
+      ACO_CombatDirector           전장 지휘: 타겟당 공격 정원, 대기 순서, 교대. 동기화·Update 없음
+      ACO_MissionGenerator         미션 생성: 풀 유닛 무작위 배치(지상/바다/공역 밖), 페이즈 목표 배치·태그, 함대, 결과 배열만 동기화
+      ACO_MissionManager           미션 진행: 페이즈 모듈 고르기, 증원 웨이브, 팀 점수·랭크, 이벤트 방송
+      ACO_GameFlow                 게임 진행: 참가 명단 · READY · 일제 출격 · 과반 자동 시작(6-15)
+      ACO_PhaseModule              페이즈 모듈 기반(추상): 고르기·시작·판정·종료·표시·대사 — 관리자 자식에 두면 Bake가 목록에 넣는다(6-32~6-38)
+      ACO_Phase*                   페이즈 모듈: Destroy(타격·SEAD·제공권) · Quota · TimeSensitive · Escort · Convoy · Intercept · Amphibious ·
+                                   Fleet · Precision · Tunnel · Boss · Fortress · LandShip · Submarine · Railgun · Borderless · Twins · Shade · Luna · MrS
+      ACO_HexTerrain               육각 기둥 지형: 씨앗 노이즈 높이 → 기둥 배치(런타임 Instantiate 1회 후 재사용, 프레임 분할)
+      ACO_TerrainFeatures          지형 장식 배치(도시 블록 · 마을 · 터널 · 항구 · 등대 · 폐허 등)
+      ACO_PlayerProgress           재화 · 보상 · 영구 저장(PlayerData, 고정 키)
+      ACO_VehicleUpgrades          기체 강화 적용
+      ACO_SupportManager           지원 호출(벙커버스터 · 급유 드론 · 가디언 드론 · 아군 편대) · CIC 무전
+      ACO_Localization             번역 장치(문장 표 · VRChat 언어)
+      ACO_VersionGuard             이전 버전 인스턴스 알림(6-296)
+      ACO_LockGate                 락온 제한(적 공통 부품 — 켜져 있으면 플레이어 무장이 못 잠근다)
+      ACO_SeatRecenter             VR 좌석 눈높이 재조정(점프 한 번)
+      ACO_UrlStore                 플레이어별 URL 영구 저장소(Player Object 16칸, 6-153)
     AirUnits/
-      ACO_NPCFighterAI.cs          전투기 두뇌: 순찰/추격/이탈/대기 상태머신, 요격 조준, 편대 간격, 격추/부활, 숙련도
-      ACO_NPCFighterNet.cs         전투기 동기화: 오차 기반 전송, 원격 예측/보정, 소유권. Update 없음(AI가 OwnerTick/RemoteTick 호출)
-      ACO_NPCFlightController.cs   비행 모델: 뱅크-투-턴, 월드축 분리 제어, 지형 회피. Update 없음(AI가 FlightTick 호출)
+      ACO_NPCFighterAI             전투기 두뇌: 순찰/추격/이탈/대기 상태머신, 요격 조준, 편대 간격, 격추/부활, 숙련도
+      ACO_NPCFighterNet            전투기 동기화: 오차 기반 전송, 원격 예측/보정, 소유권. Update 없음(AI가 호출)
+      ACO_NPCFlightController      비행 모델: 뱅크-투-턴, 월드축 분리 제어, 지형 회피. Update 없음(AI가 호출)
+      ACO_AceBase · ACO_Twins · ACO_Borderless · ACO_ShadeAce · ACO_LunaAce · ACO_MrS   에이스 보스 행동(03_bosses)
+      ACO_CrossManeuver            교차 기동 · 편대 집결(에이스 공통 부품)
+      ACO_AirWreck                 에이스 추락 연출(6-145)
+      ACO_Wingman                  아군 편대(지원 호출 WINGMEN, 6-273)
+      ACO_AirCollisionIgnore       공중 유닛과 내 조종 기체 충돌 무시
     GroundUnits/
-      ACO_SAMSite.cs               SAM 포대(함선 VLS 겸용): 탐지, 포탑 조준, 원거리 잠재우기, 격추/부활
-      ACO_AAGunSite.cs             대공포(함포/CIWS 겸용): 늦은 속도 리드 + 조준 흔들림, ACO_NPCGun 사격, 원거리 잠재우기, 격추/부활, CIWS 미사일 요격(6-40)
-      ACO_StaticTarget.cs          고가치 표적(공장/벙커): 무장 없음, 체력은 SaccTarget, 잔해 전환, 미션 계약
-      ACO_MobileUnit.cs                  이동 유닛(전차·헬리콥터·곡사포, Kind): 서버 시간 지상 항로(순찰 고리/매복), 지면 추종, 거리 LOD, 포탑은 같은 오브젝트의 ACO_AAGunSite
-      ACO_EscortUnit.cs            호위 대상(아군): 서버 시간 항로(Catmull-Rom), 이동 방식 공중/해상/지상, 적 우선순위, 격추 연출
-      ACO_Warship.cs               부위 파괴형 함선(전함/구축함): 본체 체력, 부위 파괴 → 본체 피해, 서버 시간 원 순항, 편대 호위, 격침 연출 필드
+      ACO_SAMSite                  SAM 포대(함선 VLS 겸용): 탐지, 포탑 조준, 원거리 잠재우기, 격추/부활
+      ACO_AAGunSite                대공포(함포/CIWS 겸용): 리드 + 조준 흔들림, ACO_NPCGun 사격, CIWS 미사일 요격(6-40)
+      ACO_StaticTarget             고가치 표적(공장/벙커): 무장 없음, 체력은 SaccTarget, 잔해 전환
+      ACO_MobileUnit               이동 유닛(전차·헬리콥터·곡사포, Kind): 서버 시간 지상 항로, 지면 추종, 거리 LOD
+      ACO_ArtilleryGun             곡사포 포탑(호위 대상 포격)
+      ACO_EscortUnit               호위 대상(아군): 서버 시간 항로, 이동 방식 공중/해상/지상/공기부양, 적 우선순위, 격추 연출
+      ACO_Warship                  부위 파괴형 함선: 본체 체력, 부위 → 본체 피해, 서버 시간 순항, 격침 연출
+      ACO_CityVehicle              도시 도로 차량(민간 · 지휘 차량, 6-270)
+      ACO_TelUnit                  TEL: 발사 준비(지상 표적) → 탄도탄 상승(공중 표적), 서버 시간 궤적
+      ACO_FlyingFortress · ACO_FortressPart · ACO_FortressBlast   공중 요새 보스
+      ACO_LandShip                 육상전함 보스
+      ACO_Submarine · ACO_Slcm     잠수함 보스 · SLCM(6-202)
+      ACO_Railgun · ACO_MiniRailgun   레일건 보스 · 소형 레일건 포대
+      ACO_IcbmSite · ACO_OrbitalStrike   레이저 에이스 사일로 · LUNA 궤도 폭격 연출(피해 없음)
+      ACO_FlareDispenser           NPC · 호위 대상 플레어/연막
     Weapons/
-      ACO_MissileLauncher.cs       공용 런처: 락온 누적·피락온 경고·탄약/재장전, SAV 미사일 덕 타이핑 계약. Update 없음
-      ACO_Missile.cs               자체 미사일: 유도 3종, 콜드런치, 대응책/접근 경고(SAV 호환), 피격자/사수 판정, 후연, 피격 충격,
-      ACO_Dispenser.cs             산탄 탄두(SCM): 자탄 파티클을 원뿔로 뿌리고, 지면에 닿는 시각마다 폭발·범위 피해(ACO_Missile.SubmunitionHit)
-      ACO_FlyingFortress.cs        공중 요새: 궤도·돌진 비행, 단계 표현(엔진·코어 드러내기), 방공 수리
-      ACO_LandShip.cs              육상전함: 지상 항로 이동(선체 길이로 지면에 맞춘 자세), 부위 노출(스커트 → 궤도 → 배기구), 코어 셔터
-      ACO_FortressPart.cs          공중 요새 엔진(드러나기 전엔 락온·피해 없음)
-      ACO_TelUnit.cs               TEL(시한 표적 전용): 발사 준비(지상 표적) → 탄도탄 상승(공중 표적), 서버 시간 궤적
-      ACO_PhaseFleet.cs            함대전 지원 페이즈: 항모 격침 / 기함 사수, 함재기 출격, 상황별 대사
-      ACO_PhaseFortress.cs         공중 요새 보스 페이즈(단계 판정, 궤도·돌진 기준값 동기화)
-      ACO_PhaseLandShip.cs         육상전함 보스 페이즈(장갑·궤도·배기구 → 코어, 항로·속도 기준값 동기화)
-                                   특수 동작(대응책 무시·아무 적 근접 신관·재표적·투하·시스키밍), CIWS 요격 판정, 땅·물 폭발 연출
-      ACO_DFUNC_Missile.cs         플레이어 미사일 다이얼 기능(DFUNC_AAM 대체): 레이어 표적, 슬롯 장전, 강화 가능한 성능, 특수 동작 칸
-      ACO_DFUNC_Special.cs         특수무장 슬롯 다이얼 기능: 격납고에서 고른 무장 모듈을 장착하고 이벤트를 넘긴다
-      ACO_Ordnance.cs              폭탄/로켓 탄체: 중력/추진 비행, 충돌 폭발, 범위 피해(아군 제외), 쏜 사람 판정, 근접 신관(FLAK), 유도(LGB·LGR), 땅·물 폭발 연출
-      ACO_NPCGun.cs                NPC 기총: 시각 전용 파티클 + 타겟 오너의 조준 체류 판정. Update 없음
+      ACO_MissileLauncher          공용 런처: 락온 누적·피락온 경고·탄약/재장전, SAV 미사일 덕 타이핑 계약. Update 없음
+      ACO_Missile                  자체 미사일: 유도 3종, 콜드런치, 대응책/접근 경고(SAV 호환), 피격자/사수 판정, 특수 동작, CIWS 요격 판정
+      ACO_Dispenser                산탄 탄두(SCM)
+      ACO_Ordnance                 폭탄/로켓 탄체: 중력/추진, 범위 피해(아군 제외), 근접 신관(FLAK), 유도(LGB·LGR)
+      ACO_DFUNC_Missile            플레이어 미사일 다이얼(DFUNC_AAM 대체): 레이어 표적, 슬롯 장전, 강화 성능, 특수 동작
+      ACO_DFUNC_Special · ACO_SpecialWeaponDef   특수무장 슬롯 · 무장 정의(6-22)
+      ACO_DFUNC_Support            SUPPORT 다이얼(지원 호출, 6-142)
+      ACO_NPCGun · ACO_NPCLaser    NPC 기총(시각 파티클 + 조준 체류 판정) · 레이저 모드
+      ACO_TankerDrone              급유 드론 연출
+      ACO_GunDamageBonus           기총 피해 강화
+      ACO_BulletFlyby              나를 노린 총탄 스치는 소리
+    Vehicle/                       플레이어 기체 · 항모 갑판
+      ACO_VehicleAutomation        기체 자동화(자동 캐노피 등, SaccEntity 확장)
+      ACO_VehicleMarks · ACO_VehicleDecal   헐넘버 · 콜사인 · 킬마크 · 데칼
+      ACO_DFUNC_Catapult · ACO_CatapultCrew · ACO_LaunchOperator   캐터펄트 · 갑판 요원 · 발함 지휘소 요원
+      ACO_PilotOnlyColliders       탑승자 전용 충돌(6-259)
+    Environment/
+      ACO_Weather · ACO_CloudField · ACO_Rain · ACO_Lightning   날씨 · 구름 · 비 · 낙뢰
+      ACO_WaterFx · ACO_Underwater 물보라 · 항적 · 물속 연출
+      ACO_InteriorZone             함내 구역(비 · 물속 · 마커 끔, 안전지대)
+      ACO_WallClock                벽시계(로컬 시각)
     UI/
-      ACO_ScoreHUD.cs              머리를 따라오는 점수/시간/페이즈/웨이브 패널, 페이즈·결과 안내(로컬)
-      ACO_TargetMarkers.cs         표적 마커: 항상 같은 화면 크기, 항공기 사각형/지상 육각형, 페이즈 목표 TGT, 시선 정보 + 체력 바(로컬)
-      ACO_MissionLog.cs            작전판: 격추·페이즈 기록(스크롤), 조종사 집계, 끝나면 디브리핑(로컬)
-      ACO_LogScrollButton.cs       작전판 스크롤 버튼: NEWER · OLDER · LATEST(콜라이더 Interact)
-      ACO_MissionStartButton.cs    작전 콘솔 버튼: Interact → 페이즈 수를 정해 미션 시작
-      ACO_Loadout.cs               격납고: 내 특수무장 선택(로컬), 조종석에 앉을 때 특수무장 슬롯이 읽는다
-      ACO_HangarButton.cs          격납고 버튼: 특수무장 선택·구매·쪽 넘김 / 상점 탭·줄 고르기·구매
-      ACO_Shop.cs                  격납고 강화 상점: 줄을 고르고 구매 버튼으로 단계·소모품 구매, 보유 크레딧·지난 보상 표시(로컬)
-      ACO_SpectatorCam.cs          관전 패널: 큰 스크린에 플레이어 기체를 리플레이식 컷(추적·플라이바이·망원·나란히·조종석·미사일·표적)으로 실시간 관전, 감독 AI(로컬)
-      ACO_SpectatorButton.cs       관전 패널 버튼: POWER / 대상 < > / 컷 < >
-      ACO_FlightHud.cs             비행 HUD(SAV HUD 대신): 기체 앞 고정 — 헤딩·속도·스로틀·고도·피치 래더·속도 벡터·상태·잔탄·HP·장전 막대·조준 표시(기총 피퍼)
-      ACO_Units.cs                 거리 단위(m/km ↔ NM) — 비행 HUD·표적 마커·페이즈 진행 글자가 같이 쓴다
-      ACO_TacName.cs               TAC 네임(콜사인): 입력 패널, 플레이어 영구 저장(aco_tac_name), 중복이면 뒤에 숫자 — 아군기 테두리 위 글자
-      ACO_DecalStudio.cs           데칼 스튜디오(격납고): 이미지 URL 받기(캐시·대기열 — 모든 데칼 공용), 샘플 기체에 데칼 2개 배치·크기·회전·뒤집기·대칭, 자리 저장
-      ACO_DecalGun.cs              데칼 건(VRC Pickup): 샘플 기체를 겨눠 미리보기, 방아쇠로 확정
-      ACO_DecalButton.cs           데칼 스튜디오 패널 버튼
-  Shaders/ACO_MarkerOverlay.shader 단색, ZTest Always(항상 맨 위)
-  Shaders/ACO_UnderwaterBackdrop.shader 물속 물빛 벽(구 안쪽 면 = 지금 안개 색, 스카이박스 가리기)
-  Shaders/ACO_SkyFog.shader 하늘 안개 돔(원평면, 하늘 픽셀에만 지금 안개)
-  Shaders/ACO_CloudLayer.shader 비구름층·안개층 판(월드 고정 얼룩, 디더 페이드)
-  Shaders/ACO_CloudVeil.shader 구름 속 물안개 막(월드 고정 3D 노이즈)
-  Shaders/ACO_CanopyRain.shader 캐노피 빗방울(기체 자세의 머리 둘레 구, 느리면 맺혀 흘러내리고 빠르면 위로 늘어난다)
-  Shaders/ACO_Lightning.shader 낙뢰 줄기(엇갈린 리본, 더하기 블렌드)
-  Shaders/ACO_Decal.shader 데칼(Unity 프로젝터 — 표면에 비추기, 크기·뒤집기는 머티리얼 값, 마주 보는 면·깊이만)
-  Generated/                       HUD/작전판 빌더가 만든 메시·머티리얼(마커 테두리, 체력 바, TMP 오버레이, 보드 배경)
+      ACO_ScoreHUD · ACO_TargetMarkers · ACO_FlightHud · ACO_HudSettings(+Button) · ACO_Units   HUD · 표적 마커 · 비행 HUD · HUD 설정 · 거리 단위
+      ACO_HudRadar · ACO_RadarContacts · ACO_RWR · ACO_VoiceWarning   레이더 · 접촉 목록 · RWR · 조종석 음성 경고
+      ACO_TacticalMap · ACO_CockpitMap   CIC 작전 테이블 · 브리핑실 벽 지도/조종석 지도
+      ACO_MissionLog · ACO_LogScrollButton · ACO_MissionStartButton · ACO_FlowButton   작전판 · 작전 콘솔 · 게임 진행 버튼
+      ACO_Chatter                  무전 채터(자막 + 음성, 6-19)
+      ACO_Cic*                     CIC 도구(Console · Strike · CruiseMissile · DroneSync · Goggles · GogglesPanel, 6-275)
+      ACO_Loadout · ACO_HangarButton · ACO_Shop   격납고 특수무장 · 상점
+      ACO_SpectatorCam · ACO_SpectatorButton   관전 패널
+      ACO_DecalStudio · ACO_DecalGun · ACO_DecalButton · ACO_TacName   데칼 · 라운델 · 콜사인
+      ACO_TutorialPopup · ACO_CreditBoard · ACO_CreditScrollButton   튜토리얼 · 크레딧/업데이트 노트 보드
+      ACO_Bgm · ACO_BgmPanel · ACO_VideoAudioToggle · ACO_UiSound   BGM · 영상 소리 · UI 소리
+      ACO_ScreenFader · ACO_Teleporter · ACO_DebugPanel · ACO_DebugButton   암전 · 이동 · 디버그(AllowedPlayers)
+  Shaders/                         ACO/* 셰이더 — 마커(MarkerOverlay) · 지형/나무 · 바다 · 하늘 안개 · 구름(Puffs · Layer · Veil · Volume) · 비 ·
+                                   캐노피 빗방울 · 낙뢰 · 데칼 · 표시 글자/이미지(MarkText · MarkImage) · 파티클(FxParticle) · 레이저 · 경계 벽 ·
+                                   지도 정점색 · 고글 화면 · 함내(Interior) 등
+  Generated/                       빌더가 만든 메시·머티리얼·텍스처(HUD 선 · 마커 · 보드 · 구름 · 터널 · 장식 등) — 손으로 고치지 않는다
+  Localization/ACO_Strings.tsv     번역 문장 표(키 · 한 · 영 · 일) — 고친 뒤 ACO_LocalizationSetup.ApplyTable → Bake
+  Credits/                         크레딧 · 업데이트 노트(ko · en · ja)
+  Audio/ · Models/ · Textures/ · Fonts/ · animation/
+  Udon/                            U# Program Asset (스크립트당 1개 — 셋업 검사가 빠진 것을 만든다)
+  Prefabs/                         빌더가 생성: NPC_* (적 · 아군 유닛 · 보스 · 포탑), ACO_Missile_* , ACO_* (HUD · 패널 · 보드 · 지형 장식 · 연출)
+  SpecialWeapons/                  특수무장 정의 프리팹(ACO_Special_*). Bake가 격납고·기체에 맞춘다
   Editor/
-    ACO_PrefabBuilderWindow.cs     메뉴 ACO → Create Prefabs... : 프리팹 생성 창(항목별 체크, 이미 있는 것은 기본 해제 + 덮어쓰기 확인)
-    ACO_PrefabBuilder.cs           NPC/표적 프리팹 생성(미사일 AAM/VLS, 전투기, SAM, 대공포, 공장, 벙커, 전함, 구축함, 전차, 아군 콘보이 차량, 아군 수송기)
-    ACO_HUDBuilder.cs              ACO_HUD(점수 패널 + 마커 64개 + 체력 바), ACO_MissionBoard(작전판), ACO_MissionConsole(작전 콘솔)
-    ACO_SceneBaker.cs              빌드 시 자동 + 메뉴 ACO → Bake NPC References: 주변 NPC 목록, CombatDirector, 생성기 풀(전투기/지상/고가치 표적),
-                                   관리자·HUD·마커·작전판·콘솔 연결. 메뉴 ACO → Create Mission Manager / Mission Generator / Combat Director
-    ACO_CombatDirectorGizmo.cs     씬 뷰 시각화: 플레이 모드에서 NPC별 모드/타겟/대기 순번/교대 시간, 타겟별 공격 수·대기 궤도·자기 방어 거리
-    ACO_MissionGeneratorGizmo.cs   씬 뷰 시각화: 공역, 안전지대, CAP 지점, 사용 중인 유닛
-  Udon/                            U# Program Asset (스크립트당 1개, UdonSharp 필수)
-  Prefabs/                         빌더가 생성: ACO_Missile_AAM, ACO_Missile_VLS, NPC_Fighter, NPC_SAM, NPC_AAGun, NPC_Factory, NPC_Bunker,
-                                   NPC_Warship, NPC_Destroyer, NPC_Tank, NPC_ConvoyTruck, NPC_Transport, NPC_Attacker, ACO_HexColumn, ACO_HUD, ACO_MissionBoard, ACO_MissionConsole
-  SpecialWeapons/                  특수무장 정의 프리팹(ACO_Special_* — 예제 16종 + 복제해 만든 무장). Bake가 격납고·기체에 맞춘다
+    ACO_ToolsWindow                ACO → Tools...: 셋업 도구 모음
+    ACO_SetupValidator(.Tuning)    셋업 검사 · [고치기] · 프리팹 수치 맞춤 표시
+    ACO_SceneBaker(.*)             Bake: 씬 참조 연결(빌드 시 자동) — Aircraft · Cic · Create · Environment · Game · Localization · Support · Ui · Units
+    ACO_PrefabBuilder(.*) · ACO_PrefabBuilderWindow   NPC · 미사일 · 표적 프리팹 생성
+    ACO_PrefabVersions             프리팹 판 번호(판이 오르면 셋업 검사가 다시 만들기를 권한다)
+    ACO_PrefabTuning               프리팹 · 씬 수치 맞춤 항목(예전 값과 같을 때만 바꾼다, ACO_AppliedTuning.txt에 기록)
+    ACO_HUDBuilder(.Cic · .Tutorial · .Version)   HUD · 비행 HUD · HUD 설정 · 작전판 · 콘솔 · 튜토리얼 · 버전 알림
+    ACO_RadarBuilder               레이더 · 브리핑 지도(PlanMap) · 작전 테이블 격자
+    *Builder · *Model              유닛 · 보스 · 장식 · 함내 · 터널 · 하늘 · 물 연출 빌더(Fleet · Fortress · LandShip · Submarine · Railgun · Luna · MrS ·
+                                   Borderless · Tel · CityVehicle · Wingman · Support · Crew · Interior · Tunnel · Deco · Sky · WaterFx · Fx · Boundary 등)
+    ACO_LocalizationSetup · ACO_VoiceLines   문장 표 적용 · 무전 대사 목록
+    ACO_UdonPrograms · ACO_NetworkIDFixer · ACO_SyncModeFixer   프로그램 에셋 · 네트워크 ID · 동기화 모드 정리
+    ACO_CombatDirectorGizmo · ACO_MissionGeneratorGizmo   씬 뷰 시각화
 Tools/ (프로젝트 루트)
   aco_compile_check.py             Unity 컴파일러로 ACO 스크립트만 컴파일해 C# 오류 확인
-  aco_sync_sim.py                  페이즈 동기화 몬테카를로(6-34)
-  aco_ciws_sim.py                  CIWS 요격 시뮬레이션(6-40)
-  aco_icons.py                     HUD·격납고 라인 아이콘 생성
-  aco_make_flyby.py                적 미사일 스쳐 지나가는 소리 합성(6-45)
+  aco_elevenlabs.py · aco_voice_lines.json · aco_make_voice.py · aco_radio_filter.py   무전 음성 생성(ElevenLabs) · 대사 목록 · 무전 필터
+  aco_*_model.py                   Blender 모델 스크립트(터널 · 잠수함 · 육상전함 · 에이스 기체 · TEL · 도시 차량 · 함내 등)
+  aco_make_*.py · aco_sfx_*.py     효과음 합성(스침 · 레이저 · 천둥 등)
+  aco_*_tex.py · aco_icons.py      텍스처 · 아이콘 생성
+  aco_sync_sim.py · aco_ciws_sim.py   페이즈 동기화(6-34) · CIWS 요격(6-40) 시뮬레이션
+  aco_interior_check.py · aco_interior_bake.py   함내 검사 · 굽기
 ```
-
-> 이 목록은 핵심 스크립트 위주다 — 레이더·무전·HUD 설정·생성기 보조 등 나머지는 각 절(6-xx)에 적었다.
 
 - 레이어 상수는 별도 파일 없이 `ACO_PrefabBuilder`에 있다(25 아군 항공기 / 29 적 항공기 / 30 적 지상 / 17 히트박스). 런타임은 각 유닛의 `TargetLayers` 필드를 쓴다.
 - 업데이트 비용을 줄이려고 Update를 가진 스크립트를 최소화했다: 전투기는 AI 1개만, 비행 컨트롤러와 런처는 Update가 없다. 지상 유닛은 원거리 잠재우기로 플레이어 근처 유닛만 계산한다(2.9).
-- 새 U# 스크립트를 추가하면 Unity에서 Assets → Refresh(Ctrl+R)가 돌아야 프로그램 에셋이 인식된다 — 안 그러면 UdonSharp가 다른 스크립트를 먼저 컴파일하면서 "type could not be found"(CS0246)를 낸다(플레이 모드 중이거나 자동 새로고침이 꺼져 있을 때).
-- `SaccFlightAndVehicles.Runtime.asmdef`가 `autoReferenced: true`라 ACO 스크립트는 별도 asmdef 없이 SAV를 참조한다.
+- 새 U# 스크립트는 코드만 만들면 프로그램 에셋이 없다 — 셋업 검사 [고치기]가 만든다. static 필드는 쓰지 않는다. 플레이 모드 중이거나 자동 새로고침이 꺼져 있으면 Assets → Refresh(Ctrl+R)가 돌아야 인식된다(안 그러면 CS0246).
+- `SaccFlightAndVehicles.Runtime.asmdef`가 `autoReferenced: true`라 ACO 스크립트는 별도 asmdef 없이 SAV를 참조한다. SAV 폴더는 고치지 않는다(허용된 SaccTarget 패치만 — 6-274).
 
 ---
 
@@ -265,23 +310,23 @@ Tools/ (프로젝트 루트)
 12. 육각 지형(선택): `ACO → Create Hex Terrain`(기둥 프리팹이 없으면 같이 만든다) → 위치를 지형 중심(높이 = 해수면)에, 항공모함을 `ExcludeZones`에(범위 가장자리 근처 바다 권장), 생성기 공역/해수면을 맞춘 뒤 Bake.
 13. 지형 장식(선택, 육각 지형 필요): `ACO → Create Terrain Features`(장식 프리팹이 없으면 같이 만든다) — 지형/생성기와 자동 연결. 비우면 Bake가 빌더 프리팹으로 채운다.
 14. 미션 UI: `ACO_HUD`, `ACO_MissionBoard`(작전판), `ACO_MissionConsole`(페이즈 수 선택)을 씬에 두고 `ACO → Bake NPC References`(빌드 시 자동)로 관리자/생성기를 연결한다. 작전판/콘솔은 파란 화살표(+Z)가 관객을 보게 놓는다.
-15. 재화/강화: `ACO → Create Player Progress`(씬에 하나), 플레이어 기체에 `ACO → Player Missile → Add Upgrade Extension to Selected Vehicles`(DFUNC_AAM 교체 메뉴는 자동으로 넣는다), 격납고 프리팹을 다시 만든 뒤 Bake.
+15. 재화/강화: `ACO → Create Player Progress`(씬에 하나), 플레이어 기체 프리팹(씬 인스턴스가 아니라)을 골라 `ACO → Player Vehicle → Set Up Selected Vehicles`(미사일 다이얼 교체 · 강화 확장 · 좌석 재조정 · 특수무장 슬롯 · 카탈로그 · 키보드 단축키 — 여러 번 해도 된다), 격납고 프리팹을 다시 만든 뒤 Bake.
+16. 게임 진행 · 무전 · HUD 설정 · 작전 테이블 · 구름과 비 등 나머지 씬 오브젝트는 `ACO → Tools...`의 "씬 오브젝트 만들기"에서 만들고, 셋업 검사가 빠진 것을 알려 준다.
 
 ---
 
 ## 8. 다음 단계와 미해결 항목
 
+> 2026-11-19 정리. 끝난 항목(무전 음성 6-19 · 공격기 6-43 · 전차 · CIWS 요격 6-40 · DFUNC_AAM 대체 `ACO_DFUNC_Missile`)은 지웠다. 테스트 못 한 항목은 `Docs/TEST_CHECKLIST.md`.
+
 - **CombatDirector 확장** ⏳ (공격 정원은 ✅ 5.2-1):
   - 교전 LOD — 대기/원거리 NPC의 AI 틱·동기화 빈도 낮추기(네트워크 예산의 안전장치)
   - 오너십 분산 — 1인 최악 부하 완화. 디렉터는 이미 다중 오너를 견디도록 만들었다
-- **무전 음성** ⏳ (결과/점수 UI는 ✅ 6-6, 6-7) — 미션 관리자 이벤트(`EventListeners`)와 조회 함수로 붙인다.
-- **미션 진행 확장** ⏳ — 추가 실패 조건(기지 방어), 클리어 후 다음 미션 자동 시작, 전투기 편대 유지 비행(편대장 추종).
-- **해상 호위, 기지 방어, 적 공격기** ⏳ — 지상 호위는 ✅(6-10, 위협은 전차). 해상 선단은 같은 호위 유닛(`MoveMode` 해상)에 프리팹만 바꾸면 되지만 배를 공격할 적이 필요하다: 적 NPC 공격기의 대지·대함 공격 행동(진입 → 폭격/미사일 → 이탈, 표적 레이어 26), 그 페이즈 종류.
+- **미션 진행 확장** ⏳ — 추가 실패 조건(기지 방어 페이즈), 클리어 후 다음 미션 자동 시작, 전투기 편대 유지 비행(편대장 추종).
 - **전차 확장** ⏳ — 지금은 정해진 항로만 따라간다(결정적, 동기화 0). 표적을 쫓아 방향을 트는 기동은 위치 동기화가 필요하다.
-- **탱크** ⏳ (대공포는 ✅ 6-1) — 지상 이동은 Update 기반 웨이포인트+직선 이동이 Udon에서 안전(NavMesh 런타임 길찾기는 제약). 대공포는 SAV `AAGun_AIGUN` 재사용 여부 검토.
 - **튜닝 값** — 동기화 빈도, 편대 간격, 지형 회피 거리 등은 실제 맵·유닛 수로 프로파일링 후 확정.
-- **CIWS 미사일 요격** ⏳ 보류(사용자 결정) — 설계: SAV 미사일은 발사 45m 뒤 레이어 17 콜라이더가 켜지므로 함선당 1회 `OverlapSphereNonAlloc`(0.2초, 잠든 동안 생략)로 찾고, 포신 체류 시간을 채우면 SAV의 공개 `Explode()`(AAM/AGM/폭탄 공통 — DirectHit/SplashHit이 꺼진 채라 피해 없음)를 부른다. 요격 CIWS는 깨우는 거리를 미사일 사거리(~10km)로. 남은 결정: 요격 대상(AAM/AGM/폭탄), 성공 확률 유무.
-- **플레이어 락온(`DFUNC_AAM`) 대체** ⏳ — 자체 스크립트로 교체 예정. 그때 락온 스윕(2.7)과 지상 유닛 수 제약을 다시 본다.
+- **플레이어 락온 스윕** — 락온은 `ACO_DFUNC_Missile`로 바뀌었다. 표적 수가 늘면 스윕 비용(2.7)과 지상 유닛 수 제약을 다시 본다.
+- **언어 전환** — 패널 · 자막은 번역 표(6-166)로 바뀐다. 새 글자는 템플릿 · 키로 넣고 글상자를 넉넉히 둔다.
 - 범위 밖: 포획/배신(전투 중 소속 변경), NPC 측 대응탄 사용.
 
 ### 6-94. Bake·프리팹 생성·Setup Check 역할
@@ -317,3 +362,27 @@ SAV 폴더(`Assets/SaccFlightAndVehicles/`)는 손대지 않는 게 원칙이고
 | 늦게 들어오는 중 오너인 채로 피격(방장이 나가는 순간 등) | 그 한 번 피해를 건너뜀. 체력 0으로 즉사하지 않음 |
 | 접속 중 KillEvent 도착 | 건너뜀 — 킬 알림은 쏜 사람에게만 의미가 있다 |
 | Start 뒤 | 바뀐 것 없음 |
+
+### 6-296. 이전 버전 인스턴스 알림 — 버전 확인 (`ACO_VersionGuard`, 프리팹 `ACO_VersionGuard`)
+- 바뀜(6-325): 2026-11-19 씬에서 `ACO_VersionGuard` 오브젝트를 꺼 두었다(알림 안 뜸). 다시 켜면 그대로 동작한다.
+- 바뀜(6-327): 번호를 기록하는 사람 = 들어온 순간 마스터(예전 "Start에서 오너이고 혼자" — 우르르 들어오면 아무도 기록 못 했다), 확인 기다림 15 → 60초.
+- **계기(2026-11-19)**: 일본 사용자 신고 — 업데이트 전에 열린 인스턴스에 나중에 들어갔는데, 연 사람이 나간 뒤부터 페이즈가 시작되자마자 TGT가 "不明"에게 몇 초 만에 파괴돼 클리어됐다. 같은 인스턴스에 두 월드 버전이 섞여 미션 순번(페이즈 · 유닛 풀)을 서로 다르게 읽은 것으로 추정. VRChat은 동기화 구조가 같으면(호환) 옛 인스턴스 입장을 막지 않는다.
+- **사용자 결정**: "이전 버전 인스턴스랑 안 섞이게 방지 기능" → 오너가 쏜 값이 없으면 이전 버전으로 본다 → 15초 동안 "확인 중" 알림 → 알림은 로스터를 고르는 작전판에 → 빌드 번호는 분까지 → **"막지는 말고 계속 위에 띄워두자"**(작전판 버튼 · CIC 도구는 막지 않고, 판을 덮는 창 대신 판 위 알림 띠를 계속).
+- **빌드 번호**(`BuildStamp`): 빌드(업로드 · Build & Test)할 때 `ACO_SceneBaker.OnBuildRequested`가 Bake 전에 `ACO_HUDBuilder.StampVersionGuards`로 넣는다 — 2020-01-01 UTC부터 지난 분(정수, int 한도까지 수천 년). 문자열 · 날짜 형식을 거치지 않고 정수 같음만 비교한다. 0이면 검사를 끈다(번호가 안 찍힌 빌드에서 모두에게 경고가 뜨지 않게). 같은 분 안에 두 번 올리면 같은 번호(무시).
+- **인스턴스 번호**(`_instanceStamp`, Manual 동기화): 시작할 때 오너이고 혼자인 사람(인스턴스를 연 사람)만 자기 번호를 기록한다. 오너가 바뀌어도 새 오너는 0을 채우지 않는다(섞인 인스턴스가 정상처럼 보이지 않게).
+- **판정(로컬)**: 번호가 같으면 정상, 다르면 다른 버전. 번호가 없으면 입장 뒤 `CheckTimeout`(15초)까지 확인 중, 그 뒤 다른 버전(이 기능이 없는 옛 버전 인스턴스). 다른 버전 뒤에 늦게 받은 번호가 같으면 정상으로.
+- **표시**: 작전판(브리핑 판) 위 가장자리 바로 위 알림 띠(판 너비 · 높이 170 판 단위, 판 앞 1cm, sortingOrder 3). 확인 중 = 노랑 "월드 버전 확인 중..."(정상이면 바로 사라짐), 다른 버전 = 빨강 "이 인스턴스는 다른(이전) 버전의 월드로 열렸습니다. 새 인스턴스를 만들어 주세요."(정상이 될 때까지 계속, 닫기 없음). 클릭을 받지 않아(VRCUiShape · 레이캐스터 없음) 판 버튼을 가리지 않는다. 문구 키 `ver.checking` · `ver.mismatch`(한 · 영 · 일), 언어를 바꾸면 바로 바뀐다.
+- **막지 않는다**: 작전판 버튼 · CIC 도구 · 미션 진행은 그대로. 미션 진행 판정이 오너 이탈로 다른 버전 사람에게 넘어가는 것도 VRChat이 정해 막을 수 없다 — 알림으로 새 인스턴스를 유도한다.
+- 연결: Setup Check가 없으면 [고치기]로 작전판 자리(튜토리얼과 같은 기준)에 놓는다. `Loc`은 번역 Bake가 넣는다.
+
+| 경우 | 결과 |
+|---|---|
+| 새 버전으로 새로 연 인스턴스 | 연 사람이 기록, 모두 알림 없음 |
+| 새 버전 인스턴스에 나중에 들어옴 | 몇 초 노랑 "확인 중" 뒤 사라짐 |
+| 이 기능이 없는 옛 버전 인스턴스에 들어옴 | 15초 뒤 빨강 알림이 계속 |
+| 이 기능이 있는 옛 버전 인스턴스에 들어옴 | 번호가 달라 바로 빨강 알림 |
+| 옛 버전 오너가 나가 새 버전 사람이 오너가 됨 | 번호 그대로(채우지 않음) — 계속 빨강 |
+| 느린 네트워크로 15초 넘어 받음 | 잠깐 빨강 뒤 같으면 사라짐 |
+| 모두 나갔다가 다시 염 | 새로 연 사람이 기록 |
+| 에디터(ClientSim) | 혼자라 바로 기록, 알림 없음 |
+| 빌드 번호 0(빌드 훅이 안 돈 빌드) | 검사 끔 |

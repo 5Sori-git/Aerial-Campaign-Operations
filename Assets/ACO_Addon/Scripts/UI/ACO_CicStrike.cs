@@ -34,7 +34,9 @@ namespace ACO
         public GameObject[] FxWaters;
         [Tooltip("격추 파편(ACO_WreckFx_Missile — 로컬 +Z로 쏜다)")]
         public ParticleSystem[] FxWrecks;
-        [Tooltip("VLS 발사음")]
+        [Tooltip("발사 불꽃 · 연기(6-312 — LASM 폭발 복사에서 폭발음을 뺀 것). 비면 예전처럼 FxBlasts(폭발음 포함)")]
+        public GameObject[] FxLaunches;
+        [Tooltip("예전 VLS 발사음(판 6까지) — 6-312부터 발사음은 미사일마다(ACO_CicCruiseMissile.LaunchAudio)라 빌더가 비운다")]
         public AudioSource LaunchSound;
 
         [Header("값")]
@@ -62,6 +64,7 @@ namespace ACO
         [UdonSynced] private int _lastSlot = -1;
 
         private int _blastNext;
+        private int _launchNext;
         private int _waterNext;
         private int _wreckNext;
         private Collider[] _hits = new Collider[256];
@@ -350,10 +353,15 @@ namespace ACO
 
         // ───────────── 연출 · 피해 (미사일이 부른다) ─────────────
 
-        /// VLS 발사(모든 화면): 갑판 위 작은 폭발(불꽃 · 연기) + 발사음. 연기 기둥은 미사일 궤적이 만든다.
+        /// VLS 발사(모든 화면): 갑판 위 불꽃 · 연기(폭발음 없음 — 6-312). 발사음은 미사일이 낸다(LaunchAudio). 연기 기둥은 미사일 궤적이 만든다.
         public void PlayLaunch(Vector3 at)
         {
-            PlayBlast(at);
+            if (FxLaunches != null && FxLaunches.Length > 0)
+            {
+                Replay(FxLaunches[_launchNext % FxLaunches.Length], at);
+                _launchNext++;
+            }
+            else { PlayBlast(at); }
             if (LaunchSound && LaunchSound.clip)
             {
                 LaunchSound.transform.position = at;

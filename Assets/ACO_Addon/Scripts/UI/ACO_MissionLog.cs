@@ -91,6 +91,7 @@ namespace ACO
         // 조종사 집계
         private string[] _pilotName;
         private int[] _pilotKills;
+        private int[] _pilotDeaths;   // 손실(격추당함, 6-297)
         private int[] _pilotScore;
         private int _pilotCount;
 
@@ -111,6 +112,7 @@ namespace ACO
             _rows = new string[cap];
             _pilotName = new string[64];
             _pilotKills = new int[64];
+            _pilotDeaths = new int[64];
             _pilotScore = new int[64];
             RefreshHeader();
             RefreshBody();
@@ -465,8 +467,27 @@ namespace ACO
             if (_pilotCount >= _pilotName.Length) { return; }
             _pilotName[_pilotCount] = pilot;
             _pilotKills[_pilotCount] = points >= 0 ? 1 : 0;
+            _pilotDeaths[_pilotCount] = 0;
             _pilotScore[_pilotCount] = points;
             _pilotCount++;
+        }
+
+        /// 조종사가 격추당했다(ACO_MissionManager.NetPilotDown — 모든 화면). 그 조종사 줄의 손실을 올린다(없으면 격추 0인 줄을 만든다).
+        public void AddPilotDeath(int playerId)
+        {
+            VRCPlayerApi p = VRCPlayerApi.GetPlayerById(playerId);
+            string pilot = Utilities.IsValid(p) ? Shorten(p.displayName) : "[[log.unknown]]";
+            for (int k = 0; k < _pilotCount; k++)
+            {
+                if (_pilotName[k] == pilot) { _pilotDeaths[k]++; _bodyDirty = true; return; }
+            }
+            if (_pilotCount >= _pilotName.Length) { return; }
+            _pilotName[_pilotCount] = pilot;
+            _pilotKills[_pilotCount] = 0;
+            _pilotDeaths[_pilotCount] = 1;
+            _pilotScore[_pilotCount] = 0;
+            _pilotCount++;
+            _bodyDirty = true;
         }
 
         // ───────────── 표시 ─────────────
@@ -508,7 +529,7 @@ namespace ACO
             string breakdown = T("log.breakdown", "(KILLS {0} + PHASE {1} + CLEAR {2} + TIME {3})")
                 .Replace("{0}", (Manager.GetTeamScore() - bonus).ToString("N0")).Replace("{1}", Manager.GetPhaseBonusTotal().ToString("N0"))
                 .Replace("{2}", Manager.GetClearBonus().ToString("N0")).Replace("{3}", Manager.GetTimeBonus().ToString("N0"));
-            HeaderText.text = T("log.debrief", "DEBRIEFING") + "  -  " + result + "   " + T1("log.rank", "RANK {0}", Manager.GetRankLetter())
+            HeaderText.text = T("log.debrief", "DEBRIEFING") + "  -  " + result + "   " + T2("log.rankloss", "RANK {0} (LOSSES {1})", Manager.GetRankLetter(), Manager.GetTeamDeaths().ToString())
                 + "\n<size=60%>" + T1("log.score", "SCORE {0}", Manager.GetTeamScore().ToString("N0")) + " " + breakdown
                 + "   " + T1("log.time", "TIME {0}", FormatTime(Manager.GetElapsedSeconds()))
                 + "   " + kills + "</size>";
@@ -543,7 +564,7 @@ namespace ACO
 
             if (PilotText != null)
             {
-                string s = "<color=#7FBF8A>" + T("log.pilotcol", "PILOT<pos=58%>KILLS<pos=78%>SCORE") + "</color>";
+                string s = "<color=#7FBF8A>" + T("log.pilotcol", "PILOT<pos=50%>KILLS<pos=64%>DEATHS<pos=80%>SCORE") + "</color>";
                 // 점수 높은 순으로 MaxPilots명까지(인원이 적으니 매번 남은 사람 중 최고를 고른다)
                 bool[] used = new bool[_pilotCount];
                 int shown = Mathf.Min(_pilotCount, Mathf.Max(MaxPilots, 1));
@@ -558,8 +579,9 @@ namespace ACO
                     }
                     used[best] = true;
                     string line = (k + 1) + ". " + _pilotName[best]
-                        + "<pos=58%>" + _pilotKills[best]
-                        + "<pos=78%>" + _pilotScore[best].ToString("N0");
+                        + "<pos=50%>" + _pilotKills[best]
+                        + "<pos=64%>" + _pilotDeaths[best]
+                        + "<pos=80%>" + _pilotScore[best].ToString("N0");
                     if (_pilotName[best] == localName) { line = "<color=#FFD24D>" + line + "</color>"; }
                     s += "\n" + RenderRow(line);
                 }
@@ -624,6 +646,11 @@ namespace ACO
         // ───────────── 형식 ─────────────
 
         /// 격자 좌표. 열은 X(서→동) A, B, C…, 행은 Z(북→남) 1, 2, 3…, 키패드는 칸 안의 3x3(7 8 9 / 4 5 6 / 1 2 3).
+        /// 격자 정의(6-301 — 브리핑실 벽 지도 · 작전 테이블이 같은 격자를 그린다).
+        public Vector2 GetGridMin() { return UseCustomGrid || Generator == null ? GridMin : Generator.AreaMin; }
+        public Vector2 GetGridMax() { return UseCustomGrid || Generator == null ? GridMax : Generator.AreaMax; }
+        public int GetGridDivisions() { return Mathf.Clamp(GridDivisions, 1, 26); }
+
         private string GridLabel(Vector3 pos)
         {
             Vector2 min = UseCustomGrid ? GridMin : Generator.AreaMin;

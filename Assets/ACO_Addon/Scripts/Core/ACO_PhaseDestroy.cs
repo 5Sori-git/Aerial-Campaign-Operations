@@ -109,6 +109,12 @@ namespace ACO
         // ───────────── 모든 클라이언트 ─────────────
 
         /// 보스 편대 이름: 지금 목표 태그로 정한다(태그는 동기화돼 있어 모두 같다).
+        /// 이름의 {BOSS}를 이번 에이스 편대 이름으로(6-300 — "ACE SQUADRON - {BOSS}").
+        public override string GetName()
+        {
+            return Kind == KIND_BOSS ? PhaseName.Replace("{BOSS}", GetBossName()) : PhaseName;
+        }
+
         public string GetBossName()
         {
             if (BossNames == null || BossNames.Length == 0 || Manager == null) { return "ACE"; }

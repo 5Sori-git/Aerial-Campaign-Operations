@@ -73,11 +73,11 @@ namespace ACO
         [Tooltip("목표 위 TGT 글자 색 / 아군 위 이름(VIP 등) 글자 색")]
         public Color ObjectiveLabelColor = new Color(1f, 0.25f, 0.2f, 0.9f);
         public Color FriendlyLabelColor = new Color(0.4f, 0.75f, 1f, 0.9f);
-        [Tooltip("시가지 정밀 타격(6-270): 미확인 도시 차량(회색 ?) · 식별된 민간 차량(초록 CIV) 테두리. 비우면 지상 · 아군 머티리얼")]
+        [Tooltip("시가지 정밀 타격(6-270): 미확인 도시 차량(짙은 노랑 ? — 6-304) · 식별된 민간 차량(아군과 같은 하늘색 CIV — 6-304) 테두리. 비우면 지상 · 아군 머티리얼")]
         public Material UnknownMaterial;
         public Material CivilianMaterial;
-        public Color UnknownLabelColor = new Color(0.75f, 0.75f, 0.75f, 0.9f);
-        public Color CivilianLabelColor = new Color(0.35f, 1f, 0.45f, 0.9f);
+        public Color UnknownLabelColor = new Color(0.9f, 0.72f, 0.1f, 0.9f);   // 6-304 회색 → 짙은 노랑
+        public Color CivilianLabelColor = new Color(0.4f, 0.75f, 1f, 0.9f);   // 6-304 초록 → 아군과 같은 하늘색
 
         [Header("아군기 (플레이어)")]
         [Tooltip("빌드 시 Bake가 게임 진행을 넣는다 — 참가자 기체(칸)를 읽어 다른 플레이어가 탄 기체에 파란 테두리 + WINGMAN 칸 번호를 그린다")]
@@ -190,8 +190,8 @@ namespace ACO
         private const int KIND_WAYPOINT = 6;
         private const int KIND_DESTINATION = 7;
         private const int KIND_HOME = 8;      // 항모: 아군 색 마름모 + CVN 거리
-        private const int KIND_UNKNOWN = 9;   // 미확인 도시 차량(6-270): 회색 테두리 + ?
-        private const int KIND_CIVILIAN = 10; // 식별된 민간 차량: 초록 테두리 + CIV
+        private const int KIND_UNKNOWN = 9;   // 미확인 도시 차량(6-270): 짙은 노랑 테두리 + ?(6-304)
+        private const int KIND_CIVILIAN = 10; // 식별된 민간 차량: 하늘색(아군과 같음) 테두리 + CIV(6-304)
 
         // 시작 시 생성기 풀에서 만든 유닛 목록(캐시)
         private Transform[] _unitTransform;
@@ -1025,22 +1025,22 @@ namespace ACO
                 bool friendly = kind == KIND_FRIENDLY_AIR || kind == KIND_FRIENDLY_GROUND || kind == KIND_HOME;
                 bool objective = kind == KIND_OBJECTIVE || kind == KIND_OBJECTIVE_AIR;
                 bool route = kind == KIND_WAYPOINT || kind == KIND_DESTINATION;
-                bool city = kind == KIND_UNKNOWN || kind == KIND_CIVILIAN;
-                TgtLabels[i].gameObject.SetActive(friendly || objective || route || city);
+                // 도시 차량(미확인 ? · 민간 CIV)은 글자 없이 테두리 색만(6-305 — 수십 대가 한꺼번에 떠서 눈이 아팠다). 목표는 TGT
+                TgtLabels[i].gameObject.SetActive(friendly || objective || route);
                 if (objective) { SetTopText(i, "TGT"); TgtLabels[i].color = ObjectiveLabelColor; }
-                else if (kind == KIND_UNKNOWN) { SetTopText(i, "?"); TgtLabels[i].color = UnknownLabelColor; }
-                else if (kind == KIND_CIVILIAN) { SetTopText(i, "CIV"); TgtLabels[i].color = CivilianLabelColor; }
                 else if (friendly) { TgtLabels[i].color = FriendlyLabelColor; }
                 else if (kind == KIND_WAYPOINT) { TgtLabels[i].color = WaypointLabelColor; }
                 else if (kind == KIND_DESTINATION) { TgtLabels[i].color = DestinationLabelColor; }
             }
         }
 
-        /// 크로스헤어: 미션 중(또는 미리보기 중)에만, 시선 정면 CrosshairDistance에 CrosshairAngle 크기로.
+        /// 크로스헤어: 미션 중(함내 밖) 또는 미리보기 중(함내 포함)에만, 시선 정면 CrosshairDistance에 CrosshairAngle 크기로.
         private void UpdateCrosshair(Vector3 headPos, Quaternion headRot)
         {
             if (!Crosshair) { return; }
-            bool show = !_inInterior && ShowCrosshair && ((Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING) || Time.time < _previewUntil);
+            // 미리보기는 함내에서도 보인다(6-323 — HUD 설정 패널이 함내에 있어 조절할 때 늘 꺼져 있었다). 미션 중 표시는 함내에서 숨긴다(예전과 같다)
+            bool running = Manager != null && Manager.GetState() == ACO_MissionManager.STATE_RUNNING;
+            bool show = ShowCrosshair && (Time.time < _previewUntil || (running && !_inInterior));
             if (Crosshair.gameObject.activeSelf != show) { Crosshair.gameObject.SetActive(show); }
             if (!show) { return; }
             float d = Mathf.Max(CrosshairDistance, 0.1f);

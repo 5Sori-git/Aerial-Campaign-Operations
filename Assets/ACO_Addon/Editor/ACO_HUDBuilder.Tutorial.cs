@@ -60,7 +60,7 @@ public static partial class ACO_HUDBuilder
         { "tut.p2.tip", "작전 콘솔 맨 위에 지금 할 일이 표시됩니다", "The top of the operations console shows what to do next", "作戦コンソールの一番上に今やることが表示されます" },
         { "tut.p2.tip2", "격추되면 로드아웃 패널의 LAUNCH로 다시 출격합니다", "If you are shot down, press LAUNCH on the LOADOUT panel to sortie again", "撃墜されたらロードアウトパネルのLAUNCHで再出撃します" },
 
-        { "tut.p3.title", "3 / 9   비행 중", "3 / 9   In Flight", "3 / 9   飛行中" },
+        { "tut.p3.title", "3 / 9   조종 방법", "3 / 9   How to Fly", "3 / 9   操縦方法" },
         { "tut.p3.desktop", "데스크톱", "Desktop", "デスクトップ" },
         { "tut.p3.d1", "스로틀  <color=#F0FFF4><b>Shift / Ctrl</b></color>", "Throttle  <color=#F0FFF4><b>Shift / Ctrl</b></color>", "スロットル  <color=#F0FFF4><b>Shift / Ctrl</b></color>" },
         { "tut.p3.d2", "피치·롤  <color=#F0FFF4><b>W A S D</b></color>    요  <color=#F0FFF4><b>Q E</b></color>", "Pitch/Roll  <color=#F0FFF4><b>W A S D</b></color>    Yaw  <color=#F0FFF4><b>Q E</b></color>", "ピッチ・ロール  <color=#F0FFF4><b>W A S D</b></color>    ヨー  <color=#F0FFF4><b>Q E</b></color>" },
@@ -69,6 +69,8 @@ public static partial class ACO_HUDBuilder
         { "tut.p3.d5", "발사  <color=#F0FFF4><b>Space</b></color>    플레어  <color=#F0FFF4><b>X</b></color>", "Fire  <color=#F0FFF4><b>Space</b></color>    Flares  <color=#F0FFF4><b>X</b></color>", "発射  <color=#F0FFF4><b>Space</b></color>    フレア  <color=#F0FFF4><b>X</b></color>" },
         { "tut.p3.d6", "내리기  <color=#F0FFF4><b>Enter</b></color> 두 번", "Exit  <color=#F0FFF4><b>Enter</b></color> twice", "降機  <color=#F0FFF4><b>Enter</b></color> を2回" },
         { "tut.p3.d7", "애프터버너 켜기·끄기  <color=#F0FFF4><b>T</b></color>", "Afterburner on/off  <color=#F0FFF4><b>T</b></color>", "アフターバーナー オン/オフ  <color=#F0FFF4><b>T</b></color>" },
+        { "tut.p3.d8", "기어  <color=#F0FFF4><b>G</b></color>    플랩  <color=#F0FFF4><b>F</b></color>", "Gear  <color=#F0FFF4><b>G</b></color>    Flaps  <color=#F0FFF4><b>F</b></color>", "ギア  <color=#F0FFF4><b>G</b></color>    フラップ  <color=#F0FFF4><b>F</b></color>" },
+        { "tut.p3.d9", "브레이크  <color=#F0FFF4><b>B</b></color> (누르는 동안)", "Brake  <color=#F0FFF4><b>B</b></color> (hold)", "ブレーキ  <color=#F0FFF4><b>B</b></color>(押している間)" },
         { "tut.p3.vr", "VR", "VR", "VR" },
         { "tut.p3.v1", "왼손 그립 = 스로틀 (손을 앞뒤로)", "Left grip = throttle (move hand fore/aft)", "左グリップ = スロットル(手を前後に)" },
         { "tut.p3.v2", "오른손 그립 = 조종간 (손을 기울이기)", "Right grip = stick (tilt your hand)", "右グリップ = 操縦桿(手を傾ける)" },
@@ -421,7 +423,7 @@ public static partial class ACO_HUDBuilder
         frame.raycastTarget = true;
         frame.transform.SetAsFirstSibling();
 
-        // 쪽 순서(6-200 · 6-220 · 6-279): 개요 · 출격 방법 · 비행 중 · 크레딧과 강화 · CIC 작전 지원 · 기체 꾸미기 · 자유 비행 · BGM · 함내 지도(참고용이라 맨 끝)
+        // 쪽 순서(6-200 · 6-220 · 6-279): 개요 · 출격 방법 · 조종 방법 · 크레딧과 강화 · CIC 작전 지원 · 기체 꾸미기 · 자유 비행 · BGM · 함내 지도(참고용이라 맨 끝)
         string[] titleKeys = { "tut.p1.title", "tut.p2.title", "tut.p3.title", "tut.p4.title", "tut.pk.title", "tut.pc.title", "tut.pf.title", "tut.pb.title", "tut.p5.title" };
         var pages = new GameObject[titleKeys.Length];
         for (int i = 0; i < pages.Length; i++)
@@ -559,20 +561,20 @@ public static partial class ACO_HUDBuilder
         TutText(p, "tut.p2.tip2", new Vector2(0f, -255f), new Vector2(1520f, 60f), 36f, font, TutDim, TextAlignmentOptions.Left);
     }
 
-    // 3 비행 중: 데스크톱 | VR 두 칸 + 아래 다섯 줄
+    // 3 조종 방법: 데스크톱 | VR 두 칸 + 아래 다섯 줄
     private static void BuildTutPage3(RectTransform p, TMP_FontAsset font)
     {
         TutText(p, "tut.p3.desktop", new Vector2(-390f, 355f), new Vector2(740f, 50f), 34f, font, TutDim, TextAlignmentOptions.Left);
         TutText(p, "tut.p3.vr", new Vector2(400f, 355f), new Vector2(740f, 50f), 34f, font, TutDim, TextAlignmentOptions.Left);
-        // 7줄(6-250 — 데스크톱 애프터버너 T · VR 스로틀 끝까지): 간격 52 → 47로 좁혀 아래 구분선(y 2) 위에 끝난다
-        for (int i = 0; i < 7; i++)
+        // 데스크톱 9줄(6-311 — 기어 G · 플랩 F · 브레이크 B를 더함) · VR 7줄: 간격 47 → 40, 글자 37/35 → 34/33, 아래 구분선 y 2 → -40, 아래 네 줄도 그만큼 내린다
+        for (int i = 0; i < 9; i++)
         {
-            float y = 300f - i * 47f;
-            TutText(p, $"tut.p3.d{i + 1}", new Vector2(-390f, y), new Vector2(740f, 50f), 37f, font, TutBody, TextAlignmentOptions.Left);
-            TutText(p, $"tut.p3.v{i + 1}", new Vector2(400f, y), new Vector2(740f, 50f), 35f, font, TutBody, TextAlignmentOptions.Left);
+            float y = 305f - i * 40f;
+            TutText(p, $"tut.p3.d{i + 1}", new Vector2(-390f, y), new Vector2(740f, 46f), 34f, font, TutBody, TextAlignmentOptions.Left);
+            if (i < 7) { TutText(p, $"tut.p3.v{i + 1}", new Vector2(400f, y), new Vector2(740f, 46f), 33f, font, TutBody, TextAlignmentOptions.Left); }
         }
-        MakeUiBox(p, "Divider", new Vector2(0f, 2f), new Vector2(1520f, 3f), TutLine);
-        float[] ys = { -55f, -132f, -212f, -292f };
+        MakeUiBox(p, "Divider", new Vector2(0f, -40f), new Vector2(1520f, 3f), TutLine);
+        float[] ys = { -95f, -172f, -252f, -332f };
         float[] hs = { 92f, 54f, 92f, 54f };
         for (int i = 0; i < ys.Length; i++)
         {

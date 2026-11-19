@@ -62,6 +62,14 @@ namespace ACO
         [Range(0.1f, 1f)] public float Brightness = 1f;
         [Tooltip("판까지 거리(m) — 멀수록 시준이 정확하다(머리가 움직여도 덜 어긋난다)")]
         public float Distance = 20f;
+        [Tooltip("HUD 그늘 진하기(6-302 — 0 = 끔, HUD 설정 패널이 0.1 단위로 바꾼다). 흰 안개 · 구름 위에서 HUD 뒤를 선글라스처럼 어둡게")]
+        [Range(0f, 0.9f)] public float ShadeStrength = 0f;
+        [Tooltip("HUD 그늘 크기(0 S · 1 L · 2 XL — 가장자리가 흐려지는 타원, 3 = 화면 전체)")]
+        public int ShadeSize = 2;
+        [Tooltip("건 피퍼 크기 배율(6-303 — HUD 설정 패널이 x0.2~x2.0). 고리 반지름만 커지고 선 굵기 · 가운데 점은 그대로(6-321), 거리 글자는 크기 그대로 고리 가장자리를 따라간다")]
+        public float PipperScale = 1f;
+        [Tooltip("그늘 색(알파는 진하기)")]
+        public Color ShadeColor = new Color(0f, 0.02f, 0.03f, 1f);
 
         [Header("구성 (프리팹 빌더)")]
         public Transform Root;
@@ -112,6 +120,9 @@ namespace ACO
         public Transform IlsGs;
         [Tooltip("가운데 아래 \"ICLS 거리\"")]
         public TextMeshPro IlsText;
+        [Tooltip("HUD 그늘 메시(Canvas 자식, ACO/RadarVertexColor · ZTest Always · 렌더 큐 3990 — HUD 선 · 글자 뒤). 스크립트가 크기별 메시를 만든다(6-302)")]
+        public MeshFilter ShadeFilter;
+        public MeshRenderer ShadeRenderer;
 
         [Header("값")]
         public float HeadingScale = 0.35f;     // 단위/도
@@ -129,6 +140,10 @@ namespace ACO
         public Vector2 LadderWindow = new Vector2(11f, 10.5f);
         [Tooltip("전파고도를 보이는 높이(ft) 아래")]
         public float RadarAltBelow = 2500f;
+        [Tooltip("AOA 표시 저속 보정(6-299): 공기 속도에 기수 방향으로 이만큼(m/s) 더해 계산 — 정지 · 저속에서 속도 방향이 정해지지 않아 값이 튀던 것. 물리 · 리미터는 SAV 값 그대로")]
+        public float AoaLowSpeedBias = 2f;
+        [Tooltip("이 속도(m/s)에서 보정이 0이 된다(그 위는 SAV 값과 같음)")]
+        public float AoaBiasFadeSpeed = 30f;
         public float GunRange = 1500f;
         public float PipperTargetAngle = 12f;
         public float PipperDefaultRange = 700f;
@@ -342,8 +357,236 @@ namespace ACO
         /// HUD 녹색 계열인가(색을 바꿀 대상 — 빨강 경고·파랑 아군 같은 다른 색은 그대로).
         private bool IsHudGreen(Color c) { return c.g > 0.7f && c.r < 0.5f && c.b < 0.6f; }
 
+        private float _pipperApplied = -1f;
+        private Transform _pipperRange;
+        private Vector3 _pipperRangeBase;
+        private bool _pipperRangeBaseSet;
+        private MeshFilter _pipperFilter;
+        private Mesh _pipperMesh;
+
+        // 건 피퍼 고리(6-321): 기본 크기(빌더의 ACO_FHud_Pipper와 같다 — 고리 반지름 1.3 · 선 굵기 0.13, 가운데 점 반지름 0.13)
+        private const float PipperRingRadius = 1.3f;
+        private const float PipperLineWidth = 0.13f;
+        private const float PipperDotRadius = 0.13f;
+        private const int PipperRingSides = 36;
+        private const int PipperDotSides = 12;
+
+        /// 건 피퍼 크기(6-303 · 6-321): 고리 반지름만 크기 배율만큼 바꾸고 선 굵기 · 가운데 점은 그대로(메시를 크기마다 한 번 새로 만든다 — 원본 메시 에셋은 그대로).
+        /// 아주 작을 때(×0.2 근처)는 고리와 점이 붙지 않게 선 ≤ 반지름의 1/4, 점 ≤ 반지름의 1/5. 거리 글자(자식 Range)는 크기 그대로 고리 가장자리를 따라간다.
+        private void ApplyPipperScale()
+        {
+            if (!Pipper) { return; }
+            float k = Mathf.Clamp(PipperScale, 0.2f, 3f);
+            if (Mathf.Abs(k - _pipperApplied) < 0.001f) { return; }
+            _pipperApplied = k;
+            if (_pipperRange == null) { _pipperRange = Pipper.Find("Range"); }
+            if (_pipperRange != null && !_pipperRangeBaseSet)
+            {
+                _pipperRangeBaseSet = true;
+                _pipperRangeBase = _pipperRange.localPosition;
+            }
+            if (_pipperFilter == null) { _pipperFilter = Pipper.GetComponent<MeshFilter>(); }
+            if (_pipperFilter == null)
+            {
+                // 메시가 없는 예전 구성: 통째로 키운다(선도 같이 굵어진다)
+                Pipper.localScale = Vector3.one * k;
+                if (_pipperRange != null) { _pipperRange.localScale = Vector3.one * (1f / k); }
+                return;
+            }
+            Pipper.localScale = Vector3.one;
+            if (_pipperRange != null)
+            {
+                _pipperRange.localScale = Vector3.one;
+                _pipperRange.localPosition = _pipperRangeBase * k;
+            }
+            BuildPipperMesh(PipperRingRadius * k);
+        }
+
+        private void BuildPipperMesh(float r)
+        {
+            float w = Mathf.Min(PipperLineWidth, r * 0.25f);
+            float d = Mathf.Min(PipperDotRadius, r * 0.2f);
+            int ring = PipperRingSides;
+            int dot = PipperDotSides;
+            Vector3[] v = new Vector3[(ring + dot) * 2];
+            int[] t = new int[(ring + dot) * 6];
+            PipperRing(v, t, 0, ring, r, r - w);
+            PipperRing(v, t, ring, dot, d, 0f);
+            if (_pipperMesh == null)
+            {
+                _pipperMesh = new Mesh();
+                _pipperFilter.sharedMesh = _pipperMesh;
+            }
+            else { _pipperMesh.Clear(); }
+            _pipperMesh.vertices = v;
+            _pipperMesh.triangles = t;
+            _pipperMesh.RecalculateBounds();
+        }
+
+        /// 얇은 고리(빌더 BuildThinRingMesh와 같은 꼭짓점 · 삼각형 순서): 칸 start부터 sides개, 바깥 반지름 outer · 안쪽 inner(0이면 원판).
+        private void PipperRing(Vector3[] v, int[] t, int start, int sides, float outer, float inner)
+        {
+            for (int i = 0; i < sides; i++)
+            {
+                float a = i * Mathf.PI * 2f / sides;
+                float c = Mathf.Cos(a);
+                float s = Mathf.Sin(a);
+                int vi = (start + i) * 2;
+                v[vi] = new Vector3(c * outer, s * outer, 0f);
+                v[vi + 1] = new Vector3(c * inner, s * inner, 0f);
+                int n = start + (i + 1) % sides;
+                int ti = (start + i) * 6;
+                t[ti] = vi;
+                t[ti + 1] = n * 2;
+                t[ti + 2] = vi + 1;
+                t[ti + 3] = vi + 1;
+                t[ti + 4] = n * 2;
+                t[ti + 5] = n * 2 + 1;
+            }
+        }
+
+        private int _shadeBuiltSize = -1;
+        private float _shadeApplied = -1f;
+        private Material _shadeMat;
+        // 화면 전체 그늘(6-324)은 머리를 둘러싼 구 — 판(Canvas) 크기 · 거리를 거슬러 머리 자리 · 미터 단위로 놓는다
+        private const float ShadeSphereRadius = 1f;
+        private Vector3 _shadeBasePos;
+        private Vector3 _shadeBaseScale;
+        private bool _shadeBaseSet;
+        private float _shadePlacedScale = -1f;
+        private float _shadePlacedDist = -1f;
+        private int _shadePlacedSize = -1;
+
+        /// HUD 그늘(6-302): 진하기 0이면 끄고, 크기가 바뀌면 메시를 다시 만들고, 진하기가 바뀌면 색 알파를 넣는다.
+        private void ApplyShade()
+        {
+            if (!ShadeFilter || !ShadeRenderer) { return; }
+            float a = Mathf.Clamp(ShadeStrength, 0f, 0.9f);
+            bool on = a > 0.001f;
+            if (ShadeFilter.gameObject.activeSelf != on) { ShadeFilter.gameObject.SetActive(on); }
+            if (!on) { return; }
+            int size = Mathf.Clamp(ShadeSize, 0, 3);
+            if (size != _shadeBuiltSize) { BuildShade(size); }
+            PlaceShade();
+            if (_shadeMat == null) { _shadeMat = ShadeRenderer.material; _shadeApplied = -1f; }
+            if (Mathf.Abs(a - _shadeApplied) > 0.001f)
+            {
+                _shadeApplied = a;
+                Color c = ShadeColor;
+                c.a = a;
+                _shadeMat.color = c;
+            }
+        }
+
+        /// 화면 전체(구)면 그늘을 머리(Root 원점)에 반지름 ShadeSphereRadius m로, 아니면 원래 자리 · 크기로. 판 크기 · 거리 · 그늘 크기가 바뀔 때만.
+        private void PlaceShade()
+        {
+            Transform t = ShadeFilter.transform;
+            if (!_shadeBaseSet) { _shadeBaseSet = true; _shadeBasePos = t.localPosition; _shadeBaseScale = t.localScale; }
+            float cs = Canvas ? Mathf.Max(Canvas.localScale.x, 0.0001f) : 1f;
+            float cd = Canvas ? Canvas.localPosition.z : 0f;
+            if (_shadeBuiltSize == _shadePlacedSize && cs == _shadePlacedScale && cd == _shadePlacedDist) { return; }
+            _shadePlacedSize = _shadeBuiltSize;
+            _shadePlacedScale = cs;
+            _shadePlacedDist = cd;
+            if (_shadeBuiltSize >= 3)
+            {
+                t.localPosition = new Vector3(0f, 0f, -cd / cs);
+                t.localScale = Vector3.one * (ShadeSphereRadius / cs);
+            }
+            else
+            {
+                t.localPosition = _shadeBasePos;
+                t.localScale = _shadeBaseScale;
+            }
+        }
+
+        /// 그늘 메시(판 단위 — 1 = 약 1°): S · L · XL = 가장자리 Fade만큼 흐려지는 타원, 화면 전체 = 머리를 둘러싼 단위 구(6-324 — 예전 판 ±2000 사각형은 정면 약 ±88°만 덮어 옆 · 뒤를 보면 그늘이 없었다).
+        /// 셰이더가 양면(Cull Off) · 맨 위(ZTest Always)라 구 안에서는 어느 쪽을 봐도 한 겹만 덮는다.
+        private void BuildShade(int size)
+        {
+            _shadeBuiltSize = size;
+            Mesh mesh = ShadeFilter.sharedMesh;
+            if (!mesh)
+            {
+                mesh = new Mesh();
+                ShadeFilter.sharedMesh = mesh;
+            }
+            else { mesh.Clear(); }
+            if (size >= 3)
+            {
+                int lat = 12;
+                int lon = 24;
+                Vector3[] sv = new Vector3[(lat + 1) * (lon + 1)];
+                Color[] sc = new Color[sv.Length];
+                int[] st = new int[lat * lon * 6];
+                for (int y = 0; y <= lat; y++)
+                {
+                    float th = y * Mathf.PI / lat;
+                    float sy = Mathf.Cos(th);
+                    float sr = Mathf.Sin(th);
+                    for (int x = 0; x <= lon; x++)
+                    {
+                        float ph = x * Mathf.PI * 2f / lon;
+                        int i = y * (lon + 1) + x;
+                        sv[i] = new Vector3(sr * Mathf.Cos(ph), sy, sr * Mathf.Sin(ph));
+                        sc[i] = Color.white;
+                    }
+                }
+                int si = 0;
+                for (int y = 0; y < lat; y++)
+                {
+                    for (int x = 0; x < lon; x++)
+                    {
+                        int a = y * (lon + 1) + x;
+                        int b = a + lon + 1;
+                        st[si++] = a; st[si++] = b; st[si++] = a + 1;
+                        st[si++] = a + 1; st[si++] = b; st[si++] = b + 1;
+                    }
+                }
+                mesh.vertices = sv;
+                mesh.colors = sc;
+                mesh.triangles = st;
+                mesh.RecalculateBounds();
+                return;
+            }
+            float ax = size == 0 ? 26f : (size == 1 ? 34f : 40f);
+            float ay = size == 0 ? 15f : (size == 1 ? 20f : 25f);
+            float fade = size == 0 ? 8f : (size == 1 ? 11f : 14f);
+            int seg = 64;
+            Vector3[] v = new Vector3[1 + seg * 2];
+            Color[] c = new Color[v.Length];
+            int[] t = new int[seg * 9];
+            Color clear = new Color(1f, 1f, 1f, 0f);
+            v[0] = Vector3.zero;
+            c[0] = Color.white;
+            for (int i = 0; i < seg; i++)
+            {
+                float ang = i * Mathf.PI * 2f / seg;
+                float cs = Mathf.Cos(ang);
+                float sn = Mathf.Sin(ang);
+                v[1 + i] = new Vector3(cs * ax, sn * ay, 0f);
+                c[1 + i] = Color.white;
+                v[1 + seg + i] = new Vector3(cs * (ax + fade), sn * (ay + fade), 0f);
+                c[1 + seg + i] = clear;
+            }
+            for (int i = 0; i < seg; i++)
+            {
+                int n = (i + 1) % seg;
+                int k = i * 9;
+                t[k] = 0; t[k + 1] = 1 + i; t[k + 2] = 1 + n;
+                t[k + 3] = 1 + i; t[k + 4] = 1 + seg + i; t[k + 5] = 1 + seg + n;
+                t[k + 6] = 1 + i; t[k + 7] = 1 + seg + n; t[k + 8] = 1 + n;
+            }
+            mesh.vertices = v;
+            mesh.colors = c;
+            mesh.triangles = t;
+            mesh.RecalculateBounds();
+        }
+
         private void ApplyLook()
         {
+            ApplyPipperScale();
             float scale = Mathf.Max(Scale * BaseScale, 0.05f);
             float dist = Mathf.Max(Distance, 1f);
             if (scale != _scaleApplied || dist != _distApplied)
@@ -356,6 +599,7 @@ namespace ACO
                     Canvas.localScale = Vector3.one * (dist * TAN1 * scale);
                 }
             }
+            ApplyShade();   // 판 크기 · 거리를 정한 뒤(화면 전체 구가 머리 자리를 따라가게)
             float b = Mathf.Clamp(Brightness, 0.1f, 1f);
             if (Mathf.Abs(b - _appliedBright) < 0.001f) { return; }
             _appliedBright = b;
@@ -459,16 +703,47 @@ namespace ACO
             }
         }
 
+        /// 속도 벡터가 마지막으로 붙어 있던 창 테두리 방향(6-320 — 정확히 뒤로 갈 때 쓴다, 처음엔 아래)
+        private Vector2 _fpmEdgeDir;
+
+        /// 속도 벡터(6-320): 창(LadderWindow) 안이면 실제 방향. 밖이면 HUD 가운데에서 속도 방향으로 곧게 뻗어 창 테두리에 닿는 자리에 붙이고(모서리에서도 방향이 맞다),
+        /// 기수에서 90° 넘게 벌어져도(옆 · 뒤 미끄러짐, 후진) 가운데로 튀지 않고 속도가 향하는 쪽(기수 기준 위 · 아래 · 좌 · 우) 테두리에 붙인다.
+        /// 정확히 뒤면 직전 테두리 방향(처음이면 아래). 테두리에 붙은 동안 0.25초 켜짐 · 꺼짐으로 깜빡인다(ILS 바와 같은 주기). 5 m/s 미만은 가운데(깜빡임 없음).
         private void UpdateVelocityMarker(Quaternion inv, Vector3 vel, float scale)
         {
             if (!VelocityMarker) { return; }
             Vector2 p = Vector2.zero;
-            bool ok = vel.sqrMagnitude > 25f && Project(inv, vel, scale, out p);
-            if (!ok) { p = Vector2.zero; }
-            // 창 밖으로 나가면 가장자리에 붙인다
-            p.x = Mathf.Clamp(p.x, -LadderWindow.x, LadderWindow.x);
-            p.y = Mathf.Clamp(p.y, -LadderWindow.y, LadderWindow.y);
+            bool edge = false;
+            float vv = vel.sqrMagnitude;
+            if (vv > 25f)
+            {
+                Vector3 l = inv * vel;
+                Vector2 lat = new Vector2(l.x, l.y);
+                float wx = Mathf.Max(LadderWindow.x, 0.01f);
+                float wy = Mathf.Max(LadderWindow.y, 0.01f);
+                if (l.z > 0.01f)
+                {
+                    p = lat / (l.z * TAN1 * scale);
+                    float k = Mathf.Max(Mathf.Abs(p.x) / wx, Mathf.Abs(p.y) / wy);
+                    if (k > 1f)
+                    {
+                        p = p / k;
+                        edge = true;
+                    }
+                }
+                else
+                {
+                    edge = true;
+                    Vector2 d;
+                    if (lat.sqrMagnitude > vv * 0.0001f) { d = lat.normalized; }
+                    else { d = _fpmEdgeDir.sqrMagnitude > 0.5f ? _fpmEdgeDir : new Vector2(0f, -1f); }
+                    float k = Mathf.Max(Mathf.Abs(d.x) / wx, Mathf.Abs(d.y) / wy);
+                    p = d / Mathf.Max(k, 0.0001f);
+                }
+                if (edge && p.sqrMagnitude > 0.0001f) { _fpmEdgeDir = p.normalized; }
+            }
             VelocityMarker.localPosition = new Vector3(p.x, p.y, 0f);
+            SetActive(VelocityMarker.gameObject, !edge || Time.time % 0.5f < 0.25f);
         }
 
         // ───────────── ILS(항모 ICLS, 6-201) ─────────────
@@ -737,7 +1012,7 @@ namespace ACO
                 if (AoaText)
                 {
                     SetActive(AoaText.gameObject, gearDown);
-                    if (gearDown) { AoaText.text = "AOA " + air.AngleOfAttack.ToString("0.0"); }
+                    if (gearDown) { AoaText.text = "AOA " + DisplayAoa(air).ToString("0.0"); }
                 }
                 if (ThrottleText) { ThrottleText.text = air.AfterburnerOn ? "AB" : "THR " + Mathf.RoundToInt(Mathf.Clamp01(air.ThrottleInput) * 100f); }
             }
@@ -844,5 +1119,19 @@ namespace ACO
         }
 
         private string Mark(bool selected) { return selected ? ">\n" : "\n"; }
+
+        /// HUD AOA(6-299): SAV와 같은 식(피치 · 요 각을 따로 구해 절댓값 큰 쪽, 피치는 ZeroLiftAoA를 뺀다)에
+        /// 공기 속도 + 기수 방향 AoaLowSpeedBias × (1 − 속도 / AoaBiasFadeSpeed) — 정지 · 저속에서 미세한 속도로 값이 튀지 않게. 그 속도 위는 SAV 값과 같다.
+        private float DisplayAoa(SaccAirVehicle air)
+        {
+            Transform t = air.VehicleTransform;
+            if (t == null) { return air.AngleOfAttack; }
+            Vector3 fwd = t.forward;
+            float bias = AoaBiasFadeSpeed > 0f ? AoaLowSpeedBias * Mathf.Clamp01(1f - air.AirSpeed / AoaBiasFadeSpeed) : 0f;
+            Vector3 vel = air.AirVel + fwd * bias;
+            float pitch = Vector3.SignedAngle(fwd, Vector3.ProjectOnPlane(vel, t.right), t.right) - air.ZeroLiftAoA;
+            float yaw = Vector3.SignedAngle(fwd, Vector3.ProjectOnPlane(vel, t.up), t.up);
+            return Mathf.Max(Mathf.Abs(pitch), Mathf.Abs(yaw));
+        }
     }
 }

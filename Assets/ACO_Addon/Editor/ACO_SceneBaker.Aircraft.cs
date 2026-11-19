@@ -929,6 +929,8 @@ public partial class ACO_SceneBaker
                 bool changed = false;
                 if (m.Contacts != contacts) { m.Contacts = contacts; changed = true; }
                 if (m.HomeBase != home) { m.HomeBase = home; changed = true; }   // 항모 표시(작전 테이블의 HomeBase)
+                ACO_MissionLog gridLog = m.GridFilter != null ? Object.FindObjectOfType<ACO_MissionLog>(true) : null;
+                if (m.GridLog != gridLog) { m.GridLog = gridLog; changed = true; }   // 좌표 격자(6-301 — 벽걸이 지도)
                 if (!m.WallMode && m.EntityControl == null) { m.EntityControl = m.GetComponentInParent<SaccFlightAndVehicles.SaccEntity>(true); changed = true; }
                 if (changed) { MarkChanged(m); }
                 maps++;

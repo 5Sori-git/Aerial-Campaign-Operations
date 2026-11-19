@@ -19,8 +19,11 @@ public static partial class ACO_HUDBuilder
     /// 고글 화질 FHD(1536² — 패널 화질 버튼으로 고를 때만 그린다, 1024²의 2.25배)
     private const string GogglesRtFhdPath = "Assets/ACO_Addon/Generated/Cic/ACO_GogglesRT_FHD.renderTexture";
     public const string CicGogglesName = "ACO_CicGogglesStation";
-    /// 도구 패널: 테이블 가운데에서 이 거리(m, 수평 — 테이블 윗면 반경 1.2m 바로 바깥 테두리)에 놓는다
-    public const float CicRimDistance = 1.25f;
+    /// 도구 패널: 테이블 가운데에서 이 거리(m, 수평)에 놓는다. 6-315: 1.25 → 1.172 — 받침(Clamp, 깊이 6cm)이 테이블 강철 테두리(유리 1.12 ~ 가장자리 1.2m) 위에 얹히게
+    /// (예전엔 받침이 가장자리 바깥 1.22 ~ 1.28m 허공에 떠 있었다 — 사용자 "CIC 패널이 지도 테이블에서 살짝 떨어져 있던데 붙여 줘")
+    public const float CicRimDistance = 1.172f;
+    /// 도구 패널 높이: 테이블 루트(유리 윗면 0.652m)보다 이만큼 아래 = 강철 테두리 윗면 0.645m(6-315)
+    public const float CicRimDrop = 0.007f;
     // 도구 패널 D안 색(금속 판 · 틀 · LCD)
     private static readonly Color CicMetal = new Color(0.36f, 0.38f, 0.41f, 1f);
     private static readonly Color CicFrame = new Color(0.13f, 0.15f, 0.16f, 1f);
@@ -50,7 +53,6 @@ public static partial class ACO_HUDBuilder
         Material wpMat = CicMaterial("ACO_Cic_Waypoint", Shader.Find("Unlit/Color"), new Color(0.3f, 0.95f, 1f));
         Material areaMat = CicMaterial("ACO_Cic_Area", Shader.Find("Unlit/Color"), new Color(0.35f, 0.6f, 1f));
         Material droneMat = CicMaterial("ACO_Cic_DroneMark", Shader.Find("Unlit/Color"), new Color(0.85f, 0.95f, 1f));
-        Material lineMat = CicMaterial("ACO_Cic_AimLine", Shader.Find("Sprites/Default"), new Color(1f, 0.85f, 0.2f, 0.8f));
         // 빛기둥: 반투명 · 위로 갈수록 흐려짐 · 부드러운 가장자리(ACO/LightBeam). 큰 것(400m)은 띠 간격 · 속도를 높이 비율로 맞춘다
         Material beamMat = CicBeamMaterial("ACO_Cic_WorldBeam", 0.5f, 0.5f, 1.3f, 0.0375f, 12f, 0.10f);
         Material cursorBeamMat = CicBeamMaterial("ACO_Cic_CursorBeam", 0.6f, 0.5f, 1.1f, 0.083f, 5f, 0.6f);
@@ -87,7 +89,6 @@ public static partial class ACO_HUDBuilder
         BoxCollider toolCol = tools.gameObject.AddComponent<BoxCollider>();
         toolCol.isTrigger = true;
         toolCol.size = new Vector3(1000f, 850f, 1f);
-        console.ToolPanel = tools;   // 이 판에 먼저 닿는 트리거는 지도를 찍지 않는다(6-278)
         // D안(2026-11-18 사용자 선택 — "하드웨어 버튼"): 금속 판 + 어두운 틀, 위 LCD 머리(제목 · 커서 거리 · 안내),
         // 도구마다 백라이트 키(LED 점 · 아이콘 · 이름)와 오른쪽 LCD 표시창(상태 · 설명). 순항미사일 · 편대는 확정 팝업.
         Transform bgT = tools.Find("Background");
@@ -197,18 +198,7 @@ public static partial class ACO_HUDBuilder
         CicPrimitive(PrimitiveType.Cylinder, cursor, "Foot", new Vector3(0f, 0.002f, 0f), new Vector3(0.07f, 0.001f, 0.07f), cursorMat);
         console.Cursor = cursor;
 
-        GameObject line = new GameObject("CicAimLine");
-        line.transform.SetParent(root.transform, false);
-        LineRenderer lr = line.AddComponent<LineRenderer>();
-        lr.sharedMaterial = lineMat;
-        lr.positionCount = 2;
-        lr.useWorldSpace = true;
-        lr.startWidth = 0.004f;
-        lr.endWidth = 0.004f;
-        lr.shadowCastingMode = ShadowCastingMode.Off;
-        lr.receiveShadows = false;
-        lr.enabled = false;
-        console.AimLine = lr;
+        BuildCicTouchCanvas(root.transform, console);
 
         Transform wp = new GameObject("CicWaypointMark").transform;
         wp.SetParent(root.transform, false);
@@ -394,12 +384,29 @@ public static partial class ACO_HUDBuilder
     /// 모니터 화면 가운데(책상 위 0.34m)에서 책상 윗면까지(m, 음수)
     public const float CicGogglesDeskDrop = -0.34f;
 
+    /// CIC 금속(도구 패널 판 · 받침, 고글 자리) 렌더 큐(6-317): 작전 테이블 격자(ZTest Always, 큐 2440 — 지형 위에 늘 보이게, 6-301)보다 뒤에 그려
+    /// 패널이 격자를 가린다. 예전(2000)엔 패널을 먼저 그리고 격자가 그 위를 덮어 "격자가 패널을 뚫고" 보였다.
+    /// 2449 = Standard 불투명 모드가 허용하는 끝(넘기면 머티리얼을 볼 때 2000으로 되돌린다 — 처음 2650으로 했다가 되돌아갔다).
+    public const int CicSteelQueue = 2449;
+
     private static Material CicSteel()
     {
         Material steel = CicMaterial("ACO_Cic_Steel", Shader.Find("Standard"), new Color(0.32f, 0.34f, 0.36f));
         steel.SetFloat("_Metallic", 0.6f);
         steel.SetFloat("_Glossiness", 0.45f);
+        steel.renderQueue = CicSteelQueue;
+        EditorUtility.SetDirty(steel);
         return steel;
+    }
+
+    /// 프리팹 수치 cic-panel-over-grid-1: 이미 만든 ACO_Cic_Steel 머티리얼의 렌더 큐 2000(기본) → 2650.
+    public static void TuneCicSteelQueue()
+    {
+        Material steel = AssetDatabase.LoadAssetAtPath<Material>(CicDir + "/ACO_Cic_Steel.mat");
+        if (steel == null || steel.renderQueue == CicSteelQueue) { return; }
+        steel.renderQueue = CicSteelQueue;
+        EditorUtility.SetDirty(steel);
+        AssetDatabase.SaveAssets();
     }
 
     /// 정찰 UAV 모델: Synty PolygonMilitary SM_Veh_Drone_01(날개폭 19.4m, 기수 +Z). 비행 중이라 바퀴 · 바퀴 다리는 뺀다.
@@ -597,6 +604,65 @@ public static partial class ACO_HUDBuilder
         r.shadowCastingMode = ShadowCastingMode.Off;
         r.receiveShadows = false;
         return go.transform;
+    }
+
+    /// 지도 찍기 UI 판의 줄 수(6-326): 세로 자리는 줄 간격만큼 끊긴다 — 테이블 반지름 1.1m · 판 2.42m면 줄 1cm(실제 약 230m).
+    public const int CicTouchRows = 240;
+    /// 슬라이더 최솟값(= 읽은 뒤 되돌리는 값 · 판 왼쪽 끝): 이보다 크면 눌린 줄. 판 왼쪽 끝은 공역 원 밖이라 실제로 누를 일이 없다.
+    private const float CicTouchMin = -0.01f;
+
+    /// 지도 찍기 UI 판(6-326): VRChat UI 레이저가 닿는 보이지 않는 판 + 가로 슬라이더 CicTouchRows줄(아래 → 위).
+    /// 슬라이더는 누른 자리로 값이 바로 옮겨진다 — 줄 번호 = 세로, 값 = 가로. 콘솔이 시작할 때 MapRoot 바닥에 눕히고 지도 크기에 맞춘다.
+    private static void BuildCicTouchCanvas(Transform parent, ACO_CicConsole console)
+    {
+        RectTransform canvas = MakeUiPanel(parent, 2420f, 2420f);
+        canvas.name = "TouchCanvas";
+        Transform bg = canvas.Find("Background");
+        if (bg != null) { Object.DestroyImmediate(bg.gameObject); }
+        // 지나다닐 때 걸리지 않게 트리거(6-291과 같다 — UI 포인터는 트리거에도 닿는다)
+        BoxCollider col = canvas.gameObject.AddComponent<BoxCollider>();
+        col.isTrigger = true;
+        col.size = new Vector3(2420f, 2420f, 1f);
+        var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(console);
+        var rows = new Slider[CicTouchRows];
+        for (int i = 0; i < CicTouchRows; i++)
+        {
+            GameObject go = new GameObject("Row" + i.ToString("000"), typeof(RectTransform));
+            go.layer = 0;
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.SetParent(canvas, false);
+            rt.anchorMin = new Vector2(0f, (float)i / CicTouchRows);
+            rt.anchorMax = new Vector2(1f, (float)(i + 1) / CicTouchRows);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            Image hit = go.AddComponent<Image>();
+            hit.color = new Color(1f, 1f, 1f, 0f);   // 보이지 않는 누름 판 — 투명 메시 컬링(cullTransparentMesh)을 켜면 UI 레이캐스트에서도 빠진다(명시적으로 끈다)
+            go.GetComponent<CanvasRenderer>().cullTransparentMesh = false;
+            // 슬라이더가 누른 자리를 재는 틀 = 채움(Fill)의 부모 = 이 줄
+            GameObject fill = new GameObject("Fill", typeof(RectTransform));
+            fill.layer = 0;
+            RectTransform fr = fill.GetComponent<RectTransform>();
+            fr.SetParent(rt, false);
+            fr.anchorMin = Vector2.zero;
+            fr.anchorMax = Vector2.one;
+            fr.offsetMin = Vector2.zero;
+            fr.offsetMax = Vector2.zero;
+            Slider s = go.AddComponent<Slider>();
+            s.transition = Selectable.Transition.None;
+            s.navigation = new Navigation { mode = Navigation.Mode.None };
+            s.targetGraphic = hit;
+            s.fillRect = fr;
+            s.direction = Slider.Direction.LeftToRight;
+            s.minValue = CicTouchMin;
+            s.maxValue = 1f;
+            s.wholeNumbers = false;
+            s.SetValueWithoutNotify(CicTouchMin);
+            if (udon != null) { UnityEditor.Events.UnityEventTools.AddStringPersistentListener(s.onValueChanged, udon.SendCustomEvent, "TableTouch"); }
+            rows[i] = s;
+        }
+        if (udon == null) { Debug.LogError("[ACO] CIC 지도 찍기 판: 콘솔 UdonBehaviour를 찾지 못해 슬라이더를 연결하지 못했습니다.", console); }
+        console.TouchCanvas = canvas;
+        console.TouchRows = rows;
     }
 
     private static Image CicEventButton(RectTransform parent, ACO_CicConsole console, TMP_FontAsset font, string label, Vector2 pos, Vector2 size, string eventName, float fontSize)

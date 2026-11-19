@@ -43,7 +43,7 @@ namespace ACO
 
         public override string GetName()
         {
-            return PhaseName.Length > 0 && PhaseName != "MODULE" ? PhaseName : "SHADE SQUADRON";
+            return PhaseName.Length > 0 && PhaseName != "MODULE" ? PhaseName : "ACE SQUADRON - SHADE";
         }
 
         public override string GetDescription()

@@ -87,7 +87,7 @@ public static class ACO_PhaseModuleSetup
             ACO_PhaseDestroy m = Create<ACO_PhaseDestroy>(mgr, "Phase_AceSquadron");
             m.Kind = ACO_PhaseDestroy.KIND_BOSS;
             m.Count = 4;
-            Setup(m, "ACE SQUADRON", "", 3, false, "Caution - an enemy ace squadron has been sighted. Stay sharp.", "The ace squadron has been shot down. Incredible.", "");
+            Setup(m, "ACE SQUADRON - {BOSS}", "", 3, false, "Caution - an enemy ace squadron has been sighted. Stay sharp.", "The ace squadron has been shot down. Incredible.", "");
             made++; log.Append("\n  보스 편대");
         }
         if (!HasChild(mgr, "Phase_Escort"))
@@ -457,7 +457,7 @@ public static class ACO_PhaseModuleSetup
     {
         if (manager.GetComponentInChildren<ACO_PhaseShade>(true) != null) { return; }
         ACO_PhaseShade m = Create<ACO_PhaseShade>(manager, "Phase_Shade");
-        Setup(m, "SHADE SQUADRON", "", 1, false,
+        Setup(m, "ACE SQUADRON - SHADE", "", 1, false,
             "Four bandits, tight diamond. Shade squadron... They'll stall right in front of you. Don't sit on their tails, and they can fire in any direction!",
             "Shade squadron is wiped out! Outstanding flying, all aircraft!",
             "");

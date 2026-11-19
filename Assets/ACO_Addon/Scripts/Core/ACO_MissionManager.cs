@@ -100,10 +100,14 @@ namespace ACO
         public int ClearBonus = 1000;
         [Tooltip("클리어 시 남은 시간 1초당 보너스(제한 시간이 있을 때)")]
         public int TimeBonusPerSecond = 5;
-        [Tooltip("랭크 기준(페이즈당). 실제 기준 = 이 값 x 고른 페이즈들의 배율 합. 이상이면 S / A / B, 그 아래 C, 실패 F")]
-        public int RankSPerPhase = 2500;
-        public int RankAPerPhase = 1600;
-        public int RankBPerPhase = 800;
+
+        [Header("랭크 (6-297 — 팀 격추 수: 미션 중 참가 조종사가 격추당한 횟수의 합. 점수는 쓰지 않는다)")]
+        [Tooltip("팀 격추 0 = S, 이 값 이하 = A")]
+        public int RankAMaxDeaths = 2;
+        [Tooltip("이 값 이하 = B, 넘으면 C. 미션 실패 = F")]
+        public int RankBMaxDeaths = 4;
+        [Tooltip("작전 기록판(조종사 손실 칸) — Bake가 넣는다")]
+        public ACO_MissionLog[] Logs;
 
         [Header("웨이브 조건")]
         [Tooltip("2페이즈부터 페이즈가 시작될 때 목표 쪽으로 증원을 보낸다")]
@@ -186,6 +190,7 @@ namespace ACO
         [UdonSynced] private int _timeBonusAwarded;
         [UdonSynced] private int _phaseBonusTotal;
         [UdonSynced] private int _rank = -1;
+        [UdonSynced] private int _teamDeaths;   // 팀 격추 수(6-297) — 오너가 센다
 
         // 페이즈
         [UdonSynced] private int _phaseCount;
@@ -358,6 +363,7 @@ namespace ACO
             _timeBonusAwarded = 0;
             _phaseBonusTotal = 0;
             _rank = -1;
+            _teamDeaths = 0;
             _timeExtensionMs = 0;
             _travelGranted = false;
 
@@ -1080,11 +1086,10 @@ namespace ACO
                 }
                 _teamScore += _clearBonusAwarded + _timeBonusAwarded;
                 _state = STATE_COMPLETE;
-                float scale = 0f;
-                for (int k = 0; k < _phaseCount; k++) { if (k != _bonusIndex) { scale += GetPhaseMultiplier(k); } }
-                if (_teamScore >= RankSPerPhase * scale) { _rank = RANK_S; }
-                else if (_teamScore >= RankAPerPhase * scale) { _rank = RANK_A; }
-                else if (_teamScore >= RankBPerPhase * scale) { _rank = RANK_B; }
+                // 랭크(6-297): 팀 격추 수만 본다 — 0 S · RankAMaxDeaths 이하 A · RankBMaxDeaths 이하 B · 그 위 C
+                if (_teamDeaths <= 0) { _rank = RANK_S; }
+                else if (_teamDeaths <= RankAMaxDeaths) { _rank = RANK_A; }
+                else if (_teamDeaths <= RankBMaxDeaths) { _rank = RANK_B; }
                 else { _rank = RANK_C; }
             }
             else
@@ -1149,6 +1154,30 @@ namespace ACO
             }
             return Mathf.Min(WaveAceChanceBase + WaveAceChancePerWave * (n - 1), WaveAceChanceMax);
         }
+
+        // ───────────── 팀 격추 수 (6-297) ─────────────
+
+        /// 내가 격추당했다(ACO_PlayerProgress.ReportShotDown — 미션 진행 중만). 모두에게 알린다: 오너는 팀 격추 수를 올리고, 작전 기록판은 손실 칸을 올린다.
+        public void ReportPilotDown()
+        {
+            VRCPlayerApi me = Networking.LocalPlayer;
+            if (!Utilities.IsValid(me)) { return; }
+            SendCustomNetworkEvent(VRC.Udon.Common.Interfaces.NetworkEventTarget.All, nameof(NetPilotDown), me.playerId);
+        }
+
+        [NetworkCallable]
+        public void NetPilotDown(int playerId)
+        {
+            if (_state != STATE_RUNNING) { return; }
+            if (Networking.IsOwner(gameObject)) { _teamDeaths++; RequestSerialization(); }
+            if (Logs != null)
+            {
+                for (int i = 0; i < Logs.Length; i++) { if (Logs[i]) { Logs[i].AddPilotDeath(playerId); } }
+            }
+        }
+
+        public int GetTeamDeaths() { return _teamDeaths; }
+        public int GetRank() { return _rank; }
 
         // ───────────── 동기화 / 이벤트 (모든 클라이언트) ─────────────
 

@@ -519,6 +519,8 @@ public partial class ACO_SceneBaker
             if (map.Generator == null && generator != null) { map.Generator = generator; changed = true; }
             if (map.Flow == null && flow != null) { map.Flow = flow; changed = true; }
             if (map.Support != support) { map.Support = support; changed = true; }   // 아군 편대 표시(6-285)
+            ACO_MissionLog gridLog = map.GridFilter != null ? Object.FindObjectOfType<ACO_MissionLog>(true) : null;
+            if (map.GridLog != gridLog) { map.GridLog = gridLog; changed = true; }   // 좌표 격자(6-301)
             if (changed) { MarkChanged(map); }
             if (map.HomeBase == null) { Debug.LogWarning($"[ACO] 작전 테이블 '{map.name}': HomeBase(항모)가 비어 있어 기지 표시가 없습니다.", map); }
         }

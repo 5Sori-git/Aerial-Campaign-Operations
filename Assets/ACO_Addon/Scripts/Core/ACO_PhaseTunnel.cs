@@ -279,7 +279,7 @@ namespace ACO
         public override string GetDescription()
         {
             if (Description.Length > 0) { return Description; }
-            return "ENEMY MISSILE LAUNCHERS ARE HIDING IN THE TUNNEL - DESTROY THEM BEFORE THEY LAUNCH, OR INTERCEPT THE MISSILE";
+            return "MISSILE LAUNCHERS ARE HIDING IN THE TUNNEL - HIT THEM ON THE GROUND OR INTERCEPT THE MISSILE";
         }
     }
 }

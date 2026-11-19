@@ -561,7 +561,7 @@ namespace ACO
         {
             if (!IsLive()) { return Description; }
             if (_stage == ACO_LandShip.STAGE_ARMOR) { return "BREAK THE ARMOR AND TRACKS, DESTROY THE EXHAUST VENTS"; }
-            return "DESTROY THE CORE BEFORE IT REACHES THE CITY";
+            return "DESTROY THE REACTOR CORE BEFORE IT REACHES THE CITY";   // 무전은 reactor, HUD 진행은 CORE(6-300)
         }
 
         /// "VENT 3/8  SPD 79%  CITY 4.2km" → "CORE 72%  CITY 1.2km"(3km 아래면 빨갛게).

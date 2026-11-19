@@ -148,6 +148,12 @@ namespace ACO
             return "BMR " + alive + "/" + total + (dist.Length > 0 ? "  CITY " + dist : "");
         }
 
+        /// 목표 안내(6-300 — 비어 있어 페이즈 시작 배너에 목표 줄이 없었다). 인스펙터 Description이 있으면 그것.
+        public override string GetDescription()
+        {
+            return Description.Length > 0 ? Description : "SHOOT DOWN THE BOMBERS BEFORE THEY REACH THE CITY";
+        }
+
         public override string GetLocation()
         {
             if (Manager == null) { return ""; }

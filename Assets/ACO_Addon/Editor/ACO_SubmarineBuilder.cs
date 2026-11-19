@@ -5,6 +5,7 @@ using UdonSharp.Compiler;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 using SaccFlightAndVehicles;
 using ACO;
 using Object = UnityEngine.Object;
@@ -493,6 +494,7 @@ public static partial class ACO_PrefabBuilder
         mesh.localPosition = srcMesh.localPosition * SlcmModelScale;
         mesh.localRotation = Quaternion.identity;   // LASM은 Model(90°) · Mesh(270°)가 서로 상쇄 — 루트 기준 회전이 없다
         mesh.localScale = srcMesh.localScale * SlcmModelScale;
+        ReplaceMissileBody(mesh, SlcmBodyPrefab, SlcmBodyBaked, "잠수함 SLCM");   // 6-314: 탄체 = Kh-35(하푼 꼴 LASM과 구별)
         // 연기 궤적은 탄체(Model) 밖, SLCM 루트 아래 — ACO_Slcm이 나는 동안만 뿜고 멈추면 남은 연기는 수명대로 사라진다
         Transform trail = Object.Instantiate(srcTrail, go.transform);
         trail.name = "Trail";
@@ -526,6 +528,9 @@ public static partial class ACO_PrefabBuilder
     }
 
     private const float SlcmModelScale = 2f;   // LASM 탄체(약 3.3m) → 약 6.5m
+    /// SLCM 탄체 모델(6-314, 사용자 "SLCM은 Kh-35로 모델 바꾸자"): SSY 미사일 세트(동측) Kh-35 — 날개 뼈대가 있는 스킨 메시라 프리팹 자세로 구워 쓴다
+    private const string SlcmBodyPrefab = "Assets/studio_symphony/SSY Airplane Missile Set RF版/東側ミサイルセット/prefab/対地対艦4種/B-kh35/B-kh35.prefab";
+    private const string SlcmBodyBaked = "Assets/ACO_Addon/Generated/ACO_SlcmBody_Kh35.asset";
 
     /// 기존 미사일 연출 오브젝트(폭발 · 물기둥)의 복사 count개(꺼 둠 — 켤 때 재생). 범위 표시 구(ExplodeRadius)는 끈다(미사일 범위 피해 표시라 여기선 크기가 맞지 않는다).
     private static GameObject[] SubFxCopies(Transform parent, Transform source, string name, int count)

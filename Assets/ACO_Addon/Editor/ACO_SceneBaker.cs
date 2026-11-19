@@ -16,6 +16,8 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
 
     public bool OnBuildRequested(VRCSDKRequestedBuildType requestedBuildType)
     {
+        // 빌드 번호(6-296): 업로드 · Build & Test마다 새 번호 — 이전 버전 인스턴스와 섞였는지 비교한다
+        if (requestedBuildType == VRCSDKRequestedBuildType.Scene) { ACO_HUDBuilder.StampVersionGuards(); }
         BakeNeighbors();
         return true;
     }

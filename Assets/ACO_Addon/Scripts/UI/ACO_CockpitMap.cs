@@ -1,5 +1,6 @@
 using UdonSharp;
 using UnityEngine;
+using TMPro;
 using VRC.SDKBase;
 using SaccFlightAndVehicles;
 
@@ -44,6 +45,18 @@ namespace ACO
         [Tooltip("마름모 속 색(바다 바탕에 가깝게)")]
         public Color HomeInnerColor = new Color(0.03f, 0.06f, 0.1f, 1f);
 
+        [Header("격자 (6-301 — 작전 기록판 좌표와 같은 격자, 벽걸이 지도)")]
+        [Tooltip("격자 정의(작전 기록판) — Bake가 넣는다. 비우면 격자를 그리지 않는다")]
+        public ACO_MissionLog GridLog;
+        [Tooltip("격자 선 메시(ACO/RadarVertexColor) — 스크립트가 만든다. 비우면 격자 없음(조종석 지도)")]
+        public MeshFilter GridFilter;
+        [Tooltip("격자 이름표 — 앞 절반 = 열(A~, 위쪽 가장자리), 뒤 절반 = 행(1~, 왼쪽 가장자리). 프리팹 빌더가 만든다")]
+        public Transform[] GridLabels;
+        [Tooltip("격자 선 굵기(화면 한 변 대비)")]
+        public float GridLineWidth = 0.0025f;
+        [Tooltip("이름표와 격자 테두리 사이(화면 한 변 대비)")]
+        public float GridLabelGap = 0.02f;
+
         [Header("벽걸이")]
         [Tooltip("켜면 기체 없이 벽에 건 지도로 동작한다. 나 표시를 그리지 않는다")]
         public bool WallMode;
@@ -84,6 +97,9 @@ namespace ACO
         private bool _active;
         private float _timer;
 
+        private bool _gridBuilt;
+        private float _gridK;
+        private Vector3 _gridCenter;
         private bool _homeSet;
         private Vector3 _homeMap;
         private Vector3 _homeCenter;
@@ -147,6 +163,7 @@ namespace ACO
             if (!mine) { return; }
 
             ResolveFrame();
+            if (GridFilter != null && GridLog != null && (!_gridBuilt || _gridK != _k || _gridCenter != _center)) { BuildGrid(); }
             if (_terrain != null)
             {
                 int seed = _terrain.GetSeed();
@@ -327,6 +344,79 @@ namespace ACO
         {
             _c[v] = col; _c[v + 1] = col; _c[v + 2] = col; _c[v + 3] = col;
             _n++;
+        }
+
+        // ───────────── 격자 (6-301) ─────────────
+
+        /// 작전 기록판 격자(열 A~ 서→동, 행 1~ 북→남)를 선 메시로 한 번 만들고 이름표를 놓는다. 공역(중심 · 축척)이 바뀔 때만 다시.
+        private void BuildGrid()
+        {
+            _gridBuilt = true;
+            _gridK = _k;
+            _gridCenter = _center;
+            Vector2 min = GridLog.GetGridMin();
+            Vector2 max = GridLog.GetGridMax();
+            int n = GridLog.GetGridDivisions();
+            float x0 = (min.x - _center.x) * _k;
+            float x1 = (max.x - _center.x) * _k;
+            float y0 = (min.y - _center.z) * _k;
+            float y1 = (max.y - _center.z) * _k;
+            int lines = (n + 1) * 2;
+            Vector3[] v = new Vector3[lines * 4];
+            Color[] c = new Color[lines * 4];
+            int[] t = new int[lines * 6];
+            float w = GridLineWidth * 0.5f;
+            for (int i = 0; i <= n; i++)
+            {
+                float f = i / (float)n;
+                float x = Mathf.Lerp(x0, x1, f);
+                float y = Mathf.Lerp(y0, y1, f);
+                GridQuad(v, t, i * 2, x - w, y0 - w, x + w, y1 + w);
+                GridQuad(v, t, i * 2 + 1, x0 - w, y - w, x1 + w, y + w);
+            }
+            for (int i = 0; i < c.Length; i++) { c[i] = Color.white; }
+            Mesh mesh = GridFilter.sharedMesh;
+            if (!mesh)
+            {
+                mesh = new Mesh();
+                GridFilter.sharedMesh = mesh;
+            }
+            else { mesh.Clear(); }
+            mesh.vertices = v;
+            mesh.colors = c;
+            mesh.triangles = t;
+            mesh.RecalculateBounds();
+
+            if (GridLabels == null) { return; }
+            int half = GridLabels.Length / 2;
+            float cw = (x1 - x0) / n;
+            float ch = (y1 - y0) / n;
+            for (int k = 0; k < GridLabels.Length; k++)
+            {
+                Transform l = GridLabels[k];
+                if (!l) { continue; }
+                bool col = k < half;
+                int idx = col ? k : k - half;
+                bool on = idx < n;
+                if (l.gameObject.activeSelf != on) { l.gameObject.SetActive(on); }
+                if (!on) { continue; }
+                // 열: 위쪽(북) 가장자리 위, 행: 왼쪽(서) 가장자리 밖(행 1 = 북쪽)
+                l.localPosition = col ? new Vector3(x0 + (idx + 0.5f) * cw, y1 + GridLabelGap, 0f) : new Vector3(x0 - GridLabelGap, y1 - (idx + 0.5f) * ch, 0f);
+                TextMeshPro tmp = l.GetComponent<TextMeshPro>();
+                if (tmp) { tmp.text = col ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ".Substring(idx, 1) : (idx + 1).ToString(); }
+            }
+        }
+
+        private void GridQuad(Vector3[] v, int[] t, int q, float ax, float ay, float bx, float by)
+        {
+            int vi = q * 4;
+            int ti = q * 6;
+            v[vi] = new Vector3(ax, ay, 0f);
+            v[vi + 1] = new Vector3(ax, by, 0f);
+            v[vi + 2] = new Vector3(bx, by, 0f);
+            v[vi + 3] = new Vector3(bx, ay, 0f);
+            t[ti] = vi; t[ti + 1] = vi + 1; t[ti + 2] = vi + 2;
+            t[ti + 3] = vi; t[ti + 4] = vi + 2; t[ti + 5] = vi + 3;
         }
 
         // ───────────── 지형 메시 (윗면 육각형만, 프레임마다 나눠 만든다) ─────────────
