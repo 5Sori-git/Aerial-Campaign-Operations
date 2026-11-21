@@ -18,6 +18,7 @@ public static class ACO_AirframeInstaller
     private const string EBodyMat = "Assets/Pit-bool/FA-18/material/E/FA-18E.mat";
     private const string FBodyMat = "Assets/Pit-bool/FA-18/material/F/FA-18F.mat";
     private const string ThinDir = "Assets/ACO_Addon/Generated/Canopy";
+    private const string AcoFBodyMat = "Assets/ACO_Addon/Generated/ACO_FA-18F.mat";
     // 모델 루트(E 프리팹 = 기체 아래 FA-18F, 데칼 스튜디오 미리보기 = FA-18F(preview)) 기준 경로
     private static readonly string[] Parts = { "Main.E", "Canopy.E", "cockpit.E", "MainGear", "Nosegear", "Armature/Seat" };
 
@@ -34,7 +35,7 @@ public static class ACO_AirframeInstaller
         }
         Mesh mainF = AssetDatabase.LoadAssetAtPath<Mesh>($"{ThinDir}/Main_ACOThin.asset");
         Mesh canopyF = AssetDatabase.LoadAssetAtPath<Mesh>($"{ThinDir}/Canopy_ACOThin.asset");
-        Material eMat = AssetDatabase.LoadAssetAtPath<Material>(EBodyMat), fMat = AssetDatabase.LoadAssetAtPath<Material>(FBodyMat);
+        Material eMat = AssetDatabase.LoadAssetAtPath<Material>(EBodyMat), fMat = FBodyMaterial(eMat);
 
         GameObject root = PrefabUtility.LoadPrefabContents(EPath);
         GameObject f = Object.Instantiate(fSrc);
@@ -179,7 +180,7 @@ public static class ACO_AirframeInstaller
             }
             rear.localPosition = rearF.localPosition; rear.localRotation = rearF.localRotation; rear.localScale = rearF.localScale;
             Renderer rr = rear.GetComponent<Renderer>();
-            if (rr != null) { Material[] m = rr.sharedMaterials; for (int i = 0; i < m.Length; i++) { if (m[i] == eMat) { m[i] = fMat; } } rr.sharedMaterials = m; }
+            if (rr != null) { Material srcF = AssetDatabase.LoadAssetAtPath<Material>(FBodyMat); Material[] m = rr.sharedMaterials; for (int i = 0; i < m.Length; i++) { if (m[i] == eMat || m[i] == srcF) { m[i] = fMat; } } rr.sharedMaterials = m; }   // F 원본 재질도 ACO F 재질로
             rear.gameObject.SetActive(false);
             fObjs.Add(rear.gameObject);
         }
@@ -197,7 +198,7 @@ public static class ACO_AirframeInstaller
         if (model == null || fSrc == null) { Debug.LogError("[ACO] 기체 형식: 미리보기 모델(Main.E) 또는 F 원본이 없습니다."); return; }
         Mesh mainF = AssetDatabase.LoadAssetAtPath<Mesh>($"{ThinDir}/Main_ACOThin.asset");
         Mesh canopyF = AssetDatabase.LoadAssetAtPath<Mesh>($"{ThinDir}/Canopy_ACOThin.asset");
-        Material eMat = AssetDatabase.LoadAssetAtPath<Material>(EBodyMat), fMat = AssetDatabase.LoadAssetAtPath<Material>(FBodyMat);
+        Material eMat = AssetDatabase.LoadAssetAtPath<Material>(EBodyMat), fMat = FBodyMaterial(eMat);
         GameObject f = Object.Instantiate(fSrc);
         f.hideFlags = HideFlags.HideAndDontSave;
         try
@@ -243,6 +244,37 @@ public static class ACO_AirframeInstaller
         Undo.RecordObject(cf, "ACO preview canopy");
         cf.localRotation = Quaternion.Euler(Mathf.Lerp(89.98f, 50.545f, open), -180f, 0f);
         Debug.Log($"[ACO] 데칼 스튜디오 미리보기: F 캐노피를 E와 같이 {Mathf.RoundToInt(open * 100f)}% 열었습니다.");
+    }
+
+    /// F 동체 재질(ACO 전용 — 2026-11-21 사용자 "전부 E형과 같게"): E 재질을 통째로 복사하고 텍스처만 F 원본 재질의 F 텍스처로 바꾼다.
+    /// F 원본(Pit-bool FA-18F.mat)은 노멀맵 세기 −2.3 · 발광 색이 달라 E와 다르게 보였다. 텍스처는 F 메시 UV에 맞아야 해서 F 것을 쓴다.
+    private static Material FBodyMaterial(Material eMat)
+    {
+        Material src = AssetDatabase.LoadAssetAtPath<Material>(FBodyMat);
+        if (eMat == null || src == null) { return src; }
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(AcoFBodyMat);
+        if (m == null)
+        {
+            m = new Material(eMat) { name = "ACO_FA-18F" };
+            AssetDatabase.CreateAsset(m, AcoFBodyMat);
+        }
+        else
+        {
+            m.shader = eMat.shader;
+            m.CopyPropertiesFromMaterial(eMat);
+        }
+        m.shaderKeywords = eMat.shaderKeywords;
+        foreach (string prop in eMat.GetTexturePropertyNames())
+        {
+            if (eMat.GetTexture(prop) == null || !src.HasProperty(prop)) { continue; }
+            // 합성 텍스처(E 바탕 + F 전용 자리만 F — ACO_FTextureComposite)가 있으면 그것, 없으면 F 원본
+            Texture ct = AssetDatabase.LoadAssetAtPath<Texture>(ACO_FTextureComposite.OutPath(prop));
+            Texture ft = ct != null ? ct : src.GetTexture(prop);
+            if (ft != null) { m.SetTexture(prop, ft); }
+        }
+        EditorUtility.SetDirty(m);
+        AssetDatabase.SaveAssetIfDirty(m);
+        return m;
     }
 
     private static Mesh MeshOf(Transform t)
