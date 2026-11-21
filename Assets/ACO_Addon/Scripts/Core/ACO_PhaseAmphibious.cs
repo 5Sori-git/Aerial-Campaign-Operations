@@ -150,13 +150,13 @@ namespace ACO
                 ACO_EscortUnit unit = VipAt(i, tag);
                 if (unit == null) { continue; }
                 total++;
-                if (unit.IsDestroyed())
+                if (Manager.IsUnitGone(ACO_MissionGenerator.CAT_ESCORT, i))   // 6-338
                 {
                     // 부활 동기화 전의 체력 0은 격파로 보지 않는다.
                     if (!_seenAlive[i] && now - Generator.GetUnitDeployTimeMs(ACO_MissionGenerator.CAT_ESCORT, i) < settleMs) { pending = true; alive++; }
                     continue;
                 }
-                _seenAlive[i] = true;
+                if (!unit.IsDestroyed()) { _seenAlive[i] = true; }   // 확정 전의 체력 0은 "살아 있는 걸 봤다"가 아니다(6-338)
                 alive++;
                 if (unit.IsArrived()) { arrived++; }
             }

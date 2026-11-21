@@ -10,6 +10,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PhaseMrS : ACO_PhaseModule
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "mrs"; }
+
         [Header("배치")]
         [Tooltip("MR. S가 나타나는 거리(m) — 작전 지역 중심에서")]
         public float SpawnDistanceMin = 6000f;

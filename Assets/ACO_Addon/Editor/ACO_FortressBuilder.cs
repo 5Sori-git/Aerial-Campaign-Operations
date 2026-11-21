@@ -140,7 +140,17 @@ public static partial class ACO_PrefabBuilder
             AssetDatabase.CreateAsset(mesh, path);
             return mesh;
         }
-        EditorUtility.CopySerialized(mesh, existing);
+        // CopySerialized로 덮으면 정점 수 · 속성이 바뀐 메시의 GPU 버퍼가 갱신되지 않아 일부 면만 그려졌다(기초 옆면 스무스, 6-331) — 비우고 데이터를 다시 넣는다
+        existing.Clear();
+        existing.indexFormat = mesh.indexFormat;
+        existing.SetVertices(mesh.vertices);
+        if (mesh.normals.Length > 0) { existing.SetNormals(mesh.normals); }
+        if (mesh.tangents.Length > 0) { existing.SetTangents(mesh.tangents); }
+        if (mesh.uv.Length > 0) { existing.SetUVs(0, mesh.uv); }
+        if (mesh.colors.Length > 0) { existing.SetColors(mesh.colors); }
+        existing.subMeshCount = mesh.subMeshCount;
+        for (int i = 0; i < mesh.subMeshCount; i++) { existing.SetTriangles(mesh.GetTriangles(i), i); }
+        existing.RecalculateBounds();
         EditorUtility.SetDirty(existing);
         return existing;
     }
@@ -292,7 +302,7 @@ public static partial class ACO_PrefabBuilder
         AddTargetAnimator(root);
         SaccTarget health = root.AddUdonSharpComponent<SaccTarget>();
         ACO_FortressPart part = root.AddUdonSharpComponent<ACO_FortressPart>();
-        health.Health = 1200f;   // 공대공 직격 200 기준 6발
+        health.Health = ACO_PrefabTuning.FortressEngineHealth;   // 1800(2026-11-20 — 예전 1200, 공대공 직격 200 기준 9발)
         health.ArmorStrength = 1f;
         health.RespawnDelay = 0f;
         health.ExplodeOther = new UdonSharp.UdonSharpBehaviour[] { part };

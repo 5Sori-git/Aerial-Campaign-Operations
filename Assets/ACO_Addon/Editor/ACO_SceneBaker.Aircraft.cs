@@ -798,9 +798,9 @@ public partial class ACO_SceneBaker
         var pods = new List<ACO_DFUNC_Missile>();
         foreach (ACO_DFUNC_Missile m in Object.FindObjectsOfType<ACO_DFUNC_Missile>(true))
         {
-            if (!m.EcmMode) { continue; }
-            pods.Add(m);
+            // 모든 플레이어 무장이 허브를 안다 — 적 재머 구역 안 락온 속도(6-332). ECM 모듈은 구역 원 · 판정에도 쓴다
             if (m.EcmHub != contacts) { m.EcmHub = contacts; MarkChanged(m); }
+            if (m.EcmMode) { pods.Add(m); }
         }
         if (contacts.EcmPods == null || !new HashSet<ACO_DFUNC_Missile>(contacts.EcmPods).SetEquals(pods))
         {
@@ -811,6 +811,26 @@ public partial class ACO_SceneBaker
         Transform soundObj = contacts.transform.Find("EcmSound");
         AudioSource sound = soundObj != null ? soundObj.GetComponent<AudioSource>() : null;
         if (contacts.EcmSound != sound) { contacts.EcmSound = sound; MarkChanged(contacts); }
+        // 적 재머(6-332): 씬의 재머를 모으고 체력을 잇는다, 구역 소리를 잇는다
+        var jammers = new List<ACO_EnemyJammer>();
+        foreach (ACO_EnemyJammer j in Object.FindObjectsOfType<ACO_EnemyJammer>(true))
+        {
+            if (EditorUtility.IsPersistent(j)) { continue; }
+            jammers.Add(j);
+            if (j.Health == null)
+            {
+                SaccFlightAndVehicles.SaccTarget t = j.GetComponentInParent<SaccFlightAndVehicles.SaccTarget>(true);
+                if (t != null) { j.Health = t; MarkChanged(j); }
+            }
+        }
+        if (contacts.EnemyJammers == null || !new HashSet<ACO_EnemyJammer>(contacts.EnemyJammers).SetEquals(jammers))
+        {
+            contacts.EnemyJammers = jammers.ToArray();
+            MarkChanged(contacts);
+        }
+        Transform jamSoundObj = contacts.transform.Find("EnemyJamSound");
+        AudioSource jamSound = jamSoundObj != null ? jamSoundObj.GetComponent<AudioSource>() : null;
+        if (contacts.EnemyJamSound != jamSound) { contacts.EnemyJamSound = jamSound; MarkChanged(contacts); }
         foreach (ACO_MissileLauncher l in Object.FindObjectsOfType<ACO_MissileLauncher>(true))
         {
             ACO_RadarContacts want = IsFriendlyUnit(l) ? null : contacts;
@@ -821,7 +841,7 @@ public partial class ACO_SceneBaker
             ACO_RadarContacts want = IsFriendlyUnit(aa) ? null : contacts;
             if (aa.EcmHub != want) { aa.EcmHub = want; MarkChanged(aa); }
         }
-        Debug.Log($"[ACO] 전자전: ECM 모듈 {pods.Count}개를 이었습니다.");
+        Debug.Log($"[ACO] 전자전: ECM 모듈 {pods.Count}개, 적 재머 {jammers.Count}개를 이었습니다.");
     }
 
     private static bool IsFriendlyUnit(Component c)
@@ -831,7 +851,7 @@ public partial class ACO_SceneBaker
         return escort != null && !escort.Hostile;
     }
 
-    /// 음성 경고 ↔ 비행 HUD(내 기체·기어)·레이더 연락(내 기체)·진행도(안전지대), 그리고 경고를 부르는 쪽(랜스 포대·소형 레일건·레이저 에이스) → 음성 경고.
+    /// 음성 경고 ↔ 비행 HUD(내 기체·기어)·레이더 연락(내 기체)·진행도(안전지대), 그리고 경고를 부르는 쪽(랜스 포대·소형 레일건·레이저 에이스·레이저 탑) → 음성 경고.
     public static void BakeVoiceWarning()
     {
         ACO_VoiceWarning voice = null;
@@ -859,6 +879,7 @@ public partial class ACO_SceneBaker
             foreach (ACO_Borderless c in root.GetComponentsInChildren<ACO_Borderless>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
             foreach (ACO_LunaAce c in root.GetComponentsInChildren<ACO_LunaAce>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
             foreach (ACO_MrS c in root.GetComponentsInChildren<ACO_MrS>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
+            foreach (ACO_LaserTower c in root.GetComponentsInChildren<ACO_LaserTower>(true)) { if (c.Voice != voice) { c.Voice = voice; MarkChanged(c); } }
         }
     }
 
@@ -1046,6 +1067,11 @@ public partial class ACO_SceneBaker
         foreach (ACO_Railgun gun in Object.FindObjectsOfType<ACO_Railgun>(true))
         {
             if (gun.Flyby != flyby) { gun.Flyby = flyby; MarkChanged(gun); }
+        }
+        // 칼리번(레이저 탑, 6-331): 굵은 빔 · 그물이 스치면 레이저 전자음
+        foreach (ACO_LaserTower tower in Object.FindObjectsOfType<ACO_LaserTower>(true))
+        {
+            if (tower.Flyby != flyby) { tower.Flyby = flyby; MarkChanged(tower); }
         }
         foreach (ACO_MissileLauncher launcher in Object.FindObjectsOfType<ACO_MissileLauncher>(true))
         {

@@ -254,7 +254,8 @@ namespace ACO
                 int v;
                 _bestValues[i] = Utilities.IsValid(p) && PlayerData.TryGetInt(p, ACO_PlayerProgress.KEY_BEST_REWARD, out v) ? v : 0;
             }
-            string s = "<color=#7FBF8A>" + T("log.bestcol", "PILOT<pos=62%>BEST CR") + "</color>";
+            string s = "<color=#7FBF8A>" + T("log.bestcol", "PILOT<pos=47%>LV<pos=62%>BEST CR") + "</color>";
+            int maxLv = Progress != null ? Progress.GetPlayerLevelMax() : 0;
             int rows = 0;
             for (int k = 0; k < Mathf.Max(MaxBestRows, 1); k++)
             {
@@ -265,7 +266,9 @@ namespace ACO
                 }
                 if (best < 0) { break; }
                 VRCPlayerApi p = _bestPlayers[best];
-                string line = (k + 1) + ". " + Shorten(p.displayName) + "<pos=62%>" + _bestValues[best].ToString("N0");
+                int lv = Progress != null ? Progress.GetPlayerLevel(p) : -1;   // 6-340: 조종사 레벨(강화 단계 합)
+                string lvText = lv < 0 ? "-" : (maxLv > 0 && lv >= maxLv ? "<color=#FFCC33>" + lv + "</color>" : lv.ToString());
+                string line = (k + 1) + ". " + Shorten(p.displayName) + "<pos=47%>" + lvText + "<pos=62%>" + _bestValues[best].ToString("N0");
                 string color = p.isLocal ? "#FFD24D" : (k == 0 ? "#FFE9A8" : (k == 1 ? "#D5DDE0" : (k == 2 ? "#E0A878" : "")));
                 s += "\n" + (color != "" ? "<color=" + color + ">" + line + "</color>" : line);
                 _bestValues[best] = 0;

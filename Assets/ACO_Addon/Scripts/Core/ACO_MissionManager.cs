@@ -39,6 +39,10 @@ namespace ACO
         public bool AllowInteract = false;
         [Tooltip("판단 주기(초)")]
         public float PollInterval = 1f;
+        [Tooltip("페이즈 목표 격파 확정(6-338): 체력 0이 이만큼(초) 이어져야 격파로 센다. 기본 0 — 2초로 두니 확정을 기다리는 사이 도착 · 실패 판정이 먼저 났다(막판 요격 실패 등). 늦게 온 0은 풀 복귀 로컬 채우기로 뿌리에서 막는다")]
+        public float DeadConfirmTime = 0f;
+        [Tooltip("배치 뒤 이 시간(초)이 지나야 격파 · 점수를 센다(6-338) — 스폰 직후 직접 채우기 · 1.5 · 4초 다시 보내기가 끝난 뒤. 그 전에 부서진 것도 이 시간이 지나면 센다")]
+        public float SpawnConfirmTime = 6f;
 
         [Header("페이즈")]
         [Tooltip("페이즈 수를 정하지 않고 시작했을 때(생성기 클릭, 이 오브젝트 클릭)의 페이즈 수")]
@@ -213,6 +217,7 @@ namespace ACO
         [UdonSynced] private int _objectiveEvents;       // 목표 파괴 누적(이벤트용)
         [UdonSynced] private int _phaseScoreStart;
         [UdonSynced] private bool _lastPhaseFailed;      // 마지막으로 끝난 페이즈가 실패(보너스 페이즈 물러남)였는지
+        [UdonSynced] private bool _lastPhaseSkipped;     // 마지막으로 끝난 페이즈를 건너뛰었는지(배치 실패 등 — 보스 칭호에 세지 않는다, 6-341)
         [UdonSynced] private int _phaseBlocked;          // 이번 페이즈에서 배치에 실패해 막은 종류(비트)
         [UdonSynced] private int _phaseAttempt;          // 이번 페이즈에서 종류를 바꾼 횟수(태그 구분용)
         [UdonSynced] private int _timeExtensionMs;       // 호위 이동 시간으로 늘어난 제한 시간(이번 미션 합)
@@ -234,6 +239,17 @@ namespace ACO
         private int[] _countedSerialP = new int[0];
         private int[] _aliveSerialE = new int[0];   // 적 폭격기(호위 대상 풀의 Hostile)
         private int[] _countedSerialE = new int[0];
+        // 격파 확정(6-338): 체력 0을 처음 본 서버 시각(0 = 살아 있음/모름)과 그때의 배치 번호 — 오너 화면에서 UpdateKills가 갱신한다
+        private int[] _deadSinceF = new int[0];
+        private int[] _deadSerialF = new int[0];
+        private int[] _deadSinceG = new int[0];
+        private int[] _deadSerialG = new int[0];
+        private int[] _deadSinceH = new int[0];
+        private int[] _deadSerialH = new int[0];
+        private int[] _deadSinceP = new int[0];
+        private int[] _deadSerialP = new int[0];
+        private int[] _deadSinceE = new int[0];
+        private int[] _deadSerialE = new int[0];
         // CountTagged 결과(U#은 out을 못 쓴다)
         private int _cntTotal;
         private int _cntDone;
@@ -387,6 +403,7 @@ namespace ACO
             _objectiveTotal = 0;
             _objectiveEvents = 0;
             _lastPhaseFailed = false;
+            _lastPhaseSkipped = false;
             _nextPhaseMs = now + Mathf.RoundToInt(FirstPhaseDelay * 1000f);
 
             ResetKillTracking();
@@ -456,6 +473,40 @@ namespace ACO
 
         /// 모듈: 태그 tag인 배치 목표(전투기·지상·고가치 표적)를 센다 — 결과는 GetTagged*. 파괴 = 체력 0이고 살아 있는 걸 봤거나 배치 후 ObjectiveSettleTime이 지남.
         public void CountTaggedObjectives(int tag) { CountTagged(tag, Networking.GetServerTimeInMilliseconds()); }
+
+        /// 유닛이 확실히 부서졌는가(6-338, 관리자 오너 화면 — 페이즈가 직접 읽는 호위 · 함대 · 정밀 타격 판정): 체력 0이 DeadConfirmTime 이어졌고 배치 뒤 SpawnConfirmTime이 지났다.
+        public bool IsUnitGone(int category, int i)
+        {
+            if (Generator == null || !Generator.IsUnitDestroyed(category, i)) { return false; }
+            if (!Networking.IsOwner(gameObject)) { return true; }   // 관리자 오너가 아닌 화면(대사 · 표시용)은 기록이 없다 — 예전처럼 체력 0이면 부서짐
+            int[] since = DeadSinceOf(category);
+            int[] ser = DeadSerialOf(category);
+            if (since == null || i < 0 || i >= since.Length) { return false; }
+            int now = Networking.GetServerTimeInMilliseconds();
+            int serial = Generator.GetUnitSerial(category, i);
+            if (ser[i] != serial || since[i] == 0 || now - since[i] < Mathf.RoundToInt(DeadConfirmTime * 1000f)) { return false; }
+            return now - Generator.GetUnitDeployTimeMs(category, i) >= Mathf.RoundToInt(SpawnConfirmTime * 1000f);
+        }
+
+        private int[] DeadSinceOf(int category)
+        {
+            if (category == ACO_MissionGenerator.CAT_FIGHTER) { return _deadSinceF; }
+            if (category == ACO_MissionGenerator.CAT_GROUND) { return _deadSinceG; }
+            if (category == ACO_MissionGenerator.CAT_HVT) { return _deadSinceH; }
+            if (category == ACO_MissionGenerator.CAT_PART) { return _deadSinceP; }
+            if (category == ACO_MissionGenerator.CAT_ESCORT) { return _deadSinceE; }
+            return null;
+        }
+
+        private int[] DeadSerialOf(int category)
+        {
+            if (category == ACO_MissionGenerator.CAT_FIGHTER) { return _deadSerialF; }
+            if (category == ACO_MissionGenerator.CAT_GROUND) { return _deadSerialG; }
+            if (category == ACO_MissionGenerator.CAT_HVT) { return _deadSerialH; }
+            if (category == ACO_MissionGenerator.CAT_PART) { return _deadSerialP; }
+            if (category == ACO_MissionGenerator.CAT_ESCORT) { return _deadSerialE; }
+            return null;
+        }
         public int GetTaggedTotal() { return _cntTotal; }
         public int GetTaggedDone() { return _cntDone; }
         public bool HasTaggedAlive() { return _cntHasAlive; }
@@ -862,6 +913,7 @@ namespace ACO
             float mult = GetPhaseMultiplier(_phaseIndex);
             int bonus = 0;
             _lastPhaseFailed = failed;
+            _lastPhaseSkipped = skipped;
             if (!failed && !skipped)
             {
                 bonus = Mathf.RoundToInt(PhaseClearBonus * mult) + extraBonus;
@@ -915,14 +967,18 @@ namespace ACO
             _cntDone = 0;
             _cntHasAlive = false;
             if (tag == 0) { return; }
-            CountTaggedIn(ACO_MissionGenerator.CAT_FIGHTER, _aliveSerialF, tag, now);
-            CountTaggedIn(ACO_MissionGenerator.CAT_GROUND, _aliveSerialG, tag, now);
-            CountTaggedIn(ACO_MissionGenerator.CAT_HVT, _aliveSerialH, tag, now);
+            CountTaggedIn(ACO_MissionGenerator.CAT_FIGHTER, _aliveSerialF, _deadSinceF, _deadSerialF, tag, now);
+            CountTaggedIn(ACO_MissionGenerator.CAT_GROUND, _aliveSerialG, _deadSinceG, _deadSerialG, tag, now);
+            CountTaggedIn(ACO_MissionGenerator.CAT_HVT, _aliveSerialH, _deadSinceH, _deadSerialH, tag, now);
         }
 
-        private void CountTaggedIn(int category, int[] aliveSerial, int tag, int now)
+        /// 목표 격파(6-338): 체력 0이 DeadConfirmTime 이어졌고, 배치 뒤 SpawnConfirmTime이 지났고, 살아 있는 걸 봤거나 배치 뒤 ObjectiveSettleTime이 지났을 때.
+        /// 예전엔 체력 0 한 번에 확정했다 — 이 화면이 직접 채운 체력을 "살아 있는 걸 봤다"로 믿은 뒤 늦게 온 지난 미션의 0이 바로 격파가 됐다(LUNA 등장 때 격추 대사 · UAV 안 나옴).
+        private void CountTaggedIn(int category, int[] aliveSerial, int[] deadSince, int[] deadSerial, int tag, int now)
         {
             int settleMs = Mathf.RoundToInt(ObjectiveSettleTime * 1000f);
+            int holdMs = Mathf.RoundToInt(DeadConfirmTime * 1000f);
+            int spawnMs = Mathf.RoundToInt(SpawnConfirmTime * 1000f);
             int n = Generator.GetUnitCount(category);
             for (int i = 0; i < n; i++)
             {
@@ -930,8 +986,11 @@ namespace ACO
                 _cntTotal++;
                 if (Generator.IsUnitDestroyed(category, i))
                 {
-                    bool seen = i < aliveSerial.Length && aliveSerial[i] == Generator.GetUnitSerial(category, i);
-                    if (seen || now - Generator.GetUnitDeployTimeMs(category, i) >= settleMs) { _cntDone++; }
+                    int serial = Generator.GetUnitSerial(category, i);
+                    int age = now - Generator.GetUnitDeployTimeMs(category, i);
+                    bool held = i < deadSince.Length && deadSerial[i] == serial && deadSince[i] != 0 && now - deadSince[i] >= holdMs;
+                    bool seen = i < aliveSerial.Length && aliveSerial[i] == serial;
+                    if (held && age >= spawnMs && (seen || age >= settleMs)) { _cntDone++; }
                 }
                 else if (!_cntHasAlive)
                 {
@@ -986,6 +1045,11 @@ namespace ACO
             _countedSerialG = FilledArray(g);
             _aliveSerialH = FilledArray(h);
             _countedSerialH = FilledArray(h);
+            _deadSinceF = new int[f]; _deadSerialF = FilledArray(f);
+            _deadSinceG = new int[g]; _deadSerialG = FilledArray(g);
+            _deadSinceH = new int[h]; _deadSerialH = FilledArray(h);
+            _deadSinceP = new int[p]; _deadSerialP = FilledArray(p);
+            _deadSinceE = new int[e]; _deadSerialE = FilledArray(e);
         }
 
         private int[] FilledArray(int count)
@@ -1010,35 +1074,45 @@ namespace ACO
             }
 
             int before = _teamScore;
-            ScanCategory(ACO_MissionGenerator.CAT_FIGHTER, _aliveSerialF, _countedSerialF);
-            ScanCategory(ACO_MissionGenerator.CAT_GROUND, _aliveSerialG, _countedSerialG);
-            ScanCategory(ACO_MissionGenerator.CAT_HVT, _aliveSerialH, _countedSerialH);
-            ScanCategory(ACO_MissionGenerator.CAT_PART, _aliveSerialP, _countedSerialP);
-            ScanCategory(ACO_MissionGenerator.CAT_ESCORT, _aliveSerialE, _countedSerialE);
+            int now = Networking.GetServerTimeInMilliseconds();
+            ScanCategory(ACO_MissionGenerator.CAT_FIGHTER, _aliveSerialF, _countedSerialF, _deadSinceF, _deadSerialF, now);
+            ScanCategory(ACO_MissionGenerator.CAT_GROUND, _aliveSerialG, _countedSerialG, _deadSinceG, _deadSerialG, now);
+            ScanCategory(ACO_MissionGenerator.CAT_HVT, _aliveSerialH, _countedSerialH, _deadSinceH, _deadSerialH, now);
+            ScanCategory(ACO_MissionGenerator.CAT_PART, _aliveSerialP, _countedSerialP, _deadSinceP, _deadSerialP, now);
+            ScanCategory(ACO_MissionGenerator.CAT_ESCORT, _aliveSerialE, _countedSerialE, _deadSinceE, _deadSerialE, now);
             return _teamScore != before;
         }
 
-        private void ScanCategory(int category, int[] aliveSerial, int[] countedSerial)
+        /// 유닛마다: 살아 있으면 "봤다"(배치 번호) · 죽음 기록 지움, 죽었으면 처음 본 시각 기록(격파 확정 — 6-338). 그다음 점수.
+        /// 점수는 기다리지 않는다(살아 있는 걸 본 뒤의 0이면 바로 — 미루면 그 사이 거둬지거나 다시 쓰여 점수가 사라진다. 늦게 온 0은 풀 복귀 로컬 채우기가 막는다).
+        private void ScanCategory(int category, int[] aliveSerial, int[] countedSerial, int[] deadSince, int[] deadSerial, int now)
         {
             for (int i = 0; i < aliveSerial.Length; i++)
             {
-                if (!Generator.IsUnitUsed(category, i)) { continue; }
-                // 호위 대상 풀은 적 폭격기만 격추로 센다(아군 수송기·콘보이가 격추되는 건 점수가 아니다).
+                if (!Generator.IsUnitUsed(category, i)) { if (i < deadSince.Length) { deadSince[i] = 0; } continue; }
+                int serial = Generator.GetUnitSerial(category, i);
+                bool dead = Generator.IsUnitDestroyed(category, i);
+                if (i < deadSince.Length)
+                {
+                    if (!dead) { deadSince[i] = 0; deadSerial[i] = serial; }
+                    else if (deadSince[i] == 0 || deadSerial[i] != serial) { deadSince[i] = now != 0 ? now : 1; deadSerial[i] = serial; }
+                }
+                if (!dead)
+                {
+                    aliveSerial[i] = serial;
+                    continue;
+                }
+                // 호위 대상 풀은 적 폭격기만 격추로 센다(아군 수송기·콘보이가 격추되는 건 점수가 아니다). 죽음 기록은 위에서 모두 한다(호위 실패 판정 — IsUnitGone).
                 if (category == ACO_MissionGenerator.CAT_ESCORT)
                 {
                     ACO_EscortUnit eu = Generator.GetEscort(i);
                     if (eu == null || !eu.Hostile) { continue; }
                 }
-                int serial = Generator.GetUnitSerial(category, i);
-
-                if (!Generator.IsUnitDestroyed(category, i))
-                {
-                    aliveSerial[i] = serial;
-                    continue;
-                }
                 if (aliveSerial[i] != serial || countedSerial[i] == serial) { continue; }
 
                 countedSerial[i] = serial;
+                if (category == ACO_MissionGenerator.CAT_PART && Generator.IsPartScoreless(i)) { continue; }   // 레이저 탑의 놓을 땅 없는 ECM 기지(땅속에서 부순 것)
+                if (category == ACO_MissionGenerator.CAT_PART && Generator.IsPartShipDestroyed(i)) { continue; }   // 함선이 가라앉으며 같이 부서진 부위(Silence — 점수 없음)
                 int points = GetKillScore(category, i);
                 _teamScore += points;
                 if (points < 0) { continue; }   // 민간 차량(감점)은 격파 수에 넣지 않는다(6-270)
@@ -1295,7 +1369,13 @@ namespace ACO
         public int GetCurrentPhaseType() { return GetPhaseType(_phaseIndex); }
         /// 목표 진행 중이면 true, 페이즈 사이(또는 시작 전)면 false.
         public bool IsPhaseActive() { return _phaseActive; }
+        /// 지금 진행 중인 모듈 페이즈(없으면 null — 모든 화면, 동기화 값).
+        public ACO_PhaseModule GetActiveModule() { return _phaseActive ? GetModule(GetCurrentPhaseType()) : null; }
         public int GetPhasesCleared() { return _phasesCleared; }
+        /// 마지막으로 끝난 페이즈가 진짜 클리어였는지(물러남 · 건너뜀이 아님 — 6-341 보스 칭호).
+        public bool WasLastPhaseCleared() { return !_lastPhaseFailed && !_lastPhaseSkipped; }
+        /// 보너스를 뺀 본 페이즈 수(5페이즈 미션 성공 기록 — 6-341).
+        public int GetMainPhaseCount() { return _bonusIndex >= 0 ? _bonusIndex : _phaseCount; }
         public int GetLastPhaseBonus() { return _lastPhaseBonus; }
         public int GetPhaseBonusTotal() { return _phaseBonusTotal; }
         /// 지금 목표 유닛의 태그. 생성기 GetUnitTag와 같으면 목표(0 = 지금은 목표 유닛 없음 — 할당량, 시한 표적 사이 등).

@@ -267,6 +267,22 @@ public static class ACO_VoiceLines
             }
             else if (sub.LineText != null && sub.LineText.Length == 26) { c |= FillArray(ref sub.LineClip, 26, "Submarine/Submarine_L{0:00}", 0, 26); }
         }
+        else if (m is ACO_PhaseBreakingPoint breaking)
+        {
+            // 브레이킹 포인트(6-333): 시작 · 성공(실패 무전 없음) + 대사 표 9줄(BreakingPoint_L01~09)
+            c |= Common(m, "BreakingPoint/BreakingPoint_", false);
+            if (breaking.LineText != null && breaking.LineText.Length == 9) { c |= FillArray(ref breaking.LineClip, 9, "BreakingPoint/BreakingPoint_L{0:00}", 0, 9); }
+        }
+        else if (m is ACO_PhaseLaserTower caliburn)
+        {
+            // 칼리번(레이저 탑, 6-331): 시작 · 성공 · 실패 + 대사 표 26줄(자동 사통 2줄을 뺀 뒤 — 줄마다 처음 28줄 때의 파일 번호)
+            c |= Common(m, "Caliburn/Caliburn_", true);
+            if (caliburn.LineText != null && caliburn.LineText.Length == CaliburnClips.Length)
+            {
+                if (caliburn.LineClip == null || caliburn.LineClip.Length != CaliburnClips.Length) { caliburn.LineClip = new AudioClip[CaliburnClips.Length]; c = true; }
+                for (int i = 0; i < CaliburnClips.Length; i++) { c |= Fill(ref caliburn.LineClip[i], "Caliburn/Caliburn_" + CaliburnClips[i]); }
+            }
+        }
         else if (m is ACO_PhaseConvoy convoy)
         {
             // 웨이포인트 매복 대사(6-265)
@@ -305,6 +321,8 @@ public static class ACO_VoiceLines
         }
         return c;
     }
+
+    private static readonly string[] CaliburnClips = { "L01", "L02", "L03", "L04", "L05", "L06", "L07", "L08", "L09", "L11", "L13", "L14", "L15", "L16", "L17", "L18", "L19", "L20", "L21", "L22", "L23", "L24", "L25", "L26", "L27", "L28" };
 
     private static readonly string[] SubmarineV4Clips =
     {

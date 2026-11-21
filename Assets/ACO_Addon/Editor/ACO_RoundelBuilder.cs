@@ -203,7 +203,7 @@ public static class ACO_RoundelBuilder
         var tris = new List<Vector3>();
         foreach (SkinnedMeshRenderer smr in vehicle.GetComponentsInChildren<SkinnedMeshRenderer>(true))
         {
-            if (smr.sharedMesh == null || !smr.enabled) { continue; }
+            if (smr.sharedMesh == null || !smr.enabled || !smr.gameObject.activeInHierarchy) { continue; }   // 꺼 둔 F형 부품 제외(6-343)
             var baked = new Mesh();
             smr.BakeMesh(baked, true);
             // BakeMesh(useScale)는 크기를 정점에 넣는다 — 위치 · 회전만 곱한다

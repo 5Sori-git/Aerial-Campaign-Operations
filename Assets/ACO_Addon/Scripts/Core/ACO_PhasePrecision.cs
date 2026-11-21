@@ -293,6 +293,7 @@ namespace ACO
                     continue;
                 }
                 if (_aliveSerial[i] != serial && now - Generator.GetUnitDeployTimeMs(ACO_MissionGenerator.CAT_GROUND, i) < settleMs) { continue; }
+                if (!Manager.IsUnitGone(ACO_MissionGenerator.CAT_GROUND, i)) { continue; }   // 6-338: 체력 0이 이어져야(늦게 온 옛 0으로 민간 피해 · 실패가 나지 않게)
                 if (enemy) { _enemyDead++; } else { _civDead++; }
             }
         }

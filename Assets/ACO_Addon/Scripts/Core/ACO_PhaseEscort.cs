@@ -72,14 +72,14 @@ namespace ACO
                 return RESULT_RUNNING;
             }
             ACO_EscortUnit unit = Generator.GetEscort(idx);
-            if (unit.IsDestroyed())
+            if (Manager.IsUnitGone(ACO_MissionGenerator.CAT_ESCORT, idx))   // 6-338: 체력 0이 이어져야(늦게 온 옛 0 · 순간 오판 거름)
             {
                 // 부활 동기화 전의 체력 0은 격추로 보지 않는다.
                 int settleMs = Mathf.RoundToInt(Manager.GetObjectiveSettleTime() * 1000f);
                 if (!_seenAlive && now - Generator.GetUnitDeployTimeMs(ACO_MissionGenerator.CAT_ESCORT, idx) < settleMs) { return RESULT_RUNNING; }
                 return RESULT_FAIL;
             }
-            _seenAlive = true;
+            if (!unit.IsDestroyed()) { _seenAlive = true; }   // 확정 전의 체력 0은 "살아 있는 걸 봤다"가 아니다(6-338)
             int hp = Mathf.RoundToInt(unit.GetHealthFraction() * 100f);
             Manager.SetModuleProgress(hp, 100, false);
             if (unit.IsArrived())

@@ -401,6 +401,7 @@ namespace ACO
         public void MissionSpawn(Vector3 position, Quaternion rotation, Vector3 ingress, bool revive)
         {
             Init();
+            if (Retreating) { SetRetreat(false, Vector3.zero); }
             _missionHold = true;
             _missionHoldPos = ingress;
             if (revive) { RespawnAt(position, rotation); return; }
@@ -540,6 +541,13 @@ namespace ACO
         /// 이번 미션에 쓰지 않는다(월드 시작 시 풀 숨김 포함). 생성기가 곧 오브젝트를 끈다.
         public void MissionDespawn()
         {
+            if (Retreating) { SetRetreat(false, Vector3.zero); }
+            // 풀로 돌아갈 때 체력을 이 화면에서 채워 둔다(6-338 — 동기화 없음). 격추된 채 남은 0이 다음 출격 때 소유권 이동 · 다시 보내기로 퍼지지 않게
+            if (TargetHealth && TargetHealth.FullHealth > 0f && TargetHealth.Health < TargetHealth.FullHealth && TargetHealth.GetProgramVariable("TargetAnimator") != null)
+            {
+                TargetHealth.Health = TargetHealth.FullHealth;
+                TargetHealth.SendCustomEvent("_onDeserialization");
+            }
             _alive = false;
             ClearTarget();
             if (Gun) { Gun.ForceStop(); }
@@ -1194,6 +1202,21 @@ namespace ACO
             _missionHoldPos = pos;
         }
 
+        /// 물러나는 중(6-333 브레이킹 포인트 — 모든 화면): 사격하지 않고 집결 지점(바깥 위)으로 빠진다. 락온 · 마커는 그대로(사용자 "락온 마커 냅두자").
+        [System.NonSerialized] public bool Retreating;
+
+        /// 물러나기를 켜고 끈다(모든 화면 — 비행은 오너가 holdPos로). 스폰 · 디스폰 때 끈다.
+        public void SetRetreat(bool on, Vector3 holdPos)
+        {
+            Retreating = on;
+            HoldFire = on;
+            if (on)
+            {
+                SetMissionHold(holdPos);
+                if (MissileLauncher) { MissileLauncher.ReleaseAim(); }
+            }
+        }
+
         /// 지금 표적보다 우선순위가 높은 표적이 탐지 거리 안에 살아 있는지.
         private bool HigherPriorityInRange(GameObject[] targets, Vector3 myPos)
         {
@@ -1370,8 +1393,19 @@ namespace ACO
         /// 3프레임 뒤에, SaccTarget.Start가 끝난 것만(Start 전에 부르면 SaccTarget이 멈춘다).
         public void _LocalRefillHealth()
         {
-            if (!TargetHealth || !TargetHealth.gameObject.activeInHierarchy || Networking.IsOwner(TargetHealth.gameObject)) { return; }
+            if (!TargetHealth || !TargetHealth.gameObject.activeInHierarchy) { return; }
             if (TargetHealth.GetProgramVariable("TargetAnimator") == null) { return; }
+            if (Networking.IsOwner(TargetHealth.gameObject))
+            {
+                // 스폰 0~3프레임 사이에 소유자가 됐다(6-338): 아무도 채우지 않아 1.5초 뒤 0을 다시 보내 모두에게 격추로 보이던 것 — 소유자로서 채운다
+                if (TargetHealth.Health <= 0f)
+                {
+                    _ApplyTierHealth();
+                    TargetHealth.RespawnTarget();
+                    Debug.Log("[ACO_SYNC] 스폰 직후 소유자가 됨 — 소유자로 채움: " + gameObject.name);
+                }
+                return;
+            }
             _ApplyTierHealth();
             if (TargetHealth.FullHealth <= 0f) { return; }
             float before = TargetHealth.Health;

@@ -67,6 +67,10 @@ namespace ACO
         public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
         [Tooltip("ECM 재밍 구역 원의 굵기(스코프 지름 대비)")]
         public float EcmRingWidth = 0.008f;
+        [Tooltip("적 재머 구역 원의 색(6-332 — 노랑)")]
+        public Color EnemyJamColor = new Color(1f, 0.85f, 0.15f, 1f);
+        [Tooltip("교전 공역 원(6-333 브레이킹 포인트)")]
+        public Color ZoneColor = new Color(0.9f, 0.95f, 1f, 0.8f);
 
         private Mesh _mesh;
         private Vector3[] _v;
@@ -259,6 +263,8 @@ namespace ACO
                 Bar(new Vector3(0.1f, 0.12f, 0f), 215f, MissileSize * 0.5f * scale, MissileColor);
             }
             EcmRings(center, k);
+            EnemyJamRings(center, k);
+            ZoneRing(center, k);
             // 나: 가운데, 기수 방향
             Chevron(Vector3.zero, Mathf.Atan2(selfFwd.x, selfFwd.z) * Mathf.Rad2Deg, s * 1.15f, SelfColor);
 
@@ -290,6 +296,49 @@ namespace ACO
                     Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
                     if (p0.sqrMagnitude > 0.24f || p1.sqrMagnitude > 0.24f) { continue; }
                     Line(p0, p1, EcmRingWidth, EcmColor);
+                }
+            }
+        }
+
+        /// 교전 공역(6-333 브레이킹 포인트): 흰 테두리 원. 스코프 밖의 호는 그리지 않는다.
+        private void ZoneRing(Vector3 center, float k)
+        {
+            ACO_PhaseModule zm = Contacts != null ? Contacts.GetZoneModule() : null;
+            if (zm == null) { return; }
+            Vector3 d = zm.GetZoneCenter() - center;
+            Vector3 o = new Vector3(d.x * k, d.z * k, 0f);
+            float radius = zm.GetZoneRadius() * k;
+            for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+            {
+                float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                if (p0.sqrMagnitude > 0.24f || p1.sqrMagnitude > 0.24f) { continue; }
+                Line(p0, p1, EcmRingWidth, ZoneColor);
+            }
+        }
+
+        /// 살아 있는 적 재머 구역(6-332): 노란 테두리 원. 스코프 밖의 호는 그리지 않는다.
+        private void EnemyJamRings(Vector3 center, float k)
+        {
+            ACO_RadarContacts c = Contacts;
+            if (c == null || c.EnemyJammers == null) { return; }
+            for (int i = 0; i < c.EnemyJammers.Length; i++)
+            {
+                ACO_EnemyJammer j = c.EnemyJammers[i];
+                if (j == null || !j.IsJamming()) { continue; }
+                Vector3 d = j.GetCenter() - center;
+                Vector3 o = new Vector3(d.x * k, d.z * k, 0f);
+                float radius = j.Radius * k;
+                for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                    Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                    if (p0.sqrMagnitude > 0.24f || p1.sqrMagnitude > 0.24f) { continue; }
+                    Line(p0, p1, EcmRingWidth, EnemyJamColor);
                 }
             }
         }

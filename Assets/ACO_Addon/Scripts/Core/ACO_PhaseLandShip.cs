@@ -16,13 +16,16 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseLandShip : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "landship"; }
+
         public const int MAX_ROUTE = 6;
 
         [Header("육상전함")]
         [Tooltip("항로 길이(m) — 최고 속도(ACO_LandShip.Speed)로 가면 이 길이 / 속도 초")]
         public float RouteLength = 6000f;
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초)")]
-        public float ExtraTime = 720f;
+        public float ExtraTime = 0f;   // 2026-11-20 → 0(사용자 "페이즈당 시간이 이미 있으니 호위 · 시한 있는 임무 빼곤 다 빼자" — 레이저 에이스 · LUNA만 남김)
         [Tooltip("궤도 하나가 부서질 때마다 줄어드는 속도 비율")]
         [Range(0f, 0.3f)] public float TrackSlowdown = 0.07f;
         [Tooltip("최저 속도 배율")]
@@ -259,6 +262,7 @@ namespace ACO
                 RecoverRoute(now, ship);
             }
 
+            if (_coreDownMs != 0 && !(total > 0 && Manager.GetTaggedDone() >= total)) { _coreDownMs = 0; }   // 6-338: 목표가 다시 살아 있다(확정 전 오판) — 격파 대기 기록을 푼다
             if (total > 0 && Manager.GetTaggedDone() >= total)
             {
                 // 격파: 연쇄 폭발·대폭발이 보이게 기다린다. 기다린 시간은 돌려준다.
@@ -328,7 +332,10 @@ namespace ACO
         /// 방공·부포 부위는 RepairInterval마다 RepairCount곳씩, 페이즈 전체 MaxRepairs곳까지 되살린다(본체가 살아 있을 때만).
         private void TickRepair(int now, ACO_LandShip ship)
         {
-            if (RepairInterval <= 0f || now - _nextRepairMs < 0 || ship.IsCoreDestroyed()) { return; }
+            if (RepairInterval <= 0f || ship.IsCoreDestroyed()) { return; }
+            // 오너가 바뀌면 새 오너는 0 — 그때부터 간격을 잰다(바로 수리하거나, 서버 시각이 음수면 영영 안 하던 것)
+            if (_nextRepairMs == 0) { _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f); return; }
+            if (now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
             // 살아 있는 방공 부위가 RepairAliveCap보다 적을 때만, 그 수까지(페이즈 전체 합계 한도는 없다 — 6-150)
             int count = RepairAliveCap > 0 ? Mathf.Min(RepairCount, RepairAliveCap - ship.CountAirDefenseAlive()) : RepairCount;
@@ -444,7 +451,8 @@ namespace ACO
                 _saidCoreHalf = _stage == ACO_LandShip.STAGE_CORE && core <= 0.5f;
                 _saidCity = cityLevel;
                 _saidAllRepair = _allRepairMs != 0;
-                if (_stage == ACO_LandShip.STAGE_ARMOR && skirts == 0) { Say(SIT_SPAWN, ""); }
+                // 등장 대사: 페이즈 시작 30초 안에 처음 본 화면만(늦게 들어온 사람은 듣지 않는다). 스커트 수는 보지 않는다 — 풀에서 다시 쓸 때 지난 미션의 파괴 수가 남은 프레임이면 빠졌다
+                if (_stage == ACO_LandShip.STAGE_ARMOR && Networking.GetServerTimeInMilliseconds() - Manager.GetPhaseStartMs() < 30000) { Say(SIT_SPAWN, ""); }
                 return;
             }
             if (_stage != _saidStage)
@@ -453,6 +461,13 @@ namespace ACO
                 if (_stage == ACO_LandShip.STAGE_CORE) { Say(SIT_CORE_OPEN, ""); }
                 return;
             }
+            // 풀에서 다시 쓰는 보스: 페이즈 시작 직후 몇 프레임은 지난 미션의 부위 체력(0)이 남아 기준이 잘못 잡힐 수 있다(그러면 대사가 안 나왔다).
+            // 부위가 되살아난 게 보이면 기준을 바로잡는다 — 이 대사들이 쓰이는 단계에선 수리로 되살아나는 부위가 없다.
+            if (skirts < _saidSkirts) { _saidSkirts = skirts; }
+            if (ventsOpen < _saidVentsOpen) { _saidVentsOpen = ventsOpen; }
+            if (!TrackHalf(ship, tracks)) { _saidTrackHalf = false; }
+            if (!(vents > 0 && ventsDown * 2 >= vents)) { _saidVentHalf = false; }
+            if (core > 0.5f) { _saidCoreHalf = false; }
             if (skirts > _saidSkirts)
             {
                 if (_saidSkirts == 0) { Say(SIT_SKIRT_DOWN, ""); }

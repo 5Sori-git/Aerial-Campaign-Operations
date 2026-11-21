@@ -21,6 +21,8 @@ public static partial class ACO_PrefabBuilder
     /// 포대 배치 판 번호 — 프리팹이 이보다 낮으면 Bake가 기초를 넓히고 포대를 벌린다.
     private const int RailgunLayoutVersion = 2;
     private const float RailgunPadRadius = 530f;
+    /// 기초 옆면 깊이(m) — 사용자 "아주 길게": 가장 높은 땅에 얹어도(허용 높이 차 400m) 낮은 쪽이 뜨지 않는다
+    public const float RailgunPadDepth = 2000f;
 
     /// 방공 포대 자리의 반경: 안팎 두 줄로 엇갈려 놓는다 — 폭탄 한 발에 여러 곳이 쓸리지 않게.
     private static float RailgunRingRadius(int i) { return i % 2 == 0 ? 363f : 462f; }
@@ -76,10 +78,12 @@ public static partial class ACO_PrefabBuilder
     /// 옆면이 깊다 — 기초는 가장 높은 땅에 얹히므로 낮은 쪽 틈을 가린다(FindRailgunSite)
     private static Mesh BuildRailgunPadMesh()
     {
-        var bag = new MeshBag { UvScale = 40f };
-        bag.Prism(new Vector3(0f, 0f, 0f), RailgunPadRadius - 20f, RailgunPadRadius, -90f, 8f, 48);
-        bag.Prism(new Vector3(0f, 0f, 0f), 140f, 150f, 8f, 16f, 24);
-        return bag.ToMesh("ACO_Railgun_Pad");
+        // 옆면 셰이드 스무스(사용자 "토대 옆면 셰이드 스무스") — 기초 + 가운데 단
+        return SmoothPadMesh("ACO_Railgun_Pad", 40f, new float[,]
+        {
+            { RailgunPadRadius - 20f, RailgunPadRadius, -RailgunPadDepth, 8f, 48f },
+            { 140f, 150f, 8f, 16f, 24f },
+        });
     }
 
     private static ACO_FortressPart AddRailgunCooler(Transform parts, string name, Vector3 pos)
@@ -133,8 +137,8 @@ public static partial class ACO_PrefabBuilder
         go.transform.SetParent(hull, false);
         go.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
         BoxCollider box = go.AddComponent<BoxCollider>();
-        box.center = new Vector3(0f, -20f, 0f);
-        box.size = new Vector3(RailgunPadBox, 56f, RailgunPadBox);
+        box.center = new Vector3(0f, (8f - RailgunPadDepth) * 0.5f, 0f);   // 윗면 8m, 옆면 끝까지
+        box.size = new Vector3(RailgunPadBox, 8f + RailgunPadDepth, RailgunPadBox);
     }
 
     private static ACO_AAGunSite AddRailgunGun(Transform parts, string name, string prefab, Vector3 pos, float yaw, List<UdonSharp.UdonSharpBehaviour> list)
@@ -238,7 +242,7 @@ public static partial class ACO_PrefabBuilder
         var hullCols = new List<Collider>();
         foreach (Vector3[] b in new[]
         {
-            new[] { new Vector3(0f, -20f, 0f), new Vector3(RailgunPadBox, 56f, RailgunPadBox) },
+            new[] { new Vector3(0f, (8f - RailgunPadDepth) * 0.5f, 0f), new Vector3(RailgunPadBox, 8f + RailgunPadDepth, RailgunPadBox) },
             new[] { new Vector3(0f, 22f, 0f), new Vector3(230f, 14f, 230f) },
             new[] { new Vector3(-40f, 45f, 40f), new Vector3(18f, 34f, 100f) },
             new[] { new Vector3(40f, 45f, 40f), new Vector3(18f, 34f, 100f) },

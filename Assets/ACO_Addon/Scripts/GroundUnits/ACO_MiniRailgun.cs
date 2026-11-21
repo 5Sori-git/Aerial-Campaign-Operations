@@ -398,6 +398,7 @@ namespace ACO
         {
             if (Contacts == null || Contacts.LocalVehicle == null) { return; }
             SaccEntity e = Contacts.LocalVehicle;
+            if (!e.Piloting) { return; }   // 승객 화면은 판정하지 않는다(2인승에서 피해 두 배였다)
             Vector3 offset = e.transform.position - _shellFrom;
             float along = Vector3.Dot(offset, _shellDir);
             if (along < fromDistance || along > toDistance) { return; }
@@ -528,6 +529,7 @@ namespace ACO
         {
             if (now < _nextHurt || Contacts == null || Contacts.LocalVehicle == null) { return; }
             SaccEntity e = Contacts.LocalVehicle;
+            if (!e.Piloting) { return; }
             if ((e.transform.position - point).sqrMagnitude > radius * radius) { return; }
             _nextHurt = now + ZoneTick;
             e.WeaponDamageVehicle(ZoneDamage, gameObject, 0);

@@ -1,3 +1,4 @@
+using SaccFlightAndVehicles;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
@@ -95,6 +96,30 @@ namespace ACO
         private const string KEY_CONSUMABLE = "aco_cons_";   // + 소모품 ID → 보유(int 1/0)
         private const string KEY_CALL = "aco_call_";         // + 호출권 ID → 장수(int)
         private const string KEY_CALL_PICK = "aco_call_pick"; // 격납고에서 고른 지원(int: 0 없음, 1 + CALL_*)
+        private const string KEY_SET_MOBILITY = "aco_set_mobility"; // 기동성 적용 단계(int: -1 = 최대(구매 따라감), 0~ = 고정 — 6-345)
+        private const string KEY_SET_ENGINE = "aco_set_engine";     // 출력 적용 단계(같은 규칙)
+        // 조종사 기록(6-341) — 절대 바꾸지 않는다
+        private const string KEY_STAT_CLEARS = "aco_stat_clears";
+        private const string KEY_STAT_CLEARS5 = "aco_stat_clears5";
+        private const string KEY_STAT_KILLS = "aco_stat_kills";
+        private const string KEY_STAT_FLIGHT = "aco_stat_flight";      // 초
+        private const string KEY_STAT_CIC_BEST = "aco_stat_cic_best";
+        private const string KEY_STAT_CIC_KILLS = "aco_stat_cic_kills";
+        private const string KEY_BOSS = "aco_boss_";                   // + 보스 ID + "_kills"(int) / "_flags"(int, BOSS_FLAG_*)
+
+        // 기록 분류(ACO_PilotRecord와 같은 번호)
+        public const int STAT_LEVEL = 0;
+        public const int STAT_CLEARS = 1;
+        public const int STAT_CLEARS5 = 2;
+        public const int STAT_KILLS = 3;
+        public const int STAT_FLIGHT = 4;
+        public const int STAT_CIC_BEST = 5;
+        public const int STAT_CIC_KILLS = 6;
+        public const int BOSS_FLAG_S = 1;       // 보스 페이즈를 클리어한 미션이 S랭크
+        public const int BOSS_FLAG_SOLO = 2;    // 위 + 출격 1명(나) + 미션 시작부터 있었음
+        public const int BOSS_FLAG_PARTY = 4;   // 위 + 출격 4명 이상 + 미션 시작부터 있었음
+        // 보스 기록 ID(페이즈 모듈 GetAchievementId와 같은 값) — 순서 = 기록판 순서. 절대 바꾸지 않는다(새 보스는 끝에)
+        private string[] _bossIds = new string[] { "borderless", "luna", "twins", "shade", "mrs", "fortress", "landship", "lance", "submarine", "caliburn" };
 
         // 소모품(CONS_* 순서). 저장 ID는 절대 바꾸거나 재사용하지 않는다(인스펙터에 두지 않는다).
         public const int CONS_ARMOR = 0;      // 장갑판: 체력 배수
@@ -126,6 +151,10 @@ namespace ACO
         [Header("참조")]
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 미션 관리자를 넣는다")]
         public ACO_MissionManager Manager;
+        [Tooltip("플레이어 기체(Bake) — 미션에 출격한 사람 수(보스 칭호 솔로 · 4인, 6-341)를 조종석에서 센다")]
+        public SaccEntity[] Vehicles;
+        [Tooltip("조종사 기록판(Bake) — 칭호 글자 앞 아이콘(등급 색)을 받는다")]
+        public ACO_PilotRecord Record;
         [Tooltip("번역 장치(6-166). Bake가 넣는다. 이름 · 효과 · 보상 요약을 지금 언어로 돌려준다(비면 영어 — 아래 이름 배열)")]
         public ACO_Localization Loc;
 
@@ -212,6 +241,8 @@ namespace ACO
         private int[] _calls = new int[CALL_COUNT];
         private float[] _callReadyAt = new float[CALL_COUNT];
         private int _callPick = CALL_NONE;
+        private int _setMobility = -1;   // 적용 단계 설정(-1 = 최대 — 구매를 따라간다, 6-345)
+        private int _setEngine = -1;
         private int _credits;
         private int _pendingCredits;   // 불러오기 전에 받은 보상
         private int[] _levels = new int[UPGRADE_COUNT];
@@ -281,10 +312,14 @@ namespace ACO
                 _calls[c] = c < _callKeys.Length && PlayerData.TryGetInt(player, KEY_CALL + _callKeys[c], out v) ? Mathf.Clamp(v, 0, 99) : 0;
             }
             _callPick = PlayerData.TryGetInt(player, KEY_CALL_PICK, out v) && v >= 1 && v <= CALL_COUNT ? v - 1 : CALL_NONE;
+            _setMobility = PlayerData.TryGetInt(player, KEY_SET_MOBILITY, out v) && v >= 0 ? v : -1;
+            _setEngine = PlayerData.TryGetInt(player, KEY_SET_ENGINE, out v) && v >= 0 ? v : -1;
             string s;
             _savedSpecial = PlayerData.TryGetString(player, KEY_SPECIAL, out s) ? s : "";
             if (!PlayerData.TryGetInt(player, KEY_VERSION, out v)) { PlayerData.SetInt(KEY_VERSION, DATA_VERSION); }
+            RestoreRecords(player);
             _restored = true;
+            if (_recordDirty || _flightUnsaved > 0) { _recordDirty = false; SaveRecords(); }
 
             if (_pendingCredits != 0)
             {
@@ -305,9 +340,257 @@ namespace ACO
         /// 저장 값을 다 불러왔는가(그 전에는 구매할 수 없다).
         public bool IsReady() { return _restored; }
         public int GetVersion() { return _version; }
+        public bool IsRestored() { return _restored; }
         public int GetCredits() { return _restored ? _credits : _pendingCredits; }
 
         public int GetMaxLevel() { return LevelCostScale != null ? LevelCostScale.Length : 0; }
+
+        // ───────────── 조종사 기록 (6-341 — 내 PlayerData, 칭호 판정은 ACO_PilotRecord) ─────────────
+
+        private int _statClears;
+        private int _statClears5;
+        private int _statKills;
+        private int _statFlight;      // 초
+        private int _statCicBest;
+        private int _statCicKills;
+        private int[] _bossKills = new int[16];
+        private int[] _bossFlags = new int[16];
+        private string _titleId = "";
+        private float _flightFrac;
+        private float _flightSaveTimer;
+        private int _flightUnsaved;
+        private SaccAirVehicle _flightVehicle;
+        private bool _recordDirty;    // 불러오기 전에 쌓인 기록이 있다
+        private int _joinMs;
+        private bool _fromStart;      // 이번 미션을 시작부터 봤다(솔로 · 4인 칭호 조건)
+        private int _seenCleared;     // 이번 미션에서 본 페이즈 종료 수
+        private int _pendingBoss;     // 이번 미션에 참가 중 클리어한 보스(비트 = 보스 번호)
+        private int[] _sortieIds = new int[32];
+        private int _sortieCount;
+
+        public int GetBossCount() { return _bossIds.Length; }
+        public string GetBossId(int b) { return b >= 0 && b < _bossIds.Length ? _bossIds[b] : ""; }
+        public int GetBossKills(int b) { return b >= 0 && b < _bossIds.Length ? _bossKills[b] : 0; }
+        public int GetBossFlags(int b) { return b >= 0 && b < _bossIds.Length ? _bossFlags[b] : 0; }
+        public string GetTitleId() { return _titleId; }
+
+        /// 기록 값(STAT_*). 레벨은 내 강화 단계 합.
+        public int GetStat(int stat)
+        {
+            if (stat == STAT_LEVEL) { return Mathf.Max(GetPlayerLevel(Networking.LocalPlayer), 0); }
+            if (stat == STAT_CLEARS) { return _statClears; }
+            if (stat == STAT_CLEARS5) { return _statClears5; }
+            if (stat == STAT_KILLS) { return _statKills; }
+            if (stat == STAT_FLIGHT) { return _statFlight; }
+            if (stat == STAT_CIC_BEST) { return _statCicBest; }
+            if (stat == STAT_CIC_KILLS) { return _statCicKills; }
+            return 0;
+        }
+
+        /// 칭호 장착(""= 없음). 다른 사람 화면은 PlayerData로 읽는다.
+        public void SetTitle(string id)
+        {
+            if (!_restored) { return; }
+            if (id == null) { id = ""; }
+            if (id == _titleId) { return; }
+            _titleId = id;
+            PlayerData.SetString(KEY_TITLE, id);
+            _version++;
+        }
+
+        /// 불러오기: 저장값 + 불러오기 전에 쌓인 값(보상이 먼저 난 경우).
+        private void RestoreRecords(VRCPlayerApi player)
+        {
+            int v;
+            _statClears += PlayerData.TryGetInt(player, KEY_STAT_CLEARS, out v) ? v : 0;
+            _statClears5 += PlayerData.TryGetInt(player, KEY_STAT_CLEARS5, out v) ? v : 0;
+            _statKills += PlayerData.TryGetInt(player, KEY_STAT_KILLS, out v) ? v : 0;
+            _statFlight += PlayerData.TryGetInt(player, KEY_STAT_FLIGHT, out v) ? v : 0;
+            int best = PlayerData.TryGetInt(player, KEY_STAT_CIC_BEST, out v) ? v : 0;
+            _statCicBest = Mathf.Max(_statCicBest, best);
+            _statCicKills += PlayerData.TryGetInt(player, KEY_STAT_CIC_KILLS, out v) ? v : 0;
+            for (int b = 0; b < _bossIds.Length; b++)
+            {
+                _bossKills[b] += PlayerData.TryGetInt(player, KEY_BOSS + _bossIds[b] + "_kills", out v) ? v : 0;
+                _bossFlags[b] |= PlayerData.TryGetInt(player, KEY_BOSS + _bossIds[b] + "_flags", out v) ? v : 0;
+            }
+            string s;
+            _titleId = PlayerData.TryGetString(player, KEY_TITLE, out s) && s != null ? s : "";
+        }
+
+        private void SaveRecords()
+        {
+            if (!_restored) { _recordDirty = true; return; }   // 불러온 뒤 RestoreRecords 다음에 저장
+            PlayerData.SetInt(KEY_STAT_CLEARS, _statClears);
+            PlayerData.SetInt(KEY_STAT_CLEARS5, _statClears5);
+            PlayerData.SetInt(KEY_STAT_KILLS, _statKills);
+            PlayerData.SetInt(KEY_STAT_FLIGHT, _statFlight);
+            PlayerData.SetInt(KEY_STAT_CIC_BEST, _statCicBest);
+            PlayerData.SetInt(KEY_STAT_CIC_KILLS, _statCicKills);
+            for (int b = 0; b < _bossIds.Length; b++)
+            {
+                PlayerData.SetInt(KEY_BOSS + _bossIds[b] + "_kills", _bossKills[b]);
+                PlayerData.SetInt(KEY_BOSS + _bossIds[b] + "_flags", _bossFlags[b]);
+            }
+            _flightUnsaved = 0;
+        }
+
+        /// 조종 중인 비행기(ACO_VehicleUpgrades — 비행 시간). null = 내림.
+        public void ReportFlightVehicle(SaccAirVehicle v) { _flightVehicle = v; }
+
+        /// 비행 시간: 조종석에서 떠 있는 동안(지상 활주 제외, 자유 비행 포함). 1분마다 저장.
+        private void TickFlightTime()
+        {
+            if (_joinMs == 0) { _joinMs = Networking.GetServerTimeInMilliseconds(); if (_joinMs == 0) { _joinMs = 1; } }   // 들어온 시각(시작부터 봤는지)
+            if (_piloting && _flightVehicle != null && !_flightVehicle.Taxiing)
+            {
+                _flightFrac += Time.deltaTime;
+                if (_flightFrac >= 1f)
+                {
+                    int whole = Mathf.FloorToInt(_flightFrac);
+                    _flightFrac -= whole;
+                    _statFlight += whole;
+                    _flightUnsaved += whole;
+                }
+            }
+            _flightSaveTimer -= Time.deltaTime;
+            if (_flightSaveTimer <= 0f)
+            {
+                _flightSaveTimer = 60f;
+                if (_flightUnsaved > 0 && _restored) { PlayerData.SetInt(KEY_STAT_FLIGHT, _statFlight); _flightUnsaved = 0; _version++; }
+            }
+            if (!_piloting && _flightUnsaved > 0 && _restored) { PlayerData.SetInt(KEY_STAT_FLIGHT, _statFlight); _flightUnsaved = 0; _version++; }   // 내릴 때
+        }
+
+        /// 새 미션: 시작부터 봤는지, 이미 끝난 페이즈 수, 출격 인원을 처음부터.
+        private void BeginMissionRecord(int start)
+        {
+            int now = Networking.GetServerTimeInMilliseconds();
+            if (_joinMs == 0) { _joinMs = now; }
+            _fromStart = start - _joinMs >= 0;
+            _seenCleared = Manager != null ? Manager.GetPhasesCleared() : 0;
+            _pendingBoss = 0;
+            _sortieCount = 0;
+        }
+
+        /// 미션 중(보상 전): 보스 페이즈 클리어(그때 참가 중이었으면)와 출격한 사람(로스터 기체 조종석)을 센다.
+        private void WatchMissionRecord(int state)
+        {
+            int cleared = Manager.GetPhasesCleared();
+            while (_seenCleared < cleared)
+            {
+                int k = _seenCleared;
+                _seenCleared++;
+                if (_seenCleared != cleared || !Manager.WasLastPhaseCleared()) { continue; }   // 한 번에 여러 개가 왔으면 마지막만 판정할 수 있다(드묾)
+                if (!(_sortied || _cicUsed || !RequireSortie)) { continue; }
+                ACO_PhaseModule m = Manager.GetModule(Manager.GetPhaseType(k));
+                if (m == null) { continue; }
+                int b = BossIndex(m.GetAchievementId());
+                if (b >= 0) { _pendingBoss |= 1 << b; Debug.Log("[ACO] 기록: 보스 페이즈 클리어 " + _bossIds[b]); }
+            }
+            if (state != ACO_MissionManager.STATE_RUNNING || Vehicles == null) { return; }
+            for (int i = 0; i < Vehicles.Length; i++)
+            {
+                SaccEntity e = Vehicles[i];
+                if (e == null || e.SeatedPlayers == null || e.PilotSeat < 0 || e.PilotSeat >= e.SeatedPlayers.Length) { continue; }
+                int id = e.SeatedPlayers[e.PilotSeat];
+                if (id < 0) { continue; }
+                bool known = false;
+                for (int j = 0; j < _sortieCount; j++) { if (_sortieIds[j] == id) { known = true; break; } }
+                if (!known && _sortieCount < _sortieIds.Length) { _sortieIds[_sortieCount++] = id; }
+            }
+        }
+
+        private int BossIndex(string id)
+        {
+            if (string.IsNullOrEmpty(id)) { return -1; }
+            for (int b = 0; b < _bossIds.Length; b++) { if (_bossIds[b] == id) { return b; } }
+            return -1;
+        }
+
+        /// 보상 때 한 번(참가한 미션만): 성공 · 5페이즈 · 격추 · CIC · 보스.
+        private void RecordMission(bool success, bool rankS, bool cicOnly)
+        {
+            if (success)
+            {
+                _statClears++;
+                if (Manager != null && Manager.GetMainPhaseCount() >= 5) { _statClears5++; }
+            }
+            _statKills += _missionKills;
+            if (cicOnly)
+            {
+                _statCicBest = Mathf.Max(_statCicBest, _missionKills);
+                _statCicKills += _missionKills;
+            }
+            int me = Utilities.IsValid(Networking.LocalPlayer) ? Networking.LocalPlayer.playerId : -1;
+            bool meSortied = _sortied;
+            for (int j = 0; j < _sortieCount; j++) { if (_sortieIds[j] == me) { meSortied = true; } }
+            for (int b = 0; b < _bossIds.Length; b++)
+            {
+                if ((_pendingBoss & (1 << b)) == 0) { continue; }
+                _bossKills[b]++;
+                if (rankS)
+                {
+                    _bossFlags[b] |= BOSS_FLAG_S;
+                    if (_fromStart && meSortied && _sortieCount == 1) { _bossFlags[b] |= BOSS_FLAG_SOLO; }
+                    if (_fromStart && meSortied && _sortieCount >= 4) { _bossFlags[b] |= BOSS_FLAG_PARTY; }
+                }
+            }
+            Debug.Log("[ACO] 기록: 성공 " + success + ", S " + rankS + ", 격추 +" + _missionKills + (cicOnly ? " (CIC)" : "") + ", 출격 " + _sortieCount + "명, 시작부터 " + _fromStart + ", 보스 비트 " + _pendingBoss);
+            _pendingBoss = 0;
+            SaveRecords();
+            _version++;
+        }
+
+        // ───────────── 조종사 레벨 · 칭호 (6-340 — 다른 사람 화면도 그 사람의 PlayerData를 읽는다, 동기화 코드 없음) ─────────────
+
+        /// 고른 칭호 ID(string, 빈 값 = 없음). 표시 글자는 번역 표 "title." + ID. 절대 바꾸지 않는다.
+        public const string KEY_TITLE = "aco_title";
+
+        /// 그 플레이어의 레벨 = 강화 단계 합(0 ~ 항목 수 × 최대 단계). 그 사람의 저장값이 아직 오지 않았으면 -1.
+        public int GetPlayerLevel(VRCPlayerApi p)
+        {
+            if (!Utilities.IsValid(p)) { return -1; }
+            int v;
+            if (!PlayerData.TryGetInt(p, KEY_VERSION, out v)) { return -1; }   // 처음 불러올 때 저장하는 키 — 없으면 아직 안 왔다
+            int max = GetMaxLevel();
+            int sum = 0;
+            for (int i = 0; i < UPGRADE_COUNT; i++)
+            {
+                string key = UpgradeKey(i);
+                if (key != "" && PlayerData.TryGetInt(p, key, out v)) { sum += Mathf.Clamp(v, 0, max); }
+            }
+            return sum;
+        }
+
+        /// 가장 높은 레벨(모든 강화 최대).
+        public int GetPlayerLevelMax() { return UPGRADE_COUNT * GetMaxLevel(); }
+
+        /// 그 플레이어가 고른 칭호 ID("" = 없음).
+        public string GetPlayerTitleId(VRCPlayerApi p)
+        {
+            string s;
+            if (!Utilities.IsValid(p) || !PlayerData.TryGetString(p, KEY_TITLE, out s) || s == null) { return ""; }
+            return s;
+        }
+
+        /// 그 플레이어의 칭호 글자(지금 언어). 없거나 번역 표에 없는 ID(옛 칭호 등)면 "".
+        public string GetPlayerTitleText(VRCPlayerApi p)
+        {
+            string id = GetPlayerTitleId(p);
+            if (id.Length == 0 || Loc == null) { return ""; }
+            string key = "title." + id;
+            string s = Loc.Get(key);
+            if (s == key) { return ""; }
+            return Record != null ? Record.GetIconTag(id) + s : s;   // 아이콘(TMP 스프라이트 — 글자에 aco_rec_icons가 있어야 보인다)
+        }
+
+        /// "Lv 87"(번역 표 pilot.lv 문장 틀). lv < 0이면 "".
+        public string FormatLevel(int lv)
+        {
+            if (lv < 0) { return ""; }
+            return Loc != null ? Loc.Get1("pilot.lv", lv.ToString()) : "Lv " + lv;
+        }
 
         /// 강화 항목의 저장 키("" = ID 없음 — 저장하지 않는다).
         private string UpgradeKey(int id)
@@ -339,6 +622,42 @@ namespace ACO
         /// 번역 장치가 언어를 바꾸면 부른다 — 이 스크립트는 그릴 글자가 없다(상점 · 로드아웃이 다시 그린다).
         public void LocalizationChanged() { }
         public float GetUpgradeStep(int id) { return UpgradeSteps != null && id >= 0 && id < UpgradeSteps.Length ? UpgradeSteps[id] : 0f; }
+
+        // ───────────── 적용 단계(6-345 — 출력 · 기동성만) ─────────────
+        // 산 단계(조종사 레벨 · 칭호 · 상점 · 가격)는 그대로 두고, 기체에 실제로 넣는 단계만 낮출 수 있다. 설정 -1 = 최대(새로 산 단계도 따라간다).
+
+        /// 적용 단계를 고를 수 있는 강화인가(출력 · 기동성).
+        public bool IsLevelSelectable(int id) { return id == UP_MOBILITY || id == UP_ENGINE; }
+
+        /// 적용 단계 설정값(-1 = 최대).
+        public int GetLevelSetting(int id) { return id == UP_MOBILITY ? _setMobility : (id == UP_ENGINE ? _setEngine : -1); }
+
+        /// 기체에 실제로 넣는 단계 = 설정값(보유 단계까지) — 고를 수 없는 강화는 보유 단계.
+        public int GetAppliedLevel(int id)
+        {
+            int lv = GetLevel(id);
+            int s = GetLevelSetting(id);
+            return s < 0 ? lv : Mathf.Min(s, lv);
+        }
+
+        /// 기체에 넣는 효과 배수(적용 단계 기준).
+        public float GetAppliedFactor(int id) { return id < 0 ? 1f : 1f + GetUpgradeStep(id) * GetAppliedLevel(id); }
+
+        /// 적용 단계를 한 단계 내리거나(-1) 올리거나(+1) 최대로(toMax). 보유 단계에 닿으면 '최대(구매 따라감)'로 저장한다.
+        /// 돌려주는 값: 새 적용 단계, 바꿀 수 없으면 -1(불러오기 전 · 고를 수 없는 강화 · 이미 끝).
+        public int ChangeAppliedLevel(int id, int delta, bool toMax)
+        {
+            if (!_restored || !IsLevelSelectable(id)) { return -1; }
+            int lv = GetLevel(id);
+            int cur = GetAppliedLevel(id);
+            int next = toMax ? lv : Mathf.Clamp(cur + delta, 0, lv);
+            int setting = next >= lv ? -1 : next;
+            if (next == cur && setting == GetLevelSetting(id)) { return -1; }
+            if (id == UP_MOBILITY) { _setMobility = setting; PlayerData.SetInt(KEY_SET_MOBILITY, setting); }
+            else { _setEngine = setting; PlayerData.SetInt(KEY_SET_ENGINE, setting); }
+            _version++;
+            return next;
+        }
 
         /// 효과 배수 = 1 + 단계당 배수 × 단계. 항목 번호가 -1이면 1.
         public float GetUpgradeFactor(int id) { return id < 0 ? 1f : 1f + GetUpgradeStep(id) * GetLevel(id); }
@@ -409,6 +728,17 @@ namespace ACO
         /// 분류(CAT_*)의 첫 항목 번호와 항목 수(상점 탭).
         public int GetCategoryStart(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryStarts[cat] : 0; }
         public int GetCategoryLength(int cat) { return cat >= 0 && cat < CATEGORY_COUNT ? _categoryLengths[cat] : 0; }
+
+        /// 강화 분류의 단계 합 / 최대(전문 분야 칭호 — 6-341).
+        public int GetCategoryLevelSum(int cat)
+        {
+            int start = GetCategoryStart(cat);
+            int len = GetCategoryLength(cat);
+            int sum = 0;
+            for (int i = 0; i < len; i++) { sum += GetLevel(start + i); }
+            return sum;
+        }
+        public int GetCategoryLevelMax(int cat) { return GetCategoryLength(cat) * GetMaxLevel(); }
         public int GetUpgradeCategory(int id)
         {
             for (int cat = 0; cat < CATEGORY_COUNT; cat++)
@@ -707,6 +1037,7 @@ namespace ACO
 
         void Update()
         {
+            TickFlightTime();
             if (DebugSetCredits >= 0 && _restored)
             {
                 _credits = DebugSetCredits;
@@ -730,6 +1061,7 @@ namespace ACO
             int state = Manager.GetState();
             if (state == ACO_MissionManager.STATE_IDLE) { return; }
             int start = Manager.GetMissionStartMs();
+            if (_inMission && start == _missionStart && !_rewarded) { WatchMissionRecord(state); }   // 6-341: 보스 페이즈 클리어 · 출격 인원
 
             if (state == ACO_MissionManager.STATE_RUNNING)
             {
@@ -739,6 +1071,7 @@ namespace ACO
                     _missionStart = start;
                     _sortied = _piloting;   // 미션 시작 때 이미 타고 있었으면 출격으로 친다
                     _cicUsed = false;
+                    BeginMissionRecord(start);
                     _deaths = 0;
                     _personalScore = 0;
                     _missionKills = 0;
@@ -775,6 +1108,7 @@ namespace ACO
             bool rankS = success && Manager.GetRank() == ACO_MissionManager.RANK_S;
             if (rankS) { reward = Mathf.RoundToInt(reward * (1f + RankSBonus)); }
             _lastRankS = rankS && reward > 0;
+            if (!RequireSortie || _sortied || cicOnly) { RecordMission(success, rankS, cicOnly); }   // 6-341: 참가한 미션만
 
             _hasLastReward = true;
             _lastMission = _missionStart;

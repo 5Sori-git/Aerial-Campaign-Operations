@@ -11,6 +11,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PhaseTwins : ACO_PhaseModule
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "twins"; }
+
         [Header("분신 에이스")]
         [Tooltip("함께 나오는 슈퍼에이스 수(풀에 있는 만큼 — 형제 2기)")]
         [UnityEngine.Serialization.FormerlySerializedAs("Escorts")]

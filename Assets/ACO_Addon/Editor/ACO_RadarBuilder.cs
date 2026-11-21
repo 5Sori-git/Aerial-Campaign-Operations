@@ -135,6 +135,21 @@ public static class ACO_RadarBuilder
         return map;
     }
 
+    /// 계기판에 붙이는 지도(6-346 — F형 뒷좌석): parent 아래 name, 한 변 size(m), 앞면 −Z. 조종석 지도와 같은 화면(Undo 없음 — 프리팹 내용에서 쓴다).
+    public static ACO_CockpitMap BuildPanelMap(Transform parent, string name, Vector3 localPos, float size)
+    {
+        Shader shader = Shader.Find("ACO/RadarVertexColor");
+        if (shader == null) { return null; }
+        EnsureGenerated();
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale = Vector3.one * size;
+        ACO_CockpitMap map = go.AddUdonSharpComponent<ACO_CockpitMap>();
+        BuildMapScreen(go.transform, map, shader);
+        return map;
+    }
+
     /// 브리핑실 벽걸이 평면 지도 프리팹. 앞면이 루트 +Z이고, 화면 크기는 1 x 1이다.
     public static GameObject CreatePlanMapPrefab()
     {

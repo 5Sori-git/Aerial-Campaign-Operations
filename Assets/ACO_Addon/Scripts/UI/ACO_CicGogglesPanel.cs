@@ -17,6 +17,8 @@ namespace ACO
         [Header("연결 (프리팹 빌더 · Bake)")]
         public ACO_CicGoggles[] Goggles;
         public ACO_GameFlow Flow;
+        [Tooltip("TAC 네임(콜사인) — 관전 버튼에 콜사인 + VRChat 이름(Bake가 넣는다)")]
+        public ACO_TacName TacNames;
         public ACO_UiSound Sound;
         [Tooltip("번역 장치(6-166). Bake가 넣는다")]
         public ACO_Localization Loc;
@@ -119,7 +121,9 @@ namespace ACO
             if (slot >= 0) { label = Flow.GetSlotLabel(slot); }
             if (!Flow.Aircraft[v].Occupied) { return label; }
             VRCPlayerApi p = Networking.GetOwner(Flow.Aircraft[v].gameObject);
-            return Utilities.IsValid(p) ? label + "\n" + p.displayName : label;
+            if (!Utilities.IsValid(p)) { return label; }
+            string call = TacNames != null ? TacNames.GetLabel(p) : "";
+            return label + "\n" + (call.Length > 0 ? call + "  <size=75%>" + p.displayName + "</size>" : p.displayName);
         }
     }
 }

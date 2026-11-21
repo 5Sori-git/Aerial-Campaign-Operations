@@ -136,14 +136,14 @@ public static class ACO_PhaseModuleSetup
             bool oldBonus = existing.BonusOnly && existing.PhaseName == "BONUS - FLYING FORTRESS";
             bool oldNormal = !existing.BonusOnly && existing.MinPhase == 3 && (existing.PhaseWeights == null || existing.PhaseWeights.Length == 0);
             if (!oldBonus && !oldNormal) { return; }
-            existing.PhaseName = "FLYING FORTRESS";
+            existing.PhaseName = ACO_PrefabTuning.FortressPhaseName;
             FortressDefaults(existing);
             EditorUtility.SetDirty(existing);
             Debug.Log("[ACO] 공중 요새 페이즈를 5번째 페이즈 기본값으로 옮겼습니다.", existing);
             return;
         }
         ACO_PhaseFortress m = Create<ACO_PhaseFortress>(manager, "Phase_Fortress");
-        Setup(m, "FLYING FORTRESS", "CITY DESTROYED", 1, false,
+        Setup(m, ACO_PrefabTuning.FortressPhaseName, "CITY DESTROYED", 1, false,
             "A massive contact is circling the city. It's a flying fortress! Take out its air defenses first!",
             "The core is gone! The fortress is going down! Outstanding work!",
             "The fortress has hit the city... We've lost it. All units, withdraw.");
@@ -189,6 +189,43 @@ public static class ACO_PhaseModuleSetup
         m.ClearBonus = 8000;
         m.EnemyName = "LANCE COMMAND";
         Debug.Log("[ACO] 랜스 포대 페이즈 모듈 Phase_Railgun을 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 레이저 탑 페이즈(6-331, 없으면 만든다 — Bake가 부른다). 5번째 페이즈의 보스 — 요새 · 랜스와 같은 가중치. 실패 조건 없음.
+    public static void EnsureLaserTower(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseLaserTower>(true) != null) { return; }
+        ACO_PhaseLaserTower m = Create<ACO_PhaseLaserTower>(manager, "Phase_LaserTower");
+        Setup(m, "CALIBURN", "", 1, false,
+            "Optical weapon tower detected. Its jammers are shielding the power grid. Take out the ECM vehicles first!",
+            "The tower is down. All aircraft, outstanding work.",
+            "We could not bring down the tower. All units, withdraw.");
+        m.PhaseWeights = new[] { 0f, 0f, 0f, 0f, 3f };
+        m.ClearBonus = 8000;
+        m.EnemyName = "CALIBURN CONTROL";
+        m.AllyName = "WINGMAN";
+        m.SystemName = "TOWER FCS";
+        ACO_VoiceLines.ApplyPhase(m);   // 음성(Caliburn/*) — 있는 것만
+        Debug.Log("[ACO] 레이저 탑 페이즈 모듈 Phase_LaserTower를 미션 관리자 아래에 만들었습니다.", m);
+    }
+
+    /// 브레이킹 포인트 페이즈 가중치(1~5번째) — 사용자 "0, 0, 1, 3, 0.01".
+    public static readonly float[] BreakingPointWeights = { 0f, 0f, 1f, 3f, 0.01f };
+
+    /// 브레이킹 포인트(6-333 — 대규모 공중전, 일반 페이즈). 없으면 만든다(Setup Check · Bake).
+    public static void EnsureBreakingPoint(ACO_MissionManager manager)
+    {
+        if (manager.GetComponentInChildren<ACO_PhaseBreakingPoint>(true) != null) { return; }
+        ACO_PhaseBreakingPoint m = Create<ACO_PhaseBreakingPoint>(manager, "Phase_BreakingPoint");
+        Setup(m, "BREAKING POINT", "", 2, false,   // 이동 시간 없음(호위 대상이 없어 더해지지 않았다)
+            "Enemy is committing its entire air wing to this sector. Bleed them until they break.",
+            "Airspace is ours. Their air wing is broken. Outstanding work.",
+            "");
+        m.PhaseWeights = BreakingPointWeights;
+        m.EnemyName = "ENEMY AIR WING";
+        m.AllyName = "WINGMAN";
+        ACO_VoiceLines.ApplyPhase(m);   // 음성(BreakingPoint/*) — 있는 것만
+        Debug.Log("[ACO] 브레이킹 포인트 페이즈 모듈 Phase_BreakingPoint를 미션 관리자 아래에 만들었습니다.", m);
     }
 
     /// 육상전함 페이즈(없으면 만든다 — Bake가 부른다). 5번째 페이즈의 보스 — 요새·랜스 포대와 같은 가중치. 도시가 있어야 나온다.
@@ -439,7 +476,7 @@ public static class ACO_PhaseModuleSetup
         }
         if (normal != null) { return; }
         ACO_PhaseTwins m = Create<ACO_PhaseTwins>(manager, "Phase_Twins");
-        Setup(m, "ACES - {ACE}", "", 1, false,
+        Setup(m, ACO_PrefabTuning.TwinsPhaseName, "", 1, false,
             "Two bogeys in tight formation... They're aces, and they fly like brothers. Expect decoys. Make sure you're locking the real one!",
             "Both aces are down! Heads or tails, it doesn't matter now. Good work!",
             "");
@@ -671,6 +708,8 @@ public static class ACO_PhaseModuleSetup
         if (manager.GetComponentInChildren<ACO_PhaseFortress>(true) == null) { missing.Add("Phase_Fortress"); }
         if (manager.GetComponentInChildren<ACO_PhaseFleet>(true) == null) { missing.Add("Phase_Fleet"); }
         if (manager.GetComponentInChildren<ACO_PhaseRailgun>(true) == null) { missing.Add("Phase_Railgun"); }
+        if (manager.GetComponentInChildren<ACO_PhaseLaserTower>(true) == null) { missing.Add("Phase_LaserTower"); }
+        if (manager.GetComponentInChildren<ACO_PhaseBreakingPoint>(true) == null) { missing.Add("Phase_BreakingPoint"); }
         if (manager.GetComponentInChildren<ACO_PhaseLandShip>(true) == null) { missing.Add("Phase_LandShip"); }
         ACO_PhaseBorderless laser = manager.GetComponentInChildren<ACO_PhaseBorderless>(true);
         if (laser == null || !SiteComplete(laser)) { missing.Add("Phase_Borderless"); }
@@ -708,6 +747,8 @@ public static class ACO_PhaseModuleSetup
         EnsureFortress(manager);
         EnsureFleet(manager);
         EnsureRailgun(manager);
+        EnsureLaserTower(manager);
+        EnsureBreakingPoint(manager);
         EnsureLandShip(manager);
         EnsureBorderless(manager);
         EnsureTwins(manager);

@@ -9,6 +9,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class ACO_PhaseShade : ACO_PhaseModule
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "shade"; }
+
         [Header("SHADE 편대")]
         [Tooltip("함께 나오는 SHADE 수(풀에 있는 만큼)")]
         public int Aces = 4;

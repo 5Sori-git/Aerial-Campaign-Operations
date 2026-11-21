@@ -335,6 +335,7 @@ public partial class ACO_SceneBaker
         foreach (ACO_Warship s in poolRoot.GetComponentsInChildren<ACO_Warship>(true)) { if (s.ReservedForFleet) { hasCarrier = true; } }
         if (!hasCarrier) { missing.Add("NPC_Carrier"); }
         if (poolRoot.GetComponentInChildren<ACO_Railgun>(true) == null) { missing.Add("NPC_Railgun"); }
+        if (poolRoot.GetComponentInChildren<ACO_LaserTower>(true) == null) { missing.Add(ACO_PrefabBuilder.LaserTowerName); }
         if (poolRoot.GetComponentInChildren<ACO_LandShip>(true) == null) { missing.Add(ACO_PrefabBuilder.LandShipPrefab); }
         if (poolRoot.GetComponentInChildren<ACO_Submarine>(true) == null) { missing.Add(ACO_PrefabBuilder.SubmarinePrefab); }
         return missing;
@@ -365,6 +366,7 @@ public partial class ACO_SceneBaker
             case "NPC_Flagship": return ACO_PrefabBuilder.BuildFlagship();
             case "NPC_Carrier": return ACO_PrefabBuilder.BuildCarrier();
             case "NPC_Railgun": return ACO_PrefabBuilder.BuildRailgun();
+            case ACO_PrefabBuilder.LaserTowerName: return ACO_PrefabBuilder.BuildLaserTower();
             case ACO_PrefabBuilder.LandShipPrefab: return ACO_PrefabBuilder.BuildLandShip();
             case ACO_PrefabBuilder.SubmarinePrefab: return ACO_PrefabBuilder.BuildSubmarine();
             case ACO_PrefabBuilder.CityVehiclePrefab: return ACO_PrefabBuilder.BuildCityVehicle();
@@ -438,6 +440,40 @@ public partial class ACO_SceneBaker
                 MarkChanged(mini);
             }
         }
+    }
+
+    /// 레이저 탑(6-331) ↔ 보스 페이즈(동기화된 단계 · 시간표 · 시드), 참가자 기체(레이더 접촉), 지면 레이어 · 해수면(생성기 값), 무전.
+    private static void BakeLaserTower()
+    {
+        ACO_LaserTower tower = Object.FindObjectOfType<ACO_LaserTower>(true);
+        ACO_PhaseLaserTower phase = Object.FindObjectOfType<ACO_PhaseLaserTower>(true);
+        if (tower == null) { return; }
+        if (phase == null) { Debug.LogWarning("[ACO] 레이저 탑: 페이즈 모듈(ACO_PhaseLaserTower)이 없습니다.", tower); return; }
+        ACO_RadarContacts contacts = Object.FindObjectOfType<ACO_RadarContacts>(true);
+        if (tower.Phase != phase || tower.Contacts != contacts) { tower.Phase = phase; tower.Contacts = contacts; MarkChanged(tower); }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        if (phase.Chatter != chatter) { phase.Chatter = chatter; MarkChanged(phase); }
+        ACO_MissionGenerator generator = Object.FindObjectOfType<ACO_MissionGenerator>(true);
+        if (generator != null)
+        {
+            int ground = generator.GroundLayers.value & ~(1 << ACO_PrefabBuilder.LayerFortressHull);
+            if (tower.GroundLayers.value != ground || !Mathf.Approximately(tower.SeaLevel, generator.SeaLevel))
+            {
+                tower.GroundLayers = ground;
+                tower.SeaLevel = generator.SeaLevel;
+                MarkChanged(tower);
+            }
+        }
+    }
+
+    /// 브레이킹 포인트(6-333): 무전 · 지원 관리자(아군 2기).
+    private static void BakeBreakingPoint()
+    {
+        ACO_PhaseBreakingPoint phase = Object.FindObjectOfType<ACO_PhaseBreakingPoint>(true);
+        if (phase == null) { return; }
+        ACO_Chatter chatter = Object.FindObjectOfType<ACO_Chatter>(true);
+        ACO_SupportManager support = Object.FindObjectOfType<ACO_SupportManager>(true);
+        if (phase.Chatter != chatter || phase.Support != support) { phase.Chatter = chatter; phase.Support = support; MarkChanged(phase); }
     }
 
     /// 육상전함 ↔ 보스 페이즈(동기화된 항로·단계), 지면 레이어·해수면(생성기 값), 소형 레일건 레이더, 프리팹에 직접 놓은 VLS·CIWS를 부위로.

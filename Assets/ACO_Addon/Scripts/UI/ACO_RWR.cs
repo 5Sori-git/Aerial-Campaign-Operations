@@ -182,6 +182,15 @@ namespace ACO
             }
         }
 
+        // ───────────── 읽기(F형 뒷좌석 RWR 화면 — 6-346) ─────────────
+        public int GetMissileCount() { return _missileCount; }
+        public Transform GetMissile(int i) { return i >= 0 && i < _missileCount ? _missiles[i] : null; }
+        public SaccEntity GetMissileVictim(int i) { return i >= 0 && i < _missileCount ? _missileVictims[i] : null; }
+        public int GetLockSlots() { return MAX_LOCKS; }
+        /// 지금 유지 중인 락온의 출처(끝났으면 null).
+        public Transform GetActiveLock(int i) { return i >= 0 && i < MAX_LOCKS && _lockSources[i] != null && _lockUntil[i] >= Time.time ? _lockSources[i] : null; }
+        public SaccEntity GetLockVictim(int i) { return i >= 0 && i < MAX_LOCKS ? _lockVictims[i] : null; }
+
         /// HUD 설정 패널이 부른다: seconds 동안 예시 위협(먼 미사일, 가까운 미사일, 락온)을 보여 준다.
         public void Preview(float seconds) { _previewUntil = Time.time + seconds; }
 

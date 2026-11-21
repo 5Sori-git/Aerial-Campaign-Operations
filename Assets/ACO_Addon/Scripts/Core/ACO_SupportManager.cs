@@ -307,6 +307,7 @@ namespace ACO
             _wStart = new float[wf];
             _wArea = new bool[wf];
             _wCenter = new Vector3[wf];
+            _wPhase = new bool[wf];
             for (int i = 0; i < wf; i++) { _wSupport[i] = -1; _wCaller[i] = -1; }
             if (Wingmen != null) { for (int i = 0; i < Wingmen.Length; i++) { if (Wingmen[i]) { Wingmen[i].gameObject.SetActive(false); } } }
             int d = Drones != null ? Drones.Length : 0;
@@ -452,7 +453,7 @@ namespace ACO
         {
             for (int i = 0; i < _wState.Length; i++)
             {
-                if (i == exclude || _wState[i] != W_IDLE) { continue; }
+                if (i == exclude || _wState[i] != W_IDLE || IsPhaseFlight(i)) { continue; }
                 ACO_Wingman a = Wingmen[i * 2];
                 ACO_Wingman b = Wingmen[i * 2 + 1];
                 if (a != null && b != null && !a.IsActive() && !b.IsActive()) { return i; }
@@ -464,10 +465,120 @@ namespace ACO
 
         private bool[] _wArea;          // CIC 지역 편대인가(따라갈 기체 없음 — 구역 중심 기준)
         private Vector3[] _wCenter;     // 구역 중심(높이 = 선회 고도)
+        private bool[] _wPhase;         // 페이즈 전용 편대(6-333 브레이킹 포인트 — 구역 편대처럼 싸우고, 개인 점수 · 쿨타임 · 지원 무전 없음)
         private float _cicReadyAt;      // 이 화면 Time.time: CIC 편대가 돌아가기 시작한 뒤 쿨타임이 끝나는 시각
         private int _cicMission;        // 그 쿨타임이 속한 작전(시작 시각) — 작전이 바뀌면 쿨타임 없음
 
         /// CIC 콘솔(누른 사람 화면): 구역 center(높이 = 선회 고도)로 지역 편대를 부른다. pos · fwd = 나타나는 자리 · 방향. 부르면 true.
+        /// 페이즈 전용 편대인가: 풀이 7편대(14기) 이상이면 맨 끝 두 편대(6편대면 맨 끝 하나) — 지원 호출 · CIC는 쓰지 않는다.
+        private bool IsPhaseFlight(int i)
+        {
+            if (_wState == null) { return false; }
+            int n = _wState.Length;
+            int reserved = n >= 7 ? 2 : (n >= 6 ? 1 : 0);
+            return i >= n - reserved;
+        }
+
+        /// 비어 있는 페이즈 전용 편대(없으면 -1).
+        private int FreePhaseFlight()
+        {
+            if (_wState == null) { return -1; }
+            for (int i = _wState.Length - 1; i >= 0 && IsPhaseFlight(i); i--)
+            {
+                if (_wState[i] != W_IDLE) { continue; }
+                ACO_Wingman a = Wingmen[i * 2];
+                ACO_Wingman b = Wingmen[i * 2 + 1];
+                if (a != null && b != null && !a.IsActive() && !b.IsActive()) { return i; }
+            }
+            return -1;
+        }
+
+        /// 페이즈(6-333 브레이킹 포인트, 관리자 오너)가 아군 2기를 부른다: center 둘레 radius 구역에서 싸우고, 부른 사람(이 화면)이 계산한다. 개인 점수 없음.
+        /// 전용 편대가 바쁘거나 없으면 빈 편대로. 다 차 있으면 false(아군 없이 진행).
+        public bool CallPhaseWingmen(Vector3 center, Vector3 pos, Vector3 fwd, float seconds, float radius)
+        {
+            Init();
+            if (!IsMissionRunning() || Networking.LocalPlayer == null || _wState == null) { return false; }
+            int f = FreePhaseFlight();
+            if (f < 0) { f = FreeFlight(); }   // 전용 편대가 둘 다 바쁘면(드묾) 빈 일반 편대
+            if (f < 0) { return false; }
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[f * 2 + k];
+                if (w != null && !Networking.IsOwner(w.gameObject)) { Networking.SetOwner(Networking.LocalPlayer, w.gameObject); }
+            }
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetWingmenPhaseStart), f, Networking.LocalPlayer.playerId, seconds, pos, fwd, center, radius, true);
+            return true;
+        }
+
+        [NetworkCallable]
+        public void NetWingmenPhaseStart(int flight, int callerId, float seconds, Vector3 pos, Vector3 fwd, Vector3 center, float radius, bool fresh)
+        {
+            Init();
+            if (flight < 0 || flight >= _wState.Length) { return; }
+            if (fresh && _wState[flight] != W_IDLE && _wCaller[flight] != callerId) { return; }   // 드문 경합: 먼저 뜬 쪽을 둔다
+            if (fwd.sqrMagnitude < 0.0001f) { fwd = Vector3.forward; }
+            BeginFlight(flight, -1, callerId, seconds, pos, fwd, fresh);
+            _wPhase[flight] = true;
+            _wCenter[flight] = center;
+            for (int k = 0; k < 2; k++)
+            {
+                ACO_Wingman w = Wingmen[flight * 2 + k];
+                if (w == null || !w.IsActive()) { continue; }
+                w.SetArea(center, radius);
+                w.SetCredit(false);
+            }
+        }
+
+        /// 페이즈 전용 편대를 돌려보낸다(관리자 오너 → 모든 화면).
+        public void EndPhaseWingmen()
+        {
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetEndPhaseWingmen));
+        }
+
+        [NetworkCallable]
+        public void NetEndPhaseWingmen()
+        {
+            Init();
+            for (int i = 0; i < _wState.Length; i++) { if (_wPhase[i] && _wState[i] == W_ACTIVE) { EndFlight(i, false); } }
+        }
+
+        /// 페이즈 전용 편대 중 격추된 기체 수(모든 화면 — 대사). 돌아가는 중인 편대도 센다(돌려보낼 때 줄어 보이지 않게).
+        public int CountPhaseWingmenDown()
+        {
+            Init();
+            if (_wPhase == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (!_wPhase[i] || _wState[i] == W_IDLE) { continue; }
+                for (int k = 0; k < 2; k++)
+                {
+                    ACO_Wingman w = Wingmen[i * 2 + k];
+                    if (w != null && w.IsActive() && w.IsDead()) { n++; }
+                }
+            }
+            return n;
+        }
+
+        /// 페이즈 전용 편대 중 살아 있는 기체 수(모든 화면 — 대사).
+        public int CountPhaseWingmenAlive()
+        {
+            Init();
+            if (_wPhase == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < _wState.Length; i++)
+            {
+                if (!_wPhase[i] || _wState[i] != W_ACTIVE) { continue; }
+                for (int k = 0; k < 2; k++)
+                {
+                    ACO_Wingman w = Wingmen[i * 2 + k];
+                    if (w != null && w.IsActive() && !w.IsDead()) { n++; }
+                }
+            }
+            return n;
+        }
+
         public bool CallWingmenArea(Vector3 center, Vector3 pos, Vector3 fwd)
         {
             Init();
@@ -535,6 +646,24 @@ namespace ACO
         private void RetryDisplaced(int flight)
         {
             float left = Mathf.Max(_wEnd[flight] - Time.time, 0f);
+            // 페이즈 전용 편대(6-333)가 밀렸다(전용 편대가 바빠 빈 일반 편대를 썼을 때만): 다른 페이즈 · 빈 편대로 페이즈 편대를 다시 — 일반 지원 편대로 뜨지 않게
+            if (_wPhase[flight])
+            {
+                int pg = FreePhaseFlight();
+                if (pg < 0 || pg == flight) { pg = FreeFlightExcept(flight); }
+                if (pg < 0) { return; }
+                ACO_Wingman pw = Wingmen[flight * 2];
+                Vector3 pp = pw != null ? pw.transform.position : _wCenter[flight];
+                Vector3 pf = pw != null ? pw.transform.forward : Vector3.forward;
+                float pr = PhaseWingmenRadius(flight);
+                for (int k = 0; k < 2; k++)
+                {
+                    ACO_Wingman w2 = Wingmen[pg * 2 + k];
+                    if (w2 != null && !Networking.IsOwner(w2.gameObject)) { Networking.SetOwner(Networking.LocalPlayer, w2.gameObject); }
+                }
+                SendCustomNetworkEvent(NetworkEventTarget.All, nameof(NetWingmenPhaseStart), pg, Networking.LocalPlayer.playerId, left, pp, pf, _wCenter[flight], pr, true);
+                return;
+            }
             if (_wArea[flight])
             {
                 int g = FreeFlightExcept(flight);
@@ -631,6 +760,7 @@ namespace ACO
             _wCaller[flight] = callerId;
             _wEnd[flight] = Time.time + Mathf.Max(seconds, 0f);
             _wArea[flight] = false;
+            _wPhase[flight] = false;
             Quaternion rot = Quaternion.LookRotation(fwd.normalized, Vector3.up);
             Vector3 right = rot * Vector3.right;
             for (int k = 0; k < 2; k++)
@@ -648,7 +778,8 @@ namespace ACO
         {
             Init();
             if (flight < 0 || flight >= _wState.Length || _wState[flight] == W_IDLE) { return; }
-            if (_wArea[flight]) { SayCic(1); }   // CIC 편대는 모두에게(6-282)
+            if (_wPhase[flight]) { }   // 페이즈 전용 편대(6-333): 페이즈 대사가 말한다
+            else if (_wArea[flight]) { SayCic(1); }   // CIC 편대는 모두에게(6-282)
             else if (IsLocalCaller(flight)) { Say(LINE_WINGMEN_DOWN); }
             if (FlightAllDown(flight)) { EndFlight(flight, false); }
         }
@@ -664,7 +795,7 @@ namespace ACO
                 ACO_Wingman w = Wingmen[flight * 2 + k];
                 if (w != null && w.IsActive()) { any = true; }
             }
-            if (!any) { _wState[flight] = W_IDLE; _wSupport[flight] = -1; _wArea[flight] = false; }
+            if (!any) { _wState[flight] = W_IDLE; _wSupport[flight] = -1; _wArea[flight] = false; _wPhase[flight] = false; }
         }
 
         private bool FlightAllDown(int flight)
@@ -687,6 +818,7 @@ namespace ACO
                 ACO_Wingman w = Wingmen[flight * 2 + k];
                 if (w != null) { w.StartLeave(); }
             }
+            if (_wPhase[flight]) { return; }   // 페이즈 전용 편대: 쿨타임 · 무전 없음
             if (_wArea[flight])
             {
                 // CIC 편대: 개인 쿨타임은 없고, 모두가 같이 쓰는 CIC 쿨타임이 이 화면에서 시작한다
@@ -700,6 +832,13 @@ namespace ACO
                 if (sayEnd) { Say(LINE_WINGMEN_END); }
                 if (Progress) { Progress.StartCallCooldown(ACO_PlayerProgress.CALL_WINGMEN); }
             }
+        }
+
+        /// 페이즈 전용 편대의 구역 반경(늦게 들어온 사람에게 다시 알릴 때 — 편대 AI에 넣은 값).
+        private float PhaseWingmenRadius(int flight)
+        {
+            ACO_Wingman w = Wingmen[flight * 2];
+            return w != null && w.AI != null ? w.AI.AreaRadius : CicWingmenRadius;
         }
 
         private bool IsLocalCaller(int flight)
@@ -719,7 +858,7 @@ namespace ACO
             if (_wState == null) { return -1; }
             for (int i = 0; i < _wState.Length; i++)
             {
-                if (_wState[i] != W_IDLE) { continue; }
+                if (_wState[i] != W_IDLE || IsPhaseFlight(i)) { continue; }
                 ACO_Wingman a = Wingmen[i * 2];
                 ACO_Wingman b = Wingmen[i * 2 + 1];
                 if (a != null && b != null && !a.IsActive() && !b.IsActive()) { return i; }
@@ -896,6 +1035,7 @@ namespace ACO
                 ACO_Wingman w = Wingmen[i * 2];
                 Vector3 p = w != null ? w.transform.position : Vector3.zero;
                 Vector3 f = w != null ? w.transform.forward : Vector3.forward;
+                if (_wPhase[i]) { SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenPhaseStart), i, _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, _wCenter[i], PhaseWingmenRadius(i), false); continue; }
                 if (_wArea[i]) { SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenAreaStart), i, _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, _wCenter[i], false); continue; }
                 SendCustomNetworkEvent(NetworkEventTarget.Others, nameof(NetWingmenStart), i, _wSupport[i], _wCaller[i], Mathf.Max(_wEnd[i] - Time.time, 0f), p, f, false);
             }

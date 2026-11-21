@@ -60,6 +60,7 @@ namespace ACO
         public const int ACTION_LEAVE = 8;
         /// 자유 비행 켜기/끄기(인스턴스 오너).
         public const int ACTION_FREE_FLIGHT = 9;
+        public const int ACTION_AIRFRAME = 10;   // 기체 형식 E ↔ F(6-343 — 그 슬롯을 채운 사람만)
         private const int MAX_SLOTS = 8;
         private const float MESSAGE_TIME = 6f;
 
@@ -152,6 +153,10 @@ namespace ACO
         public Color SlotAirborneColor = new Color(0.07f, 0.24f, 0.4f, 1f);
         [Tooltip("JOIN/READY/LAUNCH/REROLL 버튼(빌드 시 Bake가 씬에서 모은다). 상태에 맞게 글자를 바꾸고, 지금 누를 수 없으면 회색으로 칠한다")]
         public ACO_FlowButton[] Buttons;
+        [Tooltip("기체 형식 스위치(Aircraft와 같은 칸 — Bake가 넣는다, 6-343)")]
+        public ACO_AirframeVariant[] Airframes;
+        [Tooltip("콜사인(TAC 네임) — 명단 칸 카드 · 출격 명단에 보인다(Bake가 넣는다)")]
+        public ACO_TacName TacNames;
         [Tooltip("페이즈 수 버튼(빌드 시 Bake가 모은다). 고른 수는 밝게, 바꿀 수 없을 때(미션 중·출격 카운트다운)는 회색")]
         public ACO_MissionStartButton[] PhaseButtons;
         [Tooltip("출격 카운트다운 때 패널 위에 덮어 띄우는 판(빌드 시 Bake가 콘솔·격납고 패널마다 만들고 모은다)")]
@@ -198,6 +203,7 @@ namespace ACO
         // 기체별(로컬)
         private Vector3[] _homePos;
         private float[] _idleTime;
+        private float[] _kickAt;   // 슬롯마다 승객 강제 하차를 보낸 시각(6-343 — 한 번만)
 
         // 출격 진행
         private int _launchSlot = -1;
@@ -209,6 +215,7 @@ namespace ACO
             int n = SlotCount();
             _homePos = new Vector3[n];
             _idleTime = new float[n];
+            _kickAt = new float[n];
             for (int i = 0; i < n; i++)
             {
                 if (!Aircraft[i]) { continue; }
@@ -410,7 +417,9 @@ namespace ACO
         public string GetSlotLabel(int k)
         {
             string player = _roster != null && k >= 0 && k < _roster.Length ? PlayerName(_roster[k]) : "";
-            return player.Length > 0 ? SlotName(k) + "  " + player : SlotName(k);
+            string type = AirframeLabel(k);   // 기체 형식 스위치가 있으면 지금 형식(F/A-18E · F/A-18F — 6-343)
+            string name = type.Length > 0 ? type : SlotName(k);
+            return player.Length > 0 ? name + "  " + player : name;
         }
 
         public int GetSelectedPhases() { return _phases; }
@@ -444,6 +453,16 @@ namespace ACO
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetToggleFreeFlight));
                 return true;
             }
+            if (action == ACTION_AIRFRAME)
+            {
+                // 기체 형식 E ↔ F(6-343): 로스터에서 그 슬롯을 채운 사람만, 조종석이 비었을 때. 뒷자리 승객은 강제로 내려 브리핑실로
+                if (slot < 0 || slot >= SlotCount() || Airframes == null || slot >= Airframes.Length || Airframes[slot] == null) { return false; }
+                if (LocalSlot() != slot) { return Deny("flow.msg.airframeowner", "ONLY THIS SLOT'S PILOT CAN CHANGE THE AIRCRAFT TYPE"); }
+                if (IsLoadoutLocked()) { return Deny("flow.msg.airframelocked", "ALL READY - AIRCRAFT TYPE LOCKED"); }
+                if (Aircraft[slot] && Aircraft[slot].dead) { return Deny("flow.msg.respawning", "AIRCRAFT RESPAWNING - TRY AGAIN SHORTLY"); }
+                if (Aircraft[slot] && Aircraft[slot].Occupied) { return Deny("flow.msg.thatinuse", "THAT AIRCRAFT IS STILL IN USE"); }
+                return Airframes[slot].RequestToggle();
+            }
             if (action == ACTION_PHASES_DOWN || action == ACTION_PHASES_UP)
             {
                 int want = _phases + (action == ACTION_PHASES_UP ? 1 : -1);
@@ -457,6 +476,8 @@ namespace ACO
                 EnsureRoster();
                 int mine = LocalSlot();
                 if (mine == slot) { return Deny("flow.msg.yourslot", "THIS IS YOUR SLOT - PRESS LEAVE TO EXIT THE ROSTER"); }
+                // 출격한 F형 뒷자리 탑승(6-344): 좌석에 앉아 있지 않은 사람 누구나
+                if (IsSortiedTwoSeat(slot)) { return RequestBoardRear(slot); }
                 if (_roster[slot] >= 0) { return Deny("flow.msg.slottaken", "SLOT TAKEN - PICK AN OPEN SLOT"); }
                 if (IsLaunchCountdown()) { return Deny("flow.msg.rosterlocked", "ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
                 if (Aircraft[slot] && Aircraft[slot].Occupied) { return Deny("flow.msg.thatinuse", "THAT AIRCRAFT IS STILL IN USE"); }
@@ -465,6 +486,7 @@ namespace ACO
                     if (IsBusy()) { return Deny("flow.msg.slotslocked", "MISSION IN PROGRESS - SLOTS LOCKED"); }
                     if (Aircraft[mine] && Aircraft[mine].Occupied) { return Deny("flow.msg.landtochange", "LAND AND EXIT BEFORE CHANGING SLOTS"); }
                 }
+                if (IsLocalRearPassenger()) { return Deny("flow.msg.rearjoin", "GET OUT OF THE REAR SEAT BEFORE JOINING THE ROSTER"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, nameof(NetJoinSlot), slot);
                 return true;
             }
@@ -474,6 +496,7 @@ namespace ACO
                 if (k >= 0 && k < SlotCount() && Aircraft[k] && Aircraft[k].Piloting) { return Deny("flow.msg.landtoleave", "LAND AND EXIT BEFORE LEAVING THE ROSTER"); }
                 if (k < 0 && IsLaunchCountdown()) { return Deny("flow.msg.rosterlocked", "ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED"); }
                 if (k < 0 && !HasOpenSlot()) { return Deny("flow.msg.fullspectate", "ROSTER FULL - YOU CAN SPECTATE"); }
+                if (k < 0 && IsLocalRearPassenger()) { return Deny("flow.msg.rearjoin", "GET OUT OF THE REAR SEAT BEFORE JOINING THE ROSTER"); }
                 SendCustomNetworkEvent(NetworkEventTarget.Owner, k >= 0 ? nameof(NetLeave) : nameof(NetJoin));
                 return true;
             }
@@ -969,7 +992,7 @@ namespace ACO
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!Utilities.IsValid(me)) { return; }
             bool hasZones = Progress != null && Progress.SafeZones != null && Progress.SafeZones.Length > 0;
-            if (hasZones && PilotedSlot() < 0 && Progress.IsInSafeZone(me.GetPosition())) { return; }
+            if (hasZones && SeatedSlot() < 0 && Progress.IsInSafeZone(me.GetPosition())) { return; }
             TeleportLocal(BriefingPoint);
         }
 
@@ -977,6 +1000,119 @@ namespace ACO
         {
             for (int i = 0; i < SlotCount(); i++) { if (Aircraft[i] && Aircraft[i].Piloting) { return i; } }
             return -1;
+        }
+
+        /// 내가 앉아 있는 참가자 기체(조종석 · 뒷자리 아무 좌석) — 없으면 -1(6-343).
+        private int SeatedSlot()
+        {
+            for (int i = 0; i < SlotCount(); i++) { if (Aircraft[i] && Aircraft[i].MySeat > -1) { return i; } }
+            return -1;
+        }
+
+        // ───────────── F형 뒷자리 탑승(6-344) ─────────────
+        private int _boardSlot = -1;
+        private float _teleportAt = -10f;
+
+        /// 출격한 F형(조종석에 사람)인가 — 뒷자리 탑승 대상.
+        private bool IsSortiedTwoSeat(int k)
+        {
+            return Airframes != null && k >= 0 && k < Airframes.Length && Airframes[k] && Airframes[k].IsTwoSeat()
+                && k < Aircraft.Length && Aircraft[k] && Aircraft[k].Occupied && !Aircraft[k].dead;
+        }
+
+        /// 이 화면의 내가 어느 참가자 기체의 뒷자리(승객석)에 앉아 있는가.
+        private bool IsLocalRearPassenger()
+        {
+            if (Airframes == null) { return false; }
+            for (int i = 0; i < Airframes.Length; i++) { if (Airframes[i] && Airframes[i].IsLocalPassenger()) { return true; } }
+            return false;
+        }
+
+        /// 지금 뒷자리 탑승 안내를 보여도 되는가 — 명단 밖이고 좌석에 앉아 있지 않을 때만(사용자 결정: 명단에 있으면 다른 기체 뒷자리 금지).
+        private bool MayBoardRear() { return LocalSlot() < 0 && SeatedSlot() < 0; }
+
+        /// 브리핑 패널에서 뒷자리 탑승 요청: 뒷자리가 비었고 내가 좌석에 앉아 있지 않으면 암전 뒤 앉힌다.
+        private bool RequestBoardRear(int slot)
+        {
+            if (_boardSlot >= 0 || _pendingTarget) { return false; }   // 이미 타는 중 · 옮기는 중 — 무시
+            if (LocalSlot() >= 0) { return Deny("flow.msg.rearroster", "ROSTER PILOTS CAN'T RIDE IN ANOTHER AIRCRAFT"); }
+            if (SeatedSlot() >= 0) { return Deny("flow.msg.seatedfirst", "GET OUT OF YOUR CURRENT SEAT FIRST"); }
+            if (Airframes[slot].RearPlayerId() >= 0) { return Deny("flow.msg.rearfull", "THE REAR SEAT IS TAKEN"); }
+            _boardSlot = slot;
+            if (Fader)
+            {
+                Fader.Fade();
+                SendCustomEventDelayedSeconds(nameof(_BoardRearInDark), Fader.FadeOutTime + ExitMargin);
+            }
+            else { _BoardRearInDark(); }
+            return true;
+        }
+
+        public void _BoardRearInDark()
+        {
+            int k = _boardSlot;
+            if (k < 0) { return; }
+            // 어두워지는 동안 조건이 바뀌었을 수 있다(조종사 하차 · 다른 사람이 먼저 탐)
+            if (!IsSortiedTwoSeat(k) || !Airframes[k].CanBoardRear() || !MayBoardRear())
+            {
+                _boardSlot = -1;
+                if (IsSortiedTwoSeat(k) && Airframes[k].RearPlayerId() >= 0) { SetMessage1("flow.msg.rearfull", "THE REAR SEAT IS TAKEN", ""); }
+                else { SetMessage1("flow.msg.rearunavailable", "CAN'T BOARD THE REAR SEAT RIGHT NOW", ""); }
+                return;
+            }
+            Airframes[k].BoardRear();
+            SendCustomEventDelayedSeconds(nameof(_BoardRearCheck), 1.5f);
+        }
+
+        /// 앉았는지 확인 — 동시에 누른 다른 사람이 먼저 앉았으면 안내만(좌석은 한 명만 받는다).
+        public void _BoardRearCheck()
+        {
+            int k = _boardSlot;
+            _boardSlot = -1;
+            if (k < 0 || k >= SlotCount() || !Aircraft[k]) { return; }
+            if (Aircraft[k].MySeat < 0) { SetMessage1("flow.msg.rearfull", "THE REAR SEAT IS TAKEN", ""); }
+        }
+
+        /// 기체 확장이 부른다: 뒷자리에서 내렸다. 공중이거나 안전 구역(항모 등) 밖이면 브리핑실로 — 조종사 격추 판정과 같은 구역 기준.
+        /// 다른 이유로 이미 옮기는 중이면 그대로.
+        public void PassengerLeft(bool airborne)
+        {
+            if (_pendingTarget || Time.time - _teleportAt < 2f || _boardSlot >= 0 || _launchSlot >= 0) { return; }
+            VRCPlayerApi me = Networking.LocalPlayer;
+            bool unsafeExit = Progress != null && Progress.SafeZones != null && Progress.SafeZones.Length > 0
+                && Utilities.IsValid(me) && !Progress.IsInSafeZone(me.GetPosition());
+            if ((airborne || unsafeExit) && BriefingPoint) { TeleportLocal(BriefingPoint); }
+        }
+
+        /// 기체 형식 스위치가 부른다: 바꾸지 못했다(대기 중 조종석이 찼다 · 파괴 · 승객이 안 내렸다).
+        public void AirframeSwitchFailed()
+        {
+            SetMessage1("flow.msg.airframefail", "COULDN'T CHANGE THE AIRCRAFT TYPE - TRY AGAIN", "");
+        }
+
+        /// 명단 칸 카드의 뒷자리 줄(출격한 F형만): 비었으면 탑승 안내(내 슬롯이면 안내만), 앉아 있으면 이름.
+        private string RearLine(int k, int mySlot)
+        {
+            if (!IsSortiedTwoSeat(k)) { return ""; }
+            int id = Airframes[k].RearPlayerId();
+            if (id < 0)
+            {
+                return !MayBoardRear() ? "\n<size=80%><color=#B0C4B8>" + T("flow.slot.rearempty", "REAR EMPTY") + "</color></size>"
+                    : "\n<size=80%><color=#9FE0B0>" + T("flow.slot.rearopen", "REAR OPEN - TAP") + "</color></size>";
+            }
+            VRCPlayerApi p = VRCPlayerApi.GetPlayerById(id);
+            return "\n<size=80%><color=#7FD0FF>" + T1("flow.slot.rear", "REAR: {0}", Utilities.IsValid(p) ? p.displayName : "?") + "</color></size>";
+        }
+
+        /// 기체 승객 강제 하차(6-343 — 형식 전환 · 보관 장소로 되돌리기 · 기체 폭발): 좌석에서 내려 브리핑실로(암전).
+        public void ForceToBriefing()
+        {
+            if (BriefingPoint) { TeleportLocal(BriefingPoint); }
+            else
+            {
+                int s = SeatedSlot();
+                if (s >= 0) { Aircraft[s].ExitStation(); }
+            }
         }
 
         // 기체에 탄 채 옮길 때: 화면이 다 어두워진 뒤(암전 FadeOutTime + ExitMargin) 내리고, 내리는 처리가 끝나면(2프레임) 옮긴다.
@@ -990,7 +1126,7 @@ namespace ACO
         {
             for (int i = 0; i < SlotCount(); i++)
             {
-                if (Aircraft[i] && Aircraft[i].Piloting) { Aircraft[i].ExitStation(); }
+                if (Aircraft[i] && Aircraft[i].MySeat > -1) { Aircraft[i].ExitStation(); }   // 조종석 · 뒷자리 아무 좌석(6-343)
             }
             SendCustomEventDelayedFrames(nameof(_TeleportPending), 2);
         }
@@ -1007,7 +1143,8 @@ namespace ACO
         {
             VRCPlayerApi me = Networking.LocalPlayer;
             if (!target || !Utilities.IsValid(me)) { return; }
-            if (PilotedSlot() >= 0)
+            _teleportAt = Time.time;
+            if (SeatedSlot() >= 0)   // 뒷자리 승객도 먼저 내린다(좌석에선 순간이동이 안 된다 — 6-343)
             {
                 _pendingTarget = target;
                 if (Fader)
@@ -1080,10 +1217,24 @@ namespace ACO
                     || Vector3.Distance(e.transform.position, _homePos[i]) < HomeTolerance)
                 {
                     _idleTime[i] = 0f;
+                    _kickAt[i] = 0f;
                     continue;
                 }
                 _idleTime[i] += dt;
                 if (_idleTime[i] < (Time.time < _recallUntil ? 0f : IdleReturnTime)) { continue; }
+                // 뒷자리 승객이 있으면 먼저 내려 브리핑실로 보내고, 다음 확인 때 되돌린다(6-343)
+                // 한 번만 보내고, 5초 안에 안 내리면 그냥 회수한다(승객째 보관 장소로 — 안전)
+                if (Airframes != null && i < Airframes.Length && Airframes[i] && Airframes[i].HasPassenger())
+                {
+                    if (_kickAt[i] <= 0f)
+                    {
+                        Airframes[i].SendCustomNetworkEvent(NetworkEventTarget.All, nameof(ACO_AirframeVariant.ForceExitPassengers));
+                        _kickAt[i] = Time.time;
+                        continue;
+                    }
+                    if (Time.time - _kickAt[i] < 5f) { continue; }
+                }
+                _kickAt[i] = 0f;
                 _idleTime[i] = 0f;
                 e.SendCustomNetworkEvent(NetworkEventTarget.All, nameof(SaccEntity.SendRespawn));
             }
@@ -1198,6 +1349,9 @@ namespace ACO
                 if (!Utilities.IsValid(p)) { line += "<color=#557766>" + T("flow.roster.open", "- OPEN -") + "</color>"; }
                 else
                 {
+                    // 콜사인 + 닉네임만(사용자 결정 — 레벨 · 칭호는 하이스코어판 · 머리 위 이름표에서)
+                    string call = TacNames != null ? TacNames.GetLabel(p) : "";
+                    if (call.Length > 0) { line += "<color=#9FD8FF>" + call + "</color>  "; }
                     line += (i == mySlot ? "<color=#FFD24D>" + p.displayName + "</color>" : p.displayName);
                     if (Aircraft[i] && Aircraft[i].Occupied) { line += "<pos=60%><color=#7FD0FF>" + T("flow.state.airborne", "AIRBORNE") + "</color>"; }
                     else if (!running && (_readyMask & (1 << i)) != 0) { line += "<pos=60%><color=#7FFF8A>" + T("flow.state.ready", "READY") + "</color>"; }
@@ -1311,6 +1465,7 @@ namespace ACO
                     else if (b.Action == ACTION_PHASES_DOWN) { b.SetState("-", phaseOn && _phases > 1); }
                     else if (b.Action == ACTION_PHASES_UP) { b.SetState("+", phaseOn && _phases < 5); }
                     else if (b.Action == ACTION_JOIN_SLOT) { RefreshSlotCard(b, running, mySlot, locked); }
+                    else if (b.Action == ACTION_AIRFRAME) { RefreshAirframeButton(b, mySlot); }
                 }
             }
             if (PhaseButtons != null)
@@ -1337,6 +1492,25 @@ namespace ACO
             if (playerId < 0) { return ""; }
             VRCPlayerApi p = VRCPlayerApi.GetPlayerById(playerId);
             return Utilities.IsValid(p) ? p.displayName : "";
+        }
+
+        /// 기체 형식 버튼(6-343): 지금 형식 글자, 그 슬롯 주인이고 조종석이 비었을 때만 누를 수 있다.
+        private void RefreshAirframeButton(ACO_FlowButton b, int mySlot)
+        {
+            int k = b.Slot;
+            bool exists = k >= 0 && k < SlotCount() && Airframes != null && k < Airframes.Length && Airframes[k] != null;
+            if (b.gameObject.activeSelf != exists) { b.gameObject.SetActive(exists); }
+            if (!exists) { return; }
+            string seats = Airframes[k].IsTwoSeat() ? T("flow.btn.airframe.f", "2-SEAT") : T("flow.btn.airframe.e", "1-SEAT");
+            bool busy = Aircraft[k] && (Aircraft[k].Occupied || Aircraft[k].dead);
+            b.SetState(AirframeLabel(k) + "\n<size=70%>" + seats + "</size>", k == mySlot && !busy && !IsLoadoutLocked());
+        }
+
+        /// 슬롯의 기체 형식 이름(F/A-18E · F/A-18F).
+        private string AirframeLabel(int k)
+        {
+            if (Airframes == null || k < 0 || k >= Airframes.Length || Airframes[k] == null) { return ""; }
+            return Airframes[k].IsTwoSeat() ? T("flow.airframe.f", "F/A-18F") : T("flow.airframe.e", "F/A-18E");
         }
 
         private string SlotName(int k)
@@ -1540,6 +1714,9 @@ namespace ACO
         }
 
         /// 카드 아래 두 줄: 특수무장 · 서포트(아직 못 받았으면 ...).
+        /// 슬롯 k(그 조종사 playerId)의 특수무장 · 지원 두 줄(앞에 줄바꿈) — F형 뒷좌석 조종사 화면(6-346).
+        public string GetSlotLoadoutText(int k, int playerId) { return LoadoutLines(k, playerId); }
+
         private string LoadoutLines(int k, int playerId)
         {
             EnsureLd();
@@ -1575,23 +1752,28 @@ namespace ACO
             if (!exists) { return; }
             int id = _roster != null && k < _roster.Length ? _roster[k] : -1;
             VRCPlayerApi p = id >= 0 ? VRCPlayerApi.GetPlayerById(id) : null;
-            string head = "<size=65%>" + (k + 1) + ". " + SlotName(k) + "</size>";
+            // 기체 형식 스위치가 있으면 기체 이름은 왼쪽 버튼에 — 머리줄은 번기만(6-343)
+            bool hasType = AirframeLabel(k).Length > 0;
+            string head = "<size=65%>" + (hasType ? T1("flow.slot.num", "NO. {0}", (k + 1).ToString()) : (k + 1) + ". " + SlotName(k)) + "</size>";
             if (!Utilities.IsValid(p))
             {
                 bool inUse = Aircraft[k] && Aircraft[k].Occupied;
                 string open = locked ? "<color=#8FA89A>" + T("flow.slot.openlocked", "OPEN - LOCKED") + "</color>"
                     : (inUse ? "<color=#8FA89A>" + T("flow.slot.openinuse", "OPEN - AIRCRAFT IN USE") + "</color>" : "<color=#9FE0B0>" + T("flow.slot.opentap", "+ OPEN - TAP TO JOIN") + "</color>");
-                b.SetStyle(head + "\n" + open, SlotOpenColor);
+                b.SetStyle(head + "\n" + open + RearLine(k, mySlot), SlotOpenColor);
                 return;
             }
             string name = k == mySlot ? "<color=#FFD24D>" + T1("flow.slot.you", "{0} (YOU)", p.displayName) + "</color>" : p.displayName;
+            // 머리줄 번기 옆에 콜사인(사용자 결정 — 레벨 · 칭호는 카드에 넣지 않는다)
+            string call = TacNames != null ? TacNames.GetLabel(p) : "";
+            if (call.Length > 0) { head = head.Replace("</size>", "  <color=#9FD8FF>" + call + "</color></size>"); }
             string state;
             Color bg = k == mySlot ? SlotMineColor : SlotTakenColor;
             if (Aircraft[k] && Aircraft[k].Occupied) { state = "<color=#7FD0FF>" + T("flow.state.airborne", "AIRBORNE") + "</color>"; bg = SlotAirborneColor; }
             else if (running || _freeFlight) { state = "<color=#B0C4B8>" + T("flow.state.ondeck", "ON DECK") + "</color>"; }
             else if ((_readyMask & (1 << k)) != 0) { state = "<color=#7FFF8A>" + T("flow.state.ready", "READY") + "</color>"; bg = k == mySlot ? SlotMineColor : SlotReadyColor; }
             else { state = "<color=#B0C4B8>" + T("flow.state.arming", "ARMING") + "</color>"; }
-            b.SetStyle(head + "\n" + name + "\n<size=80%>" + state + "</size>" + LoadoutLines(k, id), bg);
+            b.SetStyle(head + "\n" + name + "\n<size=80%>" + state + "</size>" + RearLine(k, mySlot) + LoadoutLines(k, id), bg);
         }
 
         private string TerrainLabel()

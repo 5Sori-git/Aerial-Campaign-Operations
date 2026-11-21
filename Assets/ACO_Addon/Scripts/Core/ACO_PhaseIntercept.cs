@@ -70,13 +70,13 @@ namespace ACO
                 ACO_EscortUnit unit = BomberAt(i, tag);
                 if (unit == null) { continue; }
                 total++;
-                if (unit.IsDestroyed())
+                if (Manager.IsUnitGone(ACO_MissionGenerator.CAT_ESCORT, i))   // 6-338
                 {
                     if (!_seenAlive[i] && now - Generator.GetUnitDeployTimeMs(ACO_MissionGenerator.CAT_ESCORT, i) < settleMs) { pending = true; }
                     else { down++; }
                     continue;
                 }
-                _seenAlive[i] = true;
+                if (!unit.IsDestroyed()) { _seenAlive[i] = true; }   // 확정 전의 체력 0은 "살아 있는 걸 봤다"가 아니다(6-338)
                 if (lead == null) { lead = unit; }
                 if (unit.IsArrived())
                 {

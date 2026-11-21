@@ -9,7 +9,29 @@ public static class ACO_CanopyThin
 {
     private const string Fbx = "Assets/Pit-bool/FA-18/FBX/FA-18E.fbx";
     private const string Dir = "Assets/ACO_Addon/Generated/Canopy";
-    private static readonly string[] Targets = { "Canopy.E", "Main.E" };
+    private static readonly string[] Targets = { "Canopy.E", "Main.E" };   // 스킨 메시 오브젝트 이름(E · F 프리팹 모두 같다)
+
+    // F형(2인승, 2026-11-21): 같은 오브젝트 이름에 F FBX의 메시(Canopy · Main)가 들어 있다. 앞 캐노피 · 앞유리 아치는 E와 같은 모양
+    // (동체 정점 97% · 캐노피 앞부분이 1mm 안에서 같다) — E에서 잰 값(이음선 · 높이 · 올리기 · 볼트)을 그대로 쓴다. 결과 메시 이름 Canopy_ACOThin · Main_ACOThin.
+    public const string FbxF = "Assets/Pit-bool/FA-18/FBX/FA-18F.fbx";
+    private static string _fbx = Fbx;
+    private static string[] _meshNames = { "Canopy.E", "Main.E" };
+
+    private static void UseVariant(bool f)
+    {
+        _fbx = f ? FbxF : Fbx;
+        _meshNames = f ? new[] { "Canopy", "Main" } : new[] { "Canopy.E", "Main.E" };
+        _boltJump = f ? 0.04f : BoltJump;
+        _missMax = f ? 8f : 3f;
+    }
+
+    /// F형 기체(root — 프리팹 내용이나 씬 오브젝트)의 캐노피 앞 프레임 · 아치를 E형과 같이 가늘게 · 볼트를 박은 F 메시로 바꾼다. 바꿨으면 true.
+    public static bool ApplyF(GameObject root)
+    {
+        UseVariant(true);
+        try { return ApplyRoot(root, true); }
+        finally { UseVariant(false); }
+    }
 
     public const float Factor = 0.65f;      // 띠 폭 배율 — 이음선 뒤(캐노피 앞 프레임 쪽)
     public const float FactorFront = 0.45f; // 이음선 앞(앞유리 아치 쪽) — 더 가늘게(사용자 요청 "앞아치도", 0.3은 너무 얇아 ×1.5)
@@ -250,7 +272,9 @@ public static class ACO_CanopyThin
 
     private static Mesh Original(string name)
     {
-        foreach (Object o in AssetDatabase.LoadAllAssetsAtPath(Fbx)) { if (o is Mesh m && m.name == name) { return m; } }
+        int idx = System.Array.IndexOf(Targets, name);
+        string mesh = idx >= 0 ? _meshNames[idx] : name;
+        foreach (Object o in AssetDatabase.LoadAllAssetsAtPath(_fbx)) { if (o is Mesh m && m.name == mesh) { return m; } }
         return null;
     }
 
@@ -259,7 +283,7 @@ public static class ACO_CanopyThin
         foreach (ACO.ACO_VehicleUpgrades u in Object.FindObjectsOfType<ACO.ACO_VehicleUpgrades>(true))
         {
             string p = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(u.gameObject);
-            if (!string.IsNullOrEmpty(p)) { return p; }
+            if (!string.IsNullOrEmpty(p) && !p.Contains("FA-18F")) { return p; }   // F형(3 · 4번기, E의 변형)은 건너뛴다 — E 프리팹을 고치면 F가 물려받는다
         }
         return "Assets/Pit-bool/FA-18E Main_ACO.prefab";
     }
@@ -278,22 +302,7 @@ public static class ACO_CanopyThin
         GameObject root = PrefabUtility.LoadPrefabContents(path);
         try
         {
-            var entity = root.GetComponentInChildren<SaccFlightAndVehicles.SaccEntity>(true);
-            if (entity == null) { Debug.LogWarning("[ACO] 캐노피 프레임: SaccEntity를 찾지 못했습니다."); return; }
-            Transform frame = entity.transform;
-            bool changed = false;
-            if (thin) { PrepareSeam(root, frame); }
-            foreach (SkinnedMeshRenderer smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                if (System.Array.IndexOf(Targets, smr.name) < 0) { continue; }
-                Mesh orig = Original(smr.name);
-                if (orig == null) { Debug.LogWarning($"[ACO] 캐노피 프레임: {Fbx}에서 {smr.name} 메시를 찾지 못했습니다."); continue; }
-                Mesh use = thin ? Build(orig, smr, frame) : orig;
-                if (FitMaterials(smr, use)) { changed = true; }
-                if (smr.sharedMesh == use) { continue; }
-                smr.sharedMesh = use;
-                changed = true;
-            }
+            bool changed = ApplyRoot(root, thin);
             if (changed)
             {
                 PrefabUtility.SaveAsPrefabAsset(root, path);
@@ -303,6 +312,28 @@ public static class ACO_CanopyThin
         finally { PrefabUtility.UnloadPrefabContents(root); }
         AssetDatabase.SaveAssets();
         SwapPreview(thin);
+    }
+
+    /// 기체 root의 캐노피 · 동체 스킨 메시를 가늘게 만든 복사본(thin) 또는 원본으로. 바꿨으면 true. 메시 · FBX는 UseVariant가 정한다.
+    private static bool ApplyRoot(GameObject root, bool thin)
+    {
+        var entity = root.GetComponentInChildren<SaccFlightAndVehicles.SaccEntity>(true);
+        if (entity == null) { Debug.LogWarning("[ACO] 캐노피 프레임: SaccEntity를 찾지 못했습니다."); return false; }
+        Transform frame = entity.transform;
+        bool changed = false;
+        if (thin) { PrepareSeam(root, frame); }
+        foreach (SkinnedMeshRenderer smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            if (System.Array.IndexOf(Targets, smr.name) < 0) { continue; }
+            Mesh orig = Original(smr.name);
+            if (orig == null) { Debug.LogWarning($"[ACO] 캐노피 프레임: {_fbx}에서 {smr.name} 메시를 찾지 못했습니다."); continue; }
+            Mesh use = thin ? Build(orig, smr, frame) : orig;
+            if (FitMaterials(smr, use)) { changed = true; }
+            if (smr.sharedMesh == use) { continue; }
+            smr.sharedMesh = use;
+            changed = true;
+        }
+        return changed;
     }
 
     /// canopy-thin-preview-1: 씬의 미리보기 모델(격납고 PreviewRoot 아래 — 프리팹이 아니라 씬에 직접 놓인 FA-18)에도 같은 메시를 끼운다(사용자 요청).
@@ -388,11 +419,26 @@ public static class ACO_CanopyThin
         {
             if (smr.name == Targets[0]) { c = smr; } else if (smr.name == Targets[1]) { m = smr; }
         }
+        _frameTrisRef = null;
         Mesh co = c != null ? Original(c.name) : null, mo = m != null ? Original(m.name) : null;
         if (co == null || mo == null) { Debug.LogWarning("[ACO] 캐노피 프레임: 이음선을 찾을 메시가 없어 홈 메우기를 건너뜁니다."); return; }
         FindSeam(co, ToFrame(c, frame), mo, ToFrame(m, frame));
         Vector3[] pc;
-        MeasureFrame(co, Final(co, ToFrame(c, frame), out pc));
+        if (_fbx == FbxF)
+        {
+            // F형: E 캐노피 앞 프레임을 기준으로 잰다(F 프레임이 안쪽으로 1 ~ 5cm 더 두껍다 — 같은 두께로 맞춘다)
+            Mesh ce = null;
+            foreach (Object o in AssetDatabase.LoadAllAssetsAtPath(Fbx)) { if (o is Mesh em && em.name == "Canopy.E") { ce = em; } }
+            if (ce != null)
+            {
+                Vector3[] pe;
+                MeasureFrame(ce, Final(ce, ToFrame(c, frame), out pe));
+                _frameTrisRef = _frameTris;
+            }
+        }
+        Vector3[] qc = Final(co, ToFrame(c, frame), out pc);
+        if (_frameTrisRef != null) { MatchFrameToRef(co, pc, qc); }
+        MeasureFrame(co, qc);
         Debug.Log($"[ACO] 캐노피 프레임: 이음선 {_seamTh.Length}칸(각도 {(_seamTh.Length > 0 ? _seamTh[0] : 0f)}° ~ {(_seamTh.Length > 0 ? _seamTh[_seamTh.Length - 1] : 0f)}°).");
     }
 
@@ -446,6 +492,44 @@ public static class ACO_CanopyThin
             _frameTris.Add(q[tri[t + 1]]);
             _frameTris.Add(q[tri[t + 2]]);
         }
+    }
+
+    // F형(2026-11-21 사용자 "E형에서 했던 것처럼 F형 캐노피 프레임 크기 · 아치 프레임 크기 · 볼트 표시 맞춰줘"): F 캐노피 앞 프레임 안쪽 면을
+    // E 앞 프레임(가늘게 만든 뒤)의 안쪽 깊이까지 바깥으로 올린다 — 그다음 아치 맞추기 · 볼트가 E와 같이 된다. 바깥면 · 유리 그대로, 띠 가중치로 문턱은 0.
+    private static System.Collections.Generic.List<Vector3> _frameTrisRef;
+    private const float RefWin = 0.06f, RefDepthMax = 0.08f;
+
+    private static bool RefInner(float th, out float inner)
+    {
+        var keep = _frameTris;
+        _frameTris = _frameTrisRef;
+        bool ok = FrameInner(th, out inner);
+        _frameTris = keep;
+        return ok;
+    }
+
+    /// F 캐노피 앞 프레임(이음선 뒤 RefWin) 정점 중 E 프레임 안쪽보다 깊은 것을 그 거리까지 바깥으로(q를 고친다). 옮긴 정점 수.
+    private static int MatchFrameToRef(Mesh canopy, Vector3[] pf, Vector3[] q)
+    {
+        if (_frameTrisRef == null || _frameTrisRef.Count == 0) { return 0; }
+        var used = new System.Collections.Generic.HashSet<int>(canopy.GetTriangles(0));
+        int moved = 0;
+        foreach (int i in used)
+        {
+            Vector3 p = q[i];
+            if (p.y <= LiftSill || Mathf.Abs(p.x) > XMax) { continue; }
+            float w = BandWeight(pf[i]);
+            if (w <= 0f) { continue; }
+            float th = Theta(p), zc, fi;
+            if (!SeamAt(th, out zc) || p.z > zc + 0.005f || p.z < zc - RefWin || !RefInner(th, out fi)) { continue; }
+            float r = Radius(p);
+            if (r >= fi || fi - r > RefDepthMax) { continue; }
+            float rn = r + (fi - r) * w;
+            Vector2 dir = new Vector2(p.x, p.y - DepthCenterY).normalized;
+            q[i] += new Vector3(dir.x, dir.y, 0f) * (rn - r);
+            moved++;
+        }
+        return moved;
     }
 
     /// 각도(도) 평면으로 자른 캐노피 앞 프레임의 가장 안쪽 거리(이음선 뒤 FrameWin 안). 없으면 false.
@@ -503,6 +587,9 @@ public static class ACO_CanopyThin
     public const bool Bolts = true;
     public const float BoltSpacing = 0.06f;
     private const float BoltMinY = 2.86f, BoltStep = 0.5f, BoltMaxTh = 80f, BoltJump = 0.02f;
+    private static float _boltJump = BoltJump;   // F형은 아치 안쪽 맞추기 뒤 작은 턱이 있어 조금 넓게(UseVariant)
+    private static string _lineStop = "";
+    private static float _missMax = 3f;   // 단면을 못 찾는 각도가 이만큼(도) 이어지면 끝(F형은 48° 부근에 빈 곳이 있어 넓게)
     private const float WasherEmbed = 0.002f, SeatSpread = 0.001f, SeatAngle = 35f;   // SeatAngle: 단면 방향과 그 자리 면 방향 차 허용(축은 늘 면에 수직)   // 와셔를 면 속으로 묻는 깊이 · 와셔 밑 면 높이 차 허용(넘으면 떠 보이니 자리를 옮기거나 건너뜀)
     private const float WasherR = 0.008f, WasherH = 0.001f, HexR = 0.006f, HexH = 0.0038f, HexTopR = 0.0047f, HexTopH = 0.0046f;
 
@@ -581,11 +668,11 @@ public static class ACO_CanopyThin
         {
             Vector3 P, N;
             // 정점 줄과 딱 겹치는 각도에선 가운데 점을 못 찾을 때가 있다 — 몇 칸은 건너뛰고, 3° 넘게 연속이면 끝
-            if (!ArchInner(dir * th, q, tris, out P, out N)) { if (++miss * BoltStep > 3f) { break; } continue; }
+            if (!ArchInner(dir * th, q, tris, out P, out N)) { if (++miss * BoltStep > _missMax) { _lineStop = $"단면 없음 {th:0.0}°"; break; } continue; }
             int steps = miss + 1;
             miss = 0;
-            if (P.y < BoltMinY) { break; }
-            if (line.Count > 0 && (P - line[line.Count - 1][0]).magnitude > BoltJump * steps) { break; }
+            if (P.y < BoltMinY) { _lineStop = $"문턱 {th:0.0}°"; break; }
+            if (line.Count > 0 && (P - line[line.Count - 1][0]).magnitude > _boltJump * steps) { _lineStop = $"끊김 {th:0.0}° ({(P - line[line.Count - 1][0]).magnitude * 100f:0.0}cm)"; break; }
             line.Add(new[] { P, N });
         }
         return line;
@@ -819,7 +906,7 @@ public static class ACO_CanopyThin
                     count++;
                 }
             }
-            Debug.Log($"[ACO] 캐노피 프레임: 아치 볼트 간격 {spacing * 100f:0.0}cm(한쪽 {seats.Count}개, 반대쪽은 거울).");
+            Debug.Log($"[ACO] 캐노피 프레임: 아치 볼트 간격 {spacing * 100f:0.0}cm(한쪽 {seats.Count}개, 반대쪽은 거울, 선 끝: {_lineStop})."); _lineStop = "";
         }
         if (skipped > 0) { Debug.Log($"[ACO] 캐노피 프레임: 와셔가 면에 붙지 않는 볼트 자리 {skipped}곳은 건너뛰었습니다."); }
         if (count == 0) { return 0; }
@@ -1016,8 +1103,9 @@ public static class ACO_CanopyThin
         Vector3[] v = m.vertices;
         Vector3[] pf;
         Vector3[] q = Final(orig, toFrame, out pf);
-        int matched = orig.name == Targets[1] ? MatchArch(orig, pf, q) : 0;
-        int glued = orig.name == Targets[0] ? GlueParts(orig, pf, q) : 0;
+        int refit = _frameTrisRef != null && orig.name == _meshNames[0] ? MatchFrameToRef(orig, pf, q) : 0;   // F형: 앞 프레임 두께를 E에 맞춤
+        int matched = orig.name == _meshNames[1] ? MatchArch(orig, pf, q) : 0;
+        int glued = orig.name == _meshNames[0] ? GlueParts(orig, pf, q) : 0;
         int glass = TuckGlass(orig, pf, q);
         int moved = 0;
         float maxShift = 0f;
@@ -1030,7 +1118,7 @@ public static class ACO_CanopyThin
             maxShift = Mathf.Max(maxShift, d.magnitude);
         }
         m.vertices = v;
-        int bolts = orig.name == Targets[1] ? AddBolts(m, q, toMesh) : 0;
+        int bolts = orig.name == _meshNames[1] ? AddBolts(m, q, toMesh) : 0;
         m.RecalculateBounds();
         if (!AssetDatabase.IsValidFolder(Dir)) { AssetDatabase.CreateFolder("Assets/ACO_Addon/Generated", "Canopy"); }
         string path = $"{Dir}/{m.name}.asset";
@@ -1043,7 +1131,7 @@ public static class ACO_CanopyThin
             Object.DestroyImmediate(m);
             EditorUtility.SetDirty(old);
         }
-        Debug.Log($"[ACO] 캐노피 프레임: {orig.name} 정점 {moved}개를 옮겼습니다(최대 {maxShift * 100f:0.0}cm" + (matched > 0 ? $", 아치 안쪽 맞추기 {matched}개" : "") + (glued > 0 ? $", 부품 붙이기 {glued}개" : "") + (glass > 0 ? $", 유리 끝 넣기 {glass}개" : "") + (bolts > 0 ? $", 볼트 {bolts}개" : "") + ").");
+        Debug.Log($"[ACO] 캐노피 프레임: {orig.name} 정점 {moved}개를 옮겼습니다(최대 {maxShift * 100f:0.0}cm" + (refit > 0 ? $", 앞 프레임 E 두께 맞추기 {refit}개" : "") + (matched > 0 ? $", 아치 안쪽 맞추기 {matched}개" : "") + (glued > 0 ? $", 부품 붙이기 {glued}개" : "") + (glass > 0 ? $", 유리 끝 넣기 {glass}개" : "") + (bolts > 0 ? $", 볼트 {bolts}개" : "") + ").");
         return old;
     }
 

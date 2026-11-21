@@ -21,6 +21,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseSubmarine : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "submarine"; }
+
         public const int MAX_SALVO = 6;
         public const int MAX_TORPEDO = 4;
 
@@ -145,7 +148,7 @@ namespace ACO
 
         [Header("끝맺음")]
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초) — SLCM 단계만 약 6분 30초(한 무리씩), 간헐 부상 1~3주기, 돌격 2분 30초")]
-        public float ExtraTime = 900f;
+        public float ExtraTime = 0f;   // 2026-11-20 → 0(사용자 "페이즈당 시간이 이미 있으니 호위 · 시한 있는 임무 빼곤 다 빼자" — 레이저 에이스 · LUNA만 남김)
         [Tooltip("격침 뒤 다 가라앉아(모델이 꺼진 뒤) 이 시간(초) 있다가 성공 — 그전에 풀로 거두면 물 위에서 사라졌다")]
         public float ClearDelay = 2f;
         [Tooltip("다 가라앉았다는 걸 못 봐도 격침 뒤 이 시간(초)이면 성공")]
@@ -421,6 +424,7 @@ namespace ACO
                 return fail ? RESULT_FAIL : RESULT_RUNNING;
             }
             // 격침: 연쇄 폭발 · 침몰이 보이게 기다린다. 기다린 시간은 돌려준다.
+            if (_sunkMs != 0 && !(total > 0 && Manager.GetTaggedDone() >= total)) { _sunkMs = 0; _downMs = 0; }   // 6-338: 목표가 다시 살아 있다(확정 전 오판) — 격파 대기 기록을 푼다
             if (total > 0 && Manager.GetTaggedDone() >= total)
             {
                 if (_sunkMs == 0) { _sunkMs = now; }

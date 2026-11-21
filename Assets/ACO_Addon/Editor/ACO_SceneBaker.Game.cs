@@ -211,6 +211,28 @@ public partial class ACO_SceneBaker
         }
         flow.Buttons = buttons.ToArray();
         flow.PhaseButtons = phaseButtons.ToArray();
+        // 기체 형식 스위치(6-343): 칸마다 그 기체 안의 ACO_AirframeVariant
+        var airframes = new ACO_AirframeVariant[flow.Aircraft.Length];
+        for (int i = 0; i < flow.Aircraft.Length; i++)
+        {
+            if (flow.Aircraft[i] == null) { continue; }
+            airframes[i] = flow.Aircraft[i].GetComponentInChildren<ACO_AirframeVariant>(true);
+            if (airframes[i] != null && (airframes[i].Flow != flow || airframes[i].Entity != flow.Aircraft[i])) { airframes[i].Flow = flow; airframes[i].Entity = flow.Aircraft[i]; MarkChanged(airframes[i]); }
+        }
+        flow.Airframes = airframes;
+        // F형 뒷좌석 화면(6-346): 게임 진행 · RWR · 콜사인
+        ACO_RWR rwrForRear = Object.FindObjectOfType<ACO_RWR>(true);
+        ACO_TacName tacForRear = Object.FindObjectOfType<ACO_TacName>(true);
+        for (int i = 0; i < flow.Aircraft.Length; i++)
+        {
+            if (flow.Aircraft[i] == null) { continue; }
+            foreach (ACO_RearCockpit rc in flow.Aircraft[i].GetComponentsInChildren<ACO_RearCockpit>(true))
+            {
+                if (rc.Flow == flow && rc.Rwr == rwrForRear && rc.TacNames == tacForRear) { continue; }
+                rc.Flow = flow; rc.Rwr = rwrForRear; rc.TacNames = tacForRear;
+                MarkChanged(rc);
+            }
+        }
         MarkChanged(flow);
         Debug.Log($"[ACO] 게임 진행 '{flow.name}'를 연결했습니다(기체 {slots}, 상태 글자 {status.Count}, 카운트다운 판 {overlays.Count}, 진행 버튼 {buttons.Count}, 페이즈 버튼 {phaseButtons.Count}).", flow);
     }
@@ -401,6 +423,7 @@ public partial class ACO_SceneBaker
             generator.Fortress = poolRoot.GetComponentInChildren<ACO_FlyingFortress>(true);
             generator.Manager = Object.FindObjectOfType<ACO_MissionManager>(true);
             generator.Railgun = poolRoot.GetComponentInChildren<ACO_Railgun>(true);
+            generator.LaserTower = poolRoot.GetComponentInChildren<ACO_LaserTower>(true);
             generator.LandShip = poolRoot.GetComponentInChildren<ACO_LandShip>(true);
             generator.Submarine = poolRoot.GetComponentInChildren<ACO_Submarine>(true);
             generator.Carrier = null;

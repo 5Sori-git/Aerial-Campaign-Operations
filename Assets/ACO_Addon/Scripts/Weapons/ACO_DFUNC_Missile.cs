@@ -770,7 +770,12 @@ namespace ACO
                     // 잠수함 SLCM(6-202)은 잠수함 아래에 있지만 따로 나는 미사일 — 함선 부위로 보면 SLCM끼리 락온 진행도가 이어졌다
                     if (tr.GetComponent<ACO_Slcm>() != null) { break; }
                     ACO_Warship w = tr.GetComponent<ACO_Warship>();
-                    if (w != null) { _targetShip[i] = w; break; }
+                    if (w != null)
+                    {
+                        // 함선이 아닌 지상 포대(랜스 포대 · 칼리번)는 부위끼리 락온 진행도를 잇지 않는다(사용자 — 부위가 수백 m씩 떨어져 있다)
+                        if (w.GetComponent<ACO_Railgun>() == null && w.GetComponent<ACO_LaserTower>() == null) { _targetShip[i] = w; }
+                        break;
+                    }
                     tr = tr.parent;
                 }
             }
@@ -963,7 +968,7 @@ namespace ACO
 
                 if (Vector3.Angle(fwd, dir) <= LockAngle && !blocked && (_targetGates[i] == null || _targetGates[i].CanBeLockedFrom(origin)))
                 {
-                    _lockTimer[k] += dt;
+                    _lockTimer[k] += dt * (EcmHub != null ? EcmHub.LocalLockFactor : 1f);   // 적 재머 구역 안이면 느리게(6-332)
                     if (_lockTimer[k] >= LockTime) { _lockDone[k] = true; }
                 }
                 else if (blocked && ShipOf(i) != null) { }   // 함선 부위가 잠깐 가렸다: 진행도를 멈춰 둔다(OBSCURED_GRACE 넘으면 칸을 비우고 진행도는 같은 함선 다른 부위로 넘어간다)

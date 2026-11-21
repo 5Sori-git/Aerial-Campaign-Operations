@@ -52,7 +52,8 @@ namespace ACO
         public const int ITEM_HUD_SHADE = 36;       // HUD 그늘 진하기(6-302): 0 = 끔, 0.1 단위 ~0.9
         public const int ITEM_HUD_SHADE_SIZE = 37;  // HUD 그늘 크기(6-302): 0 S · 1 L · 2 XL · 3 화면 전체
         public const int ITEM_PIPPER_SIZE = 38;     // 건 피퍼 크기 배율(6-303): x0.2~x2.0
-        public const int ITEM_COUNT = 39;
+        public const int ITEM_PILOT_TAGS = 39;      // 조종사 이름표(6-340) 켜기/끄기 — 다른 사람 머리 위 칭호 · 레벨
+        public const int ITEM_COUNT = 40;
 
         private const string KEY_PREFIX = "aco_hud_";
         // 배율 항목의 기본값(6-239) — 프리팹 크기(×1.0) 대비. 저장값도 같은 기준이라 기본값을 바꿔도 저장된 설정은 그대로 보인다
@@ -65,7 +66,7 @@ namespace ACO
         private string[] _keys = new string[] {
             "panel_x", "panel_y", "panel_distance", "panel_scale", "marker_size", "info_angle", "crosshair", "crosshair_size", "rwr", "rwr_size",
             "result_x", "result_y", "result_scale", "crosshair_distance", "chatter_x", "chatter_y", "chatter_scale", "rwr_missile_size", "rwr_lock_size",
-            "radar", "radar_size", "radar_x", "radar_y", "radar_alpha", "hud_follow", "radar_range", "radar_blip", "flight_hud", "flight_hud_size", "flight_hud_bright", "distance_unit", "deck_crew", "cloud_quality", "hud_color", "text_shadow", "language", "hud_shade", "hud_shade_size", "pipper_size" };
+            "radar", "radar_size", "radar_x", "radar_y", "radar_alpha", "hud_follow", "radar_range", "radar_blip", "flight_hud", "flight_hud_size", "flight_hud_bright", "distance_unit", "deck_crew", "cloud_quality", "hud_color", "text_shadow", "language", "hud_shade", "hud_shade_size", "pipper_size", "pilot_tags" };
 
         [Header("참조 (빌드 시 ACO_SceneBaker가 넣는다)")]
         public ACO_ScoreHUD ScoreHUD;
@@ -77,6 +78,8 @@ namespace ACO
         public ACO_Units Units;
         [Tooltip("갑판 요원 — 내 화면에서 켜고 끈다")]
         public ACO_CatapultCrew[] Crews;
+        [Tooltip("조종사 이름표(6-340) — 내 화면에서 켜고 끈다")]
+        public ACO_PilotTag PilotTags;
         [Tooltip("구름 — 구름 품질(체적/판)")]
         public ACO_CloudField Clouds;
         [Tooltip("번역 장치(6-166) — LANGUAGE 항목을 넘기고, 값 글자(ON/OFF 등)를 언어에 맞게 쓴다")]
@@ -88,15 +91,15 @@ namespace ACO
             "MARKER FRAME SIZE", "INFO VIEW ANGLE", "CROSSHAIR", "CROSSHAIR SIZE", "RWR", "RWR RING SIZE",
             "RESULT LEFT / RIGHT", "RESULT UP / DOWN", "RESULT SIZE", "CROSSHAIR / RWR DISTANCE",
             "SUBTITLE LEFT / RIGHT", "SUBTITLE UP / DOWN", "SUBTITLE SIZE", "RWR MISSILE MARK SIZE", "RWR LOCK ARC SIZE",
-            "RADAR", "RADAR SIZE", "RADAR LEFT / RIGHT", "RADAR UP / DOWN", "RADAR OPACITY", "HUD FOLLOW DELAY", "RADAR RANGE", "RADAR BLIP SIZE", "FLIGHT HUD", "FLIGHT HUD SIZE", "FLIGHT HUD BRIGHTNESS", "DISTANCE UNIT", "DECK CREW", "CLOUD QUALITY", "HUD COLOR", "TEXT SHADOW", "LANGUAGE", "HUD SHADE", "HUD SHADE SIZE", "GUN PIPPER SIZE" };
+            "RADAR", "RADAR SIZE", "RADAR LEFT / RIGHT", "RADAR UP / DOWN", "RADAR OPACITY", "HUD FOLLOW DELAY", "RADAR RANGE", "RADAR BLIP SIZE", "FLIGHT HUD", "FLIGHT HUD SIZE", "FLIGHT HUD BRIGHTNESS", "DISTANCE UNIT", "DECK CREW", "CLOUD QUALITY", "HUD COLOR", "TEXT SHADOW", "LANGUAGE", "HUD SHADE", "HUD SHADE SIZE", "GUN PIPPER SIZE", "PILOT TAGS" };
         [Tooltip("−/+ 한 번에 바뀌는 양(위치 m, 크기 배율, 각도 도). 크로스헤어·RWR·레이더는 켜기/끄기, 따라오는 지연은 초. 패널 거리·크로스헤어 거리는 현재 거리의 DistanceStepRatio와 이 값 중 큰 쪽")]
-        public float[] Steps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f };
-        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f };
-        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f };
+        public float[] Steps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f, 1f };
+        public float[] Mins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f, 0f };
+        public float[] Maxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f, 1f };
         // 예전 프리팹(항목이 적은 배열)을 위한 코드 기본값 — 인스펙터 배열이 짧으면 이 값을 쓴다.
-        private float[] _fbSteps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f };
-        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f };
-        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f };
+        private float[] _fbSteps = new float[] { 0.01f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 1f, 0.2f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.5f, 0.01f, 0.01f, 0.1f, 0.1f, 0.1f, 1f, 0.1f, 0.01f, 0.01f, 0.1f, 0.01f, 1000f, 0.1f, 1f, 0.1f, 0.1f, 1f, 1f, 1f, 1f, 1f, 1f, 0.1f, 1f, 0.1f, 1f };
+        private float[] _fbMins = new float[] { -0.6f, -0.4f, 0.4f, 0.5f, 1f, 1f, 0f, 0.4f, 0f, 0.5f, -0.6f, -0.4f, 0.5f, 0.5f, -0.6f, -0.5f, 0.5f, 0.5f, 0.9f, 0f, 0.5f, -0.6f, -0.4f, 0.2f, 0f, 2000f, 0.5f, 0f, 0.6f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.2f, 0f };
+        private float[] _fbMaxs = new float[] { 0.6f, 0.4f, 30f, 2f, 6f, 10f, 1f, 4f, 1f, 2f, 0.6f, 0.4f, 2f, 60f, 0.6f, 0.4f, 2f, 2.5f, 2f, 1f, 2.5f, 0.6f, 0.4f, 1f, 0.5f, 10000f, 2f, 1f, 1.6f, 1f, 1f, 1f, 1f, 5f, 1f, 3f, 0.9f, 3f, 2f, 1f };
 
         [Header("HUD 색 (ITEM_HUD_COLOR — 프리셋 번호, 0 = 순녹색)")]
         [Tooltip("비행 HUD·적 마커(테두리·정보 글자)·조준 고리·RWR·HUD 레이더 색. 목표 빨강·아군 파랑·체력 막대는 그대로")]
@@ -176,6 +179,7 @@ namespace ACO
             _defaults[ITEM_HUD_SHADE] = FlightHud != null ? FlightHud.ShadeStrength : 0f;   // 기본 끔
             _defaults[ITEM_HUD_SHADE_SIZE] = FlightHud != null ? FlightHud.ShadeSize : 2f;  // 기본 XL
             _defaults[ITEM_PIPPER_SIZE] = FlightHud != null ? FlightHud.PipperScale : 1f;
+            _defaults[ITEM_PILOT_TAGS] = 1f;
             // 글자 그림자 진하기(재질 값 — 끄면 0, 켜면 이 값)
             int ns = TextShadowMaterials != null ? TextShadowMaterials.Length : 0;
             _shadowAlpha = new float[ns];
@@ -215,7 +219,7 @@ namespace ACO
             Start();
             if (item < 0 || item >= ITEM_COUNT) { return false; }
             float before = _values[item];
-            if (item == ITEM_CROSSHAIR || item == ITEM_RWR || item == ITEM_RADAR || item == ITEM_FLIGHT_HUD || item == ITEM_DISTANCE_UNIT || item == ITEM_DECK_CREW || item == ITEM_CLOUD_QUALITY || item == ITEM_TEXT_SHADOW) { _values[item] = _values[item] > 0.5f ? 0f : 1f; }
+            if (item == ITEM_CROSSHAIR || item == ITEM_RWR || item == ITEM_RADAR || item == ITEM_FLIGHT_HUD || item == ITEM_DISTANCE_UNIT || item == ITEM_DECK_CREW || item == ITEM_CLOUD_QUALITY || item == ITEM_TEXT_SHADOW || item == ITEM_PILOT_TAGS) { _values[item] = _values[item] > 0.5f ? 0f : 1f; }
             else if (item == ITEM_HUD_COLOR || item == ITEM_LANGUAGE)
             {
                 // 프리셋 · 언어를 돌아가며(끝에서 처음으로)
@@ -323,6 +327,7 @@ namespace ACO
                 bool crew = _values[ITEM_DECK_CREW] > 0.5f;
                 for (int i = 0; i < Crews.Length; i++) { if (Crews[i]) { Crews[i].SetShown(crew); } }
             }
+            if (PilotTags) { PilotTags.SetShown(_values[ITEM_PILOT_TAGS] > 0.5f); }
             // 머리를 따라오는 HUD(점수 패널·결과 글자·무전 자막·레이더)가 늦게 따라오는 정도. 0이면 바로 붙는다.
             float delay = _values[ITEM_HUD_FOLLOW];
             float sharp = delay > 0.005f ? 1f / delay : 1000f;
@@ -443,7 +448,7 @@ namespace ACO
             if (i == ITEM_PANEL_SCALE || i == ITEM_RWR_SIZE || i == ITEM_RESULT_SCALE || i == ITEM_CHATTER_SCALE
                 || i == ITEM_RWR_MISSILE_SIZE || i == ITEM_RWR_LOCK_SIZE || i == ITEM_RADAR_SIZE || i == ITEM_RADAR_BLIP || i == ITEM_PIPPER_SIZE) { return "x" + v.ToString("0.0"); }
             if (i == ITEM_RADAR_RANGE) { return (v * 0.001f).ToString("0") + " km"; }
-            if (i == ITEM_CROSSHAIR || i == ITEM_RWR || i == ITEM_RADAR || i == ITEM_FLIGHT_HUD || i == ITEM_DECK_CREW || i == ITEM_TEXT_SHADOW) { return v > 0.5f ? T("set.on", "ON") : T("set.off", "OFF"); }
+            if (i == ITEM_CROSSHAIR || i == ITEM_RWR || i == ITEM_RADAR || i == ITEM_FLIGHT_HUD || i == ITEM_DECK_CREW || i == ITEM_TEXT_SHADOW || i == ITEM_PILOT_TAGS) { return v > 0.5f ? T("set.on", "ON") : T("set.off", "OFF"); }
             if (i == ITEM_DISTANCE_UNIT) { return v > 0.5f ? "NM" : "M / KM"; }
             if (i == ITEM_CLOUD_QUALITY) { return v > 0.5f ? T("set.high", "HIGH") : T("set.low", "LOW"); }
             if (i == ITEM_HUD_COLOR)

@@ -472,7 +472,23 @@ public static partial class ACO_HUDBuilder
             fb.Label.lineSpacing = -20f;
             fb.Background = img;
             WireClick(img.GetComponent<Button>(), fb);
-            AddButtonIcon(img, LoadIcon("tab_airframe"), 92f, IconColor);
+            // 왼쪽 칸(6-343): 위 아이콘, 아래 기체 형식 버튼(기체 이름 + 좌석 수 — 누르면 E ↔ F, 그 슬롯 주인만). 오른쪽 정보는 왼쪽 정렬
+            float colX = -295f + SlotCardColInset + SlotCardColWidth * 0.5f;
+            MakeIcon(img.rectTransform, "Icon", LoadIcon("tab_airframe"), new Vector2(colX, 85f), 92f).color = IconColor;
+            fb.Label.margin = new Vector4(SlotCardColInset + SlotCardColWidth + 20f, 0f, 16f, 0f);
+            fb.Label.alignment = TextAlignmentOptions.Left;
+            fb.Label.fontSizeMax = fb.Label.fontSize;
+            fb.Label.fontSizeMin = 18f;
+            fb.Label.enableAutoSizing = true;
+            fb.Label.spriteAsset = RecIconSpriteAsset();   // 칭호 앞 아이콘(6-341)
+            Image af = MakeFlowButton(canvas, $"Airframe_{k}", pos + new Vector2(colX, -80f), new Vector2(SlotCardColWidth, 130f), font, "F/A-18E\n<size=70%>1-SEAT</size>", ACO_GameFlow.ACTION_AIRFRAME, 38f);
+            af.GetComponent<ACO_FlowButton>().Slot = k;
+            TextMeshProUGUI afl = af.GetComponentInChildren<TextMeshProUGUI>();
+            afl.lineSpacing = -10f;
+            afl.margin = new Vector4(6f, 0f, 6f, 0f);
+            afl.fontSizeMax = 38f;
+            afl.fontSizeMin = 20f;
+            afl.enableAutoSizing = true;
         }
 
         AddFreeFlightButton(canvas, font);
@@ -729,7 +745,30 @@ public static partial class ACO_HUDBuilder
         // 상세 칸(줄 아래): 고른 줄의 이름·단계 / 설명 / 수치(NOW > NEXT, 호출권은 실제 피해·반경·시간) / 부족한 크레딧
         shop.DetailText = MakeHangarDetail(canvas, "UpgradeDetail", new Vector2(right, -370f), new Vector2(rowWidth, 230f), font);
         // 구매 버튼: 줄을 눌러 고르고 이 버튼으로 산다(클릭 실수 방지). 글자·색은 게임 중 상점이 고른 줄에 맞게 쓴다.
-        Image shopBuy = MakeUiButton(canvas, "BuyUpgrade", new Vector2(right, -565f), new Vector2(1000f, 84f), font, "SELECT AN ITEM", 40f);
+        // 적용 단계 버튼(6-345 — 출력 · 기동성을 골랐을 때만 상점이 켠다): 구매 버튼 왼쪽 − · + · 최대
+        var applied = new GameObject("AppliedLevel", typeof(RectTransform));
+        RectTransform appliedRt = (RectTransform)applied.transform;
+        appliedRt.SetParent(canvas, false);
+        appliedRt.sizeDelta = Vector2.zero;
+        appliedRt.anchoredPosition = Vector2.zero;
+        float appliedLeft = right - rowWidth * 0.5f;
+        string[] appliedLabels = { "-", "+", "MAX" };
+        int[] appliedDirs = { -1, 1, 0 };
+        float[] appliedX = { appliedLeft + 50f, appliedLeft + 165f, appliedLeft + 300f };
+        float[] appliedW = { 100f, 100f, 140f };
+        for (int a = 0; a < 3; a++)
+        {
+            Image ab = MakeUiButton(appliedRt, $"Applied_{a}", new Vector2(appliedX[a], -565f), new Vector2(appliedW[a], 84f), font, appliedLabels[a], a == 2 ? 32f : 52f);
+            if (a == 2) { LocButton(ab, "shop.applied.max"); }
+            ACO_HangarButton abh = ab.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
+            abh.Shop = shop;
+            abh.Action = ACO_HangarButton.ACTION_SHOP_APPLIED;
+            abh.Index = appliedDirs[a];
+            WireClick(ab.GetComponent<Button>(), abh);
+        }
+        applied.SetActive(false);
+        shop.AppliedControls = applied;
+        Image shopBuy = MakeUiButton(canvas, "BuyUpgrade", new Vector2(right + 130f, -565f), new Vector2(1000f, 84f), font, "SELECT AN ITEM", 40f);
         shopBuy.color = new Color(0.16f, 0.17f, 0.17f, 1f);
         AddButtonIcon(shopBuy, LoadIcon("credits"), 62f, HangarGold);
         ACO_HangarButton shopBuyButton = shopBuy.gameObject.AddUdonSharpComponent<ACO_HangarButton>();
@@ -856,6 +895,9 @@ public static partial class ACO_HUDBuilder
     }
 
     private const float ButtonIconInset = 26f;
+    // 명단 칸 카드 왼쪽 칸(아이콘 · 기체 형식 버튼, 6-343)
+    private const float SlotCardColInset = 15f;
+    private const float SlotCardColWidth = 170f;
     private const float ButtonIconGap = 18f;
 
     /// 글자를 아이콘 오른쪽 남은 칸의 가운데에 두고, 넘치면 글자를 줄인다.
@@ -1142,7 +1184,11 @@ public static partial class ACO_HUDBuilder
         tabButtons[0] = LocButton(DecalButton(canvas, studio, font, "DECAL", new Vector2(-655f, 362f), new Vector2(230f, 56f), ACO_DecalStudio.ACT_TAB, ACO_DecalStudio.TAB_DECAL, 32f), "decal.tab.decal");
         tabButtons[1] = LocButton(DecalButton(canvas, studio, font, "ROUNDEL", new Vector2(-415f, 362f), new Vector2(230f, 56f), ACO_DecalStudio.ACT_TAB, ACO_DecalStudio.TAB_ROUNDEL, 32f), "decal.tab.roundel");
         studio.TabButtons = tabButtons;
-        studio.TabHintText = MakeUiText(canvas, "TabHint", new Vector2(250f, 362f), new Vector2(1040f, 50f), 26f, font, "");
+        studio.TabHintText = MakeUiText(canvas, "TabHint", new Vector2(90f, 362f), new Vector2(720f, 50f), 26f, font, "");
+        // 미리보기 기체 E/F(6-347): 탭 줄 오른쪽 끝 — 아래 LOAD 버튼과 같은 열(가운데 600 · 폭 260). 글자는 스크립트가 쓴다(F/A-18E · F/A-18F)
+        Image af = DecalButton(canvas, studio, font, "F/A-18E", new Vector2(600f, 362f), new Vector2(260f, 56f), ACO_DecalStudio.ACT_AIRFRAME, 1, 30f);
+        AddButtonIcon(af, LoadIcon("tab_airframe"), 40f, IconColor);
+        studio.AirframeText = af.GetComponentInChildren<TextMeshProUGUI>();
         studio.TabHintText.alignment = TextAlignmentOptions.Left;
         studio.TabHintText.enableAutoSizing = true;   // 언어마다 길이가 달라 칸을 넘지 않게
         studio.TabHintText.fontSizeMin = 18f;
@@ -1980,6 +2026,7 @@ public static partial class ACO_HUDBuilder
     private const float FlightThrottleX = -26f;
     private const float FlightThrottleMarkX = -0.75f;
     private static readonly Vector3 FlightEcmTextPos = new Vector3(0f, 9.2f, 0f);
+    private static readonly Vector3 FlightJamTextPos = new Vector3(0f, 10.9f, 0f);
 
     /// 막대를 가리키는 > 표시(끝이 원점).
     private static Mesh ThrottleMarkMesh()
@@ -2196,6 +2243,9 @@ public static partial class ACO_HUDBuilder
         // 가운데 위: 아군 ECM 구역 안에서만 보인다
         hud.EcmText = text(canvas, "EcmText", FlightEcmTextPos, 8f, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), "ECM SUPPORT");
         hud.EcmText.gameObject.SetActive(false);
+        // 그 위: 적 재머 구역 안에서 깜빡인다(6-332)
+        hud.JamText = text(canvas, "JamText", FlightJamTextPos, 8f, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), "JAMMED");
+        hud.JamText.gameObject.SetActive(false);
 
         // 왼쪽 아래: G, 받음각(랜딩기어를 내렸을 때), 상태(GEAR·FLAP·HOOK·AIRBRAKE)
         hud.GText = text(canvas, "GText", new Vector3(-21.5f, -6.8f, 0f), 8f, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), "G 1.0");
@@ -3308,15 +3358,15 @@ public static partial class ACO_HUDBuilder
             new[] { "set.row.show", "set.row.ringsize", "set.row.missilemark", "set.row.lockarc" }),
         // 일반(6-303): 거리 단위 · 갑판 요원(예전 분류 제목 키를 줄 이름으로) · 구름 품질
         new HudCategory(2, "set.cat.general",
-            new[] { ACO_HudSettings.ITEM_DISTANCE_UNIT, ACO_HudSettings.ITEM_DECK_CREW, ACO_HudSettings.ITEM_CLOUD_QUALITY },
-            new[] { "set.row.unit", "set.cat.crew", "set.row.cloud" }),
+            new[] { ACO_HudSettings.ITEM_DISTANCE_UNIT, ACO_HudSettings.ITEM_DECK_CREW, ACO_HudSettings.ITEM_CLOUD_QUALITY, ACO_HudSettings.ITEM_PILOT_TAGS },
+            new[] { "set.row.unit", "set.cat.crew", "set.row.cloud", "set.row.pilottags" }),
         LanguageCategory,
     };
 
     private static HudCategory LanguageCategory => new HudCategory(2, "set.cat.language", new[] { ACO_HudSettings.ITEM_LANGUAGE }, new[] { "set.row.language" });
 
     private const float HudColWidth = 860f;
-    private const float HudRowH = 90f;
+    private const float HudRowH = 80f;   // 판 10: 90 → 80(오른쪽 열 16줄이 판 밖으로 나가 언어 줄이 눌리지 않았다)
     private const float HudHeaderH = 76f;
     private const float HudCardGap = 30f;
     private static readonly Color HudAccent = new Color(1f, 0.85f, 0.35f, 1f);

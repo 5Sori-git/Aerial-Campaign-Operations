@@ -151,6 +151,8 @@ namespace ACO
                 if (!ps) { continue; }
                 ParticleSystem.EmissionModule em = ps.emission;
                 em.rateOverTimeMultiplier = rate;
+                // 방출 모듈도 같이 켜고 끈다(6-328 — 기준 프리팹 ACO_WaterSpray의 방출 모듈이 꺼진 채라 방출량만 올려서는 아무것도 안 나왔다)
+                em.enabled = rate > 0f;
                 if (rate > 0f && !ps.isPlaying) { ps.Play(); }
             }
         }

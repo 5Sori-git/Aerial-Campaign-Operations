@@ -130,6 +130,8 @@ namespace ACO
         public GameObject BuyButton;
         [Tooltip("구매 버튼 글자(\"BUY LV3  4,000 CR\" 등)")]
         public TextMeshProUGUI BuyText;
+        [Tooltip("적용 단계 버튼 묶음(− · + · 최대 — 출력 · 기동성을 골랐을 때만 켠다, 6-345). 프리팹 빌더가 채운다")]
+        public GameObject AppliedControls;
         public Color NormalColor = new Color(0.08f, 0.3f, 0.14f, 1f);
         public Color MaxedColor = new Color(0.25f, 0.75f, 0.35f, 1f);
         public Color TooExpensiveColor = new Color(0.12f, 0.14f, 0.13f, 1f);
@@ -209,6 +211,29 @@ namespace ACO
             int kind = BuyRow(_selectedRow);
             _dirty = true;
             return kind;
+        }
+
+        /// 고른 줄의 강화 번호 — 적용 단계를 고를 수 있는 강화(출력 · 기동성)일 때만, 아니면 -1.
+        private int SelectedApplicableId()
+        {
+            if (!Progress || _selectedRow < 0 || _tab == TAB_SUPPLY || _tab == TAB_SUPPORT) { return -1; }
+            if (_selectedRow >= Progress.GetCategoryLength(_tab)) { return -1; }
+            int id = Progress.GetCategoryStart(_tab) + _selectedRow;
+            return Progress.IsLevelSelectable(id) ? id : -1;
+        }
+
+        /// 적용 단계 버튼(ACO_HangarButton, Action = 적용 단계)이 부른다: dir −1 내림, +1 올림, 0 최대. 산 단계는 그대로(6-345).
+        public int ChangeApplied(int dir)
+        {
+            int id = SelectedApplicableId();
+            if (id < 0) { return ACO_UiSound.KIND_DENY; }
+            if (!Progress.IsReady()) { SetMessage(Loading()); return ACO_UiSound.KIND_DENY; }
+            if (Flow != null && Flow.IsLoadoutLocked()) { SetMessage(Red(T("shop.msg.lock.applied", "ALL READY - AIRCRAFT SETTINGS LOCKED"))); return ACO_UiSound.KIND_DENY; }
+            int next = Progress.ChangeAppliedLevel(id, dir, dir == 0);
+            if (next < 0) { SetMessage(T("shop.msg.appliedlimit", "CAN'T GO FURTHER")); return ACO_UiSound.KIND_DENY; }
+            SetMessage(T2("shop.msg.applied", "{0} SET TO LV {1} - FROM NEXT BOARDING", Progress.GetUpgradeName(id), next.ToString()));
+            _dirty = true;
+            return ACO_UiSound.KIND_CLICK;
         }
 
         /// 실제 구매(고른 줄 또는 예전 방식의 줄 클릭). row = 지금 탭 안의 줄 번호.
@@ -420,7 +445,9 @@ namespace ACO
                     string pips = "<size=78%><mspace=0.5em>[";
                     for (int k = 0; k < max; k++) { pips += k < lv ? "#" : "-"; }
                     pips += "]</mspace></size>";
-                    RowTexts[row].text = Progress.GetUpgradeName(id) + "<pos=36%>" + pips + "<pos=58%>" + Progress.GetUpgradeEffectText(id)
+                    int applied = Progress.GetAppliedLevel(id);
+                    string effect = applied < lv ? "<color=#FFD24D>" + Progress.GetUpgradeEffectAt(id, applied) + "</color>" : Progress.GetUpgradeEffectText(id);   // 적용 단계를 낮췄으면 적용 값(6-345)
+                    RowTexts[row].text = Progress.GetUpgradeName(id) + "<pos=36%>" + pips + "<pos=58%>" + effect
                         + "<pos=70%>" + (cost < 0 ? T("shop.row.max", "MAX") : cost.ToString("N0") + " CR");
                 }
                 if (RowIcons != null && row < RowIcons.Length && RowIcons[row] != null)
@@ -438,9 +465,19 @@ namespace ACO
             RefreshDetail();
         }
 
+        /// 적용 단계 버튼은 출력 · 기동성을 골랐고 한 단계 이상 샀을 때만 보인다.
+        private void RefreshAppliedControls()
+        {
+            if (!AppliedControls) { return; }
+            int id = SelectedApplicableId();
+            bool show = id >= 0 && Progress.GetLevel(id) > 0;
+            if (AppliedControls.activeSelf != show) { AppliedControls.SetActive(show); }
+        }
+
         /// 상세 칸: 고른 줄의 이름(+단계) / 설명 / 수치. 고른 게 없으면 안내 한 줄. 문장은 틀(Detail*)에 값을 끼운다.
         private void RefreshDetail()
         {
+            RefreshAppliedControls();
             if (!DetailText) { return; }
             if (_selectedRow < 0) { SetDetail("<color=#8FA89A>" + T("shop.detail.empty", "SELECT AN ITEM TO SEE DETAILS") + "</color>"); return; }
             int credits = Progress.GetCredits();
@@ -480,6 +517,15 @@ namespace ACO
                 string now = Progress.GetUpgradeEffectAt(id, lv);
                 stats = cost < 0 ? T1("shop.detail.maxed", "MAX LEVEL   {0}", now) : T2("shop.detail.nownext", "NOW {0}   >   NEXT {1}", now, Progress.GetUpgradeEffectAt(id, lv + 1));
                 if (id == ACO_PlayerProgress.UP_MOBILITY && MobilityPreview != null) { stats += "\n" + MobilityLimits(lv, cost < 0); }
+                if (Progress.IsLevelSelectable(id) && lv > 0)
+                {
+                    // 적용 단계(6-345): 최대면 '구매 따라감', 낮췄으면 노랑으로 단계 · 효과
+                    int applied = Progress.GetAppliedLevel(id);
+                    stats += "\n" + (Progress.GetLevelSetting(id) < 0
+                        ? T1("shop.detail.appliedmax", "APPLIED: MAX (FOLLOWS PURCHASES)  {0}", now)
+                        : "<color=#FFD24D>" + T3("shop.detail.applied", "APPLIED: LV {0}/{1}  {2}", applied.ToString(), lv.ToString(), Progress.GetUpgradeEffectAt(id, applied))
+                          + (id == ACO_PlayerProgress.UP_MOBILITY && MobilityPreview != null ? "  ·  " + AoaText(MobilityPreview.GetAoALimitAt(applied)) + " · " + GText(MobilityPreview.GetGLimitAt(applied)) : "") + "</color>");
+                }
                 if (cost >= 0) { need = cost - credits; }
             }
             string s = "<b>" + title + "</b>\n<size=85%>" + desc + "</size>\n<color=" + statColor + ">" + stats + "</color>";

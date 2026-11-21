@@ -38,6 +38,7 @@ namespace ACO
         public const int ACT_RESET_GUN = 8;
         public const int ACT_TAB = 9;              // step 0 = 데칼 탭, 1 = 라운델 탭
         public const int ACT_ROUNDEL_CLEAR = 10;
+        public const int ACT_AIRFRAME = 11;         // 미리보기 기체 E ↔ F(6-347 — 미리보기만, 실제 기체 형식은 명단 카드)
         /// 이미지 칸 2 = 라운델(URL 저장소 SLOT_DECAL + 2).
         public const int ROUNDEL = 2;
         public const int TAB_DECAL = 0;
@@ -85,6 +86,14 @@ namespace ACO
         public ACO_VehicleDecal[] VehicleDecals;
         [Tooltip("격납고 샘플 기체의 라운델 판(실기체와 같은 자리 — Setup Check가 만든다)")]
         public Renderer[] PreviewRoundels;
+        [Header("미리보기 기체 형식 (6-347 — 설치 도구가 넣는다)")]
+        [Tooltip("미리보기 E형 부품(E일 때 켠다)")]
+        public GameObject[] PreviewEObjects;
+        [Tooltip("미리보기 F형 부품(F일 때 켠다)")]
+        public GameObject[] PreviewFObjects;
+        [Tooltip("E/F 버튼 글자")]
+        public TextMeshProUGUI AirframeText;
+        private bool _previewF;
 
         [Header("값")]
         public float MinSize = 0.2f;
@@ -131,6 +140,7 @@ namespace ACO
 
         void Start()
         {
+            ApplyPreviewAirframe();   // 처음은 E형(6-347)
             _downloader = new VRCImageDownloader();
             for (int i = 0; i < 2; i++) { _rot[i] = Quaternion.identity; _size[i] = 1f; }
             ApplyPreview();
@@ -188,6 +198,20 @@ namespace ACO
 
         // ───────────── 패널 ─────────────
 
+        /// 미리보기 기체를 지금 형식(E · F)으로 — 부품 묶음을 켜고 끄고 버튼 글자를 쓴다.
+        private void ApplyPreviewAirframe()
+        {
+            SetObjects(PreviewEObjects, !_previewF);
+            SetObjects(PreviewFObjects, _previewF);
+            if (AirframeText) { AirframeText.text = _previewF ? T("flow.airframe.f", "F/A-18F") : T("flow.airframe.e", "F/A-18E"); }
+        }
+
+        private void SetObjects(GameObject[] list, bool on)
+        {
+            if (list == null) { return; }
+            for (int i = 0; i < list.Length; i++) { if (list[i] && list[i].activeSelf != on) { list[i].SetActive(on); } }
+        }
+
         /// URL 입력 칸 입력 끝.
         public void OnUrlEntered() { Press(ACT_LOAD, 0); }
 
@@ -225,6 +249,12 @@ namespace ACO
                 if (!Gun) { return ACO_UiSound.KIND_DENY; }
                 Gun.ResetToHome();
                 Msg("decal.msg.gunreturned", "DECAL GUN RETURNED", "", false);
+                return ACO_UiSound.KIND_CLICK;
+            }
+            if (action == ACT_AIRFRAME)
+            {
+                _previewF = !_previewF;
+                ApplyPreviewAirframe();
                 return ACO_UiSound.KIND_CLICK;
             }
             if (action == ACT_TAB)
@@ -395,7 +425,7 @@ namespace ACO
         private bool _msgRed;
 
         /// 번역 장치가 언어를 바꾸면 부른다.
-        public void LocalizationChanged() { UpdateTexts(""); }
+        public void LocalizationChanged() { ApplyPreviewAirframe(); UpdateTexts(""); }
 
         private string T(string key, string english)
         {

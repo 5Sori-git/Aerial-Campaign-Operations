@@ -478,6 +478,14 @@ public partial class ACO_SetupValidator : EditorWindow
         if (flow.DeckPoints != null) { foreach (Transform t in flow.DeckPoints) { if (t != null) { decks++; } } }
         if (decks < slots) { Add(g, ERROR, $"갑판 출격 위치(DeckPoints) {decks}개 < 기체 {slots}대 — 위치가 없는 칸은 출격할 수 없습니다.", flow, () => AddPoints(flow, slots)); }
 
+        // 기체 형식 스위치(6-343): 게임 진행 연결이 없으면 승객 강제 하차가 브리핑실로 보내지 못한다
+        if (flow.Airframes != null)
+        {
+            foreach (ACO_AirframeVariant v in flow.Airframes)
+            {
+                if (v != null && (v.Flow != flow || v.Entity == null)) { Add(g, ERROR, $"기체 형식 스위치 '{v.transform.parent.name}'에 게임 진행 · 기체 연결이 없습니다 — Bake 하세요.", v, ACO_SceneBaker.BakeNeighbors); }
+            }
+        }
         PointCheck(g, flow, flow.BriefingPoint, "BriefingPoint(미션 뒤 귀환할 브리핑실)", "BriefingPoint");
         if (flow.HangarPoint != null) { Add(g, OK, "HangarPoint(격추·탈출 뒤 돌아올 곳 — 따로 둔 격납고)", flow.HangarPoint); }
         else { Add(g, OK, "HangarPoint 없음 — 격추·탈출하면 BriefingPoint(대기실)로 돌아온다", flow); }
@@ -707,6 +715,15 @@ public partial class ACO_SetupValidator : EditorWindow
             && ((versionGuard.transform.position - verPos).sqrMagnitude > 0.0004f || Quaternion.Angle(versionGuard.transform.rotation, verRot) > 1f))
         {
             Add(g, WARN, "버전 확인 알림이 작전판 자리에 있지 않습니다. [고치기] = 판 자리로 옮기기.", versionGuard, PlaceVersionGuard);
+        }
+
+        if (FindOne<ACO_PilotRecord>() == null)
+        {
+            Add(g, WARN, "조종사 기록판(6-341 — 내 기록 · 칭호 장착 · 칭호 목록)이 없습니다. [고치기] = 선원실 업데이트 노트 보드 옆 사물함에 놓기(뒤에 Bake).", null, PlacePilotRecord);
+        }
+        if (FindOne<ACO_PilotTag>() == null)
+        {
+            Add(g, WARN, "조종사 이름표(6-340 — 다른 플레이어 머리 위 칭호 · 레벨)가 없습니다. [고치기] = 씬에 놓기(뒤에 Bake).", null, PlacePilotTags);
         }
 
         ACO_HudSettings hudSettings = FindOne<ACO_HudSettings>();
@@ -974,6 +991,28 @@ public partial class ACO_SetupValidator : EditorWindow
             }
         }
         return false;
+    }
+
+    /// 조종사 기록판(6-341)을 선원실 크레딧 보드 옆 사물함에 놓는다(ACO_SceneBaker.CreatePilotRecordBoard).
+    private static void PlacePilotRecord()
+    {
+        if (FindOne<ACO_PilotRecord>() != null) { return; }
+        ACO_SceneBaker.CreatePilotRecordBoard();
+    }
+
+    /// 조종사 이름표(6-340)를 씬 루트에 놓는다(없으면 프리팹을 만든다). 위치는 스크립트가 정한다.
+    private static void PlacePilotTags()
+    {
+        if (FindOne<ACO_PilotTag>() != null) { return; }
+        string path = $"{PrefabDir}/{ACO_HUDBuilder.PilotTagsPrefabName}.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreatePilotTagsPrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null) { Debug.LogError($"[ACO] 프리팹을 만들지 못했습니다: {path}"); return; }
+        GameObject go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        Undo.RegisterCreatedObjectUndo(go, "ACO place pilot tags");
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Selection.activeGameObject = go;
+        Debug.Log("[ACO] 조종사 이름표를 씬에 놓았습니다. Bake 하세요.", go);
     }
 
     /// 버전 확인(6-296)을 작전판 자리에 놓는다(없으면 프리팹을 만든다). 이미 있으면 그 자리로 옮긴다.

@@ -56,6 +56,20 @@ public class ACO_PhaseFortressEditor : Editor
         "항모 침몰 (SLCM · 어뢰)", "돌격 접근 경고", "충돌 (항모 격침)", "돌격 중 무장 수리",
     };
     private static readonly string[] SubmarineSpeakers = { "적 함장", "AWACS", "항모", "-", "-", "항모 승무원" };
+    // ACO_PhaseLaserTower.SIT_* 순서(칼리번 6-331)
+    private static readonly string[] LaserTowerSituations =
+    {
+        "등장", "ECM 차량 파괴 ({left} = 남은 수)", "환풍구 단계 시작", "환풍구 파괴 ({left} = 남은 수)", "렌즈 단계 시작", "과열 (첫 번째)",
+        "그물 예고", "방공 수리", "적 증원", "렌즈 체력 절반", "렌즈 파괴", "탑 붕괴", "비행선 전멸",
+        "재밍 힌트 (1단계가 오래갈 때)", "ECM 차량 하나 남음", "환풍구 하나 남음", "패턴 A 조준", "비행선 격추 ({left} = 남은 수)", "과열 (두 번째부터)",
+    };
+    private static readonly string[] LaserTowerSpeakers = { "적 (칼리번)", "AWACS", "아군 (쓰지 않음)", "-", "시스템 (쓰지 않음)" };
+    // ACO_PhaseBreakingPoint.SIT_* 순서(6-333)
+    private static readonly string[] BreakingPointSituations =
+    {
+        "(쓰지 않음)", "첫 접촉 (적이 공역에 들어옴)", "새 웨이브", "킬 절반", "남은 킬 5 · 3 · 1 ({left})", "아군 격추 (한 기마다)", "(쓰지 않음)", "적 물러남 (목표 달성)",
+    };
+    private static readonly string[] BreakingPointSpeakers = { "적 공군", "AWACS", "아군 (쓰지 않음)" };
     private bool _showBgm2 = true;
     private bool _showBgm3 = true;
     private static readonly string[] Speakers = { "적", "AWACS" };
@@ -72,6 +86,8 @@ public class ACO_PhaseFortressEditor : Editor
         if (t is ACO_PhaseBorderless) { return BorderlessSituations; }
         if (t is ACO_PhaseLuna) { return LunaSituations; }
         if (t is ACO_PhaseSubmarine) { return SubmarineSituations; }
+        if (t is ACO_PhaseLaserTower) { return LaserTowerSituations; }
+        if (t is ACO_PhaseBreakingPoint) { return BreakingPointSituations; }
         return Situations;
     }
 
@@ -80,6 +96,8 @@ public class ACO_PhaseFortressEditor : Editor
         if (t is ACO_PhaseFleet) { return FleetSpeakers; }
         if (t is ACO_PhaseLandShip) { return LandShipSpeakers; }
         if (t is ACO_PhaseSubmarine) { return SubmarineSpeakers; }
+        if (t is ACO_PhaseLaserTower) { return LaserTowerSpeakers; }
+        if (t is ACO_PhaseBreakingPoint) { return BreakingPointSpeakers; }
         return Speakers;
     }
 

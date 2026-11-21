@@ -25,6 +25,8 @@ namespace ACO
         public ACO_MissionGenerator Generator;
         [Tooltip("빌드 시 ACO_SceneBaker가 씬의 게임 진행을 넣는다(참가자 기체·명단 이름)")]
         public ACO_GameFlow Flow;
+        [Tooltip("TAC 네임(콜사인) — 참가자 기체 이름표에 콜사인 + VRChat 이름(Bake가 넣는다)")]
+        public ACO_TacName TacNames;
         [Tooltip("아군 기지(항모 등). 비워도 된다")]
         public Transform HomeBase;
 
@@ -351,7 +353,9 @@ namespace ACO
             SaccEntity e = Flow.Aircraft[_index[k]];
             if (!e || !e.Occupied) { return ""; }
             VRCPlayerApi owner = Networking.GetOwner(e.gameObject);
-            return Utilities.IsValid(owner) ? owner.displayName : "";
+            if (!Utilities.IsValid(owner)) { return ""; }
+            string call = TacNames != null ? TacNames.GetLabel(owner) : "";
+            return call.Length > 0 ? call + "\n<size=70%>" + owner.displayName + "</size>" : owner.displayName;   // 콜사인이 있으면 위에 크게
         }
 
         /// 항공기는 기수 방향 그대로, 지상은 방향(요)만.

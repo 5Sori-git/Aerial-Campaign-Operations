@@ -102,6 +102,8 @@ namespace ACO
 
         // SaccEntity가 주입한다.
         [System.NonSerialized] public SaccEntity EntityControl;
+        [Tooltip("기체 형식 스위치(같은 기체 — 설치 도구가 넣는다, 6-343). 폭발 때 뒷자리 승객을 브리핑실로")]
+        public ACO_AirframeVariant Airframe;
 
         [Header("안전지대 보호")]
         [Tooltip("이 기체의 락온 마커(적이 노리는 'AAMTarget', 아군 항공기 레이어 25 — Bake가 넣는다). 안전지대(Progress.SafeZones — 보급 트리거) 안에 있으면 "
@@ -182,7 +184,7 @@ namespace ACO
         {
             _pilot = true;
             _exploded = false;
-            if (Progress) { Progress.ReportPiloting(true); }
+            if (Progress) { Progress.ReportPiloting(true); Progress.ReportFlightVehicle(AirVehicle); }
             _applied = false;   // 자유 비행에서 남겨 둔 사양도 지금 조종사 값으로 다시 맞춘다
             Apply(true);
             SendConsumableVisuals();
@@ -272,7 +274,7 @@ namespace ACO
                 Progress.ReportPilotExit(EntityControl.transform.position);
             }
             _pilot = false;
-            if (Progress) { Progress.ReportPiloting(false); }
+            if (Progress) { Progress.ReportPiloting(false); Progress.ReportFlightVehicle(null); }
         }
 
         // ───────────── 소모품 외형 ─────────────
@@ -296,6 +298,12 @@ namespace ACO
         private bool KeepSpec() { return Progress && Progress.FreeFlight && !_exploded; }
 
         // 내리면(모든 클라이언트) 끈다
+        /// 뒷자리 승객이 내렸다(이 화면의 나 — 6-344): 공중이거나 안전 구역(항모 등) 밖이면 브리핑실로, 안이면 그냥 내린다.
+        public void SFEXT_P_PassengerExit()
+        {
+            if (Airframe && Airframe.Flow) { Airframe.Flow.PassengerLeft(AirVehicle && !AirVehicle.Taxiing); }
+        }
+
         public void SFEXT_G_PilotExit()
         {
             if (!Progress || !Progress.FreeFlight) { ShowConsumables(0); }
@@ -370,6 +378,8 @@ namespace ACO
         /// 모든 클라이언트에서 오지만, 이 클라이언트가 조종 중일 때만 센다(폭발 뒤 SAV가 조종사를 내린다).
         public void SFEXT_G_Explode()
         {
+            // 뒷자리 승객(6-343): SAV가 좌석에서 내리는데 그 자리(공중 · 바다)에 남는다 — 브리핑실로
+            if (!_pilot && Airframe && Airframe.IsLocalPassenger()) { Airframe.ForceExitPassengers(); }
             if (!_pilot)
             {
                 // 다른 사람이 조종하던 기체가 터졌다 — 아군 격추 대사(이름 = 조종사)
@@ -540,12 +550,13 @@ namespace ACO
                 }
                 // 체력 = 강화 × 장갑판
                 float hull = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_HULL) * Progress.GetConsumableFactor(ACO_PlayerProgress.CONS_ARMOR) : 1f;
-                float mobility = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_MOBILITY) : 1f;
-                float engine = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_ENGINE) : 1f;
+                // 출력 · 기동성은 상점에서 고른 적용 단계(6-345 — 산 단계보다 낮출 수 있다)
+                float mobility = on ? Progress.GetAppliedFactor(ACO_PlayerProgress.UP_MOBILITY) : 1f;
+                float engine = on ? Progress.GetAppliedFactor(ACO_PlayerProgress.UP_ENGINE) : 1f;
                 float fuel = on ? Progress.GetUpgradeFactor(ACO_PlayerProgress.UP_FUEL) : 1f;
                 // 기동성 강화 비율(0 ~ 1) — 양력·리미터 한계도 이만큼 함께 올린다(안정성 강화는 기동성에 합쳤다)
                 int maxLevel = Progress.GetMaxLevel();
-                float t = on && maxLevel > 0 ? Mathf.Clamp01(Progress.GetLevel(ACO_PlayerProgress.UP_MOBILITY) / (float)maxLevel) : 0f;
+                float t = on && maxLevel > 0 ? Mathf.Clamp01(Progress.GetAppliedLevel(ACO_PlayerProgress.UP_MOBILITY) / (float)maxLevel) : 0f;
                 float stability = 1f + LiftBonus * t;
 
                 float oldFull = AirVehicle.FullHealth;
@@ -581,7 +592,7 @@ namespace ACO
                 AirVehicle.ExtraVelLift += velLiftDelta - _velLiftAdded;
                 _velLiftAdded = velLiftDelta;
 
-                int mobilityLevel = on ? Progress.GetLevel(ACO_PlayerProgress.UP_MOBILITY) : 0;
+                int mobilityLevel = on ? Progress.GetAppliedLevel(ACO_PlayerProgress.UP_MOBILITY) : 0;
                 ApplyHighAlpha(mobilityLevel);
                 ApplyLimiter(t, mobilityLevel);
             }

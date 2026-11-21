@@ -269,6 +269,17 @@ namespace ACO
             }
         }
 
+        /// 격추: 방어 기총을 부순다(Silence — 기총 오너가 SaccTarget을 터뜨린다, 점수 없음). MissionDespawn은 사격만 멈춰서
+        /// 기총 체력이 남아 있으면 다시 쏘던 것(사용자 "폭격기 파괴됐는데도 후방 기총 계속 쏘는 것 같다" — 함선 부위와 같은 문제). 부활은 SpawnGuns(revive)가 한다.
+        private void KillGuns()
+        {
+            if (DefenseGuns == null) { return; }
+            for (int i = 0; i < DefenseGuns.Length; i++)
+            {
+                if (DefenseGuns[i] != null) { DefenseGuns[i].SendCustomEvent("Silence"); }
+            }
+        }
+
         private void SilenceGuns()
         {
             if (DefenseGuns == null) { return; }
@@ -494,7 +505,7 @@ namespace ACO
             _crashTime = 0f;
             _crashVel = MoveMode == MOVE_AIR ? transform.forward * Speed : Vector3.zero;
             SetDeathVisuals(true);
-            SilenceGuns();
+            KillGuns();
         }
 
         /// 공중: 관성 + 중력으로 떨어진 뒤 숨긴다(연출 전용, 클라이언트마다 로컬).

@@ -17,12 +17,15 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseRailgun : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "lance"; }
+
         [Header("배치")]
         [Tooltip("플레이어 평균 위치에서의 거리(m)")]
         public float SiteDistanceMin = 7000f;
         public float SiteDistanceMax = 20000f;
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초)")]
-        public float ExtraTime = 480f;
+        public float ExtraTime = 0f;   // 2026-11-20 → 0(사용자 "페이즈당 시간이 이미 있으니 호위 · 시한 있는 임무 빼곤 다 빼자" — 레이저 에이스 · LUNA만 남김)
 
         [Header("포격 주기")]
         [Tooltip("충전 시간(초)")]
@@ -258,6 +261,7 @@ namespace ACO
                 if (now - Manager.GetPhaseStartMs() >= Mathf.RoundToInt(Manager.GetDeployTimeout() * 1000f)) { return RESULT_REPLACE; }
                 return RESULT_RUNNING;
             }
+            if (_coreDownMs != 0 && Manager.GetTaggedDone() < total) { _coreDownMs = 0; }   // 6-338: 목표가 다시 살아 있다(확정 전 오판) — 격파 대기 기록을 푼다
             if (Manager.GetTaggedDone() >= total)
             {
                 if (_coreDownMs == 0) { _coreDownMs = now; }
@@ -341,7 +345,10 @@ namespace ACO
 
         private void TickRepair(int now, ACO_Railgun gun)
         {
-            if (RepairInterval <= 0f || now - _nextRepairMs < 0) { return; }
+            if (RepairInterval <= 0f) { return; }
+            // 오너가 바뀌면 새 오너는 0 — 그때부터 간격을 잰다(바로 수리하거나, 서버 시각이 음수면 영영 안 하던 것)
+            if (_nextRepairMs == 0) { _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f); return; }
+            if (now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
             // 살아 있는 방공 부위가 RepairAliveCap보다 적을 때만, 그 수까지(페이즈 전체 합계 한도는 없다 — 6-150)
             int count = RepairAliveCap > 0 ? Mathf.Min(RepairCount, RepairAliveCap - gun.CountAirDefenseAlive()) : RepairCount;
@@ -408,6 +415,11 @@ namespace ACO
                 else if (_stage == ACO_Railgun.STAGE_CORE) { Say(SIT_CORE_STAGE, ""); }
                 if (ReinforceFighters > 0) { Say(SIT_REINFORCE, ""); }
             }
+            // 풀에서 다시 쓰는 보스: 페이즈 시작 직후 몇 프레임은 지난 미션의 부위 체력(0)이 남아 기준이 잘못 잡힐 수 있다(그러면 대사가 안 나왔다).
+            // 부위가 되살아난 게 보이면 기준을 바로잡는다 — 이 대사들이 쓰이는 단계에선 수리로 되살아나는 부위가 없다.
+            if (_stage == ACO_Railgun.STAGE_AIR_DEFENSE && !aaHalf) { _saidAaHalf = false; }
+            if (coolers > _saidCoolers) { _saidCoolers = coolers; }
+            if (core > 0.5f) { _saidHalf = false; }
             if (_cycleMs != _saidCycle)
             {
                 _saidCycle = _cycleMs;
@@ -508,15 +520,15 @@ namespace ACO
             return "DESTROY THE CORE WHEN THE ARMOR OPENS";
         }
 
-        /// "AA 5/16  BASE 3/3  FIRE 1:12" → "CLR 2/4 ..." → "CORE 72% ...". 발사 20초 전이면 빨갛게, 코어가 열리면 OPEN.
+        /// "AA 5/16(부순 수)  BASE 3/3(남은 수)  FIRE 1:12" → "CLR 2/4(부순 수) ..." → "CORE 72% ...". 발사 20초 전이면 빨갛게, 코어가 열리면 OPEN.
         public override string GetProgressText()
         {
             ACO_Railgun gun = Gun();
             if (gun == null || !IsLive()) { return ""; }
             int now = Networking.GetServerTimeInMilliseconds();
             string s;
-            if (_stage == ACO_Railgun.STAGE_AIR_DEFENSE) { s = "AA " + gun.CountAirDefenseAlive() + "/" + gun.GetAirDefenseTotal(); }
-            else if (_stage == ACO_Railgun.STAGE_COOLERS) { s = "CLR " + gun.CountCoolersAlive() + "/" + gun.GetCoolerTotal(); }
+            if (_stage == ACO_Railgun.STAGE_AIR_DEFENSE) { s = "AA " + (gun.GetAirDefenseTotal() - gun.CountAirDefenseAlive()) + "/" + gun.GetAirDefenseTotal(); }   // 부순 수(보스 부위 표시 통일 — BASE는 남은 수)
+            else if (_stage == ACO_Railgun.STAGE_COOLERS) { s = "CLR " + (gun.GetCoolerTotal() - gun.CountCoolersAlive()) + "/" + gun.GetCoolerTotal(); }
             else { s = "CORE " + Mathf.RoundToInt(gun.GetCoreHealthRatio() * 100f) + "%"; }
             s += "  BASE " + Mathf.Max(BaseHits - _hits, 0) + "/" + BaseHits;
             if (!_armed) { return s + "  STANDBY"; }

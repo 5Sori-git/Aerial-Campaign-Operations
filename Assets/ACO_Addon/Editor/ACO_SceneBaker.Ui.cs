@@ -180,6 +180,42 @@ public partial class ACO_SceneBaker
         Debug.Log("[ACO] 크레딧 보드를 선원실 가운데 사물함 앞에 기대 세웠습니다. 씬을 저장하세요.", go);
     }
 
+    // 조종사 기록판 자리(6-341): 업데이트 노트 보드 바깥쪽 사물함(레이아웃 y +0.15) — 판 셋이 한 줄(기록 · 업데이트 · 크레딧). 크레딧 보드 반대쪽은 사물함이 없다(벽 · 틈).
+    private const float RecordLockerY = 0.15f;
+
+    /// Setup Check [고치기]: 조종사 기록판(없으면 프리팹을 만든다)을 선원실 크레딧 보드 옆 사물함 앞에 기대 세운다. 크레딧 보드를 옮겨 두었으면 그 자리 · 각도 · 크기를 따라 한 칸(0.66m) 옆.
+    public static void CreatePilotRecordBoard()
+    {
+        string path = $"Assets/ACO_Addon/Prefabs/{ACO_HUDBuilder.PilotRecordPrefabName}.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { ACO_HUDBuilder.CreatePilotRecordPrefab(); }
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        Transform interior = null;
+        foreach (GameObject r in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (Transform t in r.GetComponentsInChildren<Transform>(true)) { if (t.name == ACO_InteriorBuilder.PrefabName) { interior = t; break; } }
+            if (interior != null) { break; }
+        }
+        if (prefab == null || interior == null) { Debug.LogWarning("[ACO] 조종사 기록판: 프리팹이나 함내(ACO_Interior)가 없습니다."); return; }
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, interior.parent);
+        Undo.RegisterCreatedObjectUndo(go, "ACO pilot record");
+        float h = ACO_HUDBuilder.CreditH * ACO_HUDBuilder.CreditUnit;
+        Quaternion rot = interior.rotation * Quaternion.LookRotation(Vector3.right, Vector3.up) * Quaternion.Euler(CreditTilt, 0f, 0f);
+        float baseX = CreditLockerFrontX + Mathf.Sin(CreditTilt * Mathf.Deg2Rad) * h + 0.02f;
+        Vector3 bottom = interior.TransformPoint(new Vector3(baseX, 0.02f, RecordLockerY));
+        go.transform.SetPositionAndRotation(bottom + rot * Vector3.up * (h * 0.5f), rot);
+        // 판이 있으면 그 자리 · 각도 · 크기를 따라: 업데이트 노트 보드 한 칸 바깥(-0.66), 없으면 크레딧 보드 두 칸
+        foreach (ACO_CreditBoard cb in Object.FindObjectsOfType<ACO_CreditBoard>(true))
+        {
+            bool update = cb.LanguageSources != null && cb.LanguageSources.Length > 0;
+            go.transform.SetPositionAndRotation(cb.transform.position + interior.rotation * new Vector3(0f, 0f, update ? -0.66f : -1.32f), cb.transform.rotation);
+            go.transform.localScale = cb.transform.localScale;
+            if (update) { break; }
+        }
+        BakeUiSound();
+        EditorSceneManager.MarkSceneDirty(go.scene);
+        Debug.Log("[ACO] 조종사 기록판을 선원실 크레딧 보드 옆 사물함 앞에 놓았습니다. Bake 하고 씬을 저장하세요.", go);
+    }
+
     // 업데이트 노트 보드 자리(6-251): 크레딧 보드 바로 옆 사물함(레이아웃 y −0.51, 간격 0.66) 앞면에 같은 각도로 기대 세운다.
     private const float UpdateLockerY = -0.51f;
 
@@ -308,6 +344,7 @@ public partial class ACO_SceneBaker
             foreach (ACO_MissionStartButton c in root.GetComponentsInChildren<ACO_MissionStartButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_HangarButton c in root.GetComponentsInChildren<ACO_HangarButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_HudSettingButton c in root.GetComponentsInChildren<ACO_HudSettingButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
+            foreach (ACO_PilotRecordRow c in root.GetComponentsInChildren<ACO_PilotRecordRow>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_DebugButton c in root.GetComponentsInChildren<ACO_DebugButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_SpectatorButton c in root.GetComponentsInChildren<ACO_SpectatorButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
             foreach (ACO_LogScrollButton c in root.GetComponentsInChildren<ACO_LogScrollButton>(true)) { if (c.Sound != sound) { c.Sound = sound; MarkChanged(c); linked++; } }
@@ -479,6 +516,68 @@ public partial class ACO_SceneBaker
             if (changed) { MarkChanged(panel); }
         }
         if (panels.Count > 1) { Debug.LogWarning($"[ACO] HUD 설정 패널이 {panels.Count}개 있습니다 — 같은 저장 값을 쓰므로 하나만 두는 걸 권합니다."); }
+    }
+
+    /// 조종사 이름표(6-340): 진행도(레벨 · 칭호) · TAC 네임 · 플레이어 기체(좌석에 앉으면 숨김)를 잇고, HUD 설정의 PILOT TAGS에 잇는다.
+    private static void BakePilotTags()
+    {
+        ACO_PilotTag tags = Object.FindObjectOfType<ACO_PilotTag>(true);
+        foreach (ACO_HudSettings settings in Object.FindObjectsOfType<ACO_HudSettings>(true))
+        {
+            if (settings.PilotTags != tags) { settings.PilotTags = tags; MarkChanged(settings); }
+        }
+        ACO_PlayerProgress progress = Object.FindObjectOfType<ACO_PlayerProgress>(true);
+        // CIC 테이블 지도 · 고글 관전 버튼에 콜사인(TAC 네임)
+        ACO_TacName tacForCic = Object.FindObjectOfType<ACO_TacName>(true);
+        foreach (ACO_TacticalMap m in Object.FindObjectsOfType<ACO_TacticalMap>(true)) { if (m.TacNames != tacForCic) { m.TacNames = tacForCic; MarkChanged(m); } }
+        foreach (ACO_CicGogglesPanel gp in Object.FindObjectsOfType<ACO_CicGogglesPanel>(true)) { if (gp.TacNames != tacForCic) { gp.TacNames = tacForCic; MarkChanged(gp); } }
+        foreach (ACO_GameFlow gf in Object.FindObjectsOfType<ACO_GameFlow>(true)) { if (gf.TacNames != tacForCic) { gf.TacNames = tacForCic; MarkChanged(gf); } }   // 명단 칸 카드 · 출격 명단 콜사인
+        // 조종사 기록판(6-341)
+        ACO_PilotRecord firstRec = null;
+        foreach (ACO_PilotRecord rec in Object.FindObjectsOfType<ACO_PilotRecord>(true))
+        {
+            if (rec.Progress != progress) { rec.Progress = progress; MarkChanged(rec); }
+            ACO_Loadout loadout = Object.FindObjectOfType<ACO_Loadout>(true);
+            if (rec.Loadout != loadout) { rec.Loadout = loadout; MarkChanged(rec); }
+            if (firstRec == null) { firstRec = rec; }
+        }
+        if (progress != null && progress.Record != firstRec) { progress.Record = firstRec; MarkChanged(progress); }
+        // 로스터(작전 콘솔 상태 글자) 칭호 앞 아이콘 — TMP 스프라이트 묶음
+        TMPro.TMP_SpriteAsset recIcons = AssetDatabase.LoadAssetAtPath<TMPro.TMP_SpriteAsset>(ACO_HUDBuilder.RecIconSpriteAssetPath);
+        if (recIcons != null)
+        {
+            foreach (ACO_GameFlow flow in Object.FindObjectsOfType<ACO_GameFlow>(true))
+            {
+                if (flow.StatusTexts == null) { continue; }
+                foreach (TMPro.TextMeshProUGUI t in flow.StatusTexts) { if (t != null && t.spriteAsset != recIcons) { t.spriteAsset = recIcons; MarkChanged(t); } }
+            }
+        }
+        ACO_TacName tac = Object.FindObjectOfType<ACO_TacName>(true);
+        var vehicles = new List<SaccEntity>();
+        foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            foreach (ACO_VehicleUpgrades up in root.GetComponentsInChildren<ACO_VehicleUpgrades>(true))
+            {
+                SaccEntity e = up.GetComponentInParent<SaccEntity>(true);
+                if (e != null && !vehicles.Contains(e)) { vehicles.Add(e); }
+            }
+        }
+        // 진행도: 출격 인원(보스 칭호 솔로 · 4인, 6-341)
+        if (progress != null && (progress.Vehicles == null || !new HashSet<SaccEntity>(progress.Vehicles).SetEquals(vehicles)))
+        {
+            progress.Vehicles = vehicles.ToArray();
+            MarkChanged(progress);
+        }
+        if (tags == null) { return; }
+        bool same = tags.Vehicles != null && new HashSet<SaccEntity>(tags.Vehicles).SetEquals(vehicles);
+        if (tags.Progress != progress || tags.TacNames != tac || !same)
+        {
+            tags.Progress = progress;
+            tags.TacNames = tac;
+            tags.Vehicles = vehicles.ToArray();
+            MarkChanged(tags);
+            Debug.Log($"[ACO] 조종사 이름표: 진행도 · TAC 네임 · 기체 {vehicles.Count}대를 이었습니다.");
+        }
     }
 
     /// 하이스코어판의 글자를 작전판에 잇는다. 순위를 계산하는 쪽은 작전판(ACO_MissionLog)이다.

@@ -27,7 +27,7 @@ public static partial class ACO_PrefabBuilder
     private const string SubmarineAlbedo = "Assets/ACO_Addon/Models/Submarine/ACO_Submarine_Albedo.png";
     private const int SubSlcmBanks = 3;
     private const int SubSalvoSlots = 6;
-    private const float SubHullHealth = 12000f;   // 6-205: 6000의 2배(3배는 너무 길었다) — 20% 아래에서 충각 돌격
+    public const float SubHullHealth = 15000f;   // 2026-11-20 12000 → 15000(보스 총체력 맞춤 — 사용자)   // 6-205: 6000의 2배(3배는 너무 길었다) — 20% 아래에서 충각 돌격
     private const float SubBowOffset = 131f;      // 뱃머리 끝 z(모델)
     // 무장 자리(모델 기준 — aco_submarine_model.py의 VLS_Z · SAIL_CIWS · REAR_FLAK_Z · REAR_CIWS_Z · SIDE_GUN_Z와 같다)
     private static readonly Vector3[] SubVlsSpots = { new Vector3(0f, 8.92f, 80f), new Vector3(0f, 8.92f, 46f) };   // 앞 갑판 가운데 앞뒤로(갑판 높이)

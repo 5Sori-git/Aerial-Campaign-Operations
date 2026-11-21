@@ -817,7 +817,7 @@ public static class ACO_SpecialWeaponCatalog
     public static bool EcmSoundMissing()
     {
         ACO_RadarContacts contacts = FindEcmHub();
-        return contacts != null && contacts.transform.Find("EcmSound") == null;
+        return contacts != null && (contacts.transform.Find("EcmSound") == null || contacts.transform.Find("EnemyJamSound") == null);
     }
 
     /// ECM 설치: 먼저 들어간 모듈의 미사일을 비우고, 구역 안에서 들리는 2D 루프를 만든다. 연결은 Bake가 한다.
@@ -840,6 +840,7 @@ public static class ACO_SpecialWeaponCatalog
             soundObj.SetParent(contacts.transform, false);
             Undo.RegisterCreatedObjectUndo(soundObj.gameObject, "ACO ECM sound");
         }
+        EnsureEnemyJamSound(contacts);
         AudioSource sound = soundObj.GetComponent<AudioSource>();
         if (sound == null) { sound = soundObj.gameObject.AddComponent<AudioSource>(); }
         if (sound.clip != null) { return; }
@@ -851,6 +852,28 @@ public static class ACO_SpecialWeaponCatalog
         EditorUtility.SetDirty(sound);
     }
 
+
+    /// 적 재밍 구역 소리(6-332): ECM 루프를 낮은 음 · 작게 — 아군 ECM(ECM SUPPORT)과 귀로 구분된다. 연결은 Bake가 한다.
+    private static void EnsureEnemyJamSound(ACO_RadarContacts contacts)
+    {
+        Transform t = contacts.transform.Find("EnemyJamSound");
+        if (t == null)
+        {
+            t = new GameObject("EnemyJamSound").transform;
+            t.SetParent(contacts.transform, false);
+            Undo.RegisterCreatedObjectUndo(t.gameObject, "ACO enemy jam sound");
+        }
+        AudioSource a = t.GetComponent<AudioSource>();
+        if (a == null) { a = t.gameObject.AddComponent<AudioSource>(); }
+        if (a.clip != null) { return; }
+        a.clip = AssetDatabase.LoadAssetAtPath<AudioClip>(EcmLoopPath);
+        a.loop = true;
+        a.playOnAwake = false;
+        a.spatialBlend = 0f;
+        a.volume = 0.35f;
+        a.pitch = 0.62f;
+        EditorUtility.SetDirty(a);
+    }
 
     /// 씬의 모든 특수무장 슬롯에 없는 모듈을 넣는다(새 예제 정의부터 만든다). 넣은 수.
     /// 기체가 프리팹이면 기체 프리팹 파일에 넣는다 — 씬의 기체는 프리팹을 따라간다(슬롯 배열을 씬에서 덮어쓴 기체는 되돌린다: SyncSceneSlots).

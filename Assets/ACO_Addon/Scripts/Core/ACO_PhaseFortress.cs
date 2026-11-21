@@ -21,6 +21,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseFortress : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "fortress"; }
+
         [Header("공중 요새")]
         [Tooltip("단계가 바뀔 때 측면 해치에서 출격하는 적 전투기 수")]
         public int ReinforceFighters = 4;
@@ -38,7 +41,7 @@ namespace ACO
         public int RepairAliveCap = 6;
         [HideInInspector] public int MaxRepairs = 6;   // 예전 값(페이즈 전체 합계 — 이제 쓰지 않는다, 저장된 값만 남긴다)
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초) — 세 단계를 끝낼 시간")]
-        public float ExtraTime = 600f;
+        public float ExtraTime = 0f;   // 2026-11-20 → 0(사용자 "페이즈당 시간이 이미 있으니 호위 · 시한 있는 임무 빼곤 다 빼자" — 레이저 에이스 · LUNA만 남김)
         [Tooltip("엔진이 모두 부서졌을 때의 궤도 속도 배율 — 코어 단계로 넘어가기 직전 값")]
         [Range(0.1f, 1f)] public float MinSpeedScale = 0.45f;
 
@@ -226,6 +229,7 @@ namespace ACO
             int tag = Manager.GetModuleTag();
             Manager.CountTaggedObjectives(tag);
             int total = Manager.GetTaggedTotal();
+            if (_coreDownMs != 0 && !(total > 0 && Manager.GetTaggedDone() >= total)) { _coreDownMs = 0; }   // 6-338: 목표가 다시 살아 있다(확정 전 오판) — 격파 대기 기록을 푼다
             if (total > 0 && Manager.GetTaggedDone() >= total)
             {
                 // 격추: 충돌 폭발이 보이게 기다린다. 기다린 시간은 시간 보너스에서 빼지 않게 돌려준다.
@@ -346,7 +350,10 @@ namespace ACO
 
         private void TickRepair(int now, ACO_FlyingFortress fort)
         {
-            if (RepairInterval <= 0f || now - _nextRepairMs < 0) { return; }
+            if (RepairInterval <= 0f) { return; }
+            // 오너가 바뀌면 새 오너는 0 — 그때부터 간격을 잰다(바로 수리하거나, 서버 시각이 음수면 영영 안 하던 것)
+            if (_nextRepairMs == 0) { _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f); return; }
+            if (now - _nextRepairMs < 0) { return; }
             _nextRepairMs = now + Mathf.RoundToInt(RepairInterval * 1000f);
             // 살아 있는 방공 부위가 RepairAliveCap보다 적을 때만, 그 수까지(페이즈 전체 합계 한도는 없다 — 6-150)
             int count = RepairAliveCap > 0 ? Mathf.Min(RepairCount, RepairAliveCap - fort.CountAirDefenseAlive()) : RepairCount;
@@ -405,6 +412,11 @@ namespace ACO
                 else if (_stage == ACO_FlyingFortress.STAGE_CORE) { Say(SIT_DIVE, ""); }
                 return;
             }
+            // 풀에서 다시 쓰는 보스: 페이즈 시작 직후 몇 프레임은 지난 미션의 부위 체력(0)이 남아 기준이 잘못 잡힐 수 있다(그러면 대사가 안 나왔다).
+            // 부위가 되살아난 게 보이면 기준을 바로잡는다 — 이 대사들이 쓰이는 단계에선 수리로 되살아나는 부위가 없다.
+            if (_stage == ACO_FlyingFortress.STAGE_AIR_DEFENSE && !aaHalf) { _saidAaHalf = false; }
+            if (engines > _saidEngines) { _saidEngines = engines; }
+            if (core > 0.5f) { _saidHalf = false; }
             if (_reinforceMs != 0 && _reinforceMs != _saidReinforceMs && Networking.GetServerTimeInMilliseconds() - _reinforceMs >= 0)
             {
                 _saidReinforceMs = _reinforceMs;
@@ -487,13 +499,13 @@ namespace ACO
             return "DESTROY THE CORE BEFORE IT REACHES THE CITY";
         }
 
-        /// "AA 5/18" → "ENG 3/4" → "CORE 72%  CITY 4.2km"(5km 아래면 빨갛게).
+        /// "AA 5/18" → "ENG 3/4"(부순 수) → "CORE 72%  CITY 4.2km"(5km 아래면 빨갛게).
         public override string GetProgressText()
         {
             ACO_FlyingFortress fort = Fortress();
             if (fort == null || !IsLive()) { return ""; }
-            if (_stage == ACO_FlyingFortress.STAGE_AIR_DEFENSE) { return "AA " + fort.CountAirDefenseAlive() + "/" + fort.GetAirDefenseTotal(); }
-            if (_stage == ACO_FlyingFortress.STAGE_ENGINES) { return "ENG " + fort.CountEnginesAlive() + "/" + fort.GetEngineTotal(); }
+            if (_stage == ACO_FlyingFortress.STAGE_AIR_DEFENSE) { return "AA " + (fort.GetAirDefenseTotal() - fort.CountAirDefenseAlive()) + "/" + fort.GetAirDefenseTotal(); }   // 부순 수(보스 부위 표시 통일)
+            if (_stage == ACO_FlyingFortress.STAGE_ENGINES) { return "ENG " + (fort.GetEngineTotal() - fort.CountEnginesAlive()) + "/" + fort.GetEngineTotal(); }
             float near = fort.GetCityDistance();
             string dist = Dist(near);
             if (near < 5000f) { dist = "<color=#FF5544>" + dist + "</color>"; }

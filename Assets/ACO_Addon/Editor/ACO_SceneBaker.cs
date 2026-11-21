@@ -173,11 +173,14 @@ public partial class ACO_SceneBaker : IVRCSDKBuildRequestedCallback
         BakeTimeSensitive();
         BakeFleet();
         BakeRailgun();
+        BakeLaserTower();
+        BakeBreakingPoint();
         BakeLandShip();
         BakeSubmarine();
         BakeTierHealth();
         BakeTacticalMaps();
         BakeHiScoreBoard();
+        BakePilotTags();
         BakeHudSettings();
         BakeRadio();
         BakeInterior();

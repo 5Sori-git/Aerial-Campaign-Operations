@@ -14,6 +14,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseLuna : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "luna"; }
+
         [Header("배치")]
         [Tooltip("LUNA가 나타나는 거리: 도시에서(m)")]
         public float SpawnDistanceMin = 5000f;
@@ -188,6 +191,8 @@ namespace ACO
                 Generator.RequestReleaseTag(tag);
                 return RESULT_FAIL;
             }
+            // 6-338: 격추 기록 뒤 LUNA가 다시 살아 있다(확정 전 오판) — 기록을 풀어 UAV · 대사 · 유도가 다시 돈다
+            if (_downMs != 0 && Manager.GetTaggedDone() < total) { _downMs = 0; SyncNow(); Debug.Log("[ACO] LUNA: 격추 기록을 풀었다(다시 살아 있음)"); }
             // 성공: 격추 → 빗나간 폭격이 떨어지고 ClearDelay 뒤
             if (Manager.GetTaggedDone() >= total)
             {
@@ -331,6 +336,7 @@ namespace ACO
                 Say(SIT_IMPACT);
                 return;
             }
+            if (!down && _saidDown) { _saidDown = false; }   // 격추 기록이 풀렸다(6-338) — 진짜 격추 때 다시 말한다
             if (down && !_saidDown)
             {
                 _saidDown = true;

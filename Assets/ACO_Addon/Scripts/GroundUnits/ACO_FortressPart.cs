@@ -28,10 +28,14 @@ namespace ACO
         public GameObject[] ShowOnDeath;
         [Tooltip("범위 피해 저항(6-182): 이 부위가 받는 범위 피해에 곱한다(함선 PartSplashScale 위에 더). 1 = 그대로. 탄이 직접 닿으면 그대로 받는다. 랜스 냉각탑 0.45 — 지원 폭격 두 번쯤에 깨진다")]
         [Range(0f, 1f)] public float SplashScale = 1f;
+        [Tooltip("막혀 있을 때(SetJammed) 표적 마커에 대신 보일 글자 — 비우면 드러나기 전엔 마커가 없다. 레이저 탑 환풍구 JAMMED(6-331): 락온 · 피해는 여전히 없다")]
+        public string JammedLabel = "";
 
         // 함선이 SetProgramVariable로 넣는다
         [System.NonSerialized] public bool MissionRevive;
         [System.NonSerialized] public bool Exposed;
+        /// 막힘 표시(JammedLabel) — 드러나기 전에도 마커만 보인다(락온 마커 · 히트박스는 꺼진 채).
+        [System.NonSerialized] public bool Jammed;
 
         private bool _initialized;
 
@@ -54,6 +58,12 @@ namespace ACO
             Exposed = on;
             ApplyState();
         }
+
+        /// 막힘 표시를 켜고 끈다(마커 글자만 — 락온 · 히트박스는 Exposed가 정한다).
+        public void SetJammed(bool on) { Jammed = on && !string.IsNullOrEmpty(JammedLabel); }
+
+        /// 표적 마커가 쓸 글자: 막혀 있으면 JammedLabel, 아니면 MarkerLabel.
+        public string GetMarkerText() { return Jammed && !Exposed ? JammedLabel : MarkerLabel; }
 
         private void ApplyState()
         {
@@ -81,6 +91,7 @@ namespace ACO
         {
             Init();
             Exposed = false;
+            Jammed = false;
             if (MissionRevive) { NetRespawn(); return; }
             ApplyState();
         }
@@ -90,6 +101,7 @@ namespace ACO
         {
             if (TargetHealth && TargetHealth.Health > 0f && Networking.IsOwner(TargetHealth.gameObject)) { TargetHealth.Explode(); }
             Exposed = false;
+            Jammed = false;
             ApplyState();
         }
 
@@ -132,6 +144,7 @@ namespace ACO
         {
             Init();
             Exposed = false;
+            Jammed = false;
             ApplyState();
         }
 

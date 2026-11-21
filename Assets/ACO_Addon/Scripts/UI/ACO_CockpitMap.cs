@@ -16,11 +16,18 @@ namespace ACO
     public class ACO_CockpitMap : UdonSharpBehaviour
     {
         public const int MAX_BLIPS = 320;
+        public const int SEAT_ANY = 0;        // 이 기체에 타고 있으면(조종석 · 뒷자리)
+        public const int SEAT_PILOT = 1;      // 조종석에서만(앞좌석 지도 — 6-346)
+        public const int SEAT_PASSENGER = 2;  // 뒷자리에서만(F형 뒷좌석 지도 — 6-346)
         private const int ECM_RING_SEGMENTS = 40;
         [Tooltip("ECM 재밍 구역 원의 색")]
         public Color EcmColor = new Color(0.3f, 1f, 0.4f, 1f);
         [Tooltip("ECM 재밍 구역 원의 굵기(지도 폭 대비)")]
         public float EcmRingWidth = 0.008f;
+        [Tooltip("적 재머 구역 원의 색(6-332 — 노랑)")]
+        public Color EnemyJamColor = new Color(1f, 0.85f, 0.15f, 1f);
+        [Tooltip("교전 공역 원(6-333 브레이킹 포인트)")]
+        public Color ZoneColor = new Color(0.9f, 0.95f, 1f, 0.8f);
         private const int MAX_VERTICES = 65000;
 
         [Header("참조")]
@@ -56,6 +63,9 @@ namespace ACO
         public float GridLineWidth = 0.0025f;
         [Tooltip("이름표와 격자 테두리 사이(화면 한 변 대비)")]
         public float GridLabelGap = 0.02f;
+
+        [Tooltip("어느 좌석에서 켤지: 0 = 아무 좌석, 1 = 조종석만, 2 = 뒷자리만(6-346)")]
+        public int SeatFilter = SEAT_ANY;
 
         [Header("벽걸이")]
         [Tooltip("켜면 기체 없이 벽에 건 지도로 동작한다. 나 표시를 그리지 않는다")]
@@ -158,7 +168,7 @@ namespace ACO
             _timer = UpdateInterval;
             Start();
 
-            bool mine = WallMode ? PlayerNearby() : Contacts != null && EntityControl != null && Contacts.LocalVehicle == EntityControl;
+            bool mine = WallMode ? PlayerNearby() : Contacts != null && EntityControl != null && Contacts.LocalVehicle == EntityControl && SeatMatches();
             if (mine != _active) { SetActive(mine); }
             if (!mine) { return; }
 
@@ -170,6 +180,16 @@ namespace ACO
                 if (seed != _mapSeed && _terrain.IsBuilt(seed)) { BeginTerrainMesh(seed); }
             }
             Rebuild();
+        }
+
+        /// 좌석 필터(6-346): 조종석만 / 뒷자리만.
+        private bool SeatMatches()
+        {
+            if (SeatFilter == SEAT_ANY) { return true; }
+            int seat = EntityControl.MySeat;
+            if (seat < 0) { return false; }
+            bool pilot = seat == EntityControl.PilotSeat;
+            return SeatFilter == SEAT_PILOT ? pilot : !pilot;
         }
 
         /// 벽걸이: 내가 근처에 있으면 켠다. 기체에 타지 않아도 접촉 목록이 돌게 깨운다.
@@ -223,7 +243,7 @@ namespace ACO
             }
             if (c.Targets != null)
             {
-                for (int i = 0; i < c.Count && _n < MAX_BLIPS - 1; i++)
+                for (int i = 0; i < c.Count && _n < MAX_BLIPS - 2; i++)   // 마지막 두 칸은 내 기체(테두리 + 본체)
                 {
                     if (!c.Visible[i]) { continue; }
                     Transform t = c.Targets[i];
@@ -242,6 +262,8 @@ namespace ACO
                 }
             }
             EcmRings(c);
+            EnemyJamRings(c);
+            ZoneRing(c);
             // 나: 맨 위에 그리도록 마지막
             if (!WallMode)
             {
@@ -278,7 +300,7 @@ namespace ACO
                     Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
                     Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
                     if (Mathf.Abs(p0.x) > 0.5f || Mathf.Abs(p0.y) > 0.5f || Mathf.Abs(p1.x) > 0.5f || Mathf.Abs(p1.y) > 0.5f) { continue; }
-                    if (_n >= MAX_BLIPS - 1) { return; }
+                    if (_n >= MAX_BLIPS - 2) { return; }   // 내 기체 두 칸을 남긴다
                     Vector3 d = p1 - p0;
                     Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (EcmRingWidth * 0.5f);
                     int v = _n * 4;
@@ -287,6 +309,62 @@ namespace ACO
                     _v[v + 2] = p1 + r;
                     _v[v + 3] = p1 - r;
                     Fill(v, EcmColor);
+                }
+            }
+        }
+
+        /// 교전 공역(6-333 브레이킹 포인트): 흰 테두리 원. 지도 밖의 호는 그리지 않는다.
+        private void ZoneRing(ACO_RadarContacts c)
+        {
+            ACO_PhaseModule zm = c.GetZoneModule();
+            if (zm == null) { return; }
+            Vector3 o = ToMap(zm.GetZoneCenter());
+            float radius = zm.GetZoneRadius() * _k;
+            for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+            {
+                float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                if (Mathf.Abs(p0.x) > 0.5f || Mathf.Abs(p0.y) > 0.5f || Mathf.Abs(p1.x) > 0.5f || Mathf.Abs(p1.y) > 0.5f) { continue; }
+                if (_n >= MAX_BLIPS - 2) { return; }   // 내 기체 두 칸을 남긴다
+                Vector3 d = p1 - p0;
+                Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (EcmRingWidth * 0.5f);
+                int v = _n * 4;
+                _v[v] = p0 - r;
+                _v[v + 1] = p0 + r;
+                _v[v + 2] = p1 + r;
+                _v[v + 3] = p1 - r;
+                Fill(v, ZoneColor);
+            }
+        }
+
+        /// 살아 있는 적 재머 구역(6-332): 노란 테두리 원. 지도 밖의 호는 그리지 않는다.
+        private void EnemyJamRings(ACO_RadarContacts c)
+        {
+            if (c.EnemyJammers == null) { return; }
+            for (int i = 0; i < c.EnemyJammers.Length; i++)
+            {
+                ACO_EnemyJammer j = c.EnemyJammers[i];
+                if (j == null || !j.IsJamming()) { continue; }
+                Vector3 o = ToMap(j.GetCenter());
+                float radius = j.Radius * _k;
+                for (int s = 0; s < ECM_RING_SEGMENTS; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    float a1 = (s + 1) * Mathf.PI * 2f / ECM_RING_SEGMENTS;
+                    Vector3 p0 = o + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * radius;
+                    Vector3 p1 = o + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * radius;
+                    if (Mathf.Abs(p0.x) > 0.5f || Mathf.Abs(p0.y) > 0.5f || Mathf.Abs(p1.x) > 0.5f || Mathf.Abs(p1.y) > 0.5f) { continue; }
+                    if (_n >= MAX_BLIPS - 2) { return; }   // 내 기체 두 칸을 남긴다
+                    Vector3 d = p1 - p0;
+                    Vector3 r = new Vector3(d.y, -d.x, 0f).normalized * (EcmRingWidth * 0.5f);
+                    int v = _n * 4;
+                    _v[v] = p0 - r;
+                    _v[v + 1] = p0 + r;
+                    _v[v + 2] = p1 + r;
+                    _v[v + 3] = p1 - r;
+                    Fill(v, EnemyJamColor);
                 }
             }
         }

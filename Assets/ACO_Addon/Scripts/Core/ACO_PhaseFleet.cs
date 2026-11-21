@@ -29,7 +29,7 @@ namespace ACO
         [Tooltip("한 번 출격할 때 기체 사이 간격(초) — 캐터펄트처럼 한 기씩 뜬다")]
         public float LaunchSpacing = 4f;
         [Tooltip("이 페이즈가 시작될 때 미션 제한 시간에 더하는 시간(초)")]
-        public float ExtraTime = 300f;
+        public float ExtraTime = 0f;   // 2026-11-20 → 0(사용자 "페이즈당 시간이 이미 있으니 호위 · 시한 있는 임무 빼곤 다 빼자" — 레이저 에이스 · LUNA만 남김)
         [Tooltip("페이즈가 끝난 뒤 함대를 거두기까지(초) — 격침 연출이 보이게")]
         public float ReleaseDelay = 20f;
 
@@ -127,10 +127,11 @@ namespace ACO
 
             // 기함: 살아 있는 걸 본 뒤 파괴되면 실패(배치 직후 체력 0은 부활 동기화 전). 오너가 바뀌면 다시 본다.
             ACO_EscortUnit flagship = Generator.GetFleetFlagship(tag);
+            int flagIdx = Generator.GetFleetFlagshipIndex(tag);
             if (flagship != null)
             {
                 if (!flagship.IsDestroyed()) { _seenFlagship = true; }
-                else if (_seenFlagship) { return RESULT_FAIL; }
+                else if (_seenFlagship && Manager.IsUnitGone(ACO_MissionGenerator.CAT_ESCORT, flagIdx)) { return RESULT_FAIL; }   // 6-338: 체력 0이 이어져야
             }
 
             if (now - _nextLaunchMs >= 0)

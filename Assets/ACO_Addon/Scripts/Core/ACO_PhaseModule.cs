@@ -163,6 +163,14 @@ namespace ACO
         /// 보스 페이즈인가 — 전용 곡(BgmUrls)이 없으면 ACO_Bgm의 보스 기본 풀을 튼다.
         public virtual bool IsBossPhase() { return false; }
 
+        /// 보스 칭호 · 기록 ID(6-341 — ACO_PlayerProgress 보스 목록과 같은 값, 바꾸지 않는다). "" = 보스 칭호 없음.
+        public virtual string GetAchievementId() { return ""; }
+
+        /// 교전 공역(6-333 브레이킹 포인트): 있으면 HUD 마커 ZONE · 레이더 · 조종석 지도 원.
+        public virtual bool HasZone() { return false; }
+        public virtual Vector3 GetZoneCenter() { return Vector3.zero; }
+        public virtual float GetZoneRadius() { return 0f; }
+
         /// 지금 BGM 단계(0 = BgmUrls, 1 = BgmUrls2, 2 = BgmUrls3 — 6-203). 동기화된 값으로만 정해 모든 화면이 같은 순간에 바꾼다. 기본 0.
         public virtual int GetBgmStage() { return 0; }
 

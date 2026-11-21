@@ -105,6 +105,7 @@ namespace ACO
             gameObject.SetActive(true);
             // 부른 사람이 계산한다 — 체력 · 위치 · 표적 판정이 그 화면에서(점수도 부른 사람에게)
             if (caller && fresh && !Networking.IsOwner(gameObject)) { Networking.SetOwner(Networking.LocalPlayer, gameObject); }
+            SetCredit(true);   // 지원 호출 · CIC 편대는 부른 사람 점수(페이즈 전용 편대는 관리자가 곧바로 끈다)
             if (AI)
             {
                 AI.EnsureInit();
@@ -150,6 +151,14 @@ namespace ACO
                 if (_savedHoldRadius >= 0f) { AI.HoldRadius = _savedHoldRadius; }
                 if (_savedDetect >= 0f) { AI.DetectRange = _savedDetect; AI.LoseTargetRange = _savedLose; }
             }
+        }
+
+        /// 기총 · 미사일 명중을 쏜 기체의 오너가 판정해 그 사람 점수로(true), 아니면 피격자가 판정하고 아군 유닛 격추(개인 점수 없음 — 6-333 페이즈 편대).
+        public void SetCredit(bool on)
+        {
+            if (AI == null) { return; }
+            if (AI.Gun) { AI.Gun.CreditOwner = on; }
+            if (AI.MissileLauncher) { AI.MissileLauncher.CreditOwner = on; }
         }
 
         public float GetEndTime() { return _endTime; }

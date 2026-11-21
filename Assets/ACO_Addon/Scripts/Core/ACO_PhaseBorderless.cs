@@ -14,6 +14,9 @@ namespace ACO
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class ACO_PhaseBorderless : ACO_PhaseBoss
     {
+        /// 보스 칭호 · 기록 ID(6-341).
+        public override string GetAchievementId() { return "borderless"; }
+
         public const int STAGE_LASER = 0;
         public const int STAGE_ICBM = 1;
 
@@ -171,6 +174,7 @@ namespace ACO
                 Manager.ScheduleModuleRelease();
                 return RESULT_FAIL;
             }
+            if (_downMs != 0 && Manager.GetTaggedDone() < total) { _downMs = 0; }   // 6-338: 목표가 다시 살아 있다(확정 전 오판) — 격파 대기 기록을 푼다
             if (Manager.GetTaggedDone() >= total)
             {
                 if (_downMs == 0) { _downMs = now; }

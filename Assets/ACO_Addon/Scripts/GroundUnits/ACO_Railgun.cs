@@ -410,6 +410,7 @@ namespace ACO
         {
             if (Contacts == null || Contacts.LocalVehicle == null) { return; }
             SaccEntity e = Contacts.LocalVehicle;
+            if (!e.Piloting) { return; }   // 승객 화면은 판정하지 않는다(2인승에서 피해 두 배였다)
             Vector3 d = e.transform.position - from;
             float along = Vector3.Dot(d, dir);
             if (along < 0f || along > BeamLength) { return; }

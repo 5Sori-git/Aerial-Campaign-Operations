@@ -270,6 +270,488 @@ public static class ACO_PrefabTuning
         Debug.Log($"[ACO] 탄 디버그 로그 끄기: 프리팹 {n}개.");
     }
 
+    private static readonly int[] LaserTowerLineEvent = {ACO_PhaseLaserTower.SIT_SPAWN, ACO_PhaseLaserTower.SIT_SPAWN, ACO_PhaseLaserTower.SIT_JAM_HINT, ACO_PhaseLaserTower.SIT_ECM_DOWN, ACO_PhaseLaserTower.SIT_ECM_LAST, ACO_PhaseLaserTower.SIT_VENTS, ACO_PhaseLaserTower.SIT_VENTS, ACO_PhaseLaserTower.SIT_VENT_DOWN, ACO_PhaseLaserTower.SIT_VENT_LAST, ACO_PhaseLaserTower.SIT_AIM, ACO_PhaseLaserTower.SIT_NET, ACO_PhaseLaserTower.SIT_AIRSHIP_DOWN, ACO_PhaseLaserTower.SIT_AIRSHIPS_GONE, ACO_PhaseLaserTower.SIT_AIRSHIPS_GONE, ACO_PhaseLaserTower.SIT_REPAIR, ACO_PhaseLaserTower.SIT_REINFORCE, ACO_PhaseLaserTower.SIT_REINFORCE, ACO_PhaseLaserTower.SIT_LENS_STAGE, ACO_PhaseLaserTower.SIT_LENS_STAGE, ACO_PhaseLaserTower.SIT_OVERHEAT, ACO_PhaseLaserTower.SIT_OVERHEAT_AGAIN, ACO_PhaseLaserTower.SIT_LENS_HALF, ACO_PhaseLaserTower.SIT_LENS_HALF, ACO_PhaseLaserTower.SIT_LENS_DOWN, ACO_PhaseLaserTower.SIT_LENS_DOWN, ACO_PhaseLaserTower.SIT_IMPACT_DOWN };
+    private static readonly int[] LaserTowerLineSpeaker = { ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_ENEMY, ACO_PhaseBoss.SPEAKER_AWACS, ACO_PhaseBoss.SPEAKER_AWACS };
+    private static readonly string[] LaserTowerLineText =
+    {
+        "Let there be light. Caliburn opens its eye, and this sky will be cleansed.",
+        "Optical weapon tower detected! Its jammers are shielding the power grid. Find the three ECM vehicles and take them out!",
+        "Your missiles won't lock the vents while the jammers are up. ECM vehicles first!",
+        "ECM vehicle down! {left} left!",
+        "One jammer left. Take it out!",
+        "You tore away our veil? Then face the light unshielded.",
+        "Jamming is down! The exhaust vents on the power towers are exposed. Hit them!",
+        "Vent destroyed! {left} left!",
+        "Last vent! Knock it out!",
+        "Laser lock on one of you! Break hard, don't fly straight!",
+        "Reflector net forming! Watch the blue lines and find a gap!",
+        "Reflector down! {left} left!",
+        "The mirrors are broken... but the light needs no mirrors!",
+        "All reflectors are down. No more nets!",
+        "Their guns around the tower are back online. Watch the low approach!",
+        "Faithful, take wing! Guard Caliburn!",
+        "Enemy fighters inbound over the tower!",
+        "Pour everything into the lens. The light is judgment.",
+        "All vents down! The lens overheats after every shot. Hit it the moment it fires!",
+        "The lens is glowing red! Hit it now!",
+        "Lens is open again. Strike now!",
+        "The vessel cracks, but the light endures! Give it everything!",
+        "The lens is cracking! Keep it up!",
+        "No... the light... it is leaving us!",
+        "Lens destroyed! Get clear, the tower is coming down!",
+        "The tower is down. Outstanding work, all aircraft.",
+    };
+
+    /// lasertower-lines-1(6-331): 사용자 "대사는 네가 한번 짜줘봐" → "대사 겹치거나 할 때 안 밀리게 적당히 조절해줘". 밀림 조절은 스크립트(KeepWarning 등 — 새 칸은 기본값).
+    private static void TuneLaserTowerLines()
+    {
+        int n = 0;
+        foreach (ACO_PhaseLaserTower m in FindInScene<ACO_PhaseLaserTower>())
+        {
+            Undo.RecordObject(m, "ACO laser tower lines");
+            m.LineEvent = (int[])LaserTowerLineEvent.Clone();
+            m.LineSpeaker = (int[])LaserTowerLineSpeaker.Clone();
+            m.LineText = (string[])LaserTowerLineText.Clone();
+            m.LineClip = new AudioClip[LaserTowerLineText.Length];
+            m.AllyName = "WINGMAN";
+            m.SystemName = "TOWER FCS";
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 레이저 탑 대사 표({LaserTowerLineText.Length}줄)를 모듈 {n}개에 넣었습니다. 씬을 저장하세요.");
+    }
+
+    /// caliburn-track-3(6-331): 사용자 "칼리번 조준 속도 6도 정도로 해줘, 8도 하니까 여전히 세네".
+    private static void TuneCaliburnTrack3()
+    {
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true)) { t.TrackRateA = 6f; t.JamTrackRate = 3f; Mark(t); any = true; }
+            return any;
+        });
+        RevertInScene<ACO_LaserTower>("TrackRateA", "JamTrackRate");
+        Debug.Log("[ACO] 칼리번 직사 추적 6°/s(ECM 3).");
+    }
+
+    /// airship-health-1000-1: 사용자 "기구 체력 1000 정도로 하자".
+    private static void TuneAirshipHealth1000()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                if (t.Airships == null) { continue; }
+                foreach (ACO_FortressPart a in t.Airships)
+                {
+                    if (a == null || a.TargetHealth == null) { continue; }
+                    a.TargetHealth.Health = ACO_PrefabBuilder.LaserAirshipHealth;
+                    a.BaseHealth = ACO_PrefabBuilder.LaserAirshipHealth;
+                    Mark(a); Mark(a.TargetHealth);
+                    n++; any = true;
+                }
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] 칼리번 비행선 체력: {n}척을 {ACO_PrefabBuilder.LaserAirshipHealth}로.");
+    }
+
+    /// boss-names-1: 사용자 "아크엔젤, 쌍둥이로 하자 미션 이름도 그렇게 해줘"(칭호 이름과 맞춤).
+    private static void TuneBossNames()
+    {
+        int n = 0;
+        foreach (ACO_PhaseFortress m in FindInScene<ACO_PhaseFortress>())
+        {
+            Undo.RecordObject(m, "ACO boss names");
+            m.PhaseName = FortressPhaseName;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        foreach (ACO_PhaseTwins m in FindInScene<ACO_PhaseTwins>())
+        {
+            Undo.RecordObject(m, "ACO boss names");
+            m.PhaseName = TwinsPhaseName;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 보스 미션 이름: 페이즈 {n}개(아크엔젤 · 쌍둥이). 씬을 저장하세요.");
+    }
+
+    /// boss-health-1: 사용자 "공중 요새 체력 좀 높이자, 랜스는 시간 제한이 있으니 그대로, 잠수함 선체 체력 올리고, 렌즈는 낮추고 환풍구는 조금만" → 환풍구 2200.
+    private static void TuneBossHealth()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_FlyingFortress f in root.GetComponentsInChildren<ACO_FlyingFortress>(true))
+            {
+                if (f.TargetHealth != null) { f.TargetHealth.Health = FortressCoreHealth; Mark(f.TargetHealth); }
+                if (f.Engines != null) { foreach (ACO_FortressPart e in f.Engines) { if (e != null && e.TargetHealth != null) { e.TargetHealth.Health = FortressEngineHealth; if (e.BaseHealth > 0f) { e.BaseHealth = FortressEngineHealth; Mark(e); } Mark(e.TargetHealth); n++; } } }
+                any = true;
+            }
+            foreach (ACO_Submarine s in root.GetComponentsInChildren<ACO_Submarine>(true))
+            {
+                SaccTarget hull = s.GetComponent<SaccTarget>();
+                if (hull != null) { hull.Health = ACO_PrefabBuilder.SubHullHealth; Mark(hull); n++; any = true; }
+            }
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                SaccTarget lens = t.GetComponent<SaccTarget>();
+                if (lens != null) { lens.Health = ACO_PrefabBuilder.LaserLensHealth; Mark(lens); n++; }
+                if (t.Vents != null) { foreach (ACO_FortressPart v in t.Vents) { if (v != null && v.TargetHealth != null) { v.TargetHealth.Health = ACO_PrefabBuilder.LaserVentHealth; v.BaseHealth = ACO_PrefabBuilder.LaserVentHealth; Mark(v); Mark(v.TargetHealth); n++; } } }
+                any = true;
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] 보스 총체력 맞춤: 체력 {n}곳을 고쳤습니다. Bake 하세요(기준 체력).");
+    }
+
+    /// wingman-lines-awacs-1: 사용자 "윙맨 대사는 빼고 대체할 AWACS 대사를 넣어줘".
+    private static void TuneWingmanLinesAwacs()
+    {
+        TuneLaserTowerLines();
+        TuneBreakingPointLines2();
+        Debug.Log("[ACO] 윙맨 대사 → AWACS: 칼리번 3줄 · 브레이킹 포인트 1줄. 씬을 저장하세요.");
+    }
+
+    /// extra-time-off-1: 사용자 "페이즈당 시간 이미 정해져 있잖아? 호위랑 시간 제한 있는 임무들 빼곤 다 빼자" → 레이저 에이스 · LUNA(착탄 · 폭격 카운트다운)만 남김.
+    private static void TuneExtraTimeOff()
+    {
+        int n = 0;
+        foreach (ACO_PhaseFleet m in FindInScene<ACO_PhaseFleet>()) { Undo.RecordObject(m, "ACO extra time"); m.ExtraTime = 0f; Done(m); n++; }
+        foreach (ACO_PhaseFortress m in FindInScene<ACO_PhaseFortress>()) { Undo.RecordObject(m, "ACO extra time"); m.ExtraTime = 0f; Done(m); n++; }
+        foreach (ACO_PhaseLandShip m in FindInScene<ACO_PhaseLandShip>()) { Undo.RecordObject(m, "ACO extra time"); m.ExtraTime = 0f; Done(m); n++; }
+        foreach (ACO_PhaseRailgun m in FindInScene<ACO_PhaseRailgun>()) { Undo.RecordObject(m, "ACO extra time"); m.ExtraTime = 0f; Done(m); n++; }
+        foreach (ACO_PhaseSubmarine m in FindInScene<ACO_PhaseSubmarine>()) { Undo.RecordObject(m, "ACO extra time"); m.ExtraTime = 0f; Done(m); n++; }
+        foreach (ACO_PhaseBreakingPoint m in FindInScene<ACO_PhaseBreakingPoint>()) { Undo.RecordObject(m, "ACO extra time"); m.GrantTravelTime = false; Done(m); }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 보스 추가 시간: 모듈 {n}개 0초로(레이저 에이스 · LUNA는 그대로), 브레이킹 포인트 이동 시간 끔. 씬을 저장하세요.");
+    }
+
+    private static void Done(Component m)
+    {
+        PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+        EditorUtility.SetDirty(m);
+    }
+
+    /// caliburn-track-2(6-331 · 6-333): 사용자 "레이저 지금은 좀 느리네 흔들림은 그대로 추적 속도는 8도 정도로" · "스폰 위치는 zone 훨씬 가까이에서".
+    private static void TuneCaliburnTrack2()
+    {
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                t.TrackRateA = 8f;
+                t.JamTrackRate = 4f;
+                Mark(t);
+                any = true;
+            }
+            return any;
+        });
+        RevertInScene<ACO_LaserTower>("TrackRateA", "JamTrackRate");
+        foreach (ACO_PhaseBreakingPoint m in FindInScene<ACO_PhaseBreakingPoint>())
+        {
+            Undo.RecordObject(m, "ACO Breaking Point spawn");
+            m.SpawnDistanceMin = 3000f;
+            m.SpawnDistanceMax = 6000f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 칼리번 추적 8°/s(ECM 4), 브레이킹 포인트 스폰 3 ~ 6km. 씬을 저장하세요.");
+    }
+
+    /// caliburn-ecm-spread-1(6-331): 사용자 "ECM 기지 배치 좀 넓게 해줘, UGB에 한 방에 다 안 쓸리게".
+    private static void TuneCaliburnEcmSpread()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                if (t.EcmSites == null) { continue; }
+                foreach (Transform site in t.EcmSites)
+                {
+                    if (site == null) { continue; }
+                    for (int k = 0; k < 3; k++)
+                    {
+                        Transform f = site.Find("Flak_" + k);
+                        if (f == null) { continue; }
+                        float b = k * Mathf.PI * 2f / 3f + 0.4f;
+                        f.localPosition = new Vector3(Mathf.Sin(b), 0f, Mathf.Cos(b)) * ACO_PrefabBuilder.LaserSiteFlakRadius;
+                        n++;
+                    }
+                    Transform v = site.Find("VLS");
+                    if (v != null) { v.localPosition = ACO_PrefabBuilder.LaserSiteVlsPos; n++; }
+                    Transform c = site.Find("CIWS");
+                    if (c != null) { c.localPosition = ACO_PrefabBuilder.LaserSiteCiwsPos; n++; }
+                    any = true;
+                }
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] 칼리번 ECM 기지 넓게: 포대 {n}곳을 옮겼습니다.");
+    }
+
+    /// caliburn-period-1(6-331): 사용자 "칼리번 레이저 패턴 좀 더 자주 쓰게 해주고".
+    private static void TuneCaliburnPeriod()
+    {
+        foreach (ACO_PhaseLaserTower m in FindInScene<ACO_PhaseLaserTower>())
+        {
+            Undo.RecordObject(m, "ACO Caliburn period");
+            m.PeriodA = new[] { 14f, 11f, 8f };
+            m.PeriodB = new[] { 22f, 22f, 14f };
+            m.PeriodPerVentB = 3f;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 칼리번 패턴 주기: A 14 · 11 · 8초, B 22 · 22 · 14초, 환풍구당 +3초. 씬을 저장하세요.");
+    }
+
+    /// caliburn-track-1(6-331): 사용자 "칼리번 레이저 선회가 생각보다 너무 강한데, 멀리서 접근할 수가 없어 흔들림도 좀 더 주고".
+    private static void TuneCaliburnTrack()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower t in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                t.TrackRateA = 4f;
+                t.JamTrackRate = 2f;
+                t.JamWobble = 3.5f;
+                t.BaseWobble = 0.8f;
+                Mark(t);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        RevertInScene<ACO_LaserTower>("TrackRateA", "JamTrackRate", "JamWobble", "BaseWobble");
+        Debug.Log($"[ACO] 칼리번 추적 약하게: 프리팹 {n}곳.");
+    }
+
+    /// breakingpoint-voice-1(6-333): 사용자 "블리딩이라는 대사, 손실을 입으며라고 하는 게 덜 어색할 것 같아, 이렇게 음성 만들어줘".
+    private static void TuneBreakingPointVoice()
+    {
+        TuneBreakingPointLines2();
+        int n = 0;
+        foreach (ACO_PhaseBreakingPoint m in FindInScene<ACO_PhaseBreakingPoint>()) { if (ACO_VoiceLines.ApplyPhase(m)) { n++; } }
+        Debug.Log($"[ACO] 브레이킹 포인트 음성: 모듈 {n}개의 빈 음성 칸을 채웠습니다. 씬을 저장하세요.");
+    }
+
+    /// breakingpoint-lines-2(6-333): 사용자 "아군 합류랑 전멸 대사는 빼줘, 4인 코옵이라 혼자 남았다는 말이 안 맞아". 스크립트 기본값으로 다시 넣는다.
+    private static void TuneBreakingPointLines2()
+    {
+        var go = new GameObject("ACO_BreakingPointDefaults");
+        go.hideFlags = HideFlags.HideAndDontSave;
+        try
+        {
+            ACO_PhaseBreakingPoint d = go.AddComponent<ACO_PhaseBreakingPoint>();
+            foreach (ACO_PhaseBreakingPoint m in FindInScene<ACO_PhaseBreakingPoint>())
+            {
+                Undo.RecordObject(m, "ACO Breaking Point lines 2");
+                m.LineEvent = (int[])d.LineEvent.Clone();
+                m.LineSpeaker = (int[])d.LineSpeaker.Clone();
+                m.LineText = (string[])d.LineText.Clone();
+                m.LineClip = new AudioClip[d.LineText.Length];
+                PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+                EditorUtility.SetDirty(m);
+            }
+        }
+        finally { Object.DestroyImmediate(go); }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 브레이킹 포인트 대사 9줄(아군 합류 · 전멸 뺌). 씬을 저장하세요.");
+    }
+
+    /// breakingpoint-lines-1(6-333): 사용자 "퍼볼이 대사에 너무 많다, 한 줄 정도만" · "가중치는 0, 0, 1, 3, 0.01".
+    private static void TuneBreakingPointLines()
+    {
+        string[] from = { "Wingmen on station. Let's tear this furball apart.", "More bandits inbound. They keep feeding the furball.", "Both wingmen are down. You're on your own in this furball. Watch your six." };
+        string[] to = { "Wingmen on station. Let's tear them apart.", "More bandits inbound. They keep throwing fighters at us.", "Both wingmen are down. You're on your own out there. Watch your six." };
+        foreach (ACO_PhaseBreakingPoint m in FindInScene<ACO_PhaseBreakingPoint>())
+        {
+            Undo.RecordObject(m, "ACO Breaking Point lines");
+            for (int i = 0; m.LineText != null && i < m.LineText.Length; i++)
+            {
+                int k = System.Array.IndexOf(from, m.LineText[i]);
+                if (k >= 0) { m.LineText[i] = to[k]; }
+            }
+            m.PhaseWeights = (float[])ACO_PhaseModuleSetup.BreakingPointWeights.Clone();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 브레이킹 포인트: 퍼볼 대사 한 줄만, 가중치 0 · 0 · 1 · 3 · 0.01. 씬을 저장하세요.");
+    }
+
+    /// airship-fall-visual-1(6-331): 에이전트 점검 — 격추된 비행선이 낙하 연출 없이 바로 사라졌다(연기만 떨어짐).
+    private static void TuneAirshipFallVisual()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_LaserTower tower in root.GetComponentsInChildren<ACO_LaserTower>(true))
+            {
+                if (tower.Airships == null) { continue; }
+                foreach (ACO_FortressPart ship in tower.Airships)
+                {
+                    if (ship == null || ship.HideOnDeath == null || ship.HideOnDeath.Length == 0) { continue; }
+                    ship.HideOnDeath = new GameObject[0];
+                    Mark(ship);
+                    any = true;
+                    n++;
+                }
+            }
+            return any;
+        });
+        Debug.Log($"[ACO] 칼리번 비행선 낙하 모습: 프리팹 비행선 {n}척의 HideOnDeath를 비웠습니다.");
+    }
+
+    /// jammer-radius-4km-1(6-332): 사용자 "재머 크기를 4km 정도로 늘려줘".
+    private static void TuneJammerRadius4km()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_EnemyJammer j in root.GetComponentsInChildren<ACO_EnemyJammer>(true))
+            {
+                if (Mathf.Approximately(j.Radius, 4000f)) { continue; }
+                j.Radius = 4000f;
+                Mark(j);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        RevertInScene<ACO_EnemyJammer>("Radius");
+        Debug.Log($"[ACO] 적 재머 반경: 프리팹 {n}곳을 4km로. 씬을 저장하세요.");
+    }
+
+    /// caliburn-nofcs-1(6-331): 사용자 "육상전함도 그렇고 사격통제 대사 안 써, 대사를 빼줘".
+    private static void TuneCaliburnNoFcs()
+    {
+        TuneLaserTowerLines();
+        TuneCaliburnVoice();
+    }
+
+    /// caliburn-voice-1(6-331): 사용자 "음성 제작해서 넣어줘" — ElevenLabs(Tools/aco_voice_lines.json caliburn_*)로 만든 음성을 빈 칸에.
+    private static void TuneCaliburnVoice()
+    {
+        int n = 0;
+        foreach (ACO_PhaseLaserTower m in FindInScene<ACO_PhaseLaserTower>()) { if (ACO_VoiceLines.ApplyPhase(m)) { n++; } }
+        Debug.Log($"[ACO] 칼리번 음성: 모듈 {n}개의 빈 음성 칸을 채웠습니다. 씬을 저장하세요.");
+    }
+
+    /// caliburn-name-2(6-331): 사용자 "awacs 대사는 그대로 둬" — 칼리번 이름은 적 대사 · 화면 이름에만.
+    private static void TuneCaliburnName2()
+    {
+        TuneLaserTowerLines();
+        foreach (ACO_PhaseLaserTower m in FindInScene<ACO_PhaseLaserTower>())
+        {
+            Undo.RecordObject(m, "ACO Caliburn AWACS lines");
+            m.StartText = "Optical weapon tower detected. Its jammers are shielding the power grid. Take out the ECM vehicles first!";
+            m.SuccessText = "The tower is down. All aircraft, outstanding work.";
+            m.FailChatterText = "We could not bring down the tower. All units, withdraw.";
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 칼리번 AWACS 대사 되돌림: 대사 표와 시작 · 성공 · 실패 문구. 씬을 저장하세요.");
+    }
+
+    /// caliburn-name-1(6-331): 사용자 "병기 이름은 칼리번으로 하자".
+    private static void TuneCaliburnName()
+    {
+        TuneLaserTowerLines();
+        foreach (ACO_PhaseLaserTower m in FindInScene<ACO_PhaseLaserTower>())
+        {
+            Undo.RecordObject(m, "ACO Caliburn name");
+            m.PhaseName = "CALIBURN";
+            m.EnemyName = "CALIBURN CONTROL";
+            m.StartText = "Optical weapon Caliburn detected. Its jammers are shielding the power grid. Take out the ECM vehicles first!";
+            m.SuccessText = "Caliburn is down. All aircraft, outstanding work.";
+            m.FailChatterText = "We could not bring down Caliburn. All units, withdraw.";
+            PrefabUtility.RecordPrefabInstancePropertyModifications(m);
+            EditorUtility.SetDirty(m);
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log("[ACO] 레이저 탑 이름 칼리번: 페이즈 이름 · 적 화자 · 시작 · 성공 · 실패 문구를 바꿨습니다. 씬을 저장하세요.");
+    }
+
+    /// pad-skirt-relief-1(6-331): 사용자 "랜스 포대처럼 그냥 아주 길게 늘려, 랜스 포대도 허용 조건 좀 풀어주고".
+    private static void TunePadSkirtRelief()
+    {
+        ACO_PrefabBuilder.BuildRailgun();
+        int n = 0;
+        foreach (ACO_MissionGenerator g in FindInScene<ACO_MissionGenerator>())
+        {
+            bool changed = false;
+            Undo.RecordObject(g, "ACO pad relief");
+            if (Mathf.Approximately(g.RailgunMaxRelief, 80f)) { g.RailgunMaxRelief = 400f; changed = true; }
+            if (Mathf.Approximately(g.LaserTowerMaxRelief, 250f)) { g.LaserTowerMaxRelief = 500f; changed = true; }
+            if (!changed) { continue; }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(g);
+            EditorUtility.SetDirty(g);
+            n++;
+        }
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        Debug.Log($"[ACO] 기초 길게 · 자리 조건 완화(6-331): 랜스 프리팹을 다시 만들고 미션 생성기 {n}곳의 허용 높이 차를 바꿨습니다. Bake · 씬 저장하세요.");
+    }
+
+    /// water-spray-height-50-1(6-329): 기준 물보라 프리팹 MaxHeight → ACO_WaterFxBuilder.SprayMaxHeight(50m). 변형(미사일)은 자기 값(15m)을 덮어 쓰고 있어 그대로.
+    private static void TuneWaterSprayHeight()
+    {
+        string path = ACO_WaterFxBuilder.SprayPrefabPath;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null) { Debug.LogWarning("[ACO] 물보라 높이: " + path + "가 없습니다."); return; }
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            foreach (ACO_WaterFx fx in root.GetComponentsInChildren<ACO_WaterFx>(true))
+            {
+                if (fx.Mode != ACO_WaterFx.MODE_SPRAY) { continue; }
+                fx.MaxHeight = ACO_WaterFxBuilder.SprayMaxHeight;
+                EditorUtility.SetDirty(fx);
+            }
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+        }
+        finally { PrefabUtility.UnloadPrefabContents(root); }
+        // 플레이어 기체 물보라는 기체 프리팹(Pit-bool) 안의 일반 오브젝트다(기준 프리팹 인스턴스가 아님) — 거기도 같은 값으로
+        const string aircraftPath = "Assets/Pit-bool/FA-18E Main_ACO.prefab";
+        int n = 0;
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(aircraftPath) != null)
+        {
+            GameObject air = PrefabUtility.LoadPrefabContents(aircraftPath);
+            try
+            {
+                foreach (ACO_WaterFx fx in air.GetComponentsInChildren<ACO_WaterFx>(true))
+                {
+                    if (fx.Mode != ACO_WaterFx.MODE_SPRAY || Mathf.Approximately(fx.MaxHeight, ACO_WaterFxBuilder.SprayMaxHeight)) { continue; }
+                    fx.MaxHeight = ACO_WaterFxBuilder.SprayMaxHeight;
+                    EditorUtility.SetDirty(fx);
+                    n++;
+                }
+                if (n > 0) { PrefabUtility.SaveAsPrefabAsset(air, aircraftPath); }
+            }
+            finally { PrefabUtility.UnloadPrefabContents(air); }
+        }
+        foreach (ACO_WaterFx fx in FindInScene<ACO_WaterFx>()) { if (fx.Mode == ACO_WaterFx.MODE_SPRAY) { Revert(fx, "MaxHeight"); } }
+        Debug.Log($"[ACO] 물보라 높이: 기체 {ACO_WaterFxBuilder.SprayMaxHeight}m(기준 프리팹 + 플레이어 기체 프리팹 {n}곳, 미사일 변형은 그대로).");
+    }
+
     /// fortress-dive-core-1(6-226): 공중 요새 3단계 — 돌진 약 2분 30초 → 약 3분(DiveSpeed 60 → 49), 코어 체력 4000 → 2000.
     /// 돌진 시간 = 대기 1.5초 + 가속 20초(엔진이 다 부서져 27m/s에서) + 남은 길 ÷ DiveSpeed — 궤도 7km 기준 길 약 8.5km.
     private static void TuneFortressDiveCore()
@@ -297,7 +779,10 @@ public static class ACO_PrefabTuning
     }
 
     public const float FortressDiveSpeed = 49f;
-    public const float FortressCoreHealth = 2000f;
+    public const string FortressPhaseName = "FLYING FORTRESS - ARCHANGEL";   // 2026-11-21 사용자 "아크엔젤 · 쌍둥이로 하자, 미션 이름도" (boss-names-1)
+    public const string TwinsPhaseName = "ACES - TWINS";                      // 예전 "ACES - {ACE}"(= HEADS & TAILS). 마커 · 무전의 HEADS · TAILS 콜사인은 그대로
+    public const float FortressCoreHealth = 3000f;     // 2026-11-20 2000 → 3000(보스 총체력 맞춤 — 사용자 "공중 요새 체력을 좀 높이자")
+    public const float FortressEngineHealth = 1800f;   // 2026-11-20 1200 → 1800
 
     /// artillery-shell-collider-1(6-225): 야포 포탄(ACO_ArtilleryShell) 모델의 콜라이더를 지운다. 포탄은 매 프레임 이동 구간을 Linecast로 보는데
     /// 바꿔 끼운 박격포탄 모델(SM_Prop_Mortar_Shell_01)의 MeshCollider가 그 구간 안에 있어 무장 시간(0.5초)이 끝나자마자 자기 몸에 맞아 공중에서 터졌다.
@@ -996,6 +1481,31 @@ public static class ACO_PrefabTuning
         new Entry { Id = "tunnel-landmark-2", Text = "터널 랜드마크 2판(6-266): 1 · 2 · 3칸 터널(약 0.65 · 1.35 · 2.0km, 꼭대기 140m) 프리팹을 만들고 씬 지형 장식에 넣습니다 — 놓을 수 있는 가장 긴 것, 확률 0.9. 고친 뒤 씬 저장", Apply = TuneTunnelLandmark },
         new Entry { Id = "wingmen-note-1", Text = "아군 편대 상점 주의 문구에서 '시가지의 차량은 공격하지 않습니다'를 뺍니다(당연한 내용이라). 격납고 프리팹 · 씬 상점의 4번째 주의 문구가 예전 문장일 때만 바꿉니다", Apply = TuneWingmenNote },
         new Entry { Id = "phase-names-1", Text = "페이즈 이름 · 문구 통일(6-300): ACES - Head&Tail → ACES - {ACE}, ACE SQUADRON → ACE SQUADRON - {BOSS}, SHADE SQUADRON → ACE SQUADRON - SHADE, TIME SENSITIVE 실패 INTERCEPT FAILED → MISSILE LAUNCHED, 무전 문구 오타(Tripple A · you broke · guys 마침표 · 공백 두 칸 · 둥근 따옴표). 씬 페이즈 모듈 — 이전 값일 때만. 번역표 영어 칸은 같이 고쳐 두었다. 뒤에 씬 저장", Apply = TunePhaseNames },
+        new Entry { Id = "caliburn-track-3", Text = "칼리번 직사 추적 8 → 6°/s(ECM 4 → 3, 흔들림 그대로). 씬 덮어쓰기는 지운다", Apply = TuneCaliburnTrack3 },
+        new Entry { Id = "airship-health-1000-1", Text = "칼리번 반사판 비행선 체력 1500 → 1000(6-331). 프리팹을 고친 뒤 Bake", Apply = TuneAirshipHealth1000 },
+        new Entry { Id = "npcgun-visual-nomsg-1", Text = "NPC 기총 · 포 비주얼 탄(VisualParticle)의 충돌 메시지를 끕니다 — 전차 포탄이 보이는 모든 화면에서 SAV 피격(기본 10)을 또 넣고 있었다. 지형에 막히는 충돌은 그대로, 피해는 판정자 한 화면만", Apply = TuneNpcGunVisualMessages },
+        new Entry { Id = "boss-names-1", Text = "보스 미션 이름: 씬 공중 요새 페이즈 FLYING FORTRESS → FLYING FORTRESS - ARCHANGEL, 쌍둥이 페이즈 ACES - {ACE}(HEADS & TAILS) → ACES - TWINS. 뒤에 씬 저장", Apply = TuneBossNames },
+        new Entry { Id = "boss-health-1", Text = "보스 총체력 맞춤: 공중 요새 엔진 1200 → 1800 · 코어 2000 → 3000, 잠수함 선체 12000 → 15000, 칼리번 환풍구 3000 → 2200 · 렌즈 3000 → 2000(랜스 · 육상전함 그대로). 프리팹을 고친 뒤 Bake(기준 체력)", Apply = TuneBossHealth },
+        new Entry { Id = "wingman-lines-awacs-1", Text = "윙맨 대사 빼기: 씬 칼리번 대사 3줄(재머 하나 남음 · 마지막 환풍구 · 렌즈 다시 열림)과 브레이킹 포인트 아군 격추 1줄을 AWACS 대사로(음성 같은 파일 — 다시 만든다). 뒤에 씬 저장", Apply = TuneWingmanLinesAwacs },
+        new Entry { Id = "extra-time-off-1", Text = "보스 추가 시간 빼기: 씬 함대전 · 공중 요새 · 육상전함 · 랜스 포대 · 잠수함 ExtraTime → 0(레이저 에이스 · LUNA만 남김 — 페이즈당 시간이 이미 있다), 브레이킹 포인트 이동 시간 끔. 뒤에 씬 저장", Apply = TuneExtraTimeOff },
+        new Entry { Id = "caliburn-track-2", Text = "칼리번 · 브레이킹 포인트(6-331 · 6-333): NPC_LaserTower 추적 4 → 8°/s(ECM 2 → 4, 흔들림은 그대로), 씬 Phase_BreakingPoint 적 스폰 거리 9 ~ 13 → 3 ~ 6km. 뒤에 씬 저장", Apply = TuneCaliburnTrack2 },
+        new Entry { Id = "caliburn-ecm-spread-1", Text = "칼리번 ECM 기지 넓게(6-331): NPC_LaserTower ECM 기지마다 대공포 3문 · VLS · CIWS를 차량에서 600m로(풀 강화 UGB 반경 500m에도 한 방에 3곳까지만). 물이면 차량 쪽으로 당긴다(스크립트)", Apply = TuneCaliburnEcmSpread },
+        new Entry { Id = "caliburn-period-1", Text = "칼리번 패턴 더 자주(6-331): 씬 Phase_LaserTower 패턴 A 주기 20 · 16 · 10 → 14 · 11 · 8초, 패턴 B 30 · 30 · 18 → 22 · 22 · 14초, 환풍구당 B 간격 +5 → +3초. 뒤에 씬 저장", Apply = TuneCaliburnPeriod },
+        new Entry { Id = "caliburn-track-1", Text = "칼리번 패턴 A 약하게(6-331): NPC_LaserTower 추적 8 → 4°/s, ECM 추적 4 → 2°/s, ECM 흔들림 2.4 → 3.5°, 기본 흔들림 0.8°(새로). 씬 덮어쓰기는 지운다", Apply = TuneCaliburnTrack },
+        new Entry { Id = "breakingpoint-voice-1", Text = "브레이킹 포인트(6-333): \"bleeding\" 줄을 \"taking losses\"로(대사 표를 스크립트 기본값으로 다시), 음성 Audio/AWACSVoiceLines/BreakingPoint/를 빈 칸에. 뒤에 씬 저장", Apply = TuneBreakingPointVoice },
+        new Entry { Id = "breakingpoint-lines-2", Text = "브레이킹 포인트(6-333): 씬 Phase_BreakingPoint 대사 표 11 → 9줄(아군 합류 · 아군 전멸 대사 빼기 — 4인 협동이라 \"혼자 남았다\"가 맞지 않다). 뒤에 씬 저장", Apply = TuneBreakingPointLines2 },
+        new Entry { Id = "breakingpoint-lines-1", Text = "브레이킹 포인트(6-333): 씬 Phase_BreakingPoint 대사에서 퍼볼을 한 줄(첫 접촉)만 남기고, 페이즈 가중치를 0 · 0 · 1 · 3 · 0.01로. 뒤에 씬 저장", Apply = TuneBreakingPointLines },
+        new Entry { Id = "airship-fall-visual-1", Text = "칼리번 반사판 비행선(6-331): 격추되면 모델을 바로 숨기지 않는다(HideOnDeath 비움) — 기울며 떨어지는 모습이 보이고, 낙하 뒤 땅속으로는 ACO_LaserTower가 옮긴다", Apply = TuneAirshipFallVisual },
+        new Entry { Id = "jammer-radius-4km-1", Text = "적 재머 반경 1.5km → 4km(6-332): 프리팹(NPC_LaserTower ECM 차량)의 ACO_EnemyJammer.Radius를 4000으로, 씬 덮어쓰기는 되돌립니다", Apply = TuneJammerRadius4km },
+        new Entry { Id = "caliburn-nofcs-1", Text = "칼리번 자동 사통 대사 빼기(6-331): 씬 Phase_LaserTower 대사 표 28 → 26줄(\"Target acquired. Tracking.\" · \"Reflector array aligned.\" 삭제 — 조준 · 그물은 AWACS 경고만), 음성은 남은 줄 그대로 다시 넣습니다. 뒤에 씬 저장", Apply = TuneCaliburnNoFcs },
+        new Entry { Id = "caliburn-voice-1", Text = "칼리번 음성(6-331): 씬 Phase_LaserTower의 빈 음성 칸에 Audio/AWACSVoiceLines/Caliburn/ 음성을 넣습니다 — 대사 28줄(Caliburn_L01~28, 자동 사통 2줄은 무전 필터 wav) + 시작 · 성공 · 실패. 뒤에 씬 저장", Apply = TuneCaliburnVoice },
+        new Entry { Id = "caliburn-name-2", Text = "칼리번 이름은 적 대사 · 화면 이름에만(6-331): AWACS 대사 5줄과 페이즈 시작 · 성공 · 실패 문구(AWACS)를 예전(the tower)으로 되돌립니다 — 대사 표 28줄 다시 넣기, 음성 칸 비움. 페이즈 이름 CALIBURN · 적 화자 CALIBURN CONTROL은 그대로. 뒤에 씬 저장", Apply = TuneCaliburnName2 },
+        new Entry { Id = "caliburn-name-1", Text = "레이저 탑 병기 이름 칼리번(6-331): 씬 Phase_LaserTower 페이즈 이름 LASER TOWER → CALIBURN, 적 화자 TOWER CONTROL → CALIBURN CONTROL, 시작 · 성공 · 실패 문구와 대사 7줄에 이름을 넣습니다(대사 표 28줄 다시 넣기, 음성 칸 비움). 표적 이름 · 마커 약어는 프리팹 판 11(Setup Check). 뒤에 씬 저장", Apply = TuneCaliburnName },
+        new Entry { Id = "lasertower-lines-2", Text = "레이저 탑 적 대사를 광신도 말투로(6-331): 등장 \"Let there be light.\"(빛이 있으라) 외 적 대사 7줄 — 씬 Phase_LaserTower의 대사 표 28줄을 다시 넣습니다(음성 칸은 비움). 뒤에 씬 저장", Apply = TuneLaserTowerLines },
+        new Entry { Id = "lasertower-lines-1", Text = "레이저 탑 대사 표(6-331): 씬 Phase_LaserTower의 대사 28줄(새 상황 — 재머 힌트 · 마지막 하나 · 패턴 A 조준 · 반사판 격추 · 두 번째 과열)과 화자 이름(아군 WINGMAN · 자동 사통 TOWER FCS)을 넣습니다. 음성 칸은 비웁니다(음성은 나중에). 뒤에 씬 저장", Apply = TuneLaserTowerLines },
+        new Entry { Id = "pad-smooth-1", Text = "랜스 포대 기초 옆면 셰이드 스무스(6-331): 랜스 포대 프리팹(NPC_Railgun)을 다시 만듭니다 — 기초 · 가운데 단 옆면이 부드럽게(윗면은 평평). 레이저 탑은 프리팹 판 10(Setup Check). 뒤에 Bake · 씬 저장", Apply = () => ACO_PrefabBuilder.BuildRailgun() },
+        new Entry { Id = "pad-skirt-relief-1", Text = "랜스 · 레이저 탑 기초 길게 · 자리 조건 완화(6-331): 랜스 포대 프리팹(NPC_Railgun)을 다시 만듭니다 — 기초 옆면 90 → 2,000m, 기초 충돌 상자도 옆면 끝까지. 씬 미션 생성기 허용 높이 차 랜스 80 → 400m, 레이저 탑 250 → 500m(이전 값일 때만). 레이저 탑 프리팹은 판 9(Setup Check). 뒤에 Bake · 씬 저장", Apply = TunePadSkirtRelief },
+        new Entry { Id = "water-spray-height-50-1", Text = "기체 저공 물보라 높이 30 → 50m(6-329): 기준 프리팹 ACO_WaterSpray의 MaxHeight — NPC 전투기 · 플레이어 기체 물보라가 따른다(미사일 변형 15m는 그대로). 씬 물보라에 남은 같은 칸 덮어쓰기는 되돌린다", Apply = TuneWaterSprayHeight },
         new Entry { Id = "table-terrain-holo-1", Text = "CIC 작전 테이블 지형을 홀로그램처럼(6-319): 지형 렌더러 재질 ACO_MapTerrain → ACO_MapTerrainHolo(반투명 80%, 렌더 큐 2450) — 윗면 육각형만 그리고(스크립트) 섬 밑 바다 격자가 비친다", Apply = ACO_HUDBuilder.TuneTableTerrainHolo },
         new Entry { Id = "table-grid-sea-only-1", Text = "작전 테이블 격자를 바다 위에만(6-318): 격자 머티리얼(ACO_MapGrid) 깊이 판정 Always → LessEqual, 선 높이 1 → 0.5mm — 섬 · 벽 · 사람에 가려진다(옆방 벽 너머로 비치던 것)", Apply = ACO_RadarBuilder.TuneTableGridSeaOnly },
         new Entry { Id = "cic-panel-over-grid-2", Text = "작전 테이블 격자 머티리얼(ACO_MapGrid) 렌더 큐 2600 → 2440(6-317) — CIC 패널 금속(2449, Standard 불투명이 허용하는 끝)보다 앞에 그린다. 지형 · 마커 뒤라 지형 위에 보이는 건 그대로", Apply = ACO_RadarBuilder.TuneTableGridQueue },
@@ -1078,6 +1588,31 @@ public static class ACO_PrefabTuning
         AssetDatabase.SaveAssets();
         MarkApplied(entry.Id);
         Debug.Log($"[ACO] 프리팹 수치 '{entry.Id}'를 적용했습니다.");
+    }
+
+    // ───────────── NPC 기총 비주얼 탄 ─────────────
+
+    /// npcgun-visual-nomsg-1: NPC 기총 · 포의 보이는 탄(VisualParticle)은 모든 화면에서 재생된다 — 충돌 메시지를 보내면 맞은 SAV 기체 · 표적이
+    /// 화면마다 기본 피해를 받는다(피해는 ACO_NPCGun의 판정자 한 화면이 따로 준다). 메시지만 끄고 지형에 막히는 충돌은 둔다.
+    private static void TuneNpcGunVisualMessages()
+    {
+        int n = 0;
+        EditPrefabs(root =>
+        {
+            bool any = false;
+            foreach (ACO_NPCGun gun in root.GetComponentsInChildren<ACO_NPCGun>(true))
+            {
+                if (gun.VisualParticle == null) { continue; }
+                ParticleSystem.CollisionModule col = gun.VisualParticle.collision;
+                if (!col.sendCollisionMessages) { continue; }
+                col.sendCollisionMessages = false;
+                Mark(gun.VisualParticle);
+                any = true;
+                n++;
+            }
+            return any;
+        });
+        UnityEngine.Debug.Log($"[ACO] NPC 기총 비주얼 탄 충돌 메시지 끔: {n}개");
     }
 
     // ───────────── CIWS ─────────────

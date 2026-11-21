@@ -21,12 +21,13 @@ namespace ACO
         public const int ACTION_SPECIAL_PAGE = 4;
         public const int ACTION_SHOP_BUY = 5;
         public const int ACTION_SUPPORT = 6;
+        public const int ACTION_SHOP_APPLIED = 7;   // 적용 단계(ACO_Shop.ChangeApplied(Index) — −1 내림, +1 올림, 0 최대, 6-345)
 
         [Tooltip("같은 프리팹의 격납고. 비우면 부모에서 찾는다")]
         public ACO_Loadout Loadout;
         [Tooltip("같은 프리팹의 강화 상점. 비우면 부모에서 찾는다")]
         public ACO_Shop Shop;
-        [Tooltip("0 = 특수무장 선택, 1 = 특수무장 구매, 2 = 강화 줄 고르기(줄 번호), 3 = 상점 탭 선택, 4 = 특수무장 페이지 넘김, 5 = 상점 구매(고른 줄), 6 = 지원 고르기(−1/+1)")]
+        [Tooltip("0 = 특수무장 선택, 1 = 특수무장 구매, 2 = 강화 줄 고르기(줄 번호), 3 = 상점 탭 선택, 4 = 특수무장 페이지 넘김, 5 = 상점 구매(고른 줄), 6 = 지원 고르기(−1/+1), 7 = 적용 단계(−1/+1/0 최대)")]
         public int Action = ACTION_SELECT_SPECIAL;
         [Tooltip("특수무장 칸 번호(페이지 안), 상점 줄 번호, 탭 번호(ACO_PlayerProgress.CAT_*), 또는 페이지 방향(−1/+1)")]
         public int Index;
@@ -36,12 +37,13 @@ namespace ACO
         public void Click()
         {
             int kind = ACO_UiSound.KIND_CLICK;
-            if (Action == ACTION_BUY_UPGRADE || Action == ACTION_SHOP_TAB || Action == ACTION_SHOP_BUY)
+            if (Action == ACTION_BUY_UPGRADE || Action == ACTION_SHOP_TAB || Action == ACTION_SHOP_BUY || Action == ACTION_SHOP_APPLIED)
             {
                 if (!Shop) { Shop = GetComponentInParent<ACO_Shop>(); }
                 if (!Shop) { return; }
                 if (Action == ACTION_SHOP_TAB) { Shop.SelectTab(Index); }
                 else if (Action == ACTION_SHOP_BUY) { kind = Shop.BuySelected(); }
+                else if (Action == ACTION_SHOP_APPLIED) { kind = Shop.ChangeApplied(Index); }
                 else { kind = Shop.ClickRow(Index); }
             }
             else

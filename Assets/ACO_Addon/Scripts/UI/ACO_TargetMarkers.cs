@@ -110,6 +110,8 @@ namespace ACO
         public ACO_CicGoggles[] Goggles;
         public string CicWaypointLabel = "CIC WP";
         public string CicAreaLabel = "CIC CAP";
+        [Tooltip("교전 공역 마커 글자(6-333 브레이킹 포인트)")]
+        public string ZoneLabel = "ZONE";
         public string CicUavLabel = "RECON UAV";
         [Tooltip("CIC 순항미사일 마커 이름(LACM — 대지 순항미사일)")]
         public string CicLacmLabel = "LACM";
@@ -206,6 +208,7 @@ namespace ACO
         private bool[] _unitHidden;      // 격침된 함선과 같이 가라앉는 부위
         private bool[] _unitFriendly;    // 호위 대상(아군) — 파란 테두리 + 이름, 목표처럼 멀리서도 보인다
         private ACO_CityVehicle[] _unitCity;   // 도시 차량(6-270) — 식별 전 회색 ?, 식별된 민간 초록 CIV(목표처럼 멀리서도 보인다)
+        private ACO_FortressPart[] _unitPart;   // 막힘 표시가 있는 부위(레이저 탑 환풍구 JAMMED, 6-331) — 글자가 단계에 따라 바뀐다
         private int _unitCount;
         private float _objectiveTimer;
 
@@ -299,6 +302,7 @@ namespace ACO
             _unitHidden = new bool[total];
             _unitFriendly = new bool[total];
             _unitCity = new ACO_CityVehicle[total];
+            _unitPart = new ACO_FortressPart[total];
             _unitCount = 0;
 
             for (int i = 0; i < fighters; i++)
@@ -351,8 +355,12 @@ namespace ACO
             {
                 UdonSharpBehaviour pt = Generator.GetUnitBehaviour(ACO_MissionGenerator.CAT_PART, i);
                 if (pt == null) { continue; }
-                int partKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_PART, i) ? KIND_AIR : KIND_GROUND;
+                ACO_FortressPart fp = pt.GetComponent<ACO_FortressPart>();
+                // 공중 요새 부위, 또는 락온 마커가 적 공중 층(29)인 부위(칼리번 반사판 비행선)는 항공기 모양
+                bool airPart = fp != null && fp.LockMarkers != null && fp.LockMarkers.Length > 0 && fp.LockMarkers[0] != null && fp.LockMarkers[0].layer == 29;
+                int partKind = Generator.IsFortressTarget(ACO_MissionGenerator.CAT_PART, i) || airPart ? KIND_AIR : KIND_GROUND;
                 AddUnit(pt.transform, pt.GetComponent<SaccTarget>(), partKind, ReadLabel(pt, "PRT"), null, ACO_MissionGenerator.CAT_PART, i);
+                if (fp != null && !string.IsNullOrEmpty(fp.JammedLabel)) { _unitPart[_unitCount - 1] = fp; }
             }
             for (int i = 0; i < escorts; i++)
             {
@@ -375,6 +383,7 @@ namespace ACO
             _unitCat[_unitCount] = category;
             _unitIdx[_unitCount] = index;
             _unitCity[_unitCount] = category == ACO_MissionGenerator.CAT_GROUND ? Generator.GetCityVehicle(index) : null;
+            _unitPart[_unitCount] = null;
             _unitCount++;
         }
 
@@ -398,6 +407,9 @@ namespace ACO
                 // 도시 차량: 식별 전에는 이름을 숨긴다(초점 · 락온 정보 줄도 ?)
                 ACO_CityVehicle city = _unitCity[u];
                 if (city != null) { _unitLabel[u] = city.Identified ? city.MarkerLabel : "?"; }
+                // 막힘 표시 부위: 드러나기 전엔 JAMMED
+                ACO_FortressPart jp = _unitPart[u];
+                if (jp != null) { _unitLabel[u] = jp.GetMarkerText(); }
                 if (_unitFriendly[u]) { _unitObjective[u] = false; }
                 else if (Manager == null) { _unitObjective[u] = _unitCat[u] == ACO_MissionGenerator.CAT_HVT; }
                 else { _unitObjective[u] = tag != 0 && Generator.GetUnitTag(_unitCat[u], _unitIdx[u]) == tag; }
@@ -634,6 +646,12 @@ namespace ACO
             {
                 used = DrawPoint(used, Support.GetCicCenter(), KIND_WAYPOINT, CicAreaLabel, WaypointScale, headPos, headUp, baseSize);
             }
+            // 교전 공역(6-333 브레이킹 포인트)
+            if (Manager != null && used < Markers.Length)
+            {
+                ACO_PhaseModule zm = Manager.GetActiveModule();
+                if (zm != null && zm.HasZone()) { used = DrawPoint(used, zm.GetZoneCenter(), KIND_WAYPOINT, ZoneLabel, WaypointScale, headPos, headUp, baseSize); }
+            }
 
             // 호위 항로: 남은 경유점 + 목적지
             if (ShowEscortRoute && Manager != null)
@@ -658,6 +676,10 @@ namespace ACO
             _usedLastFrame = used;
 
             // 이름표(종류·거리·체력)는 락온 대상에 고정한다. 주 표적(첫 칸)이 체력 바를 갖고, 나머지 락온 표적엔 이름표만.
+            // 락온 중에도 크로스헤어(시선 정면)에 있는 유닛엔 이름표를 띄운다(사용자 "식별하기 쉽게") — 체력 바는 주 표적에.
+            int crossMarker = focusMarker;
+            int crossUnit = focusUnit;
+            float crossDist = focusDist;
             int primary = -1;
             for (int k = 0; k < MAX_LOCKS; k++) { if (_lockMarker[k] >= 0) { primary = k; break; } }
             if (primary >= 0)
@@ -675,6 +697,7 @@ namespace ACO
                 _infoUnitFor[m] = _lockUnit[k];
                 _infoDistFor[m] = _lockDist[k];
             }
+            if (crossMarker >= 0 && crossMarker < _infoUnitFor.Length && _infoUnitFor[crossMarker] < 0) { _infoUnitFor[crossMarker] = crossUnit; _infoDistFor[crossMarker] = crossDist; }
             UpdateInfo(focusMarker, focusUnit);
             UpdateDiamonds(headPos, headUp);
         }

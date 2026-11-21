@@ -897,6 +897,151 @@ def i_gun_reset(c):
     head(c, (10, 44), 280, 18)
 
 
+# ───────────── 조종사 기록 · 칭호(6-341) ─────────────
+
+def star_pts(cx, cy, R, r, n=5, rot=-90.0):
+    pts = []
+    for i in range(n * 2):
+        rad = R if i % 2 == 0 else r
+        a = math.radians(rot + i * 180.0 / n)
+        pts.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+    return pts
+
+
+def crown(c, cx, cy, s=1.0, fill=False, w=W):
+    # 왕관: 가운데(cx, cy) 기준 폭 68 · 높이 50(s = 1)
+    pts = [(-34, 25), (-34, -13), (-17, 5), (0, -25), (17, 5), (34, -13), (34, 25)]
+    pts = [(cx + x * s, cy + y * s) for x, y in pts]
+    if fill: fill_poly(c, pts)
+    else: poly(c, pts, w)
+
+
+def pilot(c, cx, cy, s=1.0, w=W):
+    # 조종사 머리 + 어깨
+    circle(c, cx, cy - 9 * s, 8 * s, w)
+    arc(c, cx, cy + 20 * s, 17 * s, 200, 340, w)
+
+
+def i_rec_level(c):
+    # 레벨: 계급장 쉐브론 셋
+    for y in (32, 54, 76):
+        poly(c, [(18, y), (50, y - 22), (82, y)], 9, False)
+
+
+def i_rec_clears(c):
+    # 미션 성공: 깃발 + 체크
+    seg(c, (24, 10), (24, 92), 7)
+    poly(c, [(24, 14), (76, 14), (64, 31), (76, 48), (24, 48)], 6, True)
+    poly(c, [(44, 72), (56, 84), (82, 58)], 9, False)
+
+
+def i_rec_clears5(c):
+    # 5페이즈 성공: 올라가는 막대 다섯 + 별
+    for i in range(5):
+        x = 12 + i * 16
+        top = 82 - i * 11
+        fill_poly(c, [(x, 90), (x + 11, 90), (x + 11, top), (x, top)])
+    fill_poly(c, star_pts(83, 22, 13, 5.5))
+
+
+def i_rec_kills(c):
+    # 누적 격추: 조준 레티클 안의 전투기
+    circle(c, 50, 50, 36, 6)
+    for a, b in (((50, 4), (50, 20)), ((50, 80), (50, 96)), ((4, 50), (20, 50)), ((80, 50), (96, 50))):
+        seg(c, a, b, 6)
+    jet(c, 50, 50, 0.36, True)
+
+
+def i_rec_flight(c):
+    # 비행 시간: 스톱워치 + 날개
+    circle(c, 50, 56, 24, 6)
+    seg(c, (50, 24), (50, 32), 7); seg(c, (42, 22), (58, 22), 7)
+    seg(c, (50, 56), (50, 40), 6); seg(c, (50, 56), (62, 62), 6)
+    for sx in (1, -1):
+        seg(c, (50 + 28 * sx, 50), (50 + 46 * sx, 40), 6)
+        seg(c, (50 + 28 * sx, 58), (50 + 44 * sx, 52), 5)
+        seg(c, (50 + 27 * sx, 66), (50 + 40 * sx, 64), 4)
+
+
+def radar_scope(c, cx, cy, r, w=W):
+    circle(c, cx, cy, r, w)
+    circle(c, cx, cy, r * 0.5, w * 0.7)
+    seg(c, (cx, cy), (cx + r * 0.72, cy - r * 0.72), w)
+    fill_circle(c, cx - r * 0.35, cy + r * 0.2, w * 0.9)
+
+
+def i_rec_cicbest(c):
+    # CIC 한 미션 최고: 레이더 스코프 + 별
+    radar_scope(c, 44, 56, 34, 6)
+    fill_poly(c, star_pts(80, 20, 15, 6.5))
+
+
+def i_rec_cickills(c):
+    # CIC 누적: 레이더 스코프 + 누적 막대
+    radar_scope(c, 38, 42, 28, 6)
+    for i, h in enumerate((14, 24, 36)):
+        x = 66 + i * 11
+        fill_poly(c, [(x, 92), (x + 8, 92), (x + 8, 92 - h), (x, 92 - h)])
+    seg(c, (10, 92), (94, 92), 5)
+
+
+def i_rec_boss(c):
+    # 보스(분류 제목): 왕관
+    crown(c, 50, 48, 1.15, w=7)
+    seg(c, (14, 88), (86, 88), 7)
+    fill_circle(c, 50, 54, 6)
+
+
+def i_rec_boss_kill(c):
+    # 보스 사냥꾼: 레티클 안의 왕관
+    circle(c, 50, 50, 38, 6)
+    for a, b in (((50, 4), (50, 18)), ((50, 82), (50, 96)), ((4, 50), (18, 50)), ((82, 50), (96, 50))):
+        seg(c, a, b, 6)
+    crown(c, 50, 52, 0.62, fill=True)
+
+
+def i_rec_boss_s(c):
+    # 보스 정복자(S랭크): 왕관 + S
+    crown(c, 50, 24, 0.62, fill=True)
+    poly(c, [(64, 56), (57, 51), (43, 51), (36, 58), (39, 66), (50, 71), (61, 76), (64, 84), (57, 91), (43, 91), (36, 86)], 8, False)
+
+
+def i_rec_boss_solo(c):
+    # 보스 단독 정복자: 왕관 + 조종사 하나
+    crown(c, 50, 24, 0.62, fill=True)
+    pilot(c, 50, 72, 1.0, 6)
+
+
+def i_rec_boss_party(c):
+    # 보스 공략대: 왕관 + 조종사 넷
+    crown(c, 50, 22, 0.62, fill=True)
+    for x in (17, 39, 61, 83):
+        pilot(c, x, 74, 0.62, 5)
+
+
+def i_rec_role_multirole(c):
+    # 멀티롤: 가운데 기체 + 위로 올라가는 미사일(대공) + 땅으로 내려가는 미사일(대지)
+    jet(c, 50, 46, 0.46, fill=True)
+    missile(c, 18, 20, -135, 34, 5, 10, 7, 9)
+    missile(c, 82, 74, 45, 34, 5, 10, 7, 9)
+    seg(c, (70, 95), (98, 95), 5)
+
+
+def i_rec_role_arsenal(c):
+    # 무기고: 받침 위에 미사일 셋 + 폭탄
+    for x in (14, 34, 54):
+        missile(c, x, 48, -90, 66, 5, 12, 7, 10)
+    bomb(c, 80, 56, 0.55, w=5)
+    seg(c, (4, 90), (96, 90), 7)
+
+
+REC_ICONS = [
+    ("rec_level", i_rec_level), ("rec_clears", i_rec_clears), ("rec_clears5", i_rec_clears5), ("rec_kills", i_rec_kills),
+    ("rec_flight", i_rec_flight), ("rec_cicbest", i_rec_cicbest), ("rec_cickills", i_rec_cickills), ("rec_boss", i_rec_boss),
+    ("rec_boss_kill", i_rec_boss_kill), ("rec_boss_s", i_rec_boss_s), ("rec_boss_solo", i_rec_boss_solo), ("rec_boss_party", i_rec_boss_party),
+    ("rec_role_multirole", i_rec_role_multirole), ("rec_role_arsenal", i_rec_role_arsenal),
+]
+
 ICONS = [
     ("hull", i_hull), ("mobility", i_mobility), ("engine", i_engine), ("fuel", i_fuel), ("stability", i_stability),
     ("damage", i_damage), ("ammo", i_ammo), ("turn", i_turn), ("lock_speed", i_lock_speed), ("lock_range", i_lock_range),
@@ -919,6 +1064,10 @@ ICONS = [
     ("mirror", i_mirror), ("clear", i_clear), ("hide", i_hide), ("gun_reset", i_gun_reset), ("gun_ammo", i_gun_ammo),
     ("phase_1", i_phase_1), ("phase_2", i_phase_2), ("phase_3", i_phase_3), ("phase_4", i_phase_4), ("phase_5", i_phase_5),
 ]
+ICONS += REC_ICONS
+# 세 번째 인자 = 이름 앞부분(그것만 다시 만든다 — 예: rec_)
+if len(sys.argv) > 3:
+    ICONS = [i for i in ICONS if i[0].startswith(sys.argv[3])]
 
 
 def write_png(path, w, h, rows_rgba):

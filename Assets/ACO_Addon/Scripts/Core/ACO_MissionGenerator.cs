@@ -380,6 +380,12 @@ namespace ACO
         public ACO_FlyingFortress Fortress;
         [Tooltip("랜스 포대(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
         public ACO_Railgun Railgun;
+        [Tooltip("레이저 탑(보스 전용, 6-331 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
+        public ACO_LaserTower LaserTower;
+        [Tooltip("레이저 탑 기초판 반경(m)")]
+        public float LaserTowerPadRadius = 560f;
+        [Tooltip("레이저 탑 자리의 허용 높이 차(m). 기초판 옆면(2,000m)이 이보다 훨씬 깊어 낮은 쪽이 뜨지 않는다")]
+        public float LaserTowerMaxRelief = 500f;
         [Tooltip("육상전함(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
         public ACO_LandShip LandShip;
         [Tooltip("잠수함 LEVIATHAN(보스 전용 — 일반 고가치 표적 배치에는 나오지 않는다). Bake가 풀에서 찾아 넣는다")]
@@ -388,8 +394,8 @@ namespace ACO
         public float LandShipStopMargin = 900f;
         [Tooltip("육상전함 항로 경유점의 옆 흩뜨림(항로 길이 비율) — 작을수록 크게 돈다")]
         public float LandShipLateral = 0.08f;
-        [Tooltip("랜스 포대를 놓을 자리의 기초 안 높이 차 한도(m) — 기초는 가장 높은 땅에 얹히고, 낮은 쪽은 기초 옆면이 가린다")]
-        public float RailgunMaxRelief = 80f;
+        [Tooltip("랜스 포대를 놓을 자리의 기초 안 높이 차 한도(m) — 기초는 가장 높은 땅에 얹히고, 낮은 쪽은 기초 옆면(2,000m)이 가린다")]
+        public float RailgunMaxRelief = 400f;
         [Tooltip("높이를 확인하는 기초 반경(m)")]
         public float RailgunPadRadius = 530f;
         [Tooltip("랜스 포대 둘레의 방공 유닛 무리 수")]
@@ -551,6 +557,10 @@ namespace ACO
         public const int OBJ_CITY = 20;
         /// 터널 은신 발사대(6-271): count = TEL 수, tier 자리 = 터널 번호(지형 GetTunnel*), minDist 자리 = 첫 출격까지(초), maxDist 자리 = 출격 간격(초).
         public const int OBJ_TUNNEL = 21;
+        /// 레이저 탑(6-331, 태그) — focus = 자리. 보스 페이즈(ACO_PhaseLaserTower)만 쓴다.
+        public const int OBJ_LASERTOWER = 22;
+        /// 편대 보충(6-333 브레이킹 포인트): OBJ_FLIGHT와 같지만 같은 태그가 이미 놓여 있어도 더 놓는다(중복 요청 검사를 하지 않는다 — 웨이브마다 같은 태그로 부른다).
+        public const int OBJ_FLIGHT_MORE = 23;
 
         // 로컬: 이 클라이언트가 마지막으로 적용한 serial(-1 = 아직 없음)
         private int[] _appliedGroundSerial = new int[0];
@@ -1278,6 +1288,47 @@ namespace ACO
             float k = r / d;
             return new Vector3(p.x * k, p.y, p.z * k);
         }
+
+        /// (x, z)가 유닛을 놓을 수 있는 뭍인가(작전 지역 · 안전지대 · 건물 · 경사 · 물 — SampleGround와 같은 검사). 땅 높이는 GetSampledHeight. 레이저 탑 ECM 기지가 넓게 찾을 때 쓴다(6-331).
+        public bool IsPlaceableGround(float x, float z) { return SampleGround(x, z); }
+
+        /// 살아 있는 적 전투기 수(쓰는 중 · 체력 남음 · 물러나는 중 아님 — 배경 전투기 포함). 브레이킹 포인트(6-333)의 동시 생존 상한.
+        public int CountAliveFighters()
+        {
+            if (Fighters == null) { return 0; }
+            int n = 0;
+            for (int i = 0; i < Fighters.Length; i++)
+            {
+                if (Fighters[i] == null || !IsUnitUsed(CAT_FIGHTER, i) || IsUnitDestroyed(CAT_FIGHTER, i)) { continue; }
+                if (Fighters[i].Retreating) { continue; }
+                n++;
+            }
+            return n;
+        }
+
+        /// p를 NPC 공역 안으로(같은 방위의 경계 안쪽) — 높이는 그대로.
+        public Vector3 ClampToField(Vector3 p) { return ClampToNpcField(p); }
+
+        /// 이 화면에서 지금 지형 · 건물이 다 세워졌는가(늦게 들어온 화면은 동기화 뒤 몇 프레임에 걸쳐 짓는다).
+        public bool IsTerrainReady() { return HexTerrain == null || HexTerrain.IsBuilt(HexTerrain.GetSeed()); }
+
+        /// 함선 부위 i가 점수 없이 파괴 처리된 것인가(레이저 탑 ECM 기지를 놓을 땅이 없어 땅속에서 부순 것 — 팀 점수 · 격파 수에 넣지 않는다).
+        public bool IsPartScoreless(int i)
+        {
+            if (LaserTower == null) { return false; }
+            UdonSharpBehaviour part = UnitAt(CAT_PART, i);
+            return part != null && LaserTower.IsInVoidSite(part.transform);
+        }
+
+        /// 높이만 잰다(경사 · 건물 · 물 검사 없이 — 기초판 측정점 사이 보조 점). 땅이 없으면 false.
+        private bool SampleHeight(float x, float z)
+        {
+            RaycastHit hit;
+            if (!Physics.Raycast(new Vector3(x, RaycastHeight, z), Vector3.down, out hit, RaycastDistance, GroundLayers, QueryTriggerInteraction.Ignore)) { return false; }
+            _sampleY = hit.point.y;
+            return true;
+        }
+        public float GetSampledHeight() { return _sampleY; }
 
         private bool SampleGround(float x, float z)
         {
@@ -3250,7 +3301,7 @@ namespace ACO
             // 같은 태그·같은 분류가 이미 놓여 있으면 다시 놓지 않는다 — 관리자 오너가 바뀌는 순간 배치 요청이 두 번 올 수 있다
             // (생성기 상태는 나갔는데 관리자 '요청함' 상태는 못 보낸 채 오너가 나감 — Tools/aco_sync_sim.py 시나리오 D).
             // 점수 할당량은 같은 태그로 지상(사냥터)과 편대를 따로 부르므로 분류별로 본다.
-            if (tag != 0 && HasTaggedUnits(ObjectiveCategory(kind), tag))
+            if (tag != 0 && kind != OBJ_FLIGHT_MORE && HasTaggedUnits(ObjectiveCategory(kind), tag))
             {
                 Debug.LogWarning("[ACO] 목표 배치 요청 무시: 태그 " + tag + "가 이미 배치돼 있다(중복 요청)");
                 return;
@@ -3268,6 +3319,7 @@ namespace ACO
             else if (kind == OBJ_CITY) { placed = DeployCity(tag, tier, count, Mathf.RoundToInt(minDist), focus, now); label = "목표 배치(시가지 정밀 타격)"; }
             else if (kind == OBJ_TUNNEL) { placed = DeployTunnel(tag, tier, count, minDist, maxDist, now); label = "목표 배치(터널 은신 발사대)"; }
             else if (kind == OBJ_RAILGUN) { placed = DeployRailgun(tag, tier, focus, now); label = "목표 배치(랜스 포대)"; }
+            else if (kind == OBJ_LASERTOWER) { placed = DeployLaserTower(tag, focus, now); label = "목표 배치(레이저 탑)"; }
             else if (kind == OBJ_LANDSHIP) { placed = DeployLandShip(tag, tier, focus, now); label = "목표 배치(육상전함)"; }
             else if (kind == OBJ_SUBMARINE) { placed = DeploySubmarine(tag, focus, now); label = "목표 배치(잠수함)"; }
             else if (kind == OBJ_SUB_DRONE) { placed = DeploySubDrone(tag, count, tier, focus, minDist, now); label = "잠수함 무인기 사출"; }
@@ -3294,8 +3346,8 @@ namespace ACO
         /// 목표 종류(OBJ_*)가 놓이는 분류(CAT_*).
         private int ObjectiveCategory(int kind)
         {
-            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LANDSHIP || kind == OBJ_SUBMARINE) { return CAT_HVT; }
-            if (kind == OBJ_FLIGHT || kind == OBJ_TWINS || kind == OBJ_BORDERLESS || kind == OBJ_SHADE || kind == OBJ_LUNA || kind == OBJ_MRS || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT || kind == OBJ_SUB_DRONE) { return CAT_FIGHTER; }
+            if (kind == OBJ_HVT || kind == OBJ_FORTRESS || kind == OBJ_RAILGUN || kind == OBJ_LASERTOWER || kind == OBJ_LANDSHIP || kind == OBJ_SUBMARINE) { return CAT_HVT; }
+            if (kind == OBJ_FLIGHT || kind == OBJ_FLIGHT_MORE || kind == OBJ_TWINS || kind == OBJ_BORDERLESS || kind == OBJ_SHADE || kind == OBJ_LUNA || kind == OBJ_MRS || kind == OBJ_ATTACK || kind == OBJ_CARRIER_FLIGHT || kind == OBJ_CARRIER_ATTACK || kind == OBJ_HATCH_FLIGHT || kind == OBJ_SUB_DRONE) { return CAT_FIGHTER; }
             return CAT_GROUND;
         }
 
@@ -3866,7 +3918,7 @@ namespace ACO
 
         private bool IsReservedHvt(UdonSharpBehaviour unit)
         {
-            return IsFortressUnit(unit) || IsRailgunUnit(unit) || IsLandShipUnit(unit) || IsSubmarineUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
+            return IsFortressUnit(unit) || IsRailgunUnit(unit) || IsLaserTowerUnit(unit) || IsLandShipUnit(unit) || IsSubmarineUnit(unit) || (Carrier != null && unit != null && unit == (UdonSharpBehaviour)Carrier);
         }
 
         private bool IsLandShipUnit(UdonSharpBehaviour unit)
@@ -3884,9 +3936,16 @@ namespace ACO
             return Railgun != null && unit != null && unit == (UdonSharpBehaviour)Railgun.Warship;
         }
 
+        private bool IsLaserTowerUnit(UdonSharpBehaviour unit)
+        {
+            return LaserTower != null && unit != null && unit == (UdonSharpBehaviour)LaserTower.Warship;
+        }
+
         // ───────────── 랜스 포대 ─────────────
 
         private Vector3 _railgunSite;
+        /// 랜스 · 레이저 탑 기초판을 잰 곳 중 가장 높은 땅에서 이만큼(m) 올려 놓는다 — 잰 점 사이의 작은 봉우리가 판 위로 튀어나오지 않게(낮은 쪽은 깊은 옆면이 덮는다).
+        private const float PadSiteMargin = 6f;
 
         /// 랜스 포대를 쓸 수 있는가(풀에 있고, 이미 살아 있지 않다).
         public bool CanDeployRailgun()
@@ -3910,18 +3969,19 @@ namespace ACO
                 float x = focus.x + Mathf.Cos(a) * d;
                 float z = focus.z + Mathf.Sin(a) * d;
                 if (!SampleGround(x, z)) { continue; }
-                // 기초 안쪽·둘레를 재서 높이 차를 본다(육각 칸 하나보다 촘촘하게). 기초는 가장 높은 땅에 얹는다 — 포대가 땅에 묻히지 않게
+                // 기초 안쪽·둘레를 재서 높이 차를 본다(고리 셋 16 · 24 · 32곳 — 바깥 고리 간격 약 100m). 기초는 가장 높은 땅 + PadSiteMargin에 얹는다 — 잰 점 사이 봉우리가 기초판을 뚫지 않게
                 float low = _sampleY;
                 float high = _sampleY;
                 bool ok = true;
-                for (int ring = 1; ring <= 2 && ok; ring++)
+                for (int ring = 1; ring <= 3 && ok; ring++)
                 {
-                    int points = ring == 1 ? 8 : 12;
-                    float r = RailgunPadRadius * ring * 0.5f;
+                    int points = ring * 8 + 8;
+                    float r = RailgunPadRadius * ring / 3f;
                     for (int k = 0; k < points && ok; k++)
                     {
                         float b = k * Mathf.PI * 2f / points;
-                        ok = SampleGround(x + Mathf.Cos(b) * r, z + Mathf.Sin(b) * r);
+                        // 짝수 번은 원래 검사(경사 · 건물 · 물), 사이 점(홀수 번)은 높이만 — 점을 늘려도 자리 찾기가 더 까다로워지지 않게
+                        ok = (k % 2 == 0) ? SampleGround(x + Mathf.Cos(b) * r, z + Mathf.Sin(b) * r) : SampleHeight(x + Mathf.Cos(b) * r, z + Mathf.Sin(b) * r);
                         if (!ok) { continue; }
                         low = Mathf.Min(low, _sampleY);
                         high = Mathf.Max(high, _sampleY);
@@ -3929,7 +3989,7 @@ namespace ACO
                     }
                 }
                 if (!ok) { continue; }
-                _railgunSite = new Vector3(x, high, z);
+                _railgunSite = new Vector3(x, high + PadSiteMargin, z);
                 return true;
             }
             return false;
@@ -4000,6 +4060,74 @@ namespace ACO
                 Vector3 c = site + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * RailgunDefenseDistance;
                 PlaceRing(c, RailgunDefenseSize, RailgunDefenseSpread, now);
             }
+        }
+
+        // ───────────── 레이저 탑(6-331) ─────────────
+
+        private Vector3 _laserTowerSite;
+
+        /// 레이저 탑을 쓸 수 있는가(풀에 있고, 이미 살아 있지 않다).
+        public bool CanDeployLaserTower()
+        {
+            EnsureArrays();
+            if (LaserTower == null || HighValueTargets == null) { return false; }
+            for (int i = 0; i < HighValueTargets.Length && i < _hvtUsed.Length; i++)
+            {
+                if (IsLaserTowerUnit(HighValueTargets[i])) { return !_hvtUsed[i] || IsDestroyed(HighValueTargets[i].GetComponent<SaccTarget>()); }
+            }
+            return false;
+        }
+
+        /// focus 둘레에서 기초판(반경 LaserTowerPadRadius)이 들어갈 땅(높이 차 LaserTowerMaxRelief — 랜스보다 넉넉)을 찾는다. 찾으면 GetLaserTowerSite.
+        /// 기초판은 잰 곳 중 가장 높은 땅에 얹는다(탑 · 기초가 묻히지 않게) — 낮은 쪽은 깊은 기초판 옆면이 덮는다. 고리 셋(16 · 24 · 32곳)으로 촘촘히 잰다(바깥 고리 간격 약 110m).
+        public bool FindLaserTowerSite(Vector3 focus, float minDist, float maxDist)
+        {
+            for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
+            {
+                float a = Random.Range(0f, Mathf.PI * 2f);
+                float d = Random.Range(minDist, maxDist);
+                float x = focus.x + Mathf.Cos(a) * d;
+                float z = focus.z + Mathf.Sin(a) * d;
+                if (!SampleGround(x, z)) { continue; }
+                float low = _sampleY;
+                float high = _sampleY;
+                bool ok = true;
+                for (int ring = 1; ring <= 3 && ok; ring++)
+                {
+                    int points = ring * 8 + 8;
+                    float r = LaserTowerPadRadius * ring / 3f;
+                    for (int k = 0; k < points && ok; k++)
+                    {
+                        float b = k * Mathf.PI * 2f / points;
+                        // 짝수 번은 원래 검사(경사 · 건물 · 물), 사이 점(홀수 번)은 높이만 — 점을 늘려도 자리 찾기가 더 까다로워지지 않게
+                        ok = (k % 2 == 0) ? SampleGround(x + Mathf.Cos(b) * r, z + Mathf.Sin(b) * r) : SampleHeight(x + Mathf.Cos(b) * r, z + Mathf.Sin(b) * r);
+                        if (!ok) { continue; }
+                        low = Mathf.Min(low, _sampleY);
+                        high = Mathf.Max(high, _sampleY);
+                        ok = high - low <= LaserTowerMaxRelief;
+                    }
+                }
+                if (!ok) { continue; }
+                _laserTowerSite = new Vector3(x, high + PadSiteMargin, z);
+                return true;
+            }
+            return false;
+        }
+
+        public Vector3 GetLaserTowerSite() { return _laserTowerSite; }
+
+        /// ECM 기지 · 탑 둘레 방공은 프리팹 안에 있다 — 따로 놓을 방공 무리가 없다.
+        private int DeployLaserTower(int tag, Vector3 site, int now)
+        {
+            if (!CanDeployLaserTower()) { return 0; }
+            for (int i = 0; i < HighValueTargets.Length; i++)
+            {
+                if (!IsLaserTowerUnit(HighValueTargets[i])) { continue; }
+                _markTag = tag;
+                MarkHvt(i, true, site, Quaternion.Euler(0f, 0.5f, 0f), now);
+                return 1;
+            }
+            return 0;
         }
 
         // ───────────── 함대전 ─────────────
@@ -4178,6 +4306,56 @@ namespace ACO
         public int GetFleetContactMs() { return _fleetContactMs; }
 
         /// 태그 tag로 놓인 아군 기함. 없으면 null.
+        /// 풀로 돌아가는 유닛(과 그 부위 · 방어 기총)의 체력을 이 화면에서 최대로 채운다(6-338 — 동기화 없음, 모든 화면).
+        /// 격추된 채 풀에 남은 체력 0이 다음 출격 때 소유권 이동(SaccTarget은 죽은 채 소유권을 받으면 0을 다시 보낸다) · 다시 보내기로 퍼져 막 나온 유닛이 격추로 판정되던 것.
+        /// 소유자도 로컬 값만 바꾼다 — 그 뒤 무엇을 다시 보내든 0이 아니다. 이미 가득이면(대부분) 아무것도 안 한다.
+        private void LocalRefillUnit(UdonSharpBehaviour unit)
+        {
+            if (unit == null) { return; }
+            LocalRefill(unit.GetComponent<SaccTarget>());
+            ACO_Warship ship = unit.GetComponent<ACO_Warship>();
+            if (ship != null && ship.Parts != null)
+            {
+                for (int k = 0; k < ship.Parts.Length; k++) { if (ship.Parts[k] != null) { LocalRefill(ship.Parts[k].GetComponent<SaccTarget>()); } }
+            }
+            ACO_EscortUnit esc = unit.GetComponent<ACO_EscortUnit>();
+            if (esc != null && esc.DefenseGuns != null)
+            {
+                for (int k = 0; k < esc.DefenseGuns.Length; k++) { if (esc.DefenseGuns[k] != null) { LocalRefill(esc.DefenseGuns[k].GetComponent<SaccTarget>()); } }
+            }
+        }
+
+        /// SaccTarget 하나를 이 화면에서 최대 체력으로(Start 전 · 이미 가득이면 그대로). 죽음 표시(dead)도 풀린다.
+        public void LocalRefill(SaccTarget t)
+        {
+            if (t == null || t.FullHealth <= 0f || t.Health >= t.FullHealth) { return; }
+            if (t.GetProgramVariable("TargetAnimator") == null) { return; }
+            t.Health = t.FullHealth;
+            t.SendCustomEvent("_onDeserialization");
+        }
+
+        /// 함대전 기함의 호위 대상 번호(-1 = 없음).
+        public int GetFleetFlagshipIndex(int tag)
+        {
+            if (tag == 0 || EscortUnits == null) { return -1; }
+            for (int i = 0; i < _escortUsed.Length && i < EscortUnits.Length; i++)
+            {
+                if (!_escortUsed[i] || _escortTag[i] != tag) { continue; }
+                ACO_EscortUnit u = EscortUnits[i];
+                if (u != null && u.Role == ACO_EscortUnit.ROLE_FLAGSHIP) { return i; }
+            }
+            return -1;
+        }
+
+        /// 함선 부위 i의 함선이 부서졌는가(가라앉으며 같이 부서진 부위는 점수가 없다 — 6-338).
+        public bool IsPartShipDestroyed(int i)
+        {
+            int h = PartOwner(i);
+            if (h < 0) { return false; }
+            UdonSharpBehaviour ship = UnitAt(PartOwnerCategory(i), h);
+            return ship != null && IsDestroyed(ship.GetComponent<SaccTarget>());
+        }
+
         public ACO_EscortUnit GetFleetFlagship(int tag)
         {
             if (tag == 0 || EscortUnits == null) { return null; }
@@ -4934,10 +5112,11 @@ namespace ACO
             if (ship == null) { return false; }
             if (IsDestroyed(ship.GetComponent<SaccTarget>())) { return true; }
             // 공중 요새의 엔진·랜스 포대의 냉각기·육상전함의 궤도·배기구는 드러나기 전엔 표시하지 않는다
-            if (!IsFortressUnit(ship) && !IsRailgunUnit(ship) && !IsLandShipUnit(ship)) { return false; }
+            if (!IsFortressUnit(ship) && !IsRailgunUnit(ship) && !IsLaserTowerUnit(ship) && !IsLandShipUnit(ship)) { return false; }
             UdonSharpBehaviour part = UnitAt(CAT_PART, i);
             ACO_FortressPart fp = part != null ? part.GetComponent<ACO_FortressPart>() : null;
-            return fp != null && !fp.Exposed;
+            // 막힘 표시(레이저 탑 환풍구 JAMMED, 6-331)는 드러나기 전에도 마커만 보인다 — 락온 · 피해는 여전히 없다
+            return fp != null && !fp.Exposed && !fp.Jammed;
         }
 
         /// 부위 i가 속한 함선의 인덱스(-1 = 없음). 카테고리는 PartOwnerCategory(전함 = CAT_HVT, 구축함 = CAT_GROUND).
@@ -5088,6 +5267,7 @@ namespace ACO
                 {
                     ACO_EscortUnit unit = EscortUnits[i];
                     if (unit == null || (i < _appliedEscortSerial.Length && _appliedEscortSerial[i] != -1)) { continue; }
+                    LocalRefillUnit(unit);
                     unit.MissionDespawn();
                     unit.gameObject.SetActive(false);
                 }
@@ -5109,6 +5289,7 @@ namespace ACO
             {
                 UdonSharpBehaviour unit = units[i];
                 if (unit == null || (i < applied.Length && applied[i] != -1)) { continue; }
+                LocalRefillUnit(unit);
                 unit.SendCustomEvent("MissionDespawn");
                 unit.gameObject.SetActive(false);
             }
@@ -5240,6 +5421,7 @@ namespace ACO
                 }
                 else
                 {
+                    LocalRefillUnit(unit);
                     unit.MissionDespawn();
                     unit.gameObject.SetActive(false);
                 }
@@ -5329,6 +5511,7 @@ namespace ACO
                 }
                 else
                 {
+                    LocalRefillUnit(unit);
                     unit.SendCustomEvent("MissionDespawn");
                     unit.gameObject.SetActive(false);
                 }

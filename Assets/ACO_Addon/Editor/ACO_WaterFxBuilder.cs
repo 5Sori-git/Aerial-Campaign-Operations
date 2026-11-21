@@ -82,6 +82,8 @@ public static class ACO_WaterFxBuilder
 
     /// 기체용 물보라 프리팹(기준). 파티클 모양·색·방출량을 여기서 고치면 기체·미사일 물보라가 모두 바뀐다.
     public const string SprayPrefabPath = PrefabDir + "/ACO_WaterSpray.prefab";
+    /// 기체 물보라가 나오는 높이(수면 위 m) — 30 → 50(6-329, 사용자 "50m까지 나오게 하자"). 미사일 변형은 15m 그대로.
+    public const float SprayMaxHeight = 50f;
     /// 미사일용 물보라 — 기준 프리팹의 변형(Prefab Variant). 높이·속도 조건과 크기만 다르다(나머지는 기준을 따른다).
     public const string MissileSprayPrefabPath = PrefabDir + "/ACO_WaterSpray_Missile.prefab";
 
@@ -116,7 +118,7 @@ public static class ACO_WaterFxBuilder
         GameObject basePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(SprayPrefabPath);
         if (basePrefab == null)
         {
-            GameObject go = CreateSprayObject(30f, 50f, 250f, 320f, 2.5f);
+            GameObject go = CreateSprayObject(SprayMaxHeight, 50f, 250f, 320f, 2.5f);
             basePrefab = PrefabUtility.SaveAsPrefabAsset(go, SprayPrefabPath);
             Object.DestroyImmediate(go);
             Debug.Log($"[ACO] 물보라 프리팹을 만들었습니다: {SprayPrefabPath} — 여기서 고치면 모든 기체·미사일 물보라가 바뀝니다.");

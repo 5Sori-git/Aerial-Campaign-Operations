@@ -105,6 +105,8 @@ namespace ACO
         public TextMeshPro StatusText;
         [Tooltip("내 기체가 아군 ECM 구역 안일 때 보이는 문구")]
         public TextMeshPro EcmText;
+        [Tooltip("적 재밍 구역 안에서 깜빡이는 JAMMED(6-332)")]
+        public TextMeshPro JamText;
         [Tooltip("잔탄 세 칸: 고른 무장 쉐브론 | 무장 이름(AmmoText) | 수(오른쪽 맞춤) — 한 줄씩")]
         public TextMeshPro AmmoMarkText;
         public TextMeshPro AmmoText;
@@ -993,6 +995,7 @@ namespace ACO
         {
             if (HeadingText) { HeadingText.text = (Mathf.RoundToInt(heading) % 360).ToString("000"); }
             if (EcmText) { SetActive(EcmText.gameObject, Contacts != null && Contacts.LocalJammed); }
+            if (JamText) { SetActive(JamText.gameObject, Contacts != null && Contacts.LocalEnemyJammed && Time.time % 0.8f < 0.55f); }
             if (SpeedText) { SpeedText.text = Mathf.RoundToInt(kt).ToString(); }
             if (AltText) { AltText.text = Mathf.RoundToInt(ft).ToString(); }
             if (RadarAltText)

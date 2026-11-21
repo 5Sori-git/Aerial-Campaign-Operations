@@ -35,6 +35,7 @@ set.row.opacity	불투명도	OPACITY	不透明度
 set.row.range	표시 거리	RANGE	表示範囲
 set.row.blip	점 크기	BLIP SIZE	点のサイズ
 set.row.cloud	구름 품질	CLOUD QUALITY	雲の品質
+set.row.pilottags	조종사 이름표	PILOT TAGS	パイロットタグ
 set.row.language	언어	LANGUAGE	言語
 set.row.darkness	진하기	DARKNESS	濃さ
 set.row.pipper	건 피퍼 크기	GUN PIPPER SIZE	ガンパイパーサイズ
@@ -171,6 +172,12 @@ shop.detail.level	LV {0}/{1}	LV {0}/{1}	LV {0}/{1}
 shop.detail.nownext	현재 {0}   >   다음 {1}	NOW {0}   >   NEXT {1}	現在 {0}   >   次 {1}
 shop.detail.maxed	최대 단계   {0}	MAX LEVEL   {0}	最大レベル   {0}
 shop.detail.need	{0} CR 부족	NEED {0} MORE CR	あと {0} CR 必要
+shop.applied.max	최대	MAX	最大
+shop.detail.applied	적용 단계 Lv {0}/{1}  {2}	APPLIED: LV {0}/{1}  {2}	適用段階 Lv {0}/{1}  {2}
+shop.detail.appliedmax	적용 단계: 최대(구매 따라감)  {0}	APPLIED: MAX (FOLLOWS PURCHASES)  {0}	適用段階: 最大(購入に追従)  {0}
+shop.msg.applied	{0} 적용 Lv {1} - 다음 탑승부터	{0} SET TO LV {1} - FROM NEXT BOARDING	{0} 適用 Lv {1} - 次の搭乗から
+shop.msg.appliedlimit	더 바꿀 수 없습니다	CAN'T GO FURTHER	これ以上変更できません
+shop.msg.lock.applied	출격 준비 완료 - 기체 세팅 잠김	ALL READY - AIRCRAFT SETTINGS LOCKED	出撃準備完了 - 機体設定はロック中
 shop.detail.equipped	다음 미션에 장착됨	EQUIPPED FOR THE NEXT MISSION	次のミッションで装備
 shop.detail.aoa	받음각 한계 {0}   >   {1}	AOA LIMIT {0}   >   {1}	迎角制限 {0}   >   {1}
 shop.detail.aoa1	받음각 한계 {0}	AOA LIMIT {0}	迎角制限 {0}
@@ -253,6 +260,32 @@ flow.msg.yourslot	내 자리입니다 - 명단에서 빠지려면 나가기를 �
 flow.msg.slottaken	이미 찬 자리 - 빈 자리를 고르세요	SLOT TAKEN - PICK AN OPEN SLOT	使用中の枠 - 空き枠を選んでください
 flow.msg.rosterlocked	모두 준비 완료 - 출격 카운트다운 중, 명단 잠김	ALL READY - LAUNCH COUNTDOWN, ROSTER LOCKED	全員準備完了 - 出撃カウントダウン中、名簿はロック中
 flow.msg.thatinuse	그 기체는 아직 사용 중입니다	THAT AIRCRAFT IS STILL IN USE	その機体はまだ使用中です
+flow.msg.airframeowner	그 슬롯 조종사만 기체 형식을 바꿀 수 있습니다	ONLY THIS SLOT'S PILOT CAN CHANGE THE AIRCRAFT TYPE	そのスロットのパイロットだけが機体形式を変更できます
+flow.btn.airframe.e	1인승	1-SEAT	単座
+flow.btn.airframe.f	2인승	2-SEAT	複座
+flow.airframe.e	F/A-18E	F/A-18E	F/A-18E
+flow.airframe.f	F/A-18F	F/A-18F	F/A-18F
+flow.slot.num	{0}번기	NO. {0}	{0}番機
+flow.slot.rearopen	뒷자리 비어 있음 · 탑승	REAR OPEN - TAP	後席 空き・搭乗
+flow.slot.rearempty	뒷자리 비어 있음	REAR EMPTY	後席 空き
+flow.slot.rear	뒷자리: {0}	REAR: {0}	後席: {0}
+rear.legend	<color=#FFD133>■</color> 적   <color=#FF4033>■</color> 목표   <color=#59A6FF>■</color> 아군\n<color=#59A6FF>◇</color> 항모   <color=#FFFFFF>▲</color> 내 기체	<color=#FFD133>■</color> ENEMY   <color=#FF4033>■</color> TARGET   <color=#59A6FF>■</color> FRIENDLY\n<color=#59A6FF>◇</color> CARRIER   <color=#FFFFFF>▲</color> OWN SHIP	<color=#FFD133>■</color> 敵   <color=#FF4033>■</color> 目標   <color=#59A6FF>■</color> 味方\n<color=#59A6FF>◇</color> 空母   <color=#FFFFFF>▲</color> 自機
+rear.phase	페이즈 {0}/{1}	PHASE {0}/{1}	フェーズ {0}/{1}
+rear.targets	목표 {0}/{1}	TARGETS {0}/{1}	目標 {0}/{1}
+rear.time	남은 시간 {0}	TIME {0}	残り時間 {0}
+rear.kills	격추 {0}	KILLS {0}	撃墜 {0}
+rear.nomission	미션 없음	NO MISSION	ミッションなし
+rear.freeflight	자유 비행	FREE FLIGHT	自由飛行
+rear.msl	미사일 {0}	MISSILE x{0}	ミサイル {0}
+rear.lock	락온됨	LOCKED	ロックオン
+rear.clear	위협 없음	CLEAR	脅威なし
+flow.msg.rearfull	뒷자리에 이미 사람이 있습니다	THE REAR SEAT IS TAKEN	後席にはすでに人が乗っています
+flow.msg.seatedfirst	지금 좌석에서 먼저 내리세요	GET OUT OF YOUR CURRENT SEAT FIRST	今の座席から先に降りてください
+flow.msg.rearroster	명단에 있으면 다른 기체 뒷자리에 탈 수 없습니다	ROSTER PILOTS CAN'T RIDE IN ANOTHER AIRCRAFT	名簿に入っていると他の機体の後席には乗れません
+flow.msg.rearjoin	뒷자리에서 내린 뒤 명단에 들어오세요	GET OUT OF THE REAR SEAT BEFORE JOINING THE ROSTER	後席から降りてから名簿に入ってください
+flow.msg.rearunavailable	지금은 뒷자리에 탈 수 없습니다	CAN'T BOARD THE REAR SEAT RIGHT NOW	今は後席に乗れません
+flow.msg.airframelocked	출격 준비 완료 - 기체 형식 잠김	ALL READY - AIRCRAFT TYPE LOCKED	出撃準備完了 - 機体形式はロック中
+flow.msg.airframefail	기체 형식을 바꾸지 못했습니다 - 다시 시도하세요	COULDN'T CHANGE THE AIRCRAFT TYPE - TRY AGAIN	機体形式を変更できませんでした - もう一度試してください
 flow.msg.slotslocked	미션 진행 중 - 자리 잠김	MISSION IN PROGRESS - SLOTS LOCKED	ミッション進行中 - 枠はロック中
 flow.msg.landtochange	자리를 바꾸려면 착륙해서 내리세요	LAND AND EXIT BEFORE CHANGING SLOTS	枠を変えるには着陸して降りてください
 flow.msg.landtoleave	명단에서 빠지려면 착륙해서 내리세요	LAND AND EXIT BEFORE LEAVING THE ROSTER	名簿から抜けるには着陸して降りてください
@@ -404,7 +437,8 @@ log.phasecomplete	페이즈 {0} 완료	PHASE {0} COMPLETE	フェーズ{0} 完了
 log.phasefailed	페이즈 {0} 실패	PHASE {0} FAILED	フェーズ{0} 失敗
 log.ally	아군 유닛	ALLY UNIT	友軍ユニット
 log.unknown	알 수 없음	UNKNOWN	不明
-log.bestcol	조종사<pos=62%>최고 CR	PILOT<pos=62%>BEST CR	パイロット<pos=62%>最高 CR
+log.bestcol	조종사<pos=47%>LV<pos=62%>최고 CR	PILOT<pos=47%>LV<pos=62%>BEST CR	パイロット<pos=47%>LV<pos=62%>最高 CR
+pilot.lv	Lv {0}	Lv {0}	Lv {0}
 log.norecords	아직 기록 없음	NO RECORDS YET	まだ記録なし
 log.myresult	격추<pos=45%>{0}\n크레딧<pos=45%>{1}	KILLS<pos=45%>{0}\nCREDITS<pos=45%>{1}	撃墜<pos=45%>{0}\nクレジット<pos=45%>{1}
 log.scoretitle	점수	SCORE	スコア
@@ -756,6 +790,46 @@ radio.phaselandship.20	적 포 일부가 복구됐다. 조심해라!	Some of its
 radio.phaselandship.21	적 육상 전함이 도시로 진격하고 있다. 도착하기 전에 장갑을 벗기고, 궤도를 끊고, 원자로를 파괴하라!	An enemy land battleship is advancing on the city. Strip its armor, cut its tracks and kill the reactor before it arrives!	敵の陸上戦艦が街へ進撃している。到着前に装甲を剥がし、履帯を断ち、原子炉を破壊せよ！
 radio.phaselandship.22	원자로 파괴! 육상 전함은 끝났다. 훌륭했다, 전 항공기!	Reactor destroyed! The land battleship is finished. Outstanding work, all aircraft!	原子炉破壊！陸上戦艦は終わりだ。見事だ、全機！
 radio.phaselandship.23	도시가 함락됐다... 전 부대, 철수하라.	The city has fallen... All units, withdraw.	街が陥落した……全部隊、撤退せよ。
+radio.phaselasertower.01	빛이 있으라. 칼리번이 눈을 뜬다. 이 하늘은 정화될 것이다.	Let there be light. Caliburn opens its eye, and this sky will be cleansed.	光あれ。カリバーンが目を開く。この空は浄められる。
+radio.phaselasertower.02	광학병기 탑 탐지! 재머가 발전망을 가리고 있다. ECM 차량 세 대를 찾아 파괴하라!	Optical weapon tower detected! Its jammers are shielding the power grid. Find the three ECM vehicles and take them out!	光学兵器タワーを探知！ジャマーが送電網を守っている。ECM車両3両を見つけて破壊しろ！
+radio.phaselasertower.03	재머가 살아 있는 동안 환풍구엔 락온이 안 된다. ECM 차량부터!	Your missiles won't lock the vents while the jammers are up. ECM vehicles first!	ジャマーが生きている間は排気口にロックできない。ECM車両が先だ！
+radio.phaselasertower.04	ECM 차량 격파! 남은 수 {left}!	ECM vehicle down! {left} left!	ECM車両撃破！残り{left}！
+radio.phaselasertower.05	재머 하나 남았다. 처리해라!	One jammer left. Take it out!	ジャマーは残り一つ。仕留めろ！
+radio.phaselasertower.06	우리의 장막을 걷어냈다고? 그렇다면 가림 없이 빛을 마주하라.	You tore away our veil? Then face the light unshielded.	我らの帳を剥いだか。ならば遮るものなく光を浴びよ。
+radio.phaselasertower.07	재밍 해제! 보조탑 환풍구가 드러났다. 공격하라!	Jamming is down! The exhaust vents on the power towers are exposed. Hit them!	ジャミング解除！発電塔の排気口がむき出しだ。叩け！
+radio.phaselasertower.08	환풍구 파괴! 남은 수 {left}!	Vent destroyed! {left} left!	排気口破壊！残り{left}！
+radio.phaselasertower.09	마지막 환풍구다! 부숴라!	Last vent! Knock it out!	最後の排気口だ！叩き潰せ！
+radio.phaselasertower.11	누군가 레이저에 조준됐다! 급선회, 직진하지 마!	Laser lock on one of you! Break hard, don't fly straight!	誰かがレーザーに捕捉された！急旋回しろ、まっすぐ飛ぶな！
+radio.phaselasertower.13	반사 그물 형성! 파란 선을 보고 빈틈을 찾아!	Reflector net forming! Watch the blue lines and find a gap!	反射の網が張られる！青い線を見て隙間を探せ！
+radio.phaselasertower.14	반사판 격추! 남은 수 {left}!	Reflector down! {left} left!	反射板撃墜！残り{left}！
+radio.phaselasertower.15	거울이 깨졌다… 허나 빛에는 거울 따위 필요 없다!	The mirrors are broken... but the light needs no mirrors!	鏡は砕けた…だが光に鏡など要らぬ！
+radio.phaselasertower.16	반사판 전멸. 이제 그물은 없다!	All reflectors are down. No more nets!	反射板全滅。もう網は来ない！
+radio.phaselasertower.17	탑 주변 대공포가 복구됐다. 저공 접근 조심해!	Their guns around the tower are back online. Watch the low approach!	タワー周辺の対空砲が復旧した。低空侵入に注意しろ！
+radio.phaselasertower.18	신도들이여, 날아올라라! 칼리번을 지켜라!	Faithful, take wing! Guard Caliburn!	信徒よ、翼を広げよ！カリバーンを守れ！
+radio.phaselasertower.19	적 전투기, 탑 상공으로 접근 중!	Enemy fighters inbound over the tower!	敵戦闘機、タワー上空へ接近中！
+radio.phaselasertower.20	모든 힘을 렌즈에 바쳐라. 빛이 곧 심판이다.	Pour everything into the lens. The light is judgment.	全ての力をレンズに捧げよ。光こそ裁きなり。
+radio.phaselasertower.21	환풍구 전멸! 렌즈는 쏠 때마다 과열된다. 쏜 직후를 노려!	All vents down! The lens overheats after every shot. Hit it the moment it fires!	排気口全滅！レンズは撃つたびに過熱する。撃った直後を狙え！
+radio.phaselasertower.22	렌즈가 붉게 달아올랐다! 지금 쳐!	The lens is glowing red! Hit it now!	レンズが赤く焼けている！今だ、叩け！
+radio.phaselasertower.23	렌즈가 다시 열렸다. 지금 쳐라!	Lens is open again. Strike now!	レンズがまた開いた。今だ、撃て！
+radio.phaselasertower.24	그릇이 갈라져도 빛은 꺼지지 않는다! 모든 것을 바쳐라!	The vessel cracks, but the light endures! Give it everything!	器がひび割れようと光は消えぬ！全てを捧げよ！
+radio.phaselasertower.25	렌즈에 금이 가고 있다! 계속해!	The lens is cracking! Keep it up!	レンズにひびが入っている！その調子だ！
+radio.phaselasertower.26	안 돼… 빛이… 우리를 떠난다!	No... the light... it is leaving us!	そんな…光が…我らを去っていく！
+radio.phaselasertower.27	렌즈 파괴! 물러나, 탑이 무너진다!	Lens destroyed! Get clear, the tower is coming down!	レンズ破壊！離れろ、タワーが崩れるぞ！
+radio.phaselasertower.28	탑 붕괴 확인. 전 기체, 훌륭했다.	The tower is down. Outstanding work, all aircraft.	タワー崩壊を確認。全機、見事だった。
+radio.phaselasertower.29	광학병기 탑 탐지. 재머가 발전망을 가리고 있다. ECM 차량부터 제거하라!	Optical weapon tower detected. Its jammers are shielding the power grid. Take out the ECM vehicles first!	光学兵器タワーを探知。ジャマーが送電網を守っている。まずECM車両を排除せよ！
+radio.phaselasertower.30	탑이 무너졌다. 전 기체, 훌륭했다.	The tower is down. All aircraft, outstanding work.	タワーは崩れた。全機、見事だった。
+radio.phaselasertower.31	탑을 무너뜨리지 못했다. 전 부대, 철수하라.	We could not bring down the tower. All units, withdraw.	タワーを倒せなかった。全部隊、撤退せよ。
+radio.phasebreakingpoint.02	전 비행대, 공역으로 집결하라. 놈들을 하늘에서 쓸어버려라.	All squadrons, converge on the zone. Sweep them from the sky.	全飛行隊、空域へ集結せよ。奴らを空から一掃しろ。
+radio.phasebreakingpoint.03	다수의 적기가 공역으로 접근 중. 난전(퍼볼)이 될 거다. 윙맨에게서 떨어지지 마라.	Multiple bandits closing on the zone. It's going to be a furball. Stay with your wingman.	多数の敵機が空域へ接近中。ファーボール(乱戦)になるぞ。ウィングマンから離れるな。
+radio.phasebreakingpoint.04	적기 추가 접근. 놈들이 계속 전투기를 쏟아붓고 있다.	More bandits inbound. They keep throwing fighters at us.	敵機、さらに接近。奴らは次々と戦闘機を投入してくる。
+radio.phasebreakingpoint.05	손실은 상관없다. 있는 전력을 전부 보내라!	Losses are irrelevant. Send everything we have!	損害など構わん。全戦力を送り込め!
+radio.phasebreakingpoint.06	놈들이 손실을 입으면서도 계속 몰려온다. 압박을 늦추지 마라.	They're taking losses, but they keep coming. Keep the pressure on.	奴らは損害を受けながらも、まだ来るぞ。圧力をかけ続けろ。
+radio.phasebreakingpoint.07	{left}기만 더 떨어뜨리면 적 공군이 무너진다!	{left} more kills and their air wing breaks!	あと{left}機落とせば敵航空団は崩れる!
+radio.phasebreakingpoint.08	윙맨 한 기를 잃었다! 계속 싸워라!	We lost a wingman! Keep fighting!	ウィングマンが1機やられた！戦闘を続けろ！
+radio.phasebreakingpoint.10	손실이 너무 크다... 전 부대, 이탈하라!	Too many losses... All units, disengage!	損害が大きすぎる...全部隊、離脱せよ!
+radio.phasebreakingpoint.11	놈들이 물러난다! 적 공군이 전면 퇴각 중이다!	They're breaking off! The enemy air wing is in full retreat!	奴らが離脱していく! 敵航空団は総退却だ!
+radio.phasebreakingpoint.12	적이 이 공역에 공군 전력을 모두 쏟아붓고 있다. 버티지 못할 때까지 떨어뜨려라.	Enemy is committing its entire air wing to this sector. Bleed them until they break.	敵はこの空域に航空戦力のすべてを投入している。奴らが崩れるまで叩き落とせ。
+radio.phasebreakingpoint.13	공역 확보. 적 공군은 무너졌다. 훌륭했다.	Airspace is ours. Their air wing is broken. Outstanding work.	空域を確保。敵航空団は崩壊した。見事だった。
 radio.phasesubmarine.01	소나에 대형 수중 접촉물 포착, 함대로 접근 중! 전 기체, 항모로 돌아가 상공 초계(CAP)에 들어가라!	Sonar has a large submerged contact closing on the fleet! All aircraft, return to the carrier and fly CAP!	ソナーが大型の水中目標を探知、艦隊に接近中! 全機、空母へ戻り上空警戒(CAP)につけ!
 radio.phasesubmarine.02	잠망경 심도. 저기 있군… 항모다. 전 발사관 주수.	Periscope depth. There she is... the carrier. Flood all tubes.	潜望鏡深度。いたぞ……空母だ。全発射管、注水。
 radio.phasesubmarine.03	뱀파이어, 뱀파이어! 미사일 접근, 방위 {left}!	Vampire, vampire! Missiles inbound, bearing {left}!	ヴァンパイア、ヴァンパイア! ミサイル接近、方位{left}!
@@ -850,3 +924,132 @@ cic.view.uav	UAV	UAV	UAV
 cic.nosignal	신호 없음	NO SIGNAL	信号なし
 prog.reward.ciconly	CIC만	CIC ONLY	CICのみ
 cic.reset	고글 회수	RESET GOGGLES	ゴーグル回収
+# 조종사 기록판 · 칭호 (6-341) — 칭호 키 title.<ID>, ID는 저장값이라 바꾸지 않는다(이름은 바꿔도 된다)
+record.title	조종사 기록	PILOT RECORD	パイロット記録
+record.stats1	LV {0}    미션 성공 {1}    5페이즈 {2}    격추 {3}	LV {0}    CLEARS {1}    5-PHASE {2}    KILLS {3}	LV {0}    ミッション成功 {1}    5フェーズ {2}    撃墜 {3}
+record.stats2	비행 {0}    CIC 최고 {1}    CIC 누적 {2}	FLIGHT {0}    CIC BEST {1}    CIC TOTAL {2}	飛行 {0}    CIC最高 {1}    CIC累計 {2}
+record.equipped	장착 중: {0}	EQUIPPED: {0}	装備中: {0}
+record.none	없음	NONE	なし
+record.s.level	레벨	LEVEL	レベル
+record.s.clears	미션 성공	CLEARS	ミッション成功
+record.s.clears5	5페이즈 성공	5-PHASE	5フェーズ成功
+record.s.kills	누적 격추	KILLS	累計撃墜
+record.s.flight	비행 시간	FLIGHT	飛行時間
+record.s.cicbest	CIC 최고	CIC BEST	CIC最高
+record.s.cickills	CIC 누적	CIC TOTAL	CIC累計
+record.loading	불러오는 중...	LOADING...	読み込み中...
+record.hint	얻은 칭호를 누르면 달고, 다시 누르면 뗍니다	TAP AN EARNED TITLE TO WEAR IT, TAP AGAIN TO REMOVE	獲得した称号を押すと装備、もう一度押すと外します
+title.cat.level	레벨	LEVEL	レベル
+title.cat.clears	미션 성공	MISSION CLEARS	ミッション成功
+title.cat.clears5	5페이즈 미션 성공	5-PHASE CLEARS	5フェーズ成功
+title.cat.kills	누적 격추	TOTAL KILLS	累計撃墜
+title.cat.flight	비행 시간	FLIGHT TIME	飛行時間
+title.cat.cicbest	CIC 한 미션 최고	CIC BEST IN ONE MISSION	CIC 1ミッション最高
+title.cat.cickills	CIC 누적 격추	CIC TOTAL KILLS	CIC累計撃墜
+title.cat.role	전문 분야	SPECIALTY	専門分野
+title.cond.role.fighter	특수 대공 강화 모두 최대	MAX ALL SPECIAL AIR-TO-AIR UPGRADES	特殊対空の強化をすべて最大
+title.cond.role.attack	특수 대지 강화 모두 최대	MAX ALL SPECIAL AIR-TO-GROUND UPGRADES	特殊対地の強化をすべて最大
+title.cond.role.bomber	폭탄 · 로켓 강화 모두 최대	MAX ALL BOMB AND ROCKET UPGRADES	爆弾・ロケットの強化をすべて最大
+title.cond.role.test	기체 강화 모두 최대	MAX ALL AIRFRAME UPGRADES	機体の強化をすべて最大
+title.cond.role.interceptor	일반 미사일 강화 모두 최대	MAX ALL STANDARD MISSILE UPGRADES	通常ミサイルの強化をすべて最大
+title.cond.role.multirole	특수 대공 · 대지 강화 모두 최대	MAX ALL SPECIAL AIR-TO-AIR AND AIR-TO-GROUND UPGRADES	特殊対空・対地の強化をすべて最大
+title.cond.role.arsenal	특수무장 모두 해금	UNLOCK EVERY SPECIAL WEAPON	特殊兵装をすべて解放
+title.role_fighter	전투기 파일럿	FIGHTER PILOT	戦闘機パイロット
+title.role_attack	공격기 파일럿	ATTACK PILOT	攻撃機パイロット
+title.role_bomber	폭격기 파일럿	BOMBER PILOT	爆撃機パイロット
+title.role_test	테스트 파일럿	TEST PILOT	テストパイロット
+title.role_interceptor	인터셉터	INTERCEPTOR	インターセプター
+title.role_multirole	멀티롤 파일럿	MULTIROLE PILOT	マルチロールパイロット
+title.role_arsenal	무기고	ARSENAL	アーセナル
+title.cond.level	Lv {0}	Lv {0}	Lv {0}
+title.cond.clears	성공 {0}회	{0} CLEARS	成功 {0}回
+title.cond.clears5	5페이즈 미션 성공 {0}회	CLEAR {0} FIVE-PHASE MISSIONS	5フェーズミッション成功 {0}回
+title.cond.kills	격추 {0}	{0} KILLS	撃墜 {0}
+title.cond.flight	{0}시간	{0} HOURS	{0}時間
+title.cond.cicbest	출격 없이 CIC로 한 미션 {0}기	{0} KILLS IN ONE CIC-ONLY MISSION	出撃せずCICで1ミッション {0}機
+title.cond.cickills	CIC로만 누적 {0}기	{0} CIC-ONLY KILLS	CICのみで累計 {0}機
+title.cond.boss.kill	페이즈 클리어	CLEAR THE PHASE	フェーズクリア
+title.cond.boss.s	S랭크(팀 무격추)로 클리어	CLEAR AT S RANK (NO TEAM LOSSES)	Sランク（チーム被撃墜なし）でクリア
+title.cond.boss.solo	S랭크 · 처음부터 혼자 출격	S RANK, FLYING SOLO FROM THE START	Sランク・最初から単独出撃
+title.cond.boss.party	S랭크 · 처음부터 4명 출격	S RANK, 4 PILOTS FROM THE START	Sランク・最初から4人出撃
+title.level_10	강화 입문	TUNED	チューンド
+title.level_50	개조 매니아	MODDED	改造マニア
+title.level_100	하이 스펙	HIGH SPEC	ハイスペック
+title.level_200	풀 커스텀	FULL CUSTOM	フルカスタム
+title.level_300	마개조	OVERTUNED	魔改造
+title.clears_1	신참	ROOKIE	ルーキー
+title.clears_10	정규 조종사	REGULAR	レギュラー
+title.clears_50	베테랑	VETERAN	ベテラン
+title.clears_100	역전의 용사	BATTLE-HARDENED	歴戦の勇士
+title.clears_300	전설	LEGEND	レジェンド
+title.clears_1000	불멸	IMMORTAL	不滅
+title.clears5_1	장기전	THE LONG HAUL	長期戦
+title.clears5_10	끝까지 간다	ALL THE WAY	最後まで
+title.clears5_50	강철 체력	IRON ENDURANCE	鋼の持久力
+title.clears5_100	끝없는 전쟁	ENDLESS WAR	終わらない戦争
+title.kills_100	에이스	ACE	エース
+title.kills_500	격추왕	KILL LEADER	撃墜王
+title.kills_1000	천 개의 빛	THOUSAND POINTS OF LIGHT	千の光
+title.kills_5000	죽음의 날개	WINGS OF DEATH	死の翼
+title.kills_10000	재앙	CALAMITY	災厄
+title.flight_1h	이륙 완료	WHEELS UP	テイクオフ
+title.flight_5h	순항 고도	CRUISING ALTITUDE	巡航高度
+title.flight_10h	하늘의 주민	SKY DWELLER	空の住人
+title.flight_50h	구름 위의 삶	ABOVE THE CLOUDS	雲の上の暮らし
+title.flight_100h	창공의 지배자	MASTER OF THE SKY	蒼空の覇者
+title.cicbest_5	레이더 감시관	RADAR WATCH	レーダー監視員
+title.cicbest_15	전술 장교	TACTICAL OFFICER	戦術士官
+title.cicbest_30	CIC 사령관	CIC COMMANDER	CIC司令
+title.cickills_50	작전 장교	OPS OFFICER	作戦将校
+title.cickills_300	함대 참모	FLEET STAFF	艦隊参謀
+title.cickills_1000	제독	ADMIRAL	提督
+title.boss.borderless	BORDERLESS	BORDERLESS	BORDERLESS
+title.boss_borderless_kill	BORDERLESS 사냥꾼	BORDERLESS HUNTER	BORDERLESSハンター
+title.boss_borderless_s	BORDERLESS 정복자	BORDERLESS CONQUEROR	BORDERLESSの征服者
+title.boss_borderless_solo	BORDERLESS 처형인	BORDERLESS EXECUTIONER	BORDERLESSの処刑人
+title.boss_borderless_party	BORDERLESS 공략대	BORDERLESS STRIKE TEAM	BORDERLESS攻略隊
+title.boss.luna	LUNA	LUNA	LUNA
+title.boss_luna_kill	LUNA 사냥꾼	LUNA HUNTER	LUNAハンター
+title.boss_luna_s	LUNA 정복자	LUNA CONQUEROR	LUNAの征服者
+title.boss_luna_solo	LUNA 처형인	LUNA EXECUTIONER	LUNAの処刑人
+title.boss_luna_party	LUNA 공략대	LUNA STRIKE TEAM	LUNA攻略隊
+title.boss.twins	쌍둥이	TWINS	双子
+title.boss_twins_kill	쌍둥이 사냥꾼	TWINS HUNTER	双子ハンター
+title.boss_twins_s	쌍둥이 정복자	TWINS CONQUEROR	双子の征服者
+title.boss_twins_solo	쌍둥이 처형인	TWINS EXECUTIONER	双子の処刑人
+title.boss_twins_party	쌍둥이 공략대	TWINS STRIKE TEAM	双子攻略隊
+title.boss.shade	SHADE	SHADE	SHADE
+title.boss_shade_kill	SHADE 사냥꾼	SHADE HUNTER	SHADEハンター
+title.boss_shade_s	SHADE 정복자	SHADE CONQUEROR	SHADEの征服者
+title.boss_shade_solo	SHADE 처형인	SHADE EXECUTIONER	SHADEの処刑人
+title.boss_shade_party	SHADE 공략대	SHADE STRIKE TEAM	SHADE攻略隊
+title.boss.mrs	MISTER.S	MISTER.S	MISTER.S
+title.boss_mrs_kill	MISTER.S 사냥꾼	MISTER.S HUNTER	MISTER.Sハンター
+title.boss_mrs_s	MISTER.S 정복자	MISTER.S CONQUEROR	MISTER.Sの征服者
+title.boss_mrs_solo	MISTER.S 처형인	MISTER.S EXECUTIONER	MISTER.Sの処刑人
+title.boss_mrs_party	MISTER.S 공략대	MISTER.S STRIKE TEAM	MISTER.S攻略隊
+title.boss.fortress	아크엔젤	ARCHANGEL	アークエンジェル
+title.boss_fortress_kill	아크엔젤 사냥꾼	ARCHANGEL HUNTER	アークエンジェルハンター
+title.boss_fortress_s	아크엔젤 정복자	ARCHANGEL CONQUEROR	アークエンジェルの征服者
+title.boss_fortress_solo	아크엔젤 처형인	ARCHANGEL EXECUTIONER	アークエンジェルの処刑人
+title.boss_fortress_party	아크엔젤 공략대	ARCHANGEL STRIKE TEAM	アークエンジェル攻略隊
+title.boss.landship	육상전함	LAND DREADNOUGHT	陸上戦艦
+title.boss_landship_kill	육상전함 사냥꾼	LAND DREADNOUGHT HUNTER	陸上戦艦ハンター
+title.boss_landship_s	육상전함 정복자	LAND DREADNOUGHT CONQUEROR	陸上戦艦の征服者
+title.boss_landship_solo	육상전함 처형인	LAND DREADNOUGHT EXECUTIONER	陸上戦艦の処刑人
+title.boss_landship_party	육상전함 공략대	LAND DREADNOUGHT STRIKE TEAM	陸上戦艦攻略隊
+title.boss.lance	랜스	LANCE	ランス
+title.boss_lance_kill	랜스 사냥꾼	LANCE HUNTER	ランスハンター
+title.boss_lance_s	랜스 정복자	LANCE CONQUEROR	ランスの征服者
+title.boss_lance_solo	랜스 처형인	LANCE EXECUTIONER	ランスの処刑人
+title.boss_lance_party	랜스 공략대	LANCE STRIKE TEAM	ランス攻略隊
+title.boss.submarine	레비아탄	LEVIATHAN	リヴァイアサン
+title.boss_submarine_kill	레비아탄 사냥꾼	LEVIATHAN HUNTER	リヴァイアサンハンター
+title.boss_submarine_s	레비아탄 정복자	LEVIATHAN CONQUEROR	リヴァイアサンの征服者
+title.boss_submarine_solo	레비아탄 처형인	LEVIATHAN EXECUTIONER	リヴァイアサンの処刑人
+title.boss_submarine_party	레비아탄 공략대	LEVIATHAN STRIKE TEAM	リヴァイアサン攻略隊
+title.boss.caliburn	칼리번	CALIBURN	カリバーン
+title.boss_caliburn_kill	칼리번 사냥꾼	CALIBURN HUNTER	カリバーンハンター
+title.boss_caliburn_s	칼리번 정복자	CALIBURN CONQUEROR	カリバーンの征服者
+title.boss_caliburn_solo	칼리번 처형인	CALIBURN EXECUTIONER	カリバーンの処刑人
+title.boss_caliburn_party	칼리번 공략대	CALIBURN STRIKE TEAM	カリバーン攻略隊

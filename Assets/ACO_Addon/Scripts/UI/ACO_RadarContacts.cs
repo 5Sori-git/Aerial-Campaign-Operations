@@ -47,6 +47,14 @@ namespace ACO
         [System.NonSerialized] public Transform[] Missiles = new Transform[MAX_MISSILES];
         [System.NonSerialized] public SaccEntity LocalVehicle;
 
+        /// 지금 페이즈의 교전 공역(6-333 브레이킹 포인트) — 없으면 null. HUD 레이더 · 조종석 지도가 원을 그린다.
+        public ACO_PhaseModule GetZoneModule()
+        {
+            if (Flow == null || Flow.Manager == null) { return null; }
+            ACO_PhaseModule m = Flow.Manager.GetActiveModule();
+            return m != null && m.HasZone() ? m : null;
+        }
+
         private int[] _source;
         private int[] _index;
         private bool[] _air;
@@ -66,6 +74,16 @@ namespace ACO
         /// 내 기체가 재밍 구역 안인가 — 비행 HUD의 ECM SUPPORT 표시.
         [System.NonSerialized] public bool LocalJammed;
         private int _ecmUntilMs;
+
+        [Header("전자전 (적 재머 — 6-332)")]
+        [Tooltip("씬의 적 재머(Bake가 모은다). 살아 있는 재머 구역 안의 내 기체는 미사일 락온이 느리게 쌓인다")]
+        public ACO_EnemyJammer[] EnemyJammers;
+        [Tooltip("내 기체가 적 재밍 구역 안에 있는 동안 나오는 소리(특수무장 설치가 만들고 Bake가 잇는다)")]
+        public AudioSource EnemyJamSound;
+        /// 내 기체가 적 재밍 구역 안인가 — 비행 HUD의 JAMMED 표시.
+        [System.NonSerialized] public bool LocalEnemyJammed;
+        /// 내 기체의 락온 속도 배율(구역 밖 1) — ACO_DFUNC_Missile이 락온을 쌓을 때 곱한다.
+        [System.NonSerialized] public float LocalLockFactor = 1f;
         private bool _ecmOn;
 
         /// ECM이 켜졌다(모든 클라이언트) — 켜진 동안만 거리를 잰다.
@@ -77,6 +95,20 @@ namespace ACO
 
         /// 켜진 ECM이 있는가 — 지도가 구역 원을 그릴지 정한다.
         public bool IsEcmOn() { return _ecmOn; }
+
+        /// 적 재머(6-332): 이 자리의 락온 속도 배율 — 살아 있는 재머 구역 안이면 그 배율(겹치면 가장 작은 값), 밖이면 1.
+        public float EnemyLockFactor(Vector3 pos)
+        {
+            if (EnemyJammers == null) { return 1f; }
+            float f = 1f;
+            for (int i = 0; i < EnemyJammers.Length; i++)
+            {
+                ACO_EnemyJammer j = EnemyJammers[i];
+                if (j == null || !j.IsJamming()) { continue; }
+                if ((j.GetCenter() - pos).sqrMagnitude <= j.Radius * j.Radius && j.LockSpeedFactor < f) { f = j.LockSpeedFactor; }
+            }
+            return f;
+        }
 
         /// 이 자리가 재밍 구역 안인가. 아무도 안 켰으면 바로 false.
         public bool IsJammed(Vector3 pos)
@@ -199,6 +231,18 @@ namespace ACO
             Build();
             LocalVehicle = FindLocalVehicle();
             bool jammed = LocalVehicle != null && IsJammed(LocalVehicle.transform.position);
+            float lockFactor = LocalVehicle != null ? EnemyLockFactor(LocalVehicle.transform.position) : 1f;
+            bool enemyJammed = lockFactor < 0.999f;
+            LocalLockFactor = lockFactor;
+            if (enemyJammed != LocalEnemyJammed)
+            {
+                LocalEnemyJammed = enemyJammed;
+                if (EnemyJamSound)
+                {
+                    if (enemyJammed) { EnemyJamSound.Play(); }
+                    else { EnemyJamSound.Stop(); }
+                }
+            }
             if (jammed != LocalJammed)
             {
                 LocalJammed = jammed;

@@ -7,7 +7,8 @@ namespace ACO
     /// 조종석 음성 경고(로컬 전용, 동기화 없음 — 씬에 하나). 내가 조종 중인 기체 기준으로 음성을 낸다.
     ///  - PULL UP: 지금 하강 속도로 지면까지 PullUpTime초 안, 또는 진행 방향 앞 지형까지 PullUpTime초 안.
     ///  - RAILGUN·LASER: 다른 스크립트가 상황이 이어지는 동안 Warn(종류)를 부른다 — 랜스 포대 사선 경고 안(ACO_Railgun),
-    ///    소형 레일건이 나를 조준(ACO_MiniRailgun), 레이저 에이스가 나를 비춤(ACO_Borderless), LUNA 레일건이 나를 겨눔(ACO_LunaAce).
+    ///    소형 레일건이 나를 조준(ACO_MiniRailgun), 레이저 에이스가 나를 비춤(ACO_Borderless), LUNA 레일건이 나를 겨눔(ACO_LunaAce),
+    ///    레이저 탑 패턴 A가 나를 겨누거나 쏨 · 그물 갈래가 가까움(ACO_LaserTower, 6-331).
     ///  - ALTITUDE: 지면 위 AltitudeFloor m 아래로 내려가는 중.
     ///  - STALL: 속도가 StallSpeed 아래이거나 받음각이 한계(MaxAngleOfAttackPitch)의 StallAoaRatio 넘음.
     ///  - DAMAGE CRITICAL: 체력이 DamageRatio 아래로 떨어지는 순간 한 번(다시 오르면 다시 센다).
